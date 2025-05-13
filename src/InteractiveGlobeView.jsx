@@ -10,9 +10,9 @@ const InteractiveGlobeView = ({
                                   defaultFocusLat = 20,
                                   defaultFocusLng = 0,
                                   defaultFocusAltitude = 2.5,
-                                  allowUserDragRotation = false, // Use this to explicitly control interaction
-                                  enableAutoRotation = true,
-                                  globeAutoRotateSpeed = 0.1
+                                  allowUserDragRotation = false,
+                                  enableAutoRotation = true,      // Prop still used by useEffect
+                                  globeAutoRotateSpeed = 0.1    // Prop still used by useEffect
                               }) => {
     const globeRef = useRef();
     const containerRef = useRef(null);
@@ -24,9 +24,11 @@ const InteractiveGlobeView = ({
         let timeout;
         return (...args) => {
             clearTimeout(timeout);
-            timeout = setTimeout(() => func.apply(this, args), delay);
+            // Keep track of the timeout ID for cleanup
+            debounce.timeout = setTimeout(() => func.apply(this, args), delay);
         };
     };
+    debounce.timeout = null; // Initialize static property
 
     // Effect for handling container resize (unchanged)
     useEffect(() => {
@@ -36,10 +38,8 @@ const InteractiveGlobeView = ({
         const updateDimensions = () => {
             const newWidth = currentContainerRef.offsetWidth;
             const newHeight = currentContainerRef.offsetHeight;
-            // Ensure valid dimensions before setting state
             if (newWidth > 10 && newHeight > 10) {
                 setGlobeDimensions(prev => {
-                    // Only update state if dimensions actually changed
                     if (prev.width !== newWidth || prev.height !== newHeight) {
                         return { width: newWidth, height: newHeight };
                     }
@@ -48,20 +48,16 @@ const InteractiveGlobeView = ({
             }
         };
         const debouncedUpdateDimensions = debounce(updateDimensions, 200);
-        // Initial call
-        updateDimensions();
-        // Observe
+        updateDimensions(); // Initial call
         const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
         resizeObserver.observe(currentContainerRef);
-        // Cleanup
         return () => {
             if (currentContainerRef) {
                 resizeObserver.unobserve(currentContainerRef);
             }
-            // Clear any pending debounce timeout on unmount
-            clearTimeout(debounce.timeout);
+            clearTimeout(debounce.timeout); // Clear timeout on unmount
         };
-    }, []); // Empty dependency array ensures this runs once on mount for setup
+    }, []);
 
 
     // Effect for updating points data (unchanged)
@@ -74,37 +70,33 @@ const InteractiveGlobeView = ({
 
     // Effect for setting initial point of view (unchanged)
     useEffect(() => {
-        // Ensure globeDimensions are set before trying to set point of view
         if (globeRef.current && typeof globeRef.current.pointOfView === 'function' && globeDimensions.width && globeDimensions.height) {
             globeRef.current.pointOfView({ lat: defaultFocusLat, lng: defaultFocusLng, altitude: defaultFocusAltitude }, 0);
         }
-    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions]); // Add globeDimensions dependency
+    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions]);
 
-    // Effect to directly manipulate controls for zoom/rotate/pan/auto-rotate
+    // Effect to directly manipulate controls for zoom/rotate/pan/auto-rotate (unchanged)
     useEffect(() => {
         const globeInstance = globeRef.current;
-        // Ensure globeInstance, controls, and dimensions are ready
         if (globeInstance && typeof globeInstance.controls === 'function' && globeDimensions.width && globeDimensions.height) {
             const controls = globeInstance.controls();
             if (controls) {
-                // Explicitly disable user interactions based on allowUserDragRotation prop
                 controls.enableRotate = allowUserDragRotation;
                 controls.enablePan = allowUserDragRotation;
                 controls.enableZoom = allowUserDragRotation;
 
-                // Set auto-rotation based on props
                 controls.autoRotate = enableAutoRotation;
                 if (enableAutoRotation) {
-                    controls.autoRotateSpeed = globeAutoRotateSpeed * 20; // Adjust multiplier as needed
+                    // If the rotation direction is still not what you want (e.g., you want clockwise):
+                    // Try making the speed negative:
+                    controls.autoRotateSpeed = -Math.abs(globeAutoRotateSpeed * 20);
+                    // controls.autoRotateSpeed = globeAutoRotateSpeed * 20; // Default: Counter-Clockwise
                 } else {
                     controls.autoRotateSpeed = 0;
                 }
-                // Optional: Force an update to the controls if needed, though changing properties should suffice
-                // controls.update();
             }
         }
-        // Rerun if config props or dimensions change
-    }, [allowUserDragRotation, enableAutoRotation, globeAutoRotateSpeed, globeDimensions]); // ADDED globeDimensions
+    }, [allowUserDragRotation, enableAutoRotation, globeAutoRotateSpeed, globeDimensions]);
 
     // Click handler (unchanged)
     const handlePointClick = useCallback((point) => {
@@ -145,9 +137,9 @@ const InteractiveGlobeView = ({
                     pointColor="color"
                     pointsMerge={true}
                     pointsTransitionDuration={0}
-                    enableAutoRotate={enableAutoRotation} // Keep passing these for library's primary control
-                    autoRotateSpeed={globeAutoRotateSpeed}
-                    enablePointerInteraction={true} // Keep true for clicks
+                    // REMOVED: enableAutoRotate={enableAutoRotation}
+                    // REMOVED: autoRotateSpeed={globeAutoRotateSpeed}
+                    enablePointerInteraction={true}
                     onPointClick={handlePointClick}
                 />
             )}
