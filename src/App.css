@@ -40,3 +40,35 @@
 .read-the-docs {
   color: #888;
 }
+
+/* src/App.css (or src/index.css) */
+@keyframes pulse-glow-effect {
+  0% {
+    transform: scale(0.9) translate(-50%, -50%); /* translate(-50%, -50%) is for centering the div on its coordinate */
+    box-shadow: 0 0 0 0 rgba(255, 255, 0, 0.8); /* Bright Yellow glow */
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.4) translate(-50%, -50%);
+    box-shadow: 0 0 0 15px rgba(255, 255, 0, 0); /* Glow expands and fades */
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9) translate(-50%, -50%);
+    box-shadow: 0 0 0 0 rgba(255, 255, 0, 0);
+    opacity: 0.8;
+  }
+}
+
+.pulsing-significant-quake-dot {
+  background-color: rgba(255, 255, 0, 0.95); /* Bright Yellow, slightly transparent */
+  border-radius: 50%;
+  animation: pulse-glow-effect 2s infinite ease-in-out;
+  pointer-events: auto; /* Make sure this HTML element is clickable */
+  cursor: pointer;
+  /* Position is handled by react-globe.gl, but transform above is important for centering */
+  /* No explicit width/height here, it will be set dynamically via style attribute in JS */
+  /* Ensure it's visible if it somehow ends up with 0x0 dimensions before JS sets it */
+  min-width: 5px;
+  min-height: 5px;
+}

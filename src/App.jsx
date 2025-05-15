@@ -1,22 +1,23 @@
-// App.jsx
+// src/App.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import EarthquakeDetailView from './EarthquakeDetailView';
 import InteractiveGlobeView from './InteractiveGlobeView';
 import NotableQuakeFeature from './NotableQuakeFeature';
 import InfoSnippet from './InfoSnippet';
+import coastlineData from './ne_110m_coastline.json'; // Direct import
+import tectonicPlatesData from './TectonicPlateBoundaries.json'; // Direct import
 
 // --- Configuration & Helpers ---
 const USGS_API_URL_DAY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
 const USGS_API_URL_WEEK = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson';
 const USGS_API_URL_MONTH = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson';
-const MAJOR_QUAKE_THRESHOLD = 5.0;
+const MAJOR_QUAKE_THRESHOLD = 4.5;
 const FEELABLE_QUAKE_THRESHOLD = 2.5;
 const FELT_REPORTS_THRESHOLD = 0;
 const SIGNIFICANCE_THRESHOLD = 0;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const LOADING_MESSAGE_INTERVAL_MS = 750;
 const HEADER_TIME_UPDATE_INTERVAL_MS = 60 * 1000;
-// BANNER_TIME_UPDATE_INTERVAL_MS = 1000; // No longer needed for banner state
 
 const INITIAL_LOADING_MESSAGES = [
     "Connecting to Global Seismic Network...", "Fetching Most Recent Events...", "Processing Live Data...",
@@ -147,7 +148,6 @@ function App() {
 
     // --- Sub-Components (Memoized) ---
 
-    // TimeSinceLastMajorQuakeBanner Refactored
     const TimeSinceLastMajorQuakeBanner = React.memo(({
                                                           lastMajorQuake,
                                                           timeBetweenPreviousMajorQuakes,
@@ -157,7 +157,6 @@ function App() {
                                                       }) => {
         const [timeAgoFormatted, setTimeAgoFormatted] = useState('Calculating...');
 
-        // Internal effect to manage the timer for display updates
         useEffect(() => {
             let intervalId = null;
             if (lastMajorQuake?.properties?.time) {
@@ -166,16 +165,16 @@ function App() {
                     const timeSince = Date.now() - startTime;
                     setTimeAgoFormatted(formatTimeDuration(timeSince));
                 };
-                updateDisplay(); // Initial update
-                intervalId = setInterval(updateDisplay, 1000); // Update every second
+                updateDisplay();
+                intervalId = setInterval(updateDisplay, 1000);
             } else {
-                setTimeAgoFormatted('N/A'); // Reset if no quake
+                setTimeAgoFormatted('N/A');
             }
 
-            return () => { // Cleanup function
+            return () => {
                 if (intervalId) clearInterval(intervalId);
             };
-        }, [lastMajorQuake]); // Dependency: only rerun if the last quake itself changes
+        }, [lastMajorQuake]);
 
         const bannerLoading = isLoadingInitial || (isLoadingMonthly && !lastMajorQuake);
         if (bannerLoading && !lastMajorQuake) {
@@ -194,7 +193,6 @@ function App() {
 
         return (<div className="bg-slate-700 p-4 rounded-lg border border-slate-600 text-center text-slate-200">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">IT HAS BEEN:</p>
-            {/* Use the internal state for the time display */}
             <p className="text-2xl md:text-3xl font-bold text-indigo-400 tracking-tight mb-2 min-h-[36px] md:min-h-[44px] flex items-center justify-center">
                 {lastMajorQuake ? timeAgoFormatted : <SkeletonText width="w-1/2 mx-auto" height="h-10"/>}
             </p>
@@ -206,12 +204,11 @@ function App() {
     });
 
     const SummaryStatisticsCard = React.memo(({title, currentPeriodData, previousPeriodData = null, isLoading}) => {
-        // ... (rest of SummaryStatisticsCard implementation - unchanged)
         const cardBg = "bg-slate-700"; const textColor = "text-slate-300"; const titleColor = "text-indigo-400"; const statBoxBg = "bg-slate-800"; const statValueColor = "text-sky-400"; const statLabelColor = "text-slate-400"; const borderColor = "border-slate-600";
         if (isLoading || currentPeriodData === null) {
             return (<div className={`${cardBg} p-4 rounded-lg border ${borderColor} shadow-md`}> <h3 className={`text-lg font-semibold mb-3 ${titleColor}`}>{title}</h3> <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">{[...Array(8)].map((_, i) => ( <div key={i} className={`${statBoxBg} p-2 rounded-lg text-center animate-pulse`}> <SkeletonText width="w-1/2 mx-auto" height="h-6 mb-1" className="bg-slate-600" /> <SkeletonText width="w-3/4 mx-auto" height="h-3" className="bg-slate-600" /> </div>))}</div> </div>);
         }
-        if (currentPeriodData.length === 0 && !["Summary (Last Hour)", "Summary (Last 24 Hours)"].includes(title)) {
+        if (currentPeriodData.length === 0 && !["Summary (Last Hour)", "Summary (Last 24 Hours)", "Overview (Last 24 Hours)"].includes(title)) { // --- MODIFIED: Added "Overview (Last 24 Hours)"
             return (<div className={`${cardBg} p-4 rounded-lg border ${borderColor} shadow-md`}><h3 className={`text-lg font-semibold mb-3 ${titleColor}`}>{title}</h3><p className={`${textColor} text-center py-3 text-sm`}>No earthquake data for this period.</p></div>);
         }
         const currentStats = calculateStats(currentPeriodData);
@@ -229,11 +226,10 @@ function App() {
             return <span className={`ml-1 text-xs ${trendColor}`}>{trendSign} {Math.abs(diff).toFixed(String(currentValue).includes('.') ? 1 : 0)}</span>;
         };
         const statsToDisplay = [ { label: 'Total Events', value: currentStats.totalEarthquakes, trend: getTrendDisplay(currentStats.totalEarthquakes, previousStats?.totalEarthquakes) }, { label: 'Avg. Magnitude', value: currentStats.averageMagnitude, trend: getTrendDisplay(currentStats.averageMagnitude, previousStats?.averageMagnitude) }, { label: 'Strongest Mag.', value: currentStats.strongestMagnitude, trend: getTrendDisplay(currentStats.strongestMagnitude, previousStats?.strongestMagnitude) }, { label: `Feelable (M${FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+)`, value: currentStats.feelableEarthquakes, trend: getTrendDisplay(currentStats.feelableEarthquakes, previousStats?.feelableEarthquakes) }, { label: 'Significant (M4.5+)', value: currentStats.significantEarthquakes, trend: getTrendDisplay(currentStats.significantEarthquakes, previousStats?.significantEarthquakes) }, { label: 'Avg. Depth (km)', value: currentStats.averageDepth, trend: getTrendDisplay(currentStats.averageDepth, previousStats?.averageDepth) }, { label: 'Deepest (km)', value: currentStats.deepestEarthquake, trend: getTrendDisplay(currentStats.deepestEarthquake, previousStats?.deepestEarthquake) }, { label: 'Avg. Significance', value: currentStats.averageSignificance, trend: getTrendDisplay(currentStats.averageSignificance, previousStats?.averageSignificance) },];
-        return (<div className={`${cardBg} p-4 rounded-lg border ${borderColor} shadow-md`}> <h3 className={`text-lg font-semibold mb-3 ${titleColor}`}>{title}</h3> {currentPeriodData.length === 0 && ["Summary (Last Hour)", "Summary (Last 24 Hours)"].includes(title) && ( <p className={`${textColor} text-center py-3 text-sm`}>No earthquakes recorded in this period.</p>)} {currentPeriodData.length > 0 && ( <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">{statsToDisplay.map(stat => ( <div key={stat.label} className={`${statBoxBg} p-2 rounded-lg text-center border border-slate-700`}> <p className={`text-lg md:text-xl font-bold ${statValueColor}`}>{stat.value}{stat.trend}</p> <p className={`text-xs ${statLabelColor}`}>{stat.label}</p> </div>))}</div>)}</div>);
+        return (<div className={`${cardBg} p-4 rounded-lg border ${borderColor} shadow-md`}> <h3 className={`text-lg font-semibold mb-3 ${titleColor}`}>{title}</h3> {(currentPeriodData.length === 0 && ["Summary (Last Hour)", "Summary (Last 24 Hours)", "Overview (Last 24 Hours)"].includes(title)) && ( <p className={`${textColor} text-center py-3 text-sm`}>No earthquakes recorded in this period.</p>)} {currentPeriodData.length > 0 && ( <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">{statsToDisplay.map(stat => ( <div key={stat.label} className={`${statBoxBg} p-2 rounded-lg text-center border border-slate-700`}> <p className={`text-lg md:text-xl font-bold ${statValueColor}`}>{stat.value}{stat.trend}</p> <p className={`text-xs ${statLabelColor}`}>{stat.label}</p> </div>))}</div>)}</div>);
     });
 
     const RegionalDistributionList = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
-        // ... (rest of RegionalDistributionList implementation - unchanged)
         const cardBg = "bg-slate-700"; const textColor = "text-slate-300"; const titleColor = "text-indigo-400"; const itemBg = "bg-slate-800"; const itemHoverBg = "hover:bg-slate-600"; const countColor = "text-sky-400"; const borderColor = "border-slate-600";
         const regionalData = useMemo(() => {
             if (!earthquakes) return [];
@@ -252,7 +248,6 @@ function App() {
     });
 
     const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
-        // ... (rest of MagnitudeDistributionSVGChart implementation - unchanged)
         const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const barCountLabelColor = "text-slate-300"; const borderColor = "border-slate-600";
         const magnitudeRanges = useMemo(() => [
             {name: '<1', min: -Infinity, max: 0.99, color: getMagnitudeColor(0.5)},
@@ -280,7 +275,6 @@ function App() {
     });
 
     const EarthquakeTimelineSVGChart = React.memo(({earthquakes, days = 7, titleSuffix = "(Last 7 Days)", isLoading}) => {
-        // ... (rest of EarthquakeTimelineSVGChart implementation - unchanged)
         const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const barCountLabelColor = "text-slate-300"; const barFillColor = "#818CF8"; const borderColor = "border-slate-600";
         const data = useMemo(() => { if (!earthquakes) return []; const countsByDay = {}; const today = new Date(); today.setHours(0, 0, 0, 0); const startDate = new Date(today); startDate.setDate(today.getDate() - (days - 1)); for (let i = 0; i < days; i++) { const d = new Date(startDate); d.setDate(startDate.getDate() + i); countsByDay[d.toLocaleDateString([], {month: 'short', day: 'numeric'})] = 0; } earthquakes.forEach(q => { const eD = new Date(q.properties.time); if (eD >= startDate && eD <= new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1)) { const dS = eD.toLocaleDateString([], {month: 'short', day: 'numeric'}); if (countsByDay.hasOwnProperty(dS)) countsByDay[dS]++; } }); return Object.entries(countsByDay).map(([date, count]) => ({date, count})); }, [earthquakes, days]);
         if (isLoading) return <div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Earthquake Frequency {titleSuffix}</h3><SkeletonBlock height="h-[300px]" className="bg-slate-600"/></div>;
@@ -291,7 +285,6 @@ function App() {
     });
 
     const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
-        // ... (rest of MagnitudeDepthScatterSVGChart implementation - unchanged)
         const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const gridLineColor = "text-slate-600"; const borderColor = "border-slate-600";
         const chartContainerRef = useRef(null);
         const [chartDimensions, setChartDimensions] = useState({ width: 500, height: 350 });
@@ -328,7 +321,7 @@ function App() {
                     resizeObserver.unobserve(chartContainer);
                 }
             };
-        }, []); // Empty dependency array, runs once on mount
+        }, []);
 
         const data = useMemo(() => {
             if (!earthquakes) return [];
@@ -382,8 +375,8 @@ function App() {
                 <h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Magnitude vs. Depth {titleSuffix}</h3>
                 <svg width="100%" height={dynamicHeight} viewBox={`0 0 ${dynamicWidth} ${dynamicHeight}`} className="overflow-visible">
                     <line x1={p.l} y1={dynamicHeight - p.b} x2={dynamicWidth - p.r} y2={dynamicHeight - p.b} stroke="currentColor" className={gridLineColor}/>
-                    {xTicks.map((tick, i) => ( // <-- Add index 'i' here
-                        <g key={`xtick-${tick}-${i}`}> {/* <-- Append '-${i}' to the key */}
+                    {xTicks.map((tick, i) => (
+                        <g key={`xtick-${tick}-${i}`}>
                             <text x={xScale(tick)} y={dynamicHeight - p.b + 20} textAnchor="middle" className={`text-xs fill-current ${tickLabelColor}`}>{tick}</text>
                             <line x1={xScale(tick)} y1={dynamicHeight - p.b} x2={xScale(tick)} y2={dynamicHeight - p.b + 5} stroke="currentColor" className={gridLineColor}/>
                         </g>
@@ -399,7 +392,6 @@ function App() {
     });
 
     const PaginatedEarthquakeTable = React.memo(({ title, earthquakes, isLoading, onQuakeClick, itemsPerPage = 10, defaultSortKey = 'time', initialSortDirection = 'descending', periodName, filterPredicate }) => {
-        // ... (rest of PaginatedEarthquakeTable implementation - unchanged)
         const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const tableHeaderBg = "bg-slate-800"; const tableHeaderTextColor = "text-slate-400"; const tableRowHover = "hover:bg-slate-600"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-slate-300 border-slate-500 disabled:opacity-40"; const paginationText = "text-slate-400";
         const [sortConfig, setSortConfig] = useState({key: defaultSortKey, direction: initialSortDirection}); const [currentPage, setCurrentPage] = useState(1);
         const processedEarthquakes = useMemo(() => { if (!earthquakes) return []; let items = filterPredicate ? earthquakes.filter(filterPredicate) : earthquakes; if (sortConfig.key !== null) { items = [...items].sort((a, b) => { let valA, valB; if (sortConfig.key === 'depth') { valA = a.geometry?.coordinates?.[2]; valB = b.geometry?.coordinates?.[2]; } else { valA = a.properties?.[sortConfig.key]; valB = b.properties?.[sortConfig.key]; } if (valA === null || valA === undefined) return 1; if (valB === null || valB === undefined) return -1; if (typeof valA === 'string' && typeof valB === 'string') { const comparison = valA.toLowerCase().localeCompare(valB.toLowerCase()); return sortConfig.direction === 'ascending' ? comparison : -comparison; } if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1; if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1; return 0; }); } return items; }, [earthquakes, sortConfig, filterPredicate]);
@@ -437,24 +429,23 @@ function App() {
         const memoizedGetMagnitudeColorStyle = getMagnitudeColorStyle;
         const memoizedFormatTimeAgo = formatTimeAgo;
         const memoizedFormatDate = formatDate;
-        // Ensure no whitespace text nodes are direct children of <table> or <tr>
         return (
             <div className={`${cardBg} p-3 rounded-lg mt-4 border ${borderColor} shadow-md`}>
                 <h3 className={`text-md font-semibold mb-2 ${titleColor}`}>{title}</h3>
                 <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
-                    <table className="min-w-full divide-y divide-slate-600">{/*NO WHITESPACE*/}
+                    <table className="min-w-full divide-y divide-slate-600">
                         <thead className={`${tableHeaderBg} sticky top-0 z-10`}>
-                        <tr>{/*NO WHITESPACE*/}
+                        <tr>
                             {columns.map(col => (
                                 <th key={col.key} scope="col" onClick={() => requestSort(col.key)} className={`px-2 py-1.5 sm:px-3 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider cursor-pointer hover:bg-slate-700`}>
                                     {col.label}{getSortIndicator(col.key)}
                                 </th>
-                            ))}{/*NO WHITESPACE*/}
+                            ))}
                         </tr>
-                        </thead>{/*NO WHITESPACE*/}
-                        <tbody className="bg-slate-700 bg-opacity-50 divide-y divide-slate-600">{/*NO WHITESPACE*/}
+                        </thead>
+                        <tbody className="bg-slate-700 bg-opacity-50 divide-y divide-slate-600">
                         {paginatedEarthquakes.map((quake) => (
-                            <tr key={`pgtbl-${quake.id}`} onClick={() => onQuakeClick(quake)} className={`${memoizedGetMagnitudeColorStyle(quake.properties.mag)} ${tableRowHover} cursor-pointer transition-colors`}>{/*NO WHITESPACE*/}
+                            <tr key={`pgtbl-${quake.id}`} onClick={() => onQuakeClick(quake)} className={`${memoizedGetMagnitudeColorStyle(quake.properties.mag)} ${tableRowHover} cursor-pointer transition-colors`}>
                                 <td className={columns[0].className}>{quake.properties.mag?.toFixed(1) || "N/A"}</td>
                                 <td className={`${columns[1].className} text-slate-200`}>
                                     <a href={quake.properties.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-current hover:text-indigo-300 hover:underline">
@@ -466,8 +457,8 @@ function App() {
                                 </td>
                                 <td className={columns[3].className}>{quake.geometry?.coordinates?.[2] !== undefined ? `${quake.geometry.coordinates[2].toFixed(1)} km` : "N/A"}</td>
                             </tr>
-                        ))}{/*NO WHITESPACE*/}
-                        </tbody>{/*NO WHITESPACE*/}
+                        ))}
+                        </tbody>
                     </table>
                 </div>
                 {totalPages > 1 && (
@@ -491,8 +482,7 @@ function App() {
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
     const [dataFetchTime, setDataFetchTime] = useState(null);
-    const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Used for header time ago display
-    // const [bannerCurrentTime, setBannerCurrentTime] = useState(Date.now()); // Removed - Banner manages its own time
+    const [appCurrentTime, setAppCurrentTime] = useState(Date.now());
     const [hasRecentTsunamiWarning, setHasRecentTsunamiWarning] = useState(false);
     const [lastMajorQuake, setLastMajorQuake] = useState(null);
     const [timeBetweenPreviousMajorQuakes, setTimeBetweenPreviousMajorQuakes] = useState(null);
@@ -512,7 +502,7 @@ function App() {
     const [selectedDetailUrl, setSelectedDetailUrl] = useState(null);
     const isInitialAppLoad = useRef(true);
     const [globeEarthquakes, setGlobeEarthquakes] = useState([]);
-    const [focusedNotableQuake, setFocusedNotableQuake] = useState(null); // Keep for potential future use (e.g., fly-to on globe)
+    const [focusedNotableQuake, setFocusedNotableQuake] = useState(null);
     const [activeSidebarView, setActiveSidebarView] = useState('overview_panel');
 
     // --- Derived State & Memos ---
@@ -520,7 +510,6 @@ function App() {
 
     // --- Data Fetching Callbacks ---
     const fetchDataCb = useCallback(async (url) => {
-        // ... (fetchDataCb implementation - unchanged)
         try {
             const response = await fetch(url);
             if (!response.ok) { let errorBody = ''; try { errorBody = await response.text(); } catch (e) {} throw new Error(`HTTP error! status: ${response.status} ${response.statusText}. ${errorBody}`);}
@@ -533,8 +522,7 @@ function App() {
     }, []);
 
     // --- Effect Hooks ---
-    useEffect(() => { // Initial Data Load & Refresh Interval
-        // ... (orchestrateInitialDataLoad implementation largely unchanged)
+    useEffect(() => {
         let isMounted = true;
         const orchestrateInitialDataLoad = async () => {
             if (!isMounted) return;
@@ -548,7 +536,7 @@ function App() {
             const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0) => data ? data.filter(q => q.properties.time >= (nowForFiltering - hoursAgoStart * 36e5) && q.properties.time < (nowForFiltering - hoursAgoEnd * 36e5)) : [];
 
             let dailyMajor = null;
-            let currentLocalLastMajorQuake = null; // To track within this async function
+            let currentLocalLastMajorQuake = null;
             setLastMajorQuake(prev => { currentLocalLastMajorQuake = prev; return prev; });
 
 
@@ -571,7 +559,7 @@ function App() {
                     if (dailyMajor) {
                         setLastMajorQuake(prev => {
                             const newQuake = (!prev || dailyMajor.properties.time > prev.properties.time) ? dailyMajor : prev;
-                            currentLocalLastMajorQuake = newQuake; // Update local tracker
+                            currentLocalLastMajorQuake = newQuake;
                             return newQuake;
                         });
                     }
@@ -600,13 +588,13 @@ function App() {
                     if (latestWeeklyMajor) {
                         setLastMajorQuake(prev => {
                             const newQuake = (!prev || latestWeeklyMajor.properties.time > prev.properties.time) ? latestWeeklyMajor : prev;
-                            currentLocalLastMajorQuake = newQuake; // Update local tracker
+                            currentLocalLastMajorQuake = newQuake;
                             return newQuake;
                         });
                     }
 
                     let consolidatedMajors = [];
-                    if (dailyMajor) consolidatedMajors.push(dailyMajor); // From earlier in this function
+                    if (dailyMajor) consolidatedMajors.push(dailyMajor);
                     consolidatedMajors = [...consolidatedMajors, ...weeklyMajorsList]
                         .sort((a,b) => b.properties.time - a.properties.time)
                         .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id));
@@ -623,10 +611,9 @@ function App() {
         orchestrateInitialDataLoad();
         const intervalId = setInterval(orchestrateInitialDataLoad, REFRESH_INTERVAL_MS);
         return () => { isMounted = false; clearInterval(intervalId); };
-    }, [fetchDataCb]);
+    }, [fetchDataCb]); // Removed getRegionForEarthquake, getMagnitudeColor from dependencies as they are stable
 
-    const handleLoadMonthlyData = useCallback(async () => { // Monthly Data Load
-        // ... (handleLoadMonthlyData implementation largely unchanged)
+    const handleLoadMonthlyData = useCallback(async () => {
         let isMounted = true; setHasAttemptedMonthlyLoad(true); setIsLoadingMonthly(true); setMonthlyError(null);
         setLoadingMessageIndex(0); setCurrentLoadingMessages(MONTHLY_LOADING_MESSAGES);
         const nowForFiltering = Date.now();
@@ -655,7 +642,7 @@ function App() {
                 if (latestMonthlyMajor) {
                     setLastMajorQuake(prev => {
                         const newQuake = (!prev || latestMonthlyMajor.properties.time > prev.properties.time) ? latestMonthlyMajor : prev;
-                        currentOverallLastMajorQuakeForMonthly = newQuake; // Update local tracker
+                        currentOverallLastMajorQuakeForMonthly = newQuake;
                         return newQuake;
                     });
                 }
@@ -681,14 +668,10 @@ function App() {
         return () => { isMounted = false; };
     }, [fetchDataCb]);
 
-    useEffect(() => { // Header Time Update
+    useEffect(() => {
         const timerId = setInterval(() => setAppCurrentTime(Date.now()), HEADER_TIME_UPDATE_INTERVAL_MS);
         return () => clearInterval(timerId);
     }, []);
-    // useEffect(() => { // Banner Time Update - Removed
-    //     const timerId = setInterval(() => setBannerCurrentTime(Date.now()), BANNER_TIME_UPDATE_INTERVAL_MS);
-    //     return () => clearInterval(timerId);
-    // }, []);
 
     // --- UI Calculations & Memos ---
     const showFullScreenLoader = useMemo(() => (isLoadingDaily || isLoadingWeekly) && isInitialAppLoad.current, [isLoadingDaily, isLoadingWeekly]);
@@ -696,7 +679,6 @@ function App() {
     const currentAlertConfig = useMemo(() => { if (highestRecentAlert && ALERT_LEVELS[highestRecentAlert.toUpperCase()]) { return ALERT_LEVELS[highestRecentAlert.toUpperCase()]; } return null; }, [highestRecentAlert]);
 
     const keyStatsForGlobe = useMemo(() => {
-        // ... (keyStatsForGlobe implementation - unchanged)
         const isLoadingCritical = isLoadingDaily || isLoadingWeekly;
         if (isLoadingCritical || !earthquakesLast24Hours || !earthquakesLast72Hours) {
             return {
@@ -716,26 +698,45 @@ function App() {
         };
     }, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, isLoadingDaily, isLoadingWeekly, calculateStats]);
 
-    // Memo for bottom banner (no longer needs bannerCurrentTime)
     const timeSinceLastMajorFormatted = useMemo(() => {
         if (isLoadingInitialData && !lastMajorQuake) return <SkeletonText width="w-1/2 mx-auto" height="h-8" className="bg-slate-600"/>;
         if (!lastMajorQuake?.properties?.time) return "Extended period without M5+.";
-        // Display the current time duration - this component will update itself via internal state now
         return formatTimeDuration(Date.now() - lastMajorQuake.properties.time);
-    }, [lastMajorQuake, isLoadingInitialData, formatTimeDuration]); // Dependency only on the quake and loading state
+    }, [lastMajorQuake, isLoadingInitialData, formatTimeDuration]);
+
+    // --- ADDED: Memo for recent significant quakes for the overview panel ---
+    const recentSignificantQuakesForOverview = useMemo(() => {
+        if (!earthquakesLast7Days) return [];
+        return earthquakesLast7Days
+            .filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD)
+            .sort((a, b) => b.properties.time - a.properties.time);
+    }, [earthquakesLast7Days]);
+
+    // --- ADDED: Memo for most active region for the overview panel ---
+    const mostActiveRegionOverview = useMemo(() => {
+        if (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0) {
+            return { name: "N/A", count: 0, color: "#9CA3AF" };
+        }
+        const counts = REGIONS.map(r => ({ ...r, count: 0 }));
+        earthquakesLast24Hours.forEach(q => {
+            const region = getRegionForEarthquake(q);
+            const regionCounter = counts.find(r => r.name === region.name);
+            if (regionCounter) regionCounter.count++;
+        });
+        const sortedRegions = counts.filter(r => r.count > 0).sort((a, b) => b.count - a.count);
+        return sortedRegions.length > 0 ? sortedRegions[0] : { name: "No activity in defined regions", count: 0, color: "#9CA3AF" };
+    }, [earthquakesLast24Hours, REGIONS, getRegionForEarthquake]);
+
 
     // --- Event Handlers ---
     const handleQuakeClick = useCallback((quake) => { const detailUrl = quake?.properties?.detail; if (detailUrl) setSelectedDetailUrl(detailUrl); else { console.warn("No detail URL for earthquake:", quake?.id); } }, []);
     const handleCloseDetail = useCallback(() => setSelectedDetailUrl(null), []);
     const handleNotableQuakeSelect = useCallback((quakeFromFeature) => {
-        // Set state for potential future use (like fly-to)
         setFocusedNotableQuake(quakeFromFeature);
-        // Primarily open the detail view for now
         const detailUrl = quakeFromFeature?.properties?.detail || quakeFromFeature?.properties?.url || quakeFromFeature?.url;
         if (detailUrl) {
             setSelectedDetailUrl(detailUrl);
         } else {
-            // Fallback alert if no URL
             alert(`Featured Quake: ${quakeFromFeature.name || quakeFromFeature.properties?.place}\n${quakeFromFeature.description || ''}`);
         }
     }, []);
@@ -750,7 +751,6 @@ function App() {
     // --- Main Render ---
     return (
         <div className="flex flex-col h-screen font-sans bg-slate-900 text-slate-100 antialiased">
-            {/* Header */}
             <header className="bg-slate-800 text-white p-2 shadow-lg z-30 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
@@ -759,17 +759,19 @@ function App() {
             </header>
 
             <div className="flex flex-1 overflow-hidden">
-                {/* Main Content (Globe) */}
                 <main className="flex-1 relative bg-black" style={{minWidth: '60%'}}>
                     <InteractiveGlobeView
                         earthquakes={globeEarthquakes}
                         onQuakeClick={handleQuakeClick}
                         getMagnitudeColorFunc={getMagnitudeColor}
-                        allowUserDragRotation={false} // Keep this false as requested
-                        enableAutoRotation={true}     // Keep auto-rotate enabled
-                        globeAutoRotateSpeed={0.1}   // Keep speed setting
+                        allowUserDragRotation={false}
+                        enableAutoRotation={true}
+                        globeAutoRotateSpeed={0.1}
+                        coastlineGeoJson={coastlineData}
+                        tectonicPlatesGeoJson={tectonicPlatesData}
+                        highlightedQuakeId={lastMajorQuake?.id} // For point highlighting
+                        latestMajorQuakeForRing={lastMajorQuake}
                     />
-                    {/* Globe Overlays */}
                     <div className="absolute top-2 left-2 z-10 space-y-2">
                         <NotableQuakeFeature
                             dynamicFeaturedQuake={lastMajorQuake}
@@ -785,23 +787,16 @@ function App() {
                             <p className="text-xs">24h Strongest: <span className="font-bold text-md text-sky-300">{keyStatsForGlobe.strongest24h}</span></p>
                         </div>
                     </div>
-                    {/* Time Since Banner (Bottom) */}
-                    {/* This banner now updates internally, but we still use the memoized value for initial display */}
                     <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-10 p-2.5 bg-slate-900 bg-opacity-85 text-white rounded-lg shadow-xl text-center backdrop-blur-md border border-slate-700 min-w-[300px] max-w-[90%]">
                         <p className="text-[10px] sm:text-xs uppercase text-slate-400">Time Since Last Major (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) Quake Globally:</p>
-                        {/* Use the memoized value which reads the component's internal state */}
                         <p className="text-xl sm:text-2xl font-bold text-orange-400 my-0.5">{timeSinceLastMajorFormatted}</p>
                         {lastMajorQuake && <p className="text-[10px] sm:text-xs text-slate-300 truncate">M{lastMajorQuake.properties.mag?.toFixed(1)} - {lastMajorQuake.properties.place}</p>}
                     </div>
                 </main>
 
-                {/* Sidebar */}
                 <aside className="w-[480px] bg-slate-800 p-0 flex flex-col border-l border-slate-700 shadow-2xl z-20">
-                    {/* Sidebar Header */}
                     <div className="p-3 border-b border-slate-700"> <h2 className="text-md font-semibold text-indigo-400">Detailed Earthquake Analysis</h2> </div>
-                    {/* Sidebar Tabs */}
                     <div className="flex-shrink-0 p-2 space-x-1 border-b border-slate-700 whitespace-nowrap overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
-                        {/* Tab Buttons */}
                         <button onClick={() => setActiveSidebarView('overview_panel')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
                         <button onClick={() => setActiveSidebarView('details_1hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>
                         <button onClick={() => setActiveSidebarView('details_24hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_24hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 24hr</button>
@@ -809,45 +804,93 @@ function App() {
                         {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={() => setActiveSidebarView('details_14day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={() => setActiveSidebarView('details_30day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
                         <button onClick={() => setActiveSidebarView('learn_more')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
                     </div>
-                    {/* Sidebar Content */}
                     <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
-                        {/* Error Display */}
                         {error && !showFullScreenLoader && (<div className="bg-red-700 bg-opacity-40 border border-red-600 text-red-200 px-3 py-2 rounded-md text-xs" role="alert"><strong className="font-bold">Data Error:</strong> {error} Some data might be unavailable.</div>)}
-                        {/* Overview Panel Content */}
                         {activeSidebarView === 'overview_panel' && ( <>
                             {currentAlertConfig && ( <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}> <p className="font-bold text-sm">Active USGS Alert: {currentAlertConfig.text}</p> <p>{currentAlertConfig.description}</p> {activeAlertTriggeringQuakes.length > 0 && (<PaginatedEarthquakeTable title={`Alert Triggering Quakes (${currentAlertConfig.text})`} earthquakes={activeAlertTriggeringQuakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={3} periodName="alerting"/> )} </div> )}
                             {hasRecentTsunamiWarning && !currentAlertConfig && (<div className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs" role="alert"><p className="font-bold">Tsunami Info</p><p>Recent quakes indicate potential tsunami activity. Check official channels.</p></div>)}
-                            {/* Pass necessary props, but not currentTime */}
                             <TimeSinceLastMajorQuakeBanner
                                 lastMajorQuake={lastMajorQuake}
                                 timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
                                 isLoadingInitial={isLoadingInitialData}
                                 isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad}
                                 majorQuakeThreshold={MAJOR_QUAKE_THRESHOLD}
-                                // formatTimeDuration={formatTimeDuration} // formatTimeDuration is now used internally
-                                // getRegionForEarthquake={getRegionForEarthquake} // Still needed for display inside banner
-                                // getMagnitudeColor={getMagnitudeColor} // Still needed for display inside banner
                             />
+                            {/* --- ADDED: Prominent Global Statistics Snapshot --- */}
+                            <SummaryStatisticsCard
+                                title="Overview (Last 24 Hours)"
+                                currentPeriodData={earthquakesLast24Hours}
+                                isLoading={isLoadingDaily || (isLoadingWeekly && !earthquakesLast24Hours)}
+                            />
+
+                            {/* --- ADDED: Most Active Region Snippet --- */}
+                            <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
+                                <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
+                                {isLoadingDaily && !earthquakesLast24Hours ? (
+                                    <SkeletonText width="w-full" height="h-5" className="bg-slate-600"/>
+                                ) : (
+                                    <p className="text-slate-300">
+                                        <span className="font-semibold" style={{color: mostActiveRegionOverview.color || '#9CA3AF'}}>
+                                            {mostActiveRegionOverview.name}
+                                        </span>
+                                        {mostActiveRegionOverview.count > 0 ? ` - ${mostActiveRegionOverview.count} events` : ' (No significant regional activity)'}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* --- ADDED: Quick List of Recent Significant Quakes --- */}
+                            {recentSignificantQuakesForOverview.length > 0 && (
+                                <PaginatedEarthquakeTable
+                                    title={`Recent Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)`}
+                                    earthquakes={recentSignificantQuakesForOverview}
+                                    isLoading={isLoadingWeekly && !earthquakesLast7Days}
+                                    onQuakeClick={handleQuakeClick}
+                                    itemsPerPage={3} // Show a few recent ones
+                                    defaultSortKey="time"
+                                    initialSortDirection="descending"
+                                    periodName="last 7 days"
+                                />
+                            )}
+                            {isLoadingWeekly && recentSignificantQuakesForOverview.length === 0 && !earthquakesLast7Days &&
+                                <div className="bg-slate-700 p-3 rounded-lg mt-4 border border-slate-600 shadow-md">
+                                    <h3 className="text-md font-semibold mb-2 text-indigo-400">Recent Significant Quakes (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)</h3>
+                                    <SkeletonListItem /> <SkeletonListItem />
+                                </div>
+                            }
+
+                            {/* --- ADDED: Educational Tidbit / Did You Know? --- */}
+                            <div className="bg-slate-700 p-2 rounded-lg border border-slate-600 shadow-md">
+                                <h3 className="text-md font-semibold mb-1 text-indigo-400">Did You Know?</h3>
+                                <InfoSnippet topic="magnitude" /> {/* Default topic */}
+                            </div>
+
+                            {/* --- ADDED: Brief Tectonic Plates Context --- */}
+                            <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
+                                <h3 className="text-md font-semibold mb-1 text-indigo-400">Earthquakes & Tectonic Plates</h3>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                    Most earthquakes occur along the edges of tectonic plates, massive slabs of Earth's lithosphere that are constantly moving.
+                                    These movements build up stress in the rock, which is eventually released as an earthquake.
+                                    The lines on the globe represent these major plate boundaries, where different types of interactions (convergent, divergent, transform) lead to seismic activity.
+                                    You can explore these boundaries on the interactive globe. For more detailed explanations, visit the "Learn" tab.
+                                </p>
+                            </div>
+
+
                         </> )}
-                        {/* Learn More Panel */}
                         {activeSidebarView === 'learn_more' && ( <div className="p-2 bg-slate-700 rounded-md"> <h3 className="text-md font-semibold text-indigo-400 mb-2">Learn About Earthquakes</h3> <InfoSnippet topic="magnitude" /> <InfoSnippet topic="depth" /> <InfoSnippet topic="intensity" /> <InfoSnippet topic="alerts" /> </div> )}
 
-                        {/* Detail Panels (1hr, 24hr, 7day, etc.) */}
-                        {/* --- Last Hour --- */}
                         {activeSidebarView === 'details_1hr' && !isLoadingDaily && earthquakesLastHour && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last Hour)" currentPeriodData={earthquakesLastHour} isLoading={isLoadingDaily}/>
                             <PaginatedEarthquakeTable title="Earthquakes (Last Hour)" earthquakes={earthquakesLastHour} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} itemsPerPage={5} periodName="last hour"/>
                             <RegionalDistributionList earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily}/>
                             <MagnitudeDepthScatterSVGChart earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily} />
                         </div> )}
-                        {/* --- Last 24 Hours --- */}
                         {activeSidebarView === 'details_24hr' && !isLoadingWeekly && earthquakesLast24Hours && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last 24 Hours)" currentPeriodData={earthquakesLast24Hours} previousPeriodData={prev24HourData} isLoading={isLoadingWeekly || (isLoadingDaily && !prev24HourData) }/>
                             <PaginatedEarthquakeTable title="Earthquakes (Last 24 Hours)" earthquakes={earthquakesLast24Hours} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} periodName="last 24 hours"/>
                             <RegionalDistributionList earthquakes={earthquakesLast24Hours} titleSuffix="(Last 24 Hours)" isLoading={isLoadingDaily}/>
                             <MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast24Hours} titleSuffix="(Last 24 Hours)" isLoading={isLoadingDaily} />
                         </div> )}
-                        {/* --- Last 7 Days --- */}
                         {activeSidebarView === 'details_7day' && !isLoadingWeekly && earthquakesLast7Days && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last 7 Days)" currentPeriodData={earthquakesLast7Days} previousPeriodData={prev7DayData} isLoading={isLoadingWeekly || (isLoadingMonthly && hasAttemptedMonthlyLoad && !prev7DayData) }/>
                             <PaginatedEarthquakeTable title="Earthquakes (Last 7 Days)" earthquakes={earthquakesLast7Days} isLoading={isLoadingWeekly} onQuakeClick={handleQuakeClick} periodName="last 7 days"/>
@@ -856,19 +899,16 @@ function App() {
                             <MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast7Days} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} />
                         </div> )}
 
-                        {/* Monthly Data Load Button & Status */}
                         {activeSidebarView !== 'overview_panel' && activeSidebarView !== 'learn_more' && !hasAttemptedMonthlyLoad && ( <div className="text-center py-3 mt-3 border-t border-slate-700"> <button onClick={handleLoadMonthlyData} disabled={isLoadingMonthly} className="w-full bg-teal-600 hover:bg-teal-500 p-2.5 rounded-md text-white font-semibold transition-colors text-xs shadow-md disabled:opacity-60"> {isLoadingMonthly ? 'Loading Historical Data...' : 'Load Full 14 & 30-Day Analysis'} </button> </div> )}
                         {hasAttemptedMonthlyLoad && isLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
                         {hasAttemptedMonthlyLoad && monthlyError && !isLoadingMonthly && <p className="text-red-300 text-xs text-center py-1">Error loading monthly data: {monthlyError}</p>}
 
-                        {/* --- Last 14 Days --- */}
                         {activeSidebarView === 'details_14day' && hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length > 0 && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last 14 Days)" currentPeriodData={earthquakesLast14Days} previousPeriodData={prev14DayData} isLoading={false}/>
                             <EarthquakeTimelineSVGChart earthquakes={earthquakesLast14Days} days={14} titleSuffix="(Last 14 Days)" isLoading={false}/>
                             <MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast14Days} titleSuffix="(Last 14 Days)" isLoading={false}/>
                             <PaginatedEarthquakeTable title="All Earthquakes (Last 14 Days)" earthquakes={earthquakesLast14Days} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={10} defaultSortKey="time" initialSortDirection="descending"/>
                         </div> )}
-                        {/* --- Last 30 Days --- */}
                         {activeSidebarView === 'details_30day' && hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length > 0 && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last 30 Days)" currentPeriodData={earthquakesLast30Days} isLoading={false}/>
                             <div className="grid grid-cols-1 gap-3">
@@ -882,7 +922,6 @@ function App() {
                             <PaginatedEarthquakeTable title="All Earthquakes (Last 30 Days)" earthquakes={allEarthquakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={15} defaultSortKey="time" initialSortDirection="descending"/>
                         </div> )}
 
-                        {/* Loading / No Data States */}
                         {(isLoadingDaily || isLoadingWeekly || (hasAttemptedMonthlyLoad && isLoadingMonthly)) && !showFullScreenLoader &&
                             activeSidebarView !== 'overview_panel' && activeSidebarView !== 'learn_more' &&
                             !((activeSidebarView === 'details_1hr' && earthquakesLastHour) || (activeSidebarView === 'details_24hr' && earthquakesLast24Hours && prev24HourData) || (activeSidebarView === 'details_7day' && earthquakesLast7Days)) &&
@@ -891,12 +930,10 @@ function App() {
                         {hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length === 0 && (activeSidebarView === 'details_14day' || activeSidebarView === 'details_30day') &&( <p className="text-slate-400 text-center py-4 text-sm">No 14/30 day earthquake data found or loaded.</p> )}
                         {!initialDataLoaded && !isLoadingDaily && !isLoadingWeekly && (activeSidebarView === 'details_1hr' || activeSidebarView === 'details_24hr' || activeSidebarView === 'details_7day' ) && ( <div className="text-center py-10"><p className="text-sm text-slate-500">No data available for this period.</p></div> )}
                     </div>
-                    {/* Sidebar Footer */}
                     <div className="p-1.5 text-center border-t border-slate-700 mt-auto"> <p className="text-[10px] text-slate-500">&copy; {new Date().getFullYear()} Seismic Insights Museum | Data: USGS</p> </div>
                 </aside>
             </div>
 
-            {/* Detail View Modal */}
             {selectedDetailUrl && ( <EarthquakeDetailView detailUrl={selectedDetailUrl} onClose={handleCloseDetail} /> )}
         </div>
     );
