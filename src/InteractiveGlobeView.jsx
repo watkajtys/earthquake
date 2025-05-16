@@ -178,7 +178,7 @@ const InteractiveGlobeView = ({
                 id: `major_quake_ring_${latestMajorQuakeForRing.id}_${latestMajorQuakeForRing.properties.time}_${Date.now()}`,
                 lat: coords[1],
                 lng: coords[0],
-                altitude: 0.0025, // Slightly increased altitude
+                altitude: 0.02, // Slightly increased altitude
 
                 // Option 1: Brighter, more consistently opaque color (less fade-out of alpha)
                 // color: (t) => `rgba(255, 100, 0, ${Math.max(0.2, 0.8 - t * 0.6)})`, // Orange-Red, keeps some opacity
@@ -193,11 +193,11 @@ const InteractiveGlobeView = ({
                 repeatPeriod: 1800, // Pulsing effect, adjust as preferred (0 for single shot)
             };
 
-            // console.log("Setting ringsData with:", ringObject);
+            console.log("Setting ringsData with:", ringObject);
             setRingsData([ringObject]);
 
         } else {
-            // console.log("latestMajorQuakeForRing is invalid or null, clearing ringsData.");
+            console.log("latestMajorQuakeForRing is invalid or null, clearing ringsData.");
             if (ringsData.length > 0) {
                 setRingsData([]);
             }

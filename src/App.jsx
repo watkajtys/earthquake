@@ -5,7 +5,8 @@ import InteractiveGlobeView from './InteractiveGlobeView';
 import NotableQuakeFeature from './NotableQuakeFeature';
 import InfoSnippet from './InfoSnippet';
 import coastlineData from './ne_110m_coastline.json'; // Direct import
-import tectonicPlatesData from './TectonicPlateBoundaries.json'; // Direct import
+import tectonicPlatesData from './TectonicPlateBoundaries.json';
+import GlobalLastMajorQuakeTimer                                    from "./GlobalLastMajorQuakeTimer.jsx"; // Direct import
 
 // --- Configuration & Helpers ---
 const USGS_API_URL_DAY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
@@ -787,11 +788,12 @@ function App() {
                             <p className="text-xs">24h Strongest: <span className="font-bold text-md text-sky-300">{keyStatsForGlobe.strongest24h}</span></p>
                         </div>
                     </div>
-                    <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-10 p-2.5 bg-slate-900 bg-opacity-85 text-white rounded-lg shadow-xl text-center backdrop-blur-md border border-slate-700 min-w-[300px] max-w-[90%]">
-                        <p className="text-[10px] sm:text-xs uppercase text-slate-400">Time Since Last Major (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) Quake Globally:</p>
-                        <p className="text-xl sm:text-2xl font-bold text-orange-400 my-0.5">{timeSinceLastMajorFormatted}</p>
-                        {lastMajorQuake && <p className="text-[10px] sm:text-xs text-slate-300 truncate">M{lastMajorQuake.properties.mag?.toFixed(1)} - {lastMajorQuake.properties.place}</p>}
-                    </div>
+                    <GlobalLastMajorQuakeTimer
+                        lastMajorQuake={lastMajorQuake}
+                        MAJOR_QUAKE_THRESHOLD={MAJOR_QUAKE_THRESHOLD}
+                        formatTimeDuration={formatTimeDuration} // Pass the stable function
+                        SkeletonText={SkeletonText} // Pass your SkeletonText component
+                    />
                 </main>
 
                 <aside className="w-[480px] bg-slate-800 p-0 flex flex-col border-l border-slate-700 shadow-2xl z-20">
@@ -845,7 +847,7 @@ function App() {
                                     earthquakes={recentSignificantQuakesForOverview}
                                     isLoading={isLoadingWeekly && !earthquakesLast7Days}
                                     onQuakeClick={handleQuakeClick}
-                                    itemsPerPage={3} // Show a few recent ones
+                                    itemsPerPage={10} // Show a few recent ones
                                     defaultSortKey="time"
                                     initialSortDirection="descending"
                                     periodName="last 7 days"
@@ -881,7 +883,7 @@ function App() {
 
                         {activeSidebarView === 'details_1hr' && !isLoadingDaily && earthquakesLastHour && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last Hour)" currentPeriodData={earthquakesLastHour} isLoading={isLoadingDaily}/>
-                            <PaginatedEarthquakeTable title="Earthquakes (Last Hour)" earthquakes={earthquakesLastHour} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} itemsPerPage={5} periodName="last hour"/>
+                            <PaginatedEarthquakeTable title="Earthquakes (Last Hour)" earthquakes={earthquakesLastHour} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} itemsPerPage={10} periodName="last hour"/>
                             <RegionalDistributionList earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily}/>
                             <MagnitudeDepthScatterSVGChart earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily} />
                         </div> )}
