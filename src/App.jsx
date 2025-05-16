@@ -863,7 +863,7 @@ function App() {
                             {/* --- ADDED: Educational Tidbit / Did You Know? --- */}
                             <div className="bg-slate-700 p-2 rounded-lg border border-slate-600 shadow-md">
                                 <h3 className="text-md font-semibold mb-1 text-indigo-400">Did You Know?</h3>
-                                <InfoSnippet topic="magnitude" /> {/* Default topic */}
+                                <InfoSnippet topic="magnitude" />
                             </div>
 
                             {/* --- ADDED: Brief Tectonic Plates Context --- */}
@@ -879,7 +879,7 @@ function App() {
 
 
                         </> )}
-                        {activeSidebarView === 'learn_more' && ( <div className="p-2 bg-slate-700 rounded-md"> <h3 className="text-md font-semibold text-indigo-400 mb-2">Learn About Earthquakes</h3> <InfoSnippet topic="magnitude" /> <InfoSnippet topic="depth" /> <InfoSnippet topic="intensity" /> <InfoSnippet topic="alerts" /> </div> )}
+                        {activeSidebarView === 'learn_more' && ( <div className="p-2 bg-slate-700 rounded-md"> <h3 className="text-md font-semibold text-indigo-400 mb-2">Learn About Earthquakes</h3> <InfoSnippet topic="magnitude" /> <InfoSnippet topic="depth" /> <InfoSnippet topic="intensity" /> <InfoSnippet topic="alerts" /> <InfoSnippet topic="strike"/> <InfoSnippet topic="dip"/> <InfoSnippet topic="rake"/> <InfoSnippet topic="stressAxes"/> <InfoSnippet topic="beachball"/> <InfoSnippet topic="stationsUsed"/> <InfoSnippet topic="azimulthalGap"/> <InfoSnippet topic="rmsError"/> </div> )}
 
                         {activeSidebarView === 'details_1hr' && !isLoadingDaily && earthquakesLastHour && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last Hour)" currentPeriodData={earthquakesLastHour} isLoading={isLoadingDaily}/>

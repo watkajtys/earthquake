@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import InfoSnippet                                          from "./InfoSnippet.jsx";
 
 // Helper Functions
 const formatDate = (timestamp) => {
@@ -45,6 +46,102 @@ const formatLargeNumber = (num) => {
     return value + suffix;
 };
 
+
+const getBeachballPathsAndType = (rake, dip = 45) => {
+    let faultType = 'UNKNOWN';
+    const r = parseFloat(rake);
+    // const d = parseFloat(dip); // Dip can be used later for more refined patterns
+
+    if (!isValidNumber(r)) return { shadedPaths: [], faultType, nodalPlanes: [] };
+
+    // Rake categories for fault type classification
+    // These thresholds define ranges for fault types.
+    if ((r >= -22.5 && r <= 22.5) || r > 157.5 || r < -157.5) {
+        faultType = 'STRIKE_SLIP';
+    } else if (r >= 67.5 && r <= 112.5) {
+        faultType = 'REVERSE'; // Pure Reverse/Thrust
+    } else if (r <= -67.5 && r >= -112.5) {
+        faultType = 'NORMAL'; // Pure Normal
+    } else if (r > 22.5 && r < 67.5) { // Oblique Left-Lateral Reverse
+        faultType = 'OBLIQUE_REVERSE';
+    } else if (r > 112.5 && r < 157.5) { // Oblique Right-Lateral Reverse
+        faultType = 'OBLIQUE_REVERSE'; // Grouping with general reverse for visual simplicity
+    } else if (r < -22.5 && r > -67.5) { // Oblique Left-Lateral Normal
+        faultType = 'OBLIQUE_NORMAL';
+    } else if (r < -112.5 && r > -157.5) { // Oblique Right-Lateral Normal
+        faultType = 'OBLIQUE_NORMAL'; // Grouping with general normal for visual simplicity
+    }
+
+
+    let shadedPaths = [];
+    let nodalPlanes = [];
+    const R = 50; // Radius of the beachball
+    const C = 60; // Center coordinate (cx, cy)
+
+    // Standard convention: Shaded areas = compressional (T-axis plots here on USGS diagrams)
+    // White areas = tensional (P-axis plots here on USGS diagrams)
+
+    switch (faultType) {
+        case 'STRIKE_SLIP':
+        case 'OBLIQUE_REVERSE': // Using Strike-Slip pattern as a simplified visual for oblique for now
+        case 'OBLIQUE_NORMAL':  // Using Strike-Slip pattern as a simplified visual for oblique for now
+            // Classic checkerboard for vertical strike-slip
+            shadedPaths = [
+                `M${C},${C-R} A${R},${R} 0 0 1 ${C+R},${C} L${C},${C} Z`, // Top-right quadrant
+                `M${C},${C+R} A${R},${R} 0 0 1 ${C-R},${C} L${C},${C} Z`  // Bottom-left quadrant
+            ];
+            nodalPlanes = [
+                { type: 'line', x1: C, y1: C - R, x2: C, y2: C + R }, // Vertical line
+                { type: 'line', x1: C - R, y1: C, x2: C + R, y2: C }  // Horizontal line
+            ];
+            faultType = 'STRIKE_SLIP_LIKE'; // Overwrite for generic oblique cases
+            break;
+
+        case 'NORMAL': // P-axis vertical (center top/bottom = white), T-axis horizontal (sides = shaded)
+            // Shaded "lunes" on the left and right sides.
+            shadedPaths = [
+                // Left shaded lune (approximated)
+                `M${C},${C-R} C ${C-R*1.5},${C-R*0.5}, ${C-R*1.5},${C+R*0.5}, ${C},${C+R} C ${C-R*0.5},${C+R*0.5}, ${C-R*0.5},${C-R*0.5}, ${C},${C-R} Z`,
+                // Right shaded lune (approximated)
+                `M${C},${C-R} C ${C+R*1.5},${C-R*0.5}, ${C+R*1.5},${C+R*0.5}, ${C},${C+R} C ${C+R*0.5},${C+R*0.5}, ${C+R*0.5},${C-R*0.5}, ${C},${C-R} Z`
+            ];
+            // Nodal planes are two curves, convex towards the center white area.
+            nodalPlanes = [
+                { type: 'path', d: `M${C-R*0.8},${C-R*0.6} Q${C},${C} ${C-R*0.8},${C+R*0.6}` }, // Left curve (approx)
+                { type: 'path', d: `M${C+R*0.8},${C-R*0.6} Q${C},${C} ${C+R*0.8},${C+R*0.6}` }  // Right curve (approx)
+            ];
+            break;
+
+        case 'REVERSE': // P-axis horizontal (center sides = white), T-axis vertical (top/bottom = shaded "eye")
+            // Shaded "eye" in the center (actually top/bottom lobes for T vertical)
+            // This means P-axis is in the white areas on the sides.
+            shadedPaths = [
+                // Top shaded lune
+                `M${C-R},${C} C ${C-R*0.5},${C-R*1.5}, ${C+R*0.5},${C-R*1.5}, ${C+R},${C} C ${C+R*0.5},${C-R*0.5}, ${C-R*0.5},${C-R*0.5}, ${C-R},${C} Z`,
+                // Bottom shaded lune
+                `M${C-R},${C} C ${C-R*0.5},${C+R*1.5}, ${C+R*0.5},${C+R*1.5}, ${C+R},${C} C ${C+R*0.5},${C+R*0.5}, ${C-R*0.5},${C+R*0.5}, ${C-R},${C} Z`
+            ];
+            // Nodal planes are two curves, convex towards the center shaded area.
+            nodalPlanes = [
+                { type: 'path', d: `M${C-R*0.6},${C-R*0.8} Q${C},${C} ${C+R*0.6},${C-R*0.8}` }, // Top curve (approx)
+                { type: 'path', d: `M${C-R*0.6},${C+R*0.8} Q${C},${C} ${C+R*0.6},${C+R*0.8}` }  // Bottom curve (approx)
+            ];
+            break;
+
+        default: // Fallback for any UNKNOWN types
+            faultType = 'STRIKE_SLIP_LIKE'; // Default to strike-slip visual if type is unclear
+            shadedPaths = [
+                `M${C-R},${C} A${R},${R} 0 0 1 ${C},${C-R} L${C},${C} Z`,
+                `M${C+R},${C} A${R},${R} 0 0 1 ${C},${C+R} L${C},${C} Z`
+            ];
+            nodalPlanes = [
+                { type: 'line', x1: C, y1: C - R, x2: C, y2: C + R },
+                { type: 'line', x1: C - R, y1: C, x2: C + R, y2: C }
+            ];
+            break;
+    }
+    return { shadedPaths, faultType, nodalPlanes };
+};
 
 const SkeletonText = ({ width = 'w-3/4', height = 'h-4', className = '' }) => <div className={`bg-gray-300 rounded ${width} ${height} animate-pulse mb-2 ${className}`}></div>;
 const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`bg-gray-300 rounded ${height} animate-pulse ${className}`}></div>;
@@ -94,7 +191,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
         strike: parseFloat(momentTensorProductProps?.['nodal-plane-1-strike']),
         dip: parseFloat(momentTensorProductProps?.['nodal-plane-1-dip']),
         rake: parseFloat(momentTensorProductProps?.['nodal-plane-1-rake']),
-        description: momentTensorProductProps?.['nodal-plane-1-description'] || `Nodal Plane 1 (NP1) suggests a fault orientation and slip. Details below.` // Assuming description can be a string
+        description: momentTensorProductProps?.['nodal-plane-1-description'] || `Nodal Plane 1 (NP1) suggests a fault orientation and slip.` // Assuming description can be a string
     }), [momentTensorProductProps]);
 
     const np2Data = useMemo(() => ({
@@ -139,41 +236,105 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
             // Or a placeholder if absolutely necessary, but the goal is to hide.
             return null;
         }
-        const faultStrikeRotation = planeData.strike; // Already validated as a number
+        const faultStrikeRotation = planeData.strike;
         const blockFill = planeKey === 'np1' ? "#ffe0b2" : "#ede7f6";
         const blockStroke = planeKey === 'np1' ? "#5d4037" : "#4527a0";
 
-        let arrowPath1 = "M 100 100 L 120 100"; // Default: left-lateral
-        let arrowPath2 = "M 250 180 L 230 180";
+        // Define arrow paths based on rake
+        let arrowPath1 = ""; // Arrow on the left block (conceptually)
+        let arrowPath2 = ""; // Arrow on the right block (conceptually)
+        const rake = parseFloat(planeData.rake);
 
-        if (isValidNumber(planeData.rake)) { // Only adjust arrows if rake is a valid number
-            if (planeData.rake > 45 && planeData.rake < 135) { // Reverse fault (hanging wall up)
-                arrowPath1 = "M 100 100 L 100 120";
-                arrowPath2 = "M 250 180 L 250 160";
-            } else if (planeData.rake < -45 && planeData.rake > -135) { // Normal fault (hanging wall down)
-                arrowPath1 = "M 100 120 L 100 100";
-                arrowPath2 = "M 250 160 L 250 180";
+        // Define simplified arrow representations for diagram clarity
+        // Coordinates are relative to the blocks' positions in the unrotated diagram
+        // Left block roughly centered at x=95, right block at x=255, fault between 165-185
+        // Horizontal arrows (for strike-slip components)
+        const L_strike_right = "M 140 140 L 160 140"; // Left block, conceptual "rightward" slip component
+        const L_strike_left  = "M 160 140 L 140 140"; // Left block, conceptual "leftward" slip component
+        const R_strike_left  = "M 210 140 L 190 140"; // Right block, conceptual "leftward" slip component
+        const R_strike_right = "M 190 140 L 210 140"; // Right block, conceptual "rightward" slip component
+
+        // Vertical arrows (for dip-slip components in this top-down view)
+        const L_dip_up   = "M 95 155 L 95 125";   // Left block, conceptual "upward" on diagram
+        const L_dip_down = "M 95 125 L 95 155";   // Left block, conceptual "downward" on diagram
+        const R_dip_down = "M 255 125 L 255 155"; // Right block, conceptual "downward" on diagram
+        const R_dip_up   = "M 255 155 L 255 125";   // Right block, conceptual "upward" on diagram
+
+        // Oblique arrows (combine horizontal and vertical hints)
+        // Left Block
+        const L_oblique_up_right = "M 140 150 L 160 130"; // Up and to the "right" on diagram
+        const L_oblique_up_left = "M 160 150 L 140 130";  // Up and to the "left" on diagram
+        const L_oblique_down_right = "M 140 130 L 160 150"; // Down and to the "right"
+        const L_oblique_down_left = "M 160 130 L 140 150";  // Down and to the "left"
+        // Right Block (mirrored conceptually)
+        const R_oblique_down_left = "M 210 130 L 190 150"; // Down and to the "left"
+        const R_oblique_down_right = "M 190 130 L 210 150"; // Down and to the "right"
+        const R_oblique_up_left = "M 210 150 L 190 130";   // Up and to the "left"
+        const R_oblique_up_right = "M 190 150 L 210 130";  // Up and to the "right"
+
+
+        if (isValidNumber(rake)) {
+            // Rake angle classification (degrees)
+            // Pure Left-Lateral Strike-Slip: rake is close to 0°
+            if (rake >= -22.5 && rake <= 22.5) {
+                arrowPath1 = L_strike_right; arrowPath2 = R_strike_left;
             }
-            // Add cases for oblique, right-lateral if needed
+            // Pure Right-Lateral Strike-Slip: rake is close to ±180°
+            else if (rake >= 157.5 || rake <= -157.5) {
+                arrowPath1 = L_strike_left; arrowPath2 = R_strike_right;
+            }
+            // Pure Reverse/Thrust: rake is close to 90°
+            else if (rake >= 67.5 && rake <= 112.5) {
+                arrowPath1 = L_dip_up; arrowPath2 = R_dip_down; // Assuming left block is hanging wall moving up
+            }
+            // Pure Normal: rake is close to -90°
+            else if (rake <= -67.5 && rake >= -112.5) {
+                arrowPath1 = L_dip_down; arrowPath2 = R_dip_up; // Assuming left block is hanging wall moving down
+            }
+            // Oblique: Left-Lateral component + Reverse component
+            else if (rake > 22.5 && rake < 67.5) { // e.g. Rake 45°
+                arrowPath1 = L_oblique_up_right; arrowPath2 = R_oblique_down_left;
+            }
+            // Oblique: Right-Lateral component + Reverse component
+            else if (rake > 112.5 && rake < 157.5) { // e.g. Rake 135°
+                arrowPath1 = L_oblique_up_left; arrowPath2 = R_oblique_down_right;
+            }
+            // Oblique: Left-Lateral component + Normal component
+            else if (rake < -22.5 && rake > -67.5) { // e.g. Rake -45°
+                arrowPath1 = L_oblique_down_right; arrowPath2 = R_oblique_up_left;
+            }
+            // Oblique: Right-Lateral component + Normal component
+            else if (rake < -112.5 && rake > -157.5) { // e.g. Rake -135°
+                arrowPath1 = L_oblique_down_left; arrowPath2 = R_oblique_up_right;
+            }
+            else { // Fallback if somehow outside these ranges (shouldn't happen with -180 to 180)
+                arrowPath1 = L_strike_right; arrowPath2 = R_strike_left;
+            }
+        } else {
+            // Default if rake is not a valid number (simple left-lateral)
+            arrowPath1 = L_strike_right;
+            arrowPath2 = R_strike_left;
         }
 
         return (
             <svg className="w-full max-w-xs md:max-w-sm mx-auto" height="250" viewBox="0 0 350 280" xmlns="http://www.w3.org/2000/svg">
                 <rect x="10" y="50" width="330" height="180" fill="#e0e7ff" stroke="#adb5bd" strokeWidth="1"/>
-                {isValidNumber(faultStrikeRotation) && // Check before using in transform
+                {isValidNumber(faultStrikeRotation) &&
                     <line x1="175" y1="50" x2="175" y2="230" stroke={blockStroke} strokeWidth="3" strokeDasharray="6,3" transform={`rotate(${faultStrikeRotation} 175 140)`}/>
                 }
                 <g transform={`rotate(${isValidNumber(faultStrikeRotation) ? faultStrikeRotation : 0} 175 140)`}>
                     <rect x="25" y="70" width="140" height="140" fill={blockFill} stroke={blockStroke} strokeWidth="1.5" />
-                    <path d={arrowPath1} stroke="black" strokeWidth="2" markerEnd="url(#arrowhead-detail-fault)" />
+                    {arrowPath1 && <path d={arrowPath1} stroke="black" strokeWidth="2.5" markerEnd="url(#arrowhead-detail-fault)" />}
                     <rect x="185" y="70" width="140" height="140" fill={blockFill} stroke={blockStroke} strokeWidth="1.5" />
-                    <path d={arrowPath2} stroke="black" strokeWidth="2" markerEnd="url(#arrowhead-detail-fault)" />
+                    {arrowPath2 && <path d={arrowPath2} stroke="black" strokeWidth="2.5" markerEnd="url(#arrowhead-detail-fault)" />}
                 </g>
                 <defs>
-                    <marker id="arrowhead-detail-fault" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto"> <polygon points="0 0, 10 3.5, 0 7" fill="black"/> </marker>
+                    <marker id="arrowhead-detail-fault" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"> {/* Adjusted marker for thicker stroke */}
+                        <polygon points="0 0, 8 3, 0 6" fill="black"/>
+                    </marker>
                 </defs>
                 <text x="175" y="30" textAnchor="middle" className="text-sm font-semibold text-indigo-700">Fault View ({planeKey.toUpperCase()})</text>
-                <text x="175" y="265" textAnchor="middle" className="text-xs text-slate-600">Illustrative Diagram</text>
+                <text x="175" y="265" textAnchor="middle" className="text-xs text-slate-600">Illustrative Diagram (Top View)</text>
             </svg>
         );
     };
@@ -385,32 +546,79 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                                 <div className={`${exhibitPanelClass} border-green-500`}>
                                     <h2 className={`${exhibitTitleClass} text-green-800 border-green-200`}>Decoding the Fault Parameters</h2>
                                     <p className="text-xs text-slate-600 mb-3">Parameters for <strong className="font-semibold text-indigo-600">{selectedFaultPlaneKey === 'np1' ? 'Nodal Plane 1' : 'Nodal Plane 2'}</strong>:</p>
-                                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4"> {/* text-center removed from grid for better snippet alignment */}
+
+                                        {/* Strike Parameter Column */}
                                         {isValidNumber(selectedFaultPlane.strike) && (
-                                            <div className="p-2 bg-blue-50 rounded-lg shadow">
-                                                <strong className="block text-blue-700 text-sm">Strike ({formatNumber(selectedFaultPlane.strike,0)}°)</strong>
-                                                <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1"><rect x="5" y="40" width="150" height="75" fill="#e9ecef" stroke="#adb5bd" strokeWidth="1"/><text x="80" y="30" fontSize="10" textAnchor="middle" fill="#495057">Surface</text><path d="M20 105 L75 50 L140 65 L85 120 Z" fill="#ced4da" stroke="#495057" strokeWidth="1.5" /><line x1="75" y1="50" x2="140" y2="65" stroke="#dc3545" strokeWidth="2.5" /><text x="15" y="15" fontSize="10" textAnchor="middle" fill="#333">N</text><path d="M15 20 L15 30" stroke="black" strokeWidth="1" markerEnd="url(#arrow-north-strike-detail)"/><defs><marker id="arrow-north-strike-detail" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M 0 0 L 5 5 L 0 10 z" fill="black" /></marker></defs></svg>
-                                                <p className="text-xs text-slate-600">Compass direction of the fault's intersection with the surface (e.g., {formatNumber(selectedFaultPlane.strike,0)}° means roughly {selectedFaultPlane.strike > 337.5 || selectedFaultPlane.strike <= 22.5 ? "North" : selectedFaultPlane.strike <= 67.5 ? "NE" : selectedFaultPlane.strike <= 112.5 ? "East" : selectedFaultPlane.strike <= 157.5 ? "SE" : selectedFaultPlane.strike <= 202.5 ? "South" : selectedFaultPlane.strike <= 247.5 ? "SW" : selectedFaultPlane.strike <= 292.5 ? "West" : "NW"}).</p>
+                                            <div className="flex flex-col"> {/* Use flex-col to stack diagram and snippet */}
+                                                <div className="p-2 bg-blue-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[150px] sm:min-h-[200px]"> {/* Diagram and primary text in this div */}
+                                                    <strong className="block text-blue-700 text-sm">Strike ({formatNumber(selectedFaultPlane.strike,0)}°)</strong>
+                                                    {/* ... SVG for Strike (as corrected previously) ... */}
+                                                    <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
+                                                        <rect x="5" y="40" width="150" height="75" fill="#e9ecef" stroke="#adb5bd" strokeWidth="1"/>
+                                                        <text x="80" y="35" fontSize="10" textAnchor="middle" fill="#495057">Surface</text>
+                                                        <text x="15" y="15" fontSize="10" textAnchor="middle" fill="#333">N</text>
+                                                        <path d="M15 20 L15 30" stroke="black" strokeWidth="1" markerEnd="url(#arrow-north-strike-detail-decoder)"/>
+                                                        <defs>
+                                                            <marker id="arrow-north-strike-detail-decoder" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+                                                                <path d="M 0 0 L 5 5 L 0 10 z" fill="black" />
+                                                            </marker>
+                                                        </defs>
+                                                        {(() => {
+                                                            const diagramCenterX = 80;
+                                                            const diagramCenterY = 77.5;
+                                                            const lineLength = 70;
+                                                            return (
+                                                                <line
+                                                                    x1={diagramCenterX - lineLength / 2} y1={diagramCenterY}
+                                                                    x2={diagramCenterX + lineLength / 2} y2={diagramCenterY}
+                                                                    stroke="#dc3545"
+                                                                    strokeWidth="2.5"
+                                                                    transform={`rotate(${selectedFaultPlane.strike}, ${diagramCenterX}, ${diagramCenterY})`}
+                                                                />);
+                                                        })()}
+                                                    </svg>
+                                                    <p className="text-xs text-slate-600 mt-1">Compass direction of the fault's intersection... (full text here)</p>
+                                                </div>
+                                                <InfoSnippet topic="strike" /> {/* InfoSnippet is now a sibling, for this column */}
                                             </div>
                                         )}
+
+                                        {/* Dip Parameter Column */}
                                         {isValidNumber(selectedFaultPlane.dip) && (
-                                            <div className="p-2 bg-red-50 rounded-lg shadow">
-                                                <strong className="block text-red-700 text-sm">Dip ({formatNumber(selectedFaultPlane.dip,0)}°)</strong>
-                                                <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1"><line x1="10" y1="40" x2="150" y2="40" stroke="#adb5bd" strokeWidth="1.5" /><text x="80" y="30" fontSize="10" textAnchor="middle" fill="#495057">Surface</text><line x1="40" y1="40" x2="120" y2="100" stroke="#495057" strokeWidth="2" /><path d="M 40 40 C 55 40, 60 48, 65 55" fill="none" stroke="#28a745" strokeWidth="1.5" /><text x="75" y="55" fontSize="10" fill="#28a745" fontWeight="bold">{formatNumber(selectedFaultPlane.dip,0)}°</text></svg>
-                                                <p className="text-xs text-slate-600">Angle the fault plane tilts down from horizontal (0° is flat, 90° is vertical).</p>
+                                            <div className="flex flex-col">
+                                                <div className="p-2 bg-red-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[150px] sm:min-h-[200px]">
+                                                    <strong className="block text-red-700 text-sm">Dip ({formatNumber(selectedFaultPlane.dip,0)}°)</strong>
+                                                    {/* ... SVG for Dip ... */}
+                                                    <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
+                                                        <line x1="10" y1="40" x2="150" y2="40" stroke="#adb5bd" strokeWidth="1.5" />
+                                                        <text x="80" y="30" fontSize="10" textAnchor="middle" fill="#495057">Surface</text>
+                                                        <line x1="40" y1="40" x2="120" y2="100" stroke="#495057" strokeWidth="2" />
+                                                        <path d="M 40 40 C 55 40, 60 48, 65 55" fill="none" stroke="#28a745" strokeWidth="1.5" />
+                                                        <text x="75" y="55" fontSize="10" fill="#28a745" fontWeight="bold">{formatNumber(selectedFaultPlane.dip,0)}°</text>
+                                                    </svg>
+                                                    <p className="text-xs text-slate-600 mt-1">Angle the fault plane tilts down...</p>
+                                                </div>
+                                                <InfoSnippet topic="dip" /> {/* InfoSnippet is now a sibling */}
                                             </div>
                                         )}
+
+                                        {/* Rake Parameter Column */}
                                         {isValidNumber(selectedFaultPlane.rake) && (
-                                            <div className="p-2 bg-emerald-50 rounded-lg shadow">
-                                                <strong className="block text-emerald-700 text-sm">Rake ({formatNumber(selectedFaultPlane.rake,0)}°)</strong>
-                                                <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
-                                                    <rect x="25" y="10" width="110" height="100" fill="#e0e7ff" stroke="#6d28d9" strokeWidth="1.5" />
-                                                    <line x1="25" y1="60" x2="135" y2="60" stroke="#4f46e5" strokeWidth="1" strokeDasharray="2,2" />
-                                                    <defs><marker id="arrow-rake-detail-diag" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="strokeWidth" markerWidth="4" markerHeight="3" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/></marker></defs>
-                                                    <line x1="80" y1="60" x2="50" y2="80" stroke="#16a34a" strokeWidth="2.5" markerEnd="url(#arrow-rake-detail-diag)" transform={`rotate(${selectedFaultPlane.rake} 80 60)`} />
-                                                    <text x="70" y="95" fontSize="10" fill="#16a34a" fontWeight="bold">{formatNumber(selectedFaultPlane.rake,0)}°</text>
-                                                </svg>
-                                                <p className="text-xs text-slate-600">Direction of slip along the fault plane (e.g., ~0° for left-lateral, ~180° for right-lateral, ~90° for reverse, ~-90° for normal).</p>
+                                            <div className="flex flex-col">
+                                                <div className="p-2 bg-emerald-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[150px] sm:min-h-[200px]">
+                                                    <strong className="block text-emerald-700 text-sm">Rake ({formatNumber(selectedFaultPlane.rake,0)}°)</strong>
+                                                    {/* ... SVG for Rake ... */}
+                                                    <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
+                                                        <rect x="25" y="10" width="110" height="100" fill="#e0e7ff" stroke="#6d28d9" strokeWidth="1.5" />
+                                                        <line x1="25" y1="60" x2="135" y2="60" stroke="#4f46e5" strokeWidth="1" strokeDasharray="2,2" />
+                                                        <defs><marker id="arrow-rake-detail-diag-decoder" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="strokeWidth" markerWidth="4" markerHeight="3" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/></marker></defs>
+                                                        <line x1="80" y1="60" x2="50" y2="80" stroke="#16a34a" strokeWidth="2.5" markerEnd="url(#arrow-rake-detail-diag-decoder)" transform={`rotate(${selectedFaultPlane.rake} 80 60)`} />
+                                                        <text x="70" y="95" fontSize="10" fill="#16a34a" fontWeight="bold">{formatNumber(selectedFaultPlane.rake,0)}°</text>
+                                                    </svg>
+                                                    <p className="text-xs text-slate-600 mt-1">Direction of slip along the fault plane...</p>
+                                                </div>
+                                                <InfoSnippet topic="rake" /> {/* InfoSnippet is now a sibling */}
                                             </div>
                                         )}
                                     </div>
@@ -464,31 +672,71 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                     {/* --- What Pushed and Pulled Panel (Stress Axes) --- */}
                     {pAxis && tAxis && (isValidNumber(pAxis.azimuth) || isValidNumber(pAxis.plunge) || isValidNumber(tAxis.azimuth) || isValidNumber(tAxis.plunge)) && (
                         <div className={`${exhibitPanelClass} border-lime-500`}>
-                            <h2 className={`${exhibitTitleClass} text-lime-800 border-lime-200`}>What Pushed and Pulled? (Stress Axes)</h2>
-                            <div className={`${diagramContainerClass} bg-green-50`} style={{minHeight: '180px'}}>
-                                <svg width="300" height="150" viewBox="0 0 300 200">
-                                    <rect x="100" y="50" width="100" height="100" fill="#d1fae5" stroke="#065f46" strokeWidth="2"/>
-                                    <text x="150" y="105" fontFamily="Inter, sans-serif" fontSize="14" fill="#065f46" textAnchor="middle">Crust Block</text>
-                                    <defs><marker id="arrRedDetailPush" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 3.5, 10 0, 10 7" fill="#dc2626"/></marker><marker id="arrBlueDetailPull" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker></defs>
-                                    {/* P-axis elements only if pAxis.azimuth is valid */}
+                            <h2 className={`${exhibitTitleClass} text-lime-800 border-lime-200 flex justify-between items-center`}>
+                                <span>What Pushed and Pulled? (Stress Axes)</span>
+                            </h2>
+                            <div className={`${diagramContainerClass} bg-green-50 py-4`} style={{minHeight: '200px'}}>
+                                {/* Adjusted SVG viewbox and element positions for better label spacing */}
+                                <svg width="280" height="180" viewBox="0 0 280 180">
+                                    <defs>
+                                        <marker id="arrRedDetailPushClean" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto" fill="#dc2626">
+                                            <polygon points="0 3.5, 10 0, 10 7" />
+                                        </marker>
+                                        <marker id="arrBlueDetailPullClean" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto" fill="#2563eb">
+                                            <polygon points="0 0, 10 3.5, 0 7" />
+                                        </marker>
+                                    </defs>
+
+                                    {/* Crust Block - slightly smaller to give more room for labels */}
+                                    <rect x="100" y="50" width="80" height="80" fill="#d1fae5" stroke="#065f46" strokeWidth="1.5"/>
+                                    <text x="140" y="95" fontFamily="Inter, sans-serif" fontSize="11" fill="#047857" textAnchor="middle">Crust</text>
+                                    <text x="140" y="107" fontFamily="Inter, sans-serif" fontSize="11" fill="#047857" textAnchor="middle">Block</text>
+
+
+                                    {/* P-axis (Squeeze) elements */}
                                     {isValidNumber(pAxis.azimuth) && (
                                         <>
-                                            <line x1="30" y1="100" x2="95" y2="100" stroke="#dc2626" strokeWidth="4" markerEnd="url(#arrRedDetailPush)" />
-                                            <line x1="270" y1="100" x2="205" y2="100" stroke="#dc2626" strokeWidth="4" markerEnd="url(#arrRedDetailPush)" />
-                                            <text x="65" y="130" fontSize="10" fill="#dc2626" textAnchor="middle">SQUEEZE (P-axis: {formatNumber(pAxis.azimuth,0)}°)</text>
+                                            {/* Arrows pointing inwards, slightly shorter to accommodate labels */}
+                                            <line x1="30" y1="90" x2="95" y2="90" stroke="#dc2626" strokeWidth="3" markerEnd="url(#arrRedDetailPushClean)" />
+                                            <line x1="250" y1="90" x2="185" y2="90" stroke="#dc2626" strokeWidth="3" markerEnd="url(#arrRedDetailPushClean)" />
+                                            {/* Text label for P-axis - positioned further left and right of the block */}
+                                            <text x="45" y="115" fontSize="10" fill="#b91c1c" textAnchor="middle">
+                                                SQUEEZE
+                                            </text>
+                                            <text x="45" y="128" fontSize="10" fill="#b91c1c" textAnchor="middle">
+                                                (P-axis: {formatNumber(pAxis.azimuth,0)}°)
+                                            </text>
+                                            {/* Mirrored for the right side - this is illustrative, P-axis is a single orientation */}
+                                            <text x="235" y="115" fontSize="10" fill="#b91c1c" textAnchor="middle">
+                                                SQUEEZE
+                                            </text>
+                                            <text x="235" y="128" fontSize="10" fill="#b91c1c" textAnchor="middle">
+                                                (P-axis: {formatNumber(pAxis.azimuth,0)}°)
+                                            </text>
                                         </>
                                     )}
-                                    {/* T-axis elements only if tAxis.azimuth is valid */}
+
+                                    {/* T-axis (Stretch) elements */}
                                     {isValidNumber(tAxis.azimuth) && (
                                         <>
-                                            <line x1="150" y1="20" x2="150" y2="45" stroke="#2563eb" strokeWidth="4" markerStart="url(#arrBlueDetailPull)" />
-                                            <line x1="150" y1="180" x2="150" y2="155" stroke="#2563eb" strokeWidth="4" markerStart="url(#arrBlueDetailPull)" />
-                                            <text x="150" y="15" fontSize="10" fill="#2563eb" textAnchor="middle">STRETCH (T-axis: {formatNumber(tAxis.azimuth,0)}°)</text>
+                                            {/* Arrows pointing outwards, slightly shorter */}
+                                            <line x1="140" y1="45" x2="140" y2="15" stroke="#2563eb" strokeWidth="3" markerStart="url(#arrBlueDetailPullClean)" />
+                                            <line x1="140" y1="135" x2="140" y2="165" stroke="#2563eb" strokeWidth="3" markerStart="url(#arrBlueDetailPullClean)" />
+                                            {/* Text label for T-axis - positioned above and below block */}
+                                            <text x="140" y="30" fontSize="10" fill="#1d4ed8" textAnchor="middle"> {/* Moved higher */}
+                                                STRETCH (T-axis: {formatNumber(tAxis.azimuth,0)}°)
+                                            </text>
+                                            <text x="140" y="155" fontSize="10" fill="#1d4ed8" textAnchor="middle"> {/* Added below as well for symmetry */}
+                                                STRETCH (T-axis: {formatNumber(tAxis.azimuth,0)}°)
+                                            </text>
                                         </>
                                     )}
                                 </svg>
                             </div>
-                            <p className={captionClass}>P-axis (Pressure) shows main squeeze direction. T-axis (Tension) shows main stretch.</p>
+                            <p className={captionClass}>
+                                P-axis (Pressure) shows main squeeze direction, T-axis (Tension) shows main stretch. The labeled degrees indicate the compass orientation of these forces.
+                                <InfoSnippet topic="stressAxes" /> {/* Added InfoSnippet here */}
+                            </p>
                         </div>
                     )}
 
@@ -498,12 +746,49 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                             <h2 className={`${exhibitTitleClass} text-teal-800 border-teal-200`}>"Beach Ball" Diagram</h2>
                             <div className={`${diagramContainerClass} bg-sky-50`} style={{ minHeight: '220px' }}>
                                 <svg width="150" height="150" viewBox="0 0 120 120">
-                                    <circle cx="60" cy="60" r="50" fill="white" stroke="black" strokeWidth="0.5" />
-                                    {isValidNumber(np1Data.strike) && <line x1="60" y1="10" x2="60" y2="110" stroke="#333" strokeWidth="1" transform={`rotate(${-np1Data.strike} 60 60)`} />}
-                                    {isValidNumber(np2Data.strike) && <line x1="10" y1="60" x2="110" y2="60" stroke="#333" strokeWidth="1" transform={`rotate(${-np2Data.strike+90} 60 60)`} />}
-                                    {isValidNumber(np1Data.strike) && isValidNumber(np2Data.strike) && <path d={`M ${60 + 50*Math.cos((-np1Data.strike-90)*Math.PI/180)} ${60 + 50*Math.sin((-np1Data.strike-90)*Math.PI/180)} A 50 50 0 0 1 ${60 + 50*Math.cos((-np2Data.strike)*Math.PI/180)} ${60 + 50*Math.sin((-np2Data.strike)*Math.PI/180)} L 60 60 Z`} fill="#cccccc" />}
-                                    {pAxis && isValidNumber(pAxis.azimuth) && <text x="60" y="60" transform={`rotate(${pAxis.azimuth} 60 60) translate(0 -30)`} className="text-xs font-bold fill-red-600" textAnchor="middle">P</text>}
-                                    {tAxis && isValidNumber(tAxis.azimuth) && <text x="60" y="60" transform={`rotate(${tAxis.azimuth} 60 60) translate(0 30)`} className="text-xs font-bold fill-blue-600" textAnchor="middle">T</text>}
+                                    {(() => {
+                                        const selectedPlane = selectedFaultPlaneKey === 'np1' ? np1Data : np2Data;
+                                        const orientationStrike = parseFloat(np1Data.strike);
+                                        const rake = parseFloat(selectedPlane.rake);
+                                        const dip = parseFloat(selectedPlane.dip);
+
+                                        if (!isValidNumber(orientationStrike) || !isValidNumber(rake)) {
+                                            return (
+                                                <>
+                                                    <line x1="60" y1="10" x2="60" y2="110" stroke="#cccccc" strokeWidth="1" />
+                                                    <line x1="10" y1="60" x2="110" y2="60" stroke="#cccccc" strokeWidth="1" />
+                                                </>
+                                            );
+                                        }
+                                        // Pass dip to the helper function
+                                        const { shadedPaths: canonicalShadedPaths, nodalPlanes: canonicalNodalPlanes } = getBeachballPathsAndType(rake, dip);
+
+                                        return (
+                                            <g transform={`rotate(${orientationStrike}, 60, 60)`}>
+                                                {canonicalShadedPaths.map((pathData, index) => (
+                                                    <path key={`bb-shade-${index}`} d={pathData} fill="#aaaaaa" stroke="#555555" strokeWidth="0.25" />
+                                                ))}
+                                                {canonicalNodalPlanes.map((plane, index) => {
+                                                    if (plane.type === 'line') {
+                                                        return <line key={`bb-plane-${index}`} x1={plane.x1} y1={plane.y1} x2={plane.x2} y2={plane.y2} stroke="#333" strokeWidth="1.0" />;
+                                                    } else if (plane.type === 'path') {
+                                                        return <path key={`bb-plane-${index}`} d={plane.d} stroke="#333" strokeWidth="1.0" fill="none"/>;
+                                                    }
+                                                    return null;
+                                                })}
+                                            </g>
+                                        );
+                                    })()}
+
+                                    {/* P and T axes labels, rotated by their azimuths. Adjusted translate for potential plunge. */}
+                                    {pAxis && isValidNumber(pAxis.azimuth) &&
+                                        <text x="60" y="60"
+                                              transform={`rotate(${pAxis.azimuth} 60 60) translate(0 -${(isValidNumber(pAxis.plunge) && pAxis.plunge > 45) ? 20 : 38})`}
+                                              className="text-xs font-bold fill-red-600" textAnchor="middle">P</text>}
+                                    {tAxis && isValidNumber(tAxis.azimuth) &&
+                                        <text x="60" y="60"
+                                              transform={`rotate(${tAxis.azimuth} 60 60) translate(0 ${(isValidNumber(tAxis.plunge) && tAxis.plunge > 45) ? 20 : 38})`}
+                                              className="text-xs font-bold fill-blue-600" textAnchor="middle">T</text>}
                                     <text x="60" y="8" fontSize="8" textAnchor="middle" fill="#555">N</text>
                                 </svg>
                             </div>
