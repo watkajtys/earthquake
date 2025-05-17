@@ -14,7 +14,7 @@ const InteractiveGlobeView = ({
                                   defaultFocusLat = 20,
                                   defaultFocusLng = 0,
                                   defaultFocusAltitude = 2.5,
-                                  allowUserDragRotation = false,
+                                  allowUserDragRotation = true,
                                   enableAutoRotation = true,
                                   globeAutoRotateSpeed = 0.1
                               }) => {
@@ -24,6 +24,7 @@ const InteractiveGlobeView = ({
     const [paths, setPaths] = useState([]);
     const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
     const [ringsData, setRingsData] = useState([]);
 
@@ -81,14 +82,14 @@ const InteractiveGlobeView = ({
         if (coastlineGeoJson?.type === "GeometryCollection" && Array.isArray(coastlineGeoJson.geometries)) {
             processedPaths = processedPaths.concat(coastlineGeoJson.geometries
                 .filter(g => g.type === "LineString" && Array.isArray(g.coordinates))
-                .map((g, i) => ({ id: `coastline-${i}`, coords: g.coordinates, color: 'rgba(150, 150, 200, 0.5)', stroke: 0.25, label: 'Coastline', properties: { Boundary_Type: 'Coastline' } })));
+                .map((g, i) => ({ id: `coastline-${i}`, coords: g.coordinates, color: 'rgb(208,208,214)', stroke: 0.25, label: 'Coastline', properties: { Boundary_Type: 'Coastline' } })));
         }
         if (tectonicPlatesGeoJson?.type === "FeatureCollection" && Array.isArray(tectonicPlatesGeoJson.features)) {
             processedPaths = processedPaths.concat(tectonicPlatesGeoJson.features
                 .filter(f => f.type === "Feature" && f.geometry?.type === "LineString" && Array.isArray(f.geometry.coordinates))
                 .map((f, i) => {
-                    let color = 'rgba(255, 165, 0, 0.6)'; const type = f.properties?.Boundary_Type;
-                    if (type === 'Convergent') color = 'rgba(220, 20, 60, 0.7)'; else if (type === 'Divergent') color = 'rgba(60, 179, 113, 0.7)'; else if (type === 'Transform') color = 'rgba(70, 130, 180, 0.7)';
+                    let color = 'rgba(255, 165, 0, 0.8)'; const type = f.properties?.Boundary_Type;
+                    if (type === 'Convergent') color = 'rgba(220, 20, 60, 0.8)'; else if (type === 'Divergent') color = 'rgba(60, 179, 113, 0.8)'; else if (type === 'Transform') color = 'rgba(70, 130, 180, 0.8)';
                     return { id: `plate-${f.properties?.OBJECTID || i}`, coords: f.geometry.coordinates, color, stroke: 1, label: `Plate Boundary: ${type || 'Unknown'}`, properties: f.properties };
                 }));
         }
@@ -101,34 +102,86 @@ const InteractiveGlobeView = ({
         }
     }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions]);
 
+    // CONSOLIDATED Effect to manage globe controls and drag listeners
     useEffect(() => {
         const globeInstance = globeRef.current;
-        if (globeInstance?.controls && typeof globeInstance.controls === 'function' && globeDimensions.width && globeDimensions.height) {
-            const controls = globeInstance.controls();
-            if (controls) {
-                controls.enableRotate = allowUserDragRotation;
-                controls.enablePan = allowUserDragRotation;
-                controls.enableZoom = allowUserDragRotation;
-                if (isGlobeHovered) {
-                    if (controls.autoRotate !== false) controls.autoRotate = false;
-                } else {
-                    if (controls.autoRotate !== enableAutoRotation) controls.autoRotate = enableAutoRotation;
-                    if (enableAutoRotation) {
-                        const targetSpeed = -Math.abs(globeAutoRotateSpeed * 20);
-                        if (controls.autoRotateSpeed !== targetSpeed) controls.autoRotateSpeed = targetSpeed;
-                    } else {
-                        if (controls.autoRotateSpeed !== 0) controls.autoRotateSpeed = 0;
-                        if (controls.autoRotate !== false) controls.autoRotate = false;
-                    }
+        if (!globeInstance?.controls || typeof globeInstance.controls !== 'function' || !globeDimensions.width || !globeDimensions.height) {
+            return;
+        }
+
+        const controls = globeInstance.controls();
+        if (!controls) {
+            console.warn("Globe controls not available when trying to set properties or listeners.");
+            return;
+        }
+
+        // 1. Set user interaction capabilities based on props
+        // This is the most direct way to enable/disable user drag rotation
+        controls.enableRotate = allowUserDragRotation;
+        controls.enablePan = allowUserDragRotation; // Usually linked with enableRotate
+        controls.enableZoom = allowUserDragRotation; // Usually linked
+
+        // 2. Manage auto-rotation logic
+        if (enableAutoRotation) {
+            if (isGlobeHovered || isDragging) {
+                // Pause auto-rotation if hovered or actively dragging
+                if (controls.autoRotate !== false) {
+                    controls.autoRotate = false;
+                }
+            } else {
+                // If not hovered AND not dragging, enable auto-rotation
+                if (controls.autoRotate !== true) {
+                    controls.autoRotate = true;
+                }
+                // Set speed only if auto-rotation is active or being activated
+                // The negative sign determines direction, adjust as needed.
+                const targetSpeed = -Math.abs(globeAutoRotateSpeed * 20); // Example: * 20 for a perceptible speed
+                if (controls.autoRotateSpeed !== targetSpeed) {
+                    controls.autoRotateSpeed = targetSpeed;
                 }
             }
+        } else {
+            // If auto-rotation is globally disabled by the prop, ensure it's off.
+            if (controls.autoRotate !== false) {
+                controls.autoRotate = false;
+            }
+            if (controls.autoRotateSpeed !== 0) {
+                controls.autoRotateSpeed = 0;
+            }
         }
-    }, [allowUserDragRotation, enableAutoRotation, globeAutoRotateSpeed, globeDimensions, isGlobeHovered]);
+
+        // 3. Add event listeners for drag state to the controls object
+        const handleDragStart = () => setIsDragging(true);
+        const handleDragEnd = () => setIsDragging(false);
+
+        controls.addEventListener('start', handleDragStart); // User starts interacting
+        controls.addEventListener('end', handleDragEnd);     // User stops interacting
+
+        // Cleanup function for this effect
+        return () => {
+            if (globeInstance.controls()) { // Check if controls still exist (might be destroyed on unmount)
+                globeInstance.controls().removeEventListener('start', handleDragStart);
+                globeInstance.controls().removeEventListener('end', handleDragEnd);
+            }
+        };
+
+    }, [
+        allowUserDragRotation,
+        enableAutoRotation,
+        globeAutoRotateSpeed,
+        globeDimensions,    // Globe might be re-created if dimensions change.
+        isGlobeHovered,
+        isDragging,
+        // setIsDragging is stable, no need to include it.
+    ]);
+
 
     const handlePointClick = useCallback((point) => {
         if (point?.quakeData) onQuakeClick(point.quakeData);
     }, [onQuakeClick]);
 
+    // Mouse hover detection (slightly simplified from your original for clarity here)
+    // Your existing mouseMoveTimeoutRef logic is fine.
     const handleContainerMouseMove = useCallback((event) => {
         if (!globeRef.current || !containerRef.current || typeof globeRef.current.toGlobeCoords !== 'function') {
             return;
@@ -137,17 +190,25 @@ const InteractiveGlobeView = ({
             clearTimeout(mouseMoveTimeoutRef.current);
         }
         mouseMoveTimeoutRef.current = setTimeout(() => {
-            if (!containerRef.current) return;
+            if (!containerRef.current) return; // Check if containerRef is still valid
             const rect = containerRef.current.getBoundingClientRect();
             const x = event.clientX - rect.left;
             const y = event.clientY - rect.top;
-            const globeCoords = globeRef.current.toGlobeCoords(x, y);
-            const currentlyOverGlobe = !!globeCoords;
-            if (currentlyOverGlobe !== isGlobeHovered) {
-                setIsGlobeHovered(currentlyOverGlobe);
+
+            // Check if the globe instance and toGlobeCoords method are available
+            if (globeRef.current && typeof globeRef.current.toGlobeCoords === 'function') {
+                const globeCoords = globeRef.current.toGlobeCoords(x, y);
+                const currentlyOverGlobe = !!globeCoords;
+                if (currentlyOverGlobe !== isGlobeHovered) {
+                    setIsGlobeHovered(currentlyOverGlobe);
+                }
+            } else {
+                // If globe is not ready, assume not hovered.
+                if (isGlobeHovered) setIsGlobeHovered(false);
             }
-        }, 30);
-    }, [isGlobeHovered, setIsGlobeHovered]); // Added setIsGlobeHovered to dependencies
+
+        }, 30); // 30ms delay is reasonable
+    }, [isGlobeHovered, setIsGlobeHovered]); // Dependencies
 
     const handleContainerMouseLeave = useCallback(() => {
         if (mouseMoveTimeoutRef.current) {
@@ -156,7 +217,7 @@ const InteractiveGlobeView = ({
         if (isGlobeHovered) {
             setIsGlobeHovered(false);
         }
-    }, [isGlobeHovered, setIsGlobeHovered]); // Added setIsGlobeHovered to dependencies
+    }, [isGlobeHovered, setIsGlobeHovered]);
 
     // useEffect for Rings Data
     useEffect(() => {
@@ -183,7 +244,7 @@ const InteractiveGlobeView = ({
                 // Option 1: Brighter, more consistently opaque color (less fade-out of alpha)
                 // color: (t) => `rgba(255, 100, 0, ${Math.max(0.2, 0.8 - t * 0.6)})`, // Orange-Red, keeps some opacity
                 // Option 2: A very vibrant, mostly solid color
-                color: () => 'rgba(255, 255, 0, 0.75)', // Bright Yellow
+                color: () => 'rgba(255, 255, 0, 0.8)', // Bright Yellow
                 // Option 3: Your previous static red was also good, ensure alpha is high enough
                 // color: () => 'rgba(255, 80, 80, 0.75)',
 
@@ -205,9 +266,11 @@ const InteractiveGlobeView = ({
     }, [latestMajorQuakeForRing]);
 
 
+
     if (globeDimensions.width === null || globeDimensions.height === null) {
         return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe...</div>;
     }
+
 
     return (
         <div

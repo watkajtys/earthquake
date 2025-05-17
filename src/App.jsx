@@ -582,7 +582,7 @@ function App() {
                     const last7DaysData = filterByTime(weeklyData, 7 * 24);
                     setEarthquakesLast7Days(last7DaysData);
                     const sortedForGlobe = [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-                    setGlobeEarthquakes(sortedForGlobe.slice(0, 750));
+                    setGlobeEarthquakes(sortedForGlobe.slice(0, 900));
 
                     weeklyMajorsList = weeklyData.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
                     const latestWeeklyMajor = weeklyMajorsList.length > 0 ? weeklyMajorsList[0] : null;
@@ -765,7 +765,7 @@ function App() {
                         earthquakes={globeEarthquakes}
                         onQuakeClick={handleQuakeClick}
                         getMagnitudeColorFunc={getMagnitudeColor}
-                        allowUserDragRotation={false}
+                        allowUserDragRotation={true}
                         enableAutoRotation={true}
                         globeAutoRotateSpeed={0.1}
                         coastlineGeoJson={coastlineData}
@@ -806,7 +806,7 @@ function App() {
                         {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={() => setActiveSidebarView('details_14day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={() => setActiveSidebarView('details_30day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
                         <button onClick={() => setActiveSidebarView('learn_more')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
                     </div>
-                    <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+                    <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800" key="overview_content">
                         {error && !showFullScreenLoader && (<div className="bg-red-700 bg-opacity-40 border border-red-600 text-red-200 px-3 py-2 rounded-md text-xs" role="alert"><strong className="font-bold">Data Error:</strong> {error} Some data might be unavailable.</div>)}
                         {activeSidebarView === 'overview_panel' && ( <>
                             {currentAlertConfig && ( <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}> <p className="font-bold text-sm">Active USGS Alert: {currentAlertConfig.text}</p> <p>{currentAlertConfig.description}</p> {activeAlertTriggeringQuakes.length > 0 && (<PaginatedEarthquakeTable title={`Alert Triggering Quakes (${currentAlertConfig.text})`} earthquakes={activeAlertTriggeringQuakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={3} periodName="alerting"/> )} </div> )}
@@ -932,7 +932,7 @@ function App() {
                         {hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length === 0 && (activeSidebarView === 'details_14day' || activeSidebarView === 'details_30day') &&( <p className="text-slate-400 text-center py-4 text-sm">No 14/30 day earthquake data found or loaded.</p> )}
                         {!initialDataLoaded && !isLoadingDaily && !isLoadingWeekly && (activeSidebarView === 'details_1hr' || activeSidebarView === 'details_24hr' || activeSidebarView === 'details_7day' ) && ( <div className="text-center py-10"><p className="text-sm text-slate-500">No data available for this period.</p></div> )}
                     </div>
-                    <div className="p-1.5 text-center border-t border-slate-700 mt-auto"> <p className="text-[10px] text-slate-500">&copy; {new Date().getFullYear()} Seismic Insights Museum | Data: USGS</p> </div>
+                    <div className="p-1.5 text-center border-t border-slate-700 mt-auto"> <p className="text-[10px] text-slate-500">&copy; {new Date().getFullYear()} Built By Vibes | Data: USGS</p> </div>
                 </aside>
             </div>
 
