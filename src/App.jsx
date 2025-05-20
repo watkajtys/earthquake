@@ -41,6 +41,7 @@ const ALERT_LEVELS = {
 // --- App Component ---
 function App() {
 
+    const [appRenderTrigger, setAppRenderTrigger] = useState(0);
     const [activeMobileView, setActiveMobileView] = useState('globe_view'); // Default to globe view
     const [activeFeedPeriod, setActiveFeedPeriod] = useState('last_24_hours'); // NEW STATE - default to 24 hours
 
@@ -718,7 +719,20 @@ function App() {
                     }
                 }
             } catch (e) { if (!isMounted) return; setError(pE => (pE ? pE + " | " : "") + `Weekly: ${e.message}`); setEarthquakesLast72Hours([]); setEarthquakesLast7Days([]); setPrev24HourData(null); setGlobeEarthquakes([]); }
-            finally { if (isMounted) { setIsLoadingWeekly(false); if (isInitialAppLoad.current) isInitialAppLoad.current = false; } }
+            finally {
+                if (isMounted) {
+                    setIsLoadingWeekly(false);
+                    if (isInitialAppLoad.current) {
+                        isInitialAppLoad.current = false;
+                        // Add this setTimeout:
+                        setTimeout(() => {
+                            if (isMounted) { // Check isMounted again inside timeout
+                                setAppRenderTrigger(prev => prev + 1);
+                            }
+                        }, 100); // 100ms delay
+                    }
+                }
+            }
         };
         orchestrateInitialDataLoad();
         const intervalId = setInterval(orchestrateInitialDataLoad, REFRESH_INTERVAL_MS);
