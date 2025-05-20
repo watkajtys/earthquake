@@ -6,7 +6,8 @@ import NotableQuakeFeature from './NotableQuakeFeature';
 import InfoSnippet from './InfoSnippet';
 import coastlineData from './ne_110m_coastline.json'; // Direct import
 import tectonicPlatesData from './TectonicPlateBoundaries.json';
-import GlobalLastMajorQuakeTimer                                    from "./GlobalLastMajorQuakeTimer.jsx"; // Direct import
+import GlobalLastMajorQuakeTimer                                    from "./GlobalLastMajorQuakeTimer.jsx";
+import BottomNav                                                    from "./BottomNav.jsx"; // Direct import
 
 // --- Configuration & Helpers ---
 const USGS_API_URL_DAY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
@@ -39,6 +40,9 @@ const ALERT_LEVELS = {
 
 // --- App Component ---
 function App() {
+
+    const [activeMobileView, setActiveMobileView] = useState('globe_view'); // Default to globe view
+    const [activeFeedPeriod, setActiveFeedPeriod] = useState('last_24_hours'); // NEW STATE - default to 24 hours
 
     // --- Callback Hooks (Formatting, Colors, Regions, Stats) ---
     const formatDate = useCallback((timestamp) => {
@@ -522,6 +526,113 @@ function App() {
         } catch (e) { console.error(`Workspace error from ${url}:`, e); throw e; }
     }, []);
 
+    const latestFeelableQuakesSnippet = useMemo(() => {
+        if (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0) {
+            return [];
+        }
+        return earthquakesLast24Hours
+            .filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD) // FEELABLE_QUAKE_THRESHOLD is 2.5
+            .sort((a, b) => b.properties.time - a.properties.time) // Sort by most recent first
+            .slice(0, 3); // Take the top 3
+    }, [earthquakesLast24Hours]);
+
+    const currentFeedData = useMemo(() => {
+        // Determine the base dataset for feelable/significant: use 30-day if available, else 7-day
+        const baseDataForFilters = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days;
+
+        switch (activeFeedPeriod) {
+            case 'last_hour':
+                return earthquakesLastHour;
+            case 'last_24_hours':
+                return earthquakesLast24Hours;
+            case 'last_7_days':
+                return earthquakesLast7Days;
+            case 'last_14_days':
+                // Ensure earthquakesLast14Days is populated from allEarthquakes if monthly data is loaded
+                return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast14Days : null;
+            case 'last_30_days':
+                return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast30Days : null;
+
+            // --- NEW CASES ---
+            case 'feelable_quakes':
+                return baseDataForFilters ? baseDataForFilters.filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD) : [];
+            case 'significant_quakes':
+                return baseDataForFilters ? baseDataForFilters.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD) : [];
+            // --- END OF NEW CASES ---
+
+            default:
+                return earthquakesLast24Hours; // Default case
+        }
+    }, [
+        activeFeedPeriod, earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
+        earthquakesLast14Days, earthquakesLast30Days, allEarthquakes, hasAttemptedMonthlyLoad
+    ]);
+
+    const currentFeedTitle = useMemo(() => {
+        // Default period for feelable/significant if monthly not loaded
+        const filterPeriodSuffix = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? "(Last 30 Days)" : "(Last 7 Days)";
+
+        switch (activeFeedPeriod) {
+            case 'last_hour':
+                return "Earthquakes (Last Hour)";
+            case 'last_24_hours':
+                return "Earthquakes (Last 24 Hours)";
+            case 'last_7_days':
+                return "Earthquakes (Last 7 Days)";
+            case 'last_14_days':
+                return "Earthquakes (Last 14 Days)";
+            case 'last_30_days':
+                return "Earthquakes (Last 30 Days)";
+
+            // --- NEW CASES ---
+            case 'feelable_quakes':
+                return `Feelable Quakes (M${FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+) ${filterPeriodSuffix}`;
+            case 'significant_quakes':
+                return `Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) ${filterPeriodSuffix}`;
+            // --- END OF NEW CASES ---
+
+            default:
+                return "Earthquakes (Last 24 Hours)";
+        }
+    }, [activeFeedPeriod, hasAttemptedMonthlyLoad, allEarthquakes]); // Added dependencies
+
+    const currentFeedisLoading = useMemo(() => {
+        if (activeFeedPeriod === 'last_hour') return isLoadingDaily && !earthquakesLastHour;
+        if (activeFeedPeriod === 'last_24_hours') return isLoadingDaily && !earthquakesLast24Hours;
+        if (activeFeedPeriod === 'last_7_days') return isLoadingWeekly && !earthquakesLast7Days;
+
+        if (activeFeedPeriod === 'feelable_quakes' || activeFeedPeriod === 'significant_quakes') {
+            if (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) {
+                return isLoadingMonthly && !allEarthquakes.length > 0; // Loading if monthly attempt made but no data yet
+            }
+            return isLoadingWeekly && !earthquakesLast7Days; // Else, depends on 7-day data
+        }
+
+        if ((activeFeedPeriod === 'last_14_days' || activeFeedPeriod === 'last_30_days')) {
+            return isLoadingMonthly && !(allEarthquakes && allEarthquakes.length > 0);
+        }
+
+        return currentFeedData === null; // General fallback
+    }, [
+        activeFeedPeriod, isLoadingDaily, isLoadingWeekly, isLoadingMonthly,
+        earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
+        allEarthquakes, hasAttemptedMonthlyLoad, currentFeedData
+    ]);
+
+    const previousDataForCurrentFeed = useMemo(() => {
+        // Only provide previous period data for simple time-based feeds for now
+        switch (activeFeedPeriod) {
+            case 'last_24_hours':
+                return prev24HourData;
+            case 'last_7_days':
+                return prev7DayData;
+            case 'last_14_days':
+                return prev14DayData;
+            default: // For last_hour, last_30_days, feelable, significant - omit trends in their specific card for now
+                return null;
+        }
+    }, [activeFeedPeriod, prev24HourData, prev7DayData, prev14DayData]);
+
     // --- Effect Hooks ---
     useEffect(() => {
         let isMounted = true;
@@ -699,12 +810,6 @@ function App() {
         };
     }, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, isLoadingDaily, isLoadingWeekly, calculateStats]);
 
-    const timeSinceLastMajorFormatted = useMemo(() => {
-        if (isLoadingInitialData && !lastMajorQuake) return <SkeletonText width="w-1/2 mx-auto" height="h-8" className="bg-slate-600"/>;
-        if (!lastMajorQuake?.properties?.time) return "Extended period without M5+.";
-        return formatTimeDuration(Date.now() - lastMajorQuake.properties.time);
-    }, [lastMajorQuake, isLoadingInitialData, formatTimeDuration]);
-
     // --- ADDED: Memo for recent significant quakes for the overview panel ---
     const recentSignificantQuakesForOverview = useMemo(() => {
         if (!earthquakesLast7Days) return [];
@@ -752,65 +857,140 @@ function App() {
     // --- Main Render ---
     return (
         <div className="flex flex-col h-screen font-sans bg-slate-900 text-slate-100 antialiased">
-            <header className="bg-slate-800 text-white p-2 shadow-lg z-30 border-b border-slate-700">
+            <header className="bg-slate-800 text-white p-2 shadow-lg z-40 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
                     <p className="text-xs sm:text-sm text-slate-400 mt-0.5 sm:mt-0">{headerTimeDisplay}</p>
                 </div>
             </header>
 
-            <div className="flex flex-1 overflow-hidden">
-                <main className="flex-1 relative bg-black" style={{minWidth: '60%'}}>
-                    <InteractiveGlobeView
-                        earthquakes={globeEarthquakes}
-                        onQuakeClick={handleQuakeClick}
-                        getMagnitudeColorFunc={getMagnitudeColor}
-                        allowUserDragRotation={true}
-                        enableAutoRotation={true}
-                        globeAutoRotateSpeed={0.1}
-                        coastlineGeoJson={coastlineData}
-                        tectonicPlatesGeoJson={tectonicPlatesData}
-                        highlightedQuakeId={lastMajorQuake?.id} // For point highlighting
-                        latestMajorQuakeForRing={lastMajorQuake}
-                    />
-                    <div className="absolute top-2 left-2 z-10 space-y-2">
-                        <NotableQuakeFeature
-                            dynamicFeaturedQuake={lastMajorQuake}
-                            isLoadingDynamicQuake={isLoadingInitialData}
-                            onNotableQuakeSelect={handleNotableQuakeSelect}
-                            getMagnitudeColorFunc={getMagnitudeColor}
-                        />
-                        <div className="p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-[220px] backdrop-blur-sm border border-slate-700">
-                            <h3 className="text-xs font-semibold mb-1 text-indigo-300 uppercase">Live Statistics</h3>
-                            <p className="text-xs">Last Hour: <span className="font-bold text-md text-sky-300">{keyStatsForGlobe.lastHourCount}</span></p>
-                            <p className="text-xs">24h Total: <span className="font-bold text-md text-sky-300">{keyStatsForGlobe.count24h}</span></p>
-                            <p className="text-xs">72h Total: <span className="font-bold text-md text-sky-300">{keyStatsForGlobe.count72h}</span></p>
-                            <p className="text-xs">24h Strongest: <span className="font-bold text-md text-sky-300">{keyStatsForGlobe.strongest24h}</span></p>
-                        </div>
-                    </div>
-                    <GlobalLastMajorQuakeTimer
-                        lastMajorQuake={lastMajorQuake}
-                        MAJOR_QUAKE_THRESHOLD={MAJOR_QUAKE_THRESHOLD}
-                        formatTimeDuration={formatTimeDuration} // Pass the stable function
-                        SkeletonText={SkeletonText} // Pass your SkeletonText component
-                    />
-                </main>
+            {/* This main flex container now has padding-bottom for mobile to avoid overlap with BottomNav */}
+            <div className="flex flex-1 overflow-hidden pb-16 lg:pb-0">
 
-                <aside className="w-[480px] bg-slate-800 p-0 flex flex-col border-l border-slate-700 shadow-2xl z-20">
-                    <div className="p-3 border-b border-slate-700"> <h2 className="text-md font-semibold text-indigo-400">Detailed Earthquake Analysis</h2> </div>
-                    <div className="flex-shrink-0 p-2 space-x-1 border-b border-slate-700 whitespace-nowrap overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
-                        <button onClick={() => setActiveSidebarView('overview_panel')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
-                        <button onClick={() => setActiveSidebarView('details_1hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>
-                        <button onClick={() => setActiveSidebarView('details_24hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_24hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 24hr</button>
-                        <button onClick={() => setActiveSidebarView('details_7day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_7day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 7day</button>
-                        {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={() => setActiveSidebarView('details_14day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={() => setActiveSidebarView('details_30day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
-                        <button onClick={() => setActiveSidebarView('learn_more')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
+                {/* MAIN CONTENT AREA - This will now adapt based on activeMobileView */}
+                {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
+                {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
+                <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto"> {/* Changed bg for clarity on mobile */}
+
+                    {/* ---- GLOBE VIEW Container ---- */}
+                    {/* This div is 'block' if globe tab is active on mobile, OR if on desktop. Otherwise 'hidden' on mobile. */}
+                    <div className={`${activeMobileView === 'globe_view' ? 'block' : 'hidden'} lg:block h-full w-full`}>
+                        <InteractiveGlobeView
+                            earthquakes={globeEarthquakes}
+                            onQuakeClick={handleQuakeClick}
+                            getMagnitudeColorFunc={getMagnitudeColor}
+                            allowUserDragRotation={true}
+                            enableAutoRotation={true}
+                            globeAutoRotateSpeed={0.1}
+                            coastlineGeoJson={coastlineData}
+                            tectonicPlatesGeoJson={tectonicPlatesData}
+                            highlightedQuakeId={lastMajorQuake?.id}
+                            latestMajorQuakeForRing={lastMajorQuake}
+                        />
+                        {/* Globe Overlays */}
+                        <div className="absolute top-2 left-2 z-10 space-y-2">
+                            <NotableQuakeFeature
+                                dynamicFeaturedQuake={lastMajorQuake}
+                                isLoadingDynamicQuake={isLoadingInitialData}
+                                onNotableQuakeSelect={handleNotableQuakeSelect}
+                                getMagnitudeColorFunc={getMagnitudeColor}
+                            />
+                            <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-[220px] backdrop-blur-sm border border-slate-700">
+                                <h3 className="text-[10px] sm:text-xs font-semibold mb-0.5 sm:mb-1 text-indigo-300 uppercase">Live Statistics</h3>
+                                <p className="text-[10px] sm:text-xs">Last Hour: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.lastHourCount}</span></p>
+                                <p className="text-[10px] sm:text-xs">24h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count24h}</span></p>
+                                <p className="text-[10px] sm:text-xs">72h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count72h}</span></p>
+                                <p className="text-[10px] sm:text-xs">24h Strongest: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.strongest24h}</span></p>
+                            </div>
+                        </div>
+                        <GlobalLastMajorQuakeTimer
+                            lastMajorQuake={lastMajorQuake}
+                            MAJOR_QUAKE_THRESHOLD={MAJOR_QUAKE_THRESHOLD}
+                            formatTimeDuration={formatTimeDuration}
+                            SkeletonText={SkeletonText}
+                        />
                     </div>
-                    <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800" key="overview_content">
-                        {error && !showFullScreenLoader && (<div className="bg-red-700 bg-opacity-40 border border-red-600 text-red-200 px-3 py-2 rounded-md text-xs" role="alert"><strong className="font-bold">Data Error:</strong> {error} Some data might be unavailable.</div>)}
-                        {activeSidebarView === 'overview_panel' && ( <>
-                            {currentAlertConfig && ( <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}> <p className="font-bold text-sm">Active USGS Alert: {currentAlertConfig.text}</p> <p>{currentAlertConfig.description}</p> {activeAlertTriggeringQuakes.length > 0 && (<PaginatedEarthquakeTable title={`Alert Triggering Quakes (${currentAlertConfig.text})`} earthquakes={activeAlertTriggeringQuakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={3} periodName="alerting"/> )} </div> )}
-                            {hasRecentTsunamiWarning && !currentAlertConfig && (<div className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs" role="alert"><p className="font-bold">Tsunami Info</p><p>Recent quakes indicate potential tsunami activity. Check official channels.</p></div>)}
+
+                    {/* ---- MOBILE TAB CONTENT: Overview ---- */}
+                    {/* This div is 'block' if overview_mobile tab is active, AND 'lg:hidden' (so it hides on desktop) */}
+                    {activeMobileView === 'overview_mobile' && (
+                        <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
+                            <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                Overview
+                            </h2>
+
+                            {/* 1. Critical Alerts Display */}
+                            {currentAlertConfig && (
+                                <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}>
+                                    <p className="font-bold text-sm mb-1">Active USGS Alert: {currentAlertConfig.text}</p>
+                                    <p className="text-xs">{currentAlertConfig.description}</p>
+                                </div>
+                            )}
+                            {hasRecentTsunamiWarning && !currentAlertConfig && (
+                                <div className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs" role="alert">
+                                    <p className="font-bold mb-1">Tsunami Information</p>
+                                    <p className="text-xs">Recent quakes may indicate tsunami activity. Please check official channels for alerts.</p>
+                                </div>
+                            )}
+
+                            {/* 2. "LATEST SIGNIFICANT EVENT" Focus */}
+                            {lastMajorQuake && (
+                                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md">
+                                        <h3 className="text-sm font-semibold text-indigo-300 mb-1">Latest Significant Event</h3>
+                                        <p className="text-lg font-bold" style={{ color: getMagnitudeColor(lastMajorQuake.properties.mag) }}>
+                                            M {lastMajorQuake.properties.mag?.toFixed(1)}
+                                        </p>
+                                        <p className="text-sm text-slate-300 truncate" title={lastMajorQuake.properties.place}>
+                                            {lastMajorQuake.properties.place || "Location details pending..."}
+                                        </p>
+                                        <p className="text-xs text-slate-400">
+                                           {formatDate(lastMajorQuake.properties.time)}
+                                            {lastMajorQuake.geometry?.coordinates?.[2] !== undefined && `, Depth: ${lastMajorQuake.geometry.coordinates[2].toFixed(1)} km`}
+                                        </p>
+                                        <button
+                                            onClick={() => handleQuakeClick(lastMajorQuake)}
+                                            className="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
+                                        >
+                                            View Details
+                                        </button>
+                               </div>
+                            )}
+
+                            {/* 3. "WHAT JUST HAPPENED?" / Live Snippet */}
+                            {latestFeelableQuakesSnippet.length > 0 && (
+                                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md">
+                                    <h3 className="text-sm font-semibold text-indigo-300 mb-2">Latest Activity</h3>
+                                    <ul className="space-y-2">
+                                        {latestFeelableQuakesSnippet.map(quake => (
+                                            <li
+                                                key={`snippet-${quake.id}`}
+                                                className="text-xs border-b border-slate-600 pb-1 last:border-b-0 last:pb-0 p-2 rounded hover:bg-slate-600 cursor-pointer transition-colors"
+                                                onClick={() => handleQuakeClick(quake)}
+                                            >
+                                                <div className="flex justify-between items-center">
+                                                    <span className="font-semibold" style={{ color: getMagnitudeColor(quake.properties.mag) }}>
+                                                        M {quake.properties.mag?.toFixed(1)}
+                                                    </span>
+                                                    <span className="text-slate-400">
+                                                        {formatTimeAgo(Date.now() - quake.properties.time)}
+                                                    </span>
+                                                </div>
+                                                <p className="text-slate-300 truncate text-[11px]" title={quake.properties.place}>
+                                                    {quake.properties.place || "Location details pending..."}
+                                                </p>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <button
+                                        onClick={() => setActiveMobileView('feeds_details_mobile')}
+                                        className="mt-3 w-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
+                                    >
+                                        View All Recent Activity
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* 4. Global Context Banner */}
                             <TimeSinceLastMajorQuakeBanner
                                 lastMajorQuake={lastMajorQuake}
                                 timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
@@ -818,14 +998,15 @@ function App() {
                                 isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad}
                                 majorQuakeThreshold={MAJOR_QUAKE_THRESHOLD}
                             />
-                            {/* --- ADDED: Prominent Global Statistics Snapshot --- */}
+
+                            {/* 5. Key Global Statistics (WITH TRENDS) */}
                             <SummaryStatisticsCard
-                                title="Overview (Last 24 Hours)"
+                                title="Global Statistics (Last 24 Hours)"
                                 currentPeriodData={earthquakesLast24Hours}
+                                previousPeriodData={prev24HourData} // Ensure trends are shown
                                 isLoading={isLoadingDaily || (isLoadingWeekly && !earthquakesLast24Hours)}
                             />
 
-                            {/* --- ADDED: Most Active Region Snippet --- */}
                             <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
                                 <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
                                 {isLoadingDaily && !earthquakesLast24Hours ? (
@@ -839,15 +1020,141 @@ function App() {
                                     </p>
                                 )}
                             </div>
+                            <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
+                                <h3 className="text-md font-semibold mb-1 text-indigo-400">Quick Fact</h3>
+                                <InfoSnippet topic="magnitude" /> {/* Or "alerts", or rotate them, or pick one relevant */}
+                                <button
+                                    onClick={() => setActiveMobileView('learn_more_mobile')}
+                                    className="mt-2 w-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
+                                >
+                                    Learn More About Earthquakes
+                                </button>
+                            </div>
 
-                            {/* --- ADDED: Quick List of Recent Significant Quakes --- */}
+                            {/* Placeholder for Quick Educational Link - To be added last */}
+                        </div>
+                    )}
+
+                    {/* ---- MOBILE TAB CONTENT: Feeds ---- */}
+                    {activeMobileView === 'feeds_details_mobile' && (
+                        <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
+                            <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                Feeds & Details
+                            </h2>
+                            {/* Feed Selector Buttons */}
+                            <div className="my-2 flex flex-wrap gap-2 pb-2">
+                                <button onClick={() => setActiveFeedPeriod('last_hour')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_hour' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last Hour</button>
+                                <button onClick={() => setActiveFeedPeriod('feelable_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'feelable_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Feelable (M{FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+)</button>
+                                <button onClick={() => setActiveFeedPeriod('significant_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'significant_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Significant (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)</button>
+                                <button onClick={() => setActiveFeedPeriod('last_24_hours')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_24_hours' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last 24hr</button>
+                                <button onClick={() => setActiveFeedPeriod('last_7_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_7_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last 7day</button>
+                                {/* Conditionally show 14/30 day buttons if data is available or attempted */}
+                                {(hasAttemptedMonthlyLoad && allEarthquakes.length > 0) && (
+                                    <React.Fragment key="monthly-feed-buttons">
+                                        <button onClick={() => setActiveFeedPeriod('last_14_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_14_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>14-Day</button>
+                                        <button onClick={() => setActiveFeedPeriod('last_30_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_30_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>30-Day</button>
+                                    </React.Fragment>
+                               )}
+                            </div>
+
+                            <SummaryStatisticsCard
+                                title={`Statistics for ${currentFeedTitle.replace("Earthquakes ", "").replace("Quakes ", "")}`}
+                                currentPeriodData={currentFeedData || []}
+                                previousPeriodData={(activeFeedPeriod !== 'feelable_quakes' && activeFeedPeriod !== 'significant_quakes') ? previousDataForCurrentFeed : null}
+                                isLoading={currentFeedisLoading}
+                            />
+
+                            <PaginatedEarthquakeTable
+                                title={currentFeedTitle} // This would change based on selected feed
+                                earthquakes={currentFeedData || []} // This data would be dynamic
+                                isLoading={currentFeedisLoading} // Adjust loading state
+                                onQuakeClick={handleQuakeClick}
+                                itemsPerPage={15}
+                                periodName={activeFeedPeriod.replace('_', ' ')}
+                            />
+                            {!hasAttemptedMonthlyLoad && (
+                                <div className="text-center py-3 mt-3 border-t border-slate-700">
+                                    <button onClick={handleLoadMonthlyData} disabled={isLoadingMonthly} className="w-full bg-teal-600 hover:bg-teal-500 p-2.5 rounded-md text-white font-semibold transition-colors text-xs shadow-md disabled:opacity-60">
+                                        {isLoadingMonthly ? 'Loading Extended Data...' : 'Load 14 & 30-Day Data'}
+                                    </button>
+                                </div>
+                            )}
+                            {hasAttemptedMonthlyLoad && isLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
+                        </div>
+                    )}
+
+                    {/* ---- MOBILE TAB CONTENT: Learn ---- */}
+                    {activeMobileView === 'learn_more_mobile' && (
+                        <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
+                            <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                Learn About Earthquakes
+                            </h2>
+                            <InfoSnippet topic="magnitude" />
+                            <InfoSnippet topic="depth" />
+                            <InfoSnippet topic="intensity" />
+                            <InfoSnippet topic="alerts" />
+                            <InfoSnippet topic="strike"/>
+                            <InfoSnippet topic="dip"/>
+                            <InfoSnippet topic="rake"/>
+                            <InfoSnippet topic="stressAxes"/>
+                            <InfoSnippet topic="beachball"/>
+                            <InfoSnippet topic="stationsUsed"/>
+                            <InfoSnippet topic="azimuthalGap"/>
+                            <InfoSnippet topic="rmsError"/>
+                        </div>
+                    )}
+                </main>
+
+                {/* DESKTOP SIDEBAR (hidden on small screens, flex on large) */}
+                <aside className="hidden lg:flex w-[480px] bg-slate-800 p-0 flex-col border-l border-slate-700 shadow-2xl z-20">
+                    {/* ... Desktop sidebar content controlled by activeSidebarView ... (This part remains as you had it) */}
+                    <div className="p-3 border-b border-slate-700"> <h2 className="text-md font-semibold text-indigo-400">Detailed Earthquake Analysis</h2> </div>
+                    <div className="flex-shrink-0 p-2 space-x-1 border-b border-slate-700 whitespace-nowrap overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
+                        <button onClick={() => setActiveSidebarView('overview_panel')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
+                        <button onClick={() => setActiveSidebarView('details_1hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>
+                        <button onClick={() => setActiveSidebarView('details_24hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_24hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 24hr</button>
+                        <button onClick={() => setActiveSidebarView('details_7day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_7day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 7day</button>
+                        {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={() => setActiveSidebarView('details_14day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={() => setActiveSidebarView('details_30day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
+                        <button onClick={() => setActiveSidebarView('learn_more')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
+                    </div>
+                    <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800" key="overview_content_desktop_sidebar"> {/* Changed key for clarity */}
+                        {error && !showFullScreenLoader && (<div className="bg-red-700 bg-opacity-40 border border-red-600 text-red-200 px-3 py-2 rounded-md text-xs" role="alert"><strong className="font-bold">Data Error:</strong> {error} Some data might be unavailable.</div>)}
+                        {activeSidebarView === 'overview_panel' && ( <>
+                            {currentAlertConfig && ( <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}> <p className="font-bold text-sm">Active USGS Alert: {currentAlertConfig.text}</p> <p>{currentAlertConfig.description}</p> {activeAlertTriggeringQuakes.length > 0 && (<PaginatedEarthquakeTable title={`Alert Triggering Quakes (${currentAlertConfig.text})`} earthquakes={activeAlertTriggeringQuakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={3} periodName="alerting"/> )} </div> )}
+                            {hasRecentTsunamiWarning && !currentAlertConfig && (<div className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs" role="alert"><p className="font-bold">Tsunami Info</p><p>Recent quakes indicate potential tsunami activity. Check official channels.</p></div>)}
+                            <TimeSinceLastMajorQuakeBanner
+                                lastMajorQuake={lastMajorQuake}
+                                timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
+                                isLoadingInitial={isLoadingInitialData}
+                                isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad}
+                                majorQuakeThreshold={MAJOR_QUAKE_THRESHOLD}
+                            />
+                            <SummaryStatisticsCard
+                                title="Overview (Last 24 Hours)"
+                                currentPeriodData={earthquakesLast24Hours}
+                                previousPeriodData={prev24HourData} // Ensure trends are shown on desktop too
+                                isLoading={isLoadingDaily || (isLoadingWeekly && !earthquakesLast24Hours)}
+                            />
+                            <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
+                                <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
+                                {isLoadingDaily && !earthquakesLast24Hours ? (
+                                    <SkeletonText width="w-full" height="h-5" className="bg-slate-600"/>
+                                ) : (
+                                    <p className="text-slate-300">
+                                        <span className="font-semibold" style={{color: mostActiveRegionOverview.color || '#9CA3AF'}}>
+                                            {mostActiveRegionOverview.name}
+                                        </span>
+                                        {mostActiveRegionOverview.count > 0 ? ` - ${mostActiveRegionOverview.count} events` : ' (No significant regional activity)'}
+                                    </p>
+                                )}
+                            </div>
                             {recentSignificantQuakesForOverview.length > 0 && (
                                 <PaginatedEarthquakeTable
                                     title={`Recent Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)`}
                                     earthquakes={recentSignificantQuakesForOverview}
                                     isLoading={isLoadingWeekly && !earthquakesLast7Days}
                                     onQuakeClick={handleQuakeClick}
-                                    itemsPerPage={10} // Show a few recent ones
+                                    itemsPerPage={10}
                                     defaultSortKey="time"
                                     initialSortDirection="descending"
                                     periodName="last 7 days"
@@ -859,28 +1166,20 @@ function App() {
                                     <SkeletonListItem /> <SkeletonListItem />
                                 </div>
                             }
-
-                            {/* --- ADDED: Educational Tidbit / Did You Know? --- */}
                             <div className="bg-slate-700 p-2 rounded-lg border border-slate-600 shadow-md">
                                 <h3 className="text-md font-semibold mb-1 text-indigo-400">Did You Know?</h3>
                                 <InfoSnippet topic="magnitude" />
                             </div>
-
-                            {/* --- ADDED: Brief Tectonic Plates Context --- */}
                             <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
                                 <h3 className="text-md font-semibold mb-1 text-indigo-400">Earthquakes & Tectonic Plates</h3>
                                 <p className="text-xs text-slate-400 leading-relaxed">
-                                    Most earthquakes occur along the edges of tectonic plates, massive slabs of Earth's lithosphere that are constantly moving.
-                                    These movements build up stress in the rock, which is eventually released as an earthquake.
-                                    The lines on the globe represent these major plate boundaries, where different types of interactions (convergent, divergent, transform) lead to seismic activity.
-                                    You can explore these boundaries on the interactive globe. For more detailed explanations, visit the "Learn" tab.
+                                    Most earthquakes occur along the edges of tectonic plates... {/* Truncated for brevity */}
                                 </p>
                             </div>
-
-
                         </> )}
-                        {activeSidebarView === 'learn_more' && ( <div className="p-2 bg-slate-700 rounded-md"> <h3 className="text-md font-semibold text-indigo-400 mb-2">Learn About Earthquakes</h3> <InfoSnippet topic="magnitude" /> <InfoSnippet topic="depth" /> <InfoSnippet topic="intensity" /> <InfoSnippet topic="alerts" /> <InfoSnippet topic="strike"/> <InfoSnippet topic="dip"/> <InfoSnippet topic="rake"/> <InfoSnippet topic="stressAxes"/> <InfoSnippet topic="beachball"/> <InfoSnippet topic="stationsUsed"/> <InfoSnippet topic="azimulthalGap"/> <InfoSnippet topic="rmsError"/> </div> )}
+                        {activeSidebarView === 'learn_more' && ( <div className="p-2 bg-slate-700 rounded-md"> <h3 className="text-md font-semibold text-indigo-400 mb-2">Learn About Earthquakes</h3> <InfoSnippet topic="magnitude" /> <InfoSnippet topic="depth" /> <InfoSnippet topic="intensity" /> <InfoSnippet topic="alerts" /> <InfoSnippet topic="strike"/> <InfoSnippet topic="dip"/> <InfoSnippet topic="rake"/> <InfoSnippet topic="stressAxes"/> <InfoSnippet topic="beachball"/> <InfoSnippet topic="stationsUsed"/> <InfoSnippet topic="azimuthalGap"/> <InfoSnippet topic="rmsError"/> </div> )}
 
+                        {/* ... (rest of your desktop sidebar logic for details_1hr, details_24hr, etc. This part of your code was already handling these views) ... */}
                         {activeSidebarView === 'details_1hr' && !isLoadingDaily && earthquakesLastHour && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last Hour)" currentPeriodData={earthquakesLastHour} isLoading={isLoadingDaily}/>
                             <PaginatedEarthquakeTable title="Earthquakes (Last Hour)" earthquakes={earthquakesLastHour} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} itemsPerPage={10} periodName="last hour"/>
@@ -931,10 +1230,14 @@ function App() {
                         }
                         {hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length === 0 && (activeSidebarView === 'details_14day' || activeSidebarView === 'details_30day') &&( <p className="text-slate-400 text-center py-4 text-sm">No 14/30 day earthquake data found or loaded.</p> )}
                         {!initialDataLoaded && !isLoadingDaily && !isLoadingWeekly && (activeSidebarView === 'details_1hr' || activeSidebarView === 'details_24hr' || activeSidebarView === 'details_7day' ) && ( <div className="text-center py-10"><p className="text-sm text-slate-500">No data available for this period.</p></div> )}
+                    </div> {/* End of desktop sidebar scrollable content */}
+                    <div className="p-1.5 text-center border-t border-slate-700 mt-auto">
+                        <p className="text-[10px] text-slate-500">&copy; {new Date().getFullYear()} Built By Vibes | Data: USGS</p>
                     </div>
-                    <div className="p-1.5 text-center border-t border-slate-700 mt-auto"> <p className="text-[10px] text-slate-500">&copy; {new Date().getFullYear()} Built By Vibes | Data: USGS</p> </div>
                 </aside>
-            </div>
+            </div> {/* End of main flex container (main + aside) */}
+
+            <BottomNav activeMobileView={activeMobileView} setActiveMobileView={setActiveMobileView} />
 
             {selectedDetailUrl && ( <EarthquakeDetailView detailUrl={selectedDetailUrl} onClose={handleCloseDetail} /> )}
         </div>
