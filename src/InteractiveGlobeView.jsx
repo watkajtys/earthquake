@@ -10,6 +10,7 @@ const InteractiveGlobeView = ({
                                   tectonicPlatesGeoJson,
                                   highlightedQuakeId,
                                   latestMajorQuakeForRing,
+                                  previousMajorQuake, // Added new prop
                                   atmosphereColor = "rgba(100,100,255,0.3)",
                                   defaultFocusLat = 20,
                                   defaultFocusLng = 0,
@@ -59,23 +60,75 @@ const InteractiveGlobeView = ({
     }, []);
 
     useEffect(() => {
-        const allPointsData = (earthquakes || []).map(quake => {
+        let allPointsData = (earthquakes || []).map(quake => {
             const isHighlighted = quake.id === highlightedQuakeId;
             const magValue = parseFloat(quake.properties.mag) || 0;
-            let pointRadius, pointColor, pointAltitude;
+            let pointRadius, pointColor, pointAltitude, pointLabel, pointType;
+
             if (isHighlighted) {
-                pointRadius = Math.max(0.6, (magValue / 7) + 0.4); pointColor = '#FFFF00'; pointAltitude = 0.03;
+                pointRadius = Math.max(0.6, (magValue / 7) + 0.4);
+                pointColor = '#FFFF00'; // Yellow for latest significant
+                pointAltitude = 0.03;
+                pointLabel = `LATEST SIGNIFICANT: M${quake.properties.mag?.toFixed(1)} - ${quake.properties.place}`;
+                pointType = 'highlighted_significant_quake';
             } else {
-                pointRadius = Math.max(0.15, (magValue / 7) + 0.05); pointColor = getMagnitudeColorFunc(quake.properties.mag); pointAltitude = 0.01;
+                pointRadius = Math.max(0.15, (magValue / 7) + 0.05);
+                pointColor = getMagnitudeColorFunc(quake.properties.mag);
+                pointAltitude = 0.01;
+                pointLabel = `M${quake.properties.mag?.toFixed(1)} - ${quake.properties.place}`;
+                pointType = 'recent_quake';
             }
             return {
                 lat: quake.geometry?.coordinates?.[1], lng: quake.geometry?.coordinates?.[0], altitude: pointAltitude, radius: pointRadius, color: pointColor,
-                label: `${isHighlighted ? 'LATEST SIGNIFICANT: ' : ''}M${quake.properties.mag?.toFixed(1)} - ${quake.properties.place}`,
-                quakeData: quake, type: isHighlighted ? 'highlighted_significant_quake' : 'recent_quake'
+                label: pointLabel,
+                quakeData: quake, type: pointType
             };
         }).filter(p => typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng));
+
+        if (previousMajorQuake && previousMajorQuake.id && previousMajorQuake.geometry?.coordinates && previousMajorQuake.properties) {
+            const prevMagValue = parseFloat(previousMajorQuake.properties.mag) || 0;
+            let foundAndUpdated = false;
+            allPointsData = allPointsData.map(p => {
+                if (p.quakeData.id === previousMajorQuake.id) {
+                    foundAndUpdated = true;
+                    // If previousMajorQuake is also the highlightedQuakeId, let highlighted style take precedence mostly
+                    if (p.quakeData.id === highlightedQuakeId) {
+                        return {
+                            ...p, // Keep most of highlighted style
+                            label: `LATEST & PREVIOUS SIG: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`, // Special label
+                            type: 'highlighted_previous_significant_quake'
+                        };
+                    }
+                    return {
+                        ...p,
+                        radius: Math.max(0.55, (prevMagValue / 7) + 0.35), // Slightly smaller than latest highlighted
+                        color: '#B0BEC5', // Distinct grey
+                        altitude: 0.025, // Slightly different altitude
+                        label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
+                        type: 'previous_major_quake'
+                    };
+                }
+                return p;
+            });
+
+            if (!foundAndUpdated) {
+                 // Ensure previousMajorQuake is not also the current highlighted one before adding separately
+                if (previousMajorQuake.id !== highlightedQuakeId) {
+                    allPointsData.push({
+                        lat: previousMajorQuake.geometry.coordinates[1],
+                        lng: previousMajorQuake.geometry.coordinates[0],
+                        altitude: 0.025,
+                        radius: Math.max(0.55, (prevMagValue / 7) + 0.35),
+                        color: '#B0BEC5', // Distinct grey
+                        label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
+                        quakeData: previousMajorQuake,
+                        type: 'previous_major_quake'
+                    });
+                }
+            }
+        }
         setPoints(allPointsData);
-    }, [earthquakes, getMagnitudeColorFunc, highlightedQuakeId]);
+    }, [earthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake]);
 
     useEffect(() => {
         let processedPaths = [];
@@ -221,8 +274,9 @@ const InteractiveGlobeView = ({
 
     // useEffect for Rings Data
     useEffect(() => {
-        // console.log("Rings useEffect triggered. latestMajorQuakeForRing:", latestMajorQuakeForRing);
+        const newRings = [];
 
+        // Ring for latestMajorQuakeForRing
         if (latestMajorQuakeForRing &&
             latestMajorQuakeForRing.geometry &&
             Array.isArray(latestMajorQuakeForRing.geometry.coordinates) &&
@@ -234,36 +288,47 @@ const InteractiveGlobeView = ({
         ) {
             const coords = latestMajorQuakeForRing.geometry.coordinates;
             const mag = parseFloat(latestMajorQuakeForRing.properties.mag);
-
-            const ringObject = {
-                id: `major_quake_ring_${latestMajorQuakeForRing.id}_${latestMajorQuakeForRing.properties.time}_${Date.now()}`,
+            newRings.push({
+                id: `major_quake_ring_latest_${latestMajorQuakeForRing.id}_${latestMajorQuakeForRing.properties.time}_${Date.now()}`,
                 lat: coords[1],
                 lng: coords[0],
-                altitude: 0.02, // Slightly increased altitude
-
-                // Option 1: Brighter, more consistently opaque color (less fade-out of alpha)
-                // color: (t) => `rgba(255, 100, 0, ${Math.max(0.2, 0.8 - t * 0.6)})`, // Orange-Red, keeps some opacity
-                // Option 2: A very vibrant, mostly solid color
-                color: () => 'rgba(255, 255, 0, 0.8)', // Bright Yellow
-                // Option 3: Your previous static red was also good, ensure alpha is high enough
-                // color: () => 'rgba(255, 80, 80, 0.75)',
-
-
-                maxR: Math.max(6, mag * 2.2), // Increased max radius for more impact
-                propagationSpeed: Math.max(2, mag * 0.5), // Moderate speed
-                repeatPeriod: 1800, // Pulsing effect, adjust as preferred (0 for single shot)
-            };
-
-            console.log("Setting ringsData with:", ringObject);
-            setRingsData([ringObject]);
-
-        } else {
-            console.log("latestMajorQuakeForRing is invalid or null, clearing ringsData.");
-            if (ringsData.length > 0) {
-                setRingsData([]);
-            }
+                altitude: 0.02,
+                color: () => 'rgba(255, 255, 0, 0.8)', // Bright Yellow for latest
+                maxR: Math.max(6, mag * 2.2),
+                propagationSpeed: Math.max(2, mag * 0.5),
+                repeatPeriod: 1800,
+            });
         }
-    }, [latestMajorQuakeForRing]);
+
+        // Ring for previousMajorQuake
+        if (previousMajorQuake &&
+            previousMajorQuake.geometry &&
+            Array.isArray(previousMajorQuake.geometry.coordinates) &&
+            previousMajorQuake.geometry.coordinates.length >= 2 &&
+            typeof previousMajorQuake.geometry.coordinates[1] === 'number' &&
+            typeof previousMajorQuake.geometry.coordinates[0] === 'number' &&
+            previousMajorQuake.properties &&
+            typeof previousMajorQuake.properties.mag === 'number'
+        ) {
+            const coords = previousMajorQuake.geometry.coordinates;
+            const mag = parseFloat(previousMajorQuake.properties.mag);
+            newRings.push({
+                id: `major_quake_ring_prev_${previousMajorQuake.id}_${previousMajorQuake.properties.time}_${Date.now()}`,
+                lat: coords[1],
+                lng: coords[0],
+                altitude: 0.018, // Slightly different altitude
+                color: () => 'rgba(180, 180, 180, 0.6)', // Greyish for previous
+                maxR: Math.max(5, mag * 2.0),
+                propagationSpeed: Math.max(1.8, mag * 0.45),
+                repeatPeriod: 1900, // Slightly different period
+            });
+        }
+        
+        if (newRings.length > 0 || ringsData.length > 0) { // Update only if there's a change or existing rings to clear
+             setRingsData(newRings);
+        }
+
+    }, [latestMajorQuakeForRing, previousMajorQuake, ringsData.length]); // Added previousMajorQuake and ringsData.length to dependency array
 
 
 

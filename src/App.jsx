@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import EarthquakeDetailView from './EarthquakeDetailView';
 import InteractiveGlobeView from './InteractiveGlobeView';
 import NotableQuakeFeature from './NotableQuakeFeature';
+import PreviousNotableQuakeFeature from './PreviousNotableQuakeFeature'; // Import the new component
 import InfoSnippet from './InfoSnippet';
 import coastlineData from './ne_110m_coastline.json'; // Direct import
 import tectonicPlatesData from './TectonicPlateBoundaries.json';
@@ -490,6 +491,7 @@ function App() {
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now());
     const [hasRecentTsunamiWarning, setHasRecentTsunamiWarning] = useState(false);
     const [lastMajorQuake, setLastMajorQuake] = useState(null);
+    const [previousMajorQuake, setPreviousMajorQuake] = useState(null); // New state variable
     const [timeBetweenPreviousMajorQuakes, setTimeBetweenPreviousMajorQuakes] = useState(null);
     const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
     const [currentLoadingMessages, setCurrentLoadingMessages] = useState(INITIAL_LOADING_MESSAGES);
@@ -711,8 +713,20 @@ function App() {
                         .sort((a,b) => b.properties.time - a.properties.time)
                         .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id));
 
-                    if (consolidatedMajors.length > 1) {
-                        setTimeBetweenPreviousMajorQuakes(consolidatedMajors[0].properties.time - consolidatedMajors[1].properties.time);
+                    const newLastMajorQuake = consolidatedMajors.length > 0 ? consolidatedMajors[0] : null;
+                    const newPreviousMajorQuake = consolidatedMajors.length > 1 ? consolidatedMajors[1] : null;
+
+                    // Update lastMajorQuake if the new one is more recent or if no lastMajorQuake is set
+                    setLastMajorQuake(prev => {
+                        if (newLastMajorQuake && (!prev || newLastMajorQuake.properties.time > prev.properties.time)) {
+                            return newLastMajorQuake;
+                        }
+                        return prev || newLastMajorQuake; // Handles initial set if prev is null
+                    });
+                    setPreviousMajorQuake(newPreviousMajorQuake);
+
+                    if (newLastMajorQuake && newPreviousMajorQuake) {
+                        setTimeBetweenPreviousMajorQuakes(newLastMajorQuake.properties.time - newPreviousMajorQuake.properties.time);
                     } else {
                         setTimeBetweenPreviousMajorQuakes(null);
                     }
@@ -768,11 +782,18 @@ function App() {
                     .sort((a,b) => b.properties.time - a.properties.time)
                     .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id));
 
-                if (sortedAllMajor.length > 1) {
-                    setTimeBetweenPreviousMajorQuakes(sortedAllMajor[0].properties.time - sortedAllMajor[1].properties.time);
+                const finalLastMajorQuake = sortedAllMajor.length > 0 ? sortedAllMajor[0] : null;
+                const finalPreviousMajorQuake = sortedAllMajor.length > 1 ? sortedAllMajor[1] : null;
+
+                setLastMajorQuake(finalLastMajorQuake);
+                setPreviousMajorQuake(finalPreviousMajorQuake);
+
+                if (finalLastMajorQuake && finalPreviousMajorQuake) {
+                    setTimeBetweenPreviousMajorQuakes(finalLastMajorQuake.properties.time - finalPreviousMajorQuake.properties.time);
                 } else {
                     setTimeBetweenPreviousMajorQuakes(null);
                 }
+
                 if(isMounted) setLoadingMessageIndex(3);
             }
         } catch (e) { if (!isMounted) return; console.error("Failed to fetch monthly data:", e); setMonthlyError(`Monthly Data: ${e.message}`); setAllEarthquakes([]); setEarthquakesLast14Days([]); setEarthquakesLast30Days([]); setPrev7DayData(null); setPrev14DayData(null); }
@@ -886,12 +907,19 @@ function App() {
                             tectonicPlatesGeoJson={tectonicPlatesData}
                             highlightedQuakeId={lastMajorQuake?.id}
                             latestMajorQuakeForRing={lastMajorQuake}
+                            previousMajorQuake={previousMajorQuake} // Add this line
                         />
                         {/* Globe Overlays */}
                         <div className="absolute top-2 left-2 z-10 space-y-2">
                             <NotableQuakeFeature
                                 dynamicFeaturedQuake={lastMajorQuake}
                                 isLoadingDynamicQuake={isLoadingInitialData}
+                                onNotableQuakeSelect={handleNotableQuakeSelect}
+                                getMagnitudeColorFunc={getMagnitudeColor}
+                            />
+                            <PreviousNotableQuakeFeature
+                                previousMajorQuake={previousMajorQuake}
+                                isLoadingPreviousQuake={isLoadingInitialData} // Using isLoadingInitialData as discussed
                                 onNotableQuakeSelect={handleNotableQuakeSelect}
                                 getMagnitudeColorFunc={getMagnitudeColor}
                             />
