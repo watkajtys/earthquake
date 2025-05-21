@@ -1,6 +1,7 @@
 // src/App.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import EarthquakeDetailView from './EarthquakeDetailView';
 import InteractiveGlobeView from './InteractiveGlobeView';
 import NotableQuakeFeature from './NotableQuakeFeature';
@@ -976,7 +977,7 @@ function App() {
 
     // --- Full Screen Loader ---
     if (showFullScreenLoader) {
-        return ( <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white antialiased"> <svg className="animate-spin h-12 w-12 text-indigo-400 mb-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"> <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle> <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> </svg> <p className="text-2xl font-light text-indigo-300 mb-3">{currentLoadingMessages[loadingMessageIndex]}</p> <div className="w-1/3 h-1 bg-indigo-700 rounded-full overflow-hidden mt-2"> <div className="h-full bg-indigo-400 animate-pulse-short" style={{ animationDuration: `${LOADING_MESSAGE_INTERVAL_MS * INITIAL_LOADING_MESSAGES.length / 1000}s`}}></div> </div> <style>{`@keyframes pulseShort{0%{width:0%}100%{width:100%}}.animate-pulse-short{animation:pulseShort linear infinite}`}</style> <p className="text-xs text-slate-500 mt-10">Seismic Data Visualization</p> </div> );
+        return ( <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white antialiased"> <svg className="animate-spin h-12 w-12 text-indigo-400 mb-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true"> <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle> <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> </svg> <p className="text-2xl font-light text-indigo-300 mb-3">{currentLoadingMessages[loadingMessageIndex]}</p> <div className="w-1/3 h-1 bg-indigo-700 rounded-full overflow-hidden mt-2"> <div className="h-full bg-indigo-400 animate-pulse-short" style={{ animationDuration: `${LOADING_MESSAGE_INTERVAL_MS * INITIAL_LOADING_MESSAGES.length / 1000}s`}}></div> </div> <style>{`@keyframes pulseShort{0%{width:0%}100%{width:100%}}.animate-pulse-short{animation:pulseShort linear infinite}`}</style> <p className="text-xs text-slate-500 mt-10">Seismic Data Visualization</p> </div> );
     }
 
     // --- Main Render ---
@@ -998,9 +999,14 @@ function App() {
                 <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto">
                     <Routes>
                         <Route path="/" element={
-                            <div className="lg:block h-full w-full">
-                                <InteractiveGlobeView
-                                    earthquakes={globeEarthquakes}
+                            <>
+                                <Helmet>
+                                    <title>Real-time Earthquake Tracker & Seismic Activity Dashboard</title>
+                                    <meta name="description" content="Track the latest earthquakes and seismic activity worldwide with our interactive dashboard. View real-time data, maps, historical trends, and detailed event information." />
+                                </Helmet>
+                                <div className="lg:block h-full w-full">
+                                    <InteractiveGlobeView
+                                        earthquakes={globeEarthquakes}
                                     onQuakeClick={handleQuakeClick}
                                     getMagnitudeColorFunc={getMagnitudeColor}
                                     allowUserDragRotation={true}
@@ -1040,12 +1046,18 @@ function App() {
                                     SkeletonText={SkeletonText}
                                 />
                             </div>
+                            </>
                         } />
                         <Route path="/overview" element={
-                            <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
-                                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                    Overview
-                                </h2>
+                            <>
+                                <Helmet>
+                                    <title>Global Earthquake Overview | Seismic Dashboard</title>
+                                    <meta name="description" content="Get a global overview of recent seismic activity, including significant earthquakes, regional distributions, and key statistics." />
+                                </Helmet>
+                                <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
+                                    <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                        Overview
+                                    </h2>
                                 {currentAlertConfig && (
                                     <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}>
                                         <p className="font-bold text-sm mb-1">Active USGS Alert: {currentAlertConfig.text}</p>
@@ -1149,12 +1161,18 @@ function App() {
                                     </button>
                                 </div>
                             </div>
+                            </>
                         } />
                         <Route path="/feeds" element={
-                            <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
-                                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                    Feeds & Details
-                                </h2>
+                            <>
+                                <Helmet>
+                                    <title>Earthquake Data Feeds | Seismic Dashboard</title>
+                                    <meta name="description" content="Explore various earthquake data feeds, including events from the last hour, day, week, and month, plus lists of feelable and significant quakes." />
+                                </Helmet>
+                                <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
+                                    <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                        Feeds & Details
+                                    </h2>
                                 <div className="my-2 flex flex-wrap gap-2 pb-2">
                                     <button onClick={() => setActiveFeedPeriod('last_hour')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_hour' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last Hour</button>
                                     <button onClick={() => setActiveFeedPeriod('feelable_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'feelable_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Feelable (M{FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+)</button>
@@ -1191,12 +1209,18 @@ function App() {
                                 )}
                                 {hasAttemptedMonthlyLoad && isLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
                             </div>
+                            </>
                         } />
                         <Route path="/learn" element={
-                            <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
-                                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                    Learn About Earthquakes
-                                </h2>
+                            <>
+                                <Helmet>
+                                    <title>Learn About Earthquakes | Seismic Dashboard</title>
+                                    <meta name="description" content="Understand key earthquake concepts such as magnitude, depth, intensity, fault types, and how seismic data is interpreted." />
+                                </Helmet>
+                                <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
+                                    <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                        Learn About Earthquakes
+                                    </h2>
                                 <InfoSnippet topic="magnitude" />
                                 <InfoSnippet topic="depth" />
                                 <InfoSnippet topic="intensity" />
@@ -1210,6 +1234,7 @@ function App() {
                                 <InfoSnippet topic="azimuthalGap"/>
                                 <InfoSnippet topic="rmsError"/>
                             </div>
+                            </>
                         } />
                         <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModal />} />
                     </Routes>

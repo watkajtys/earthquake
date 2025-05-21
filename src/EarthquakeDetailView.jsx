@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Helmet } from 'react-helmet-async';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 
 // Helper Functions
@@ -339,9 +340,137 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
         );
     };
 
-    if (isLoading) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-8 rounded-lg max-w-3xl w-full animate-pulse"><SkeletonText width="w-3/4" height="h-8 mb-6 mx-auto" /><SkeletonBlock height="h-40 mb-4" /><SkeletonBlock height="h-64" /></div></div> );
-    if (error) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-red-600 mb-4">Error Loading Details</h3><p className="text-slate-700 mb-6">{error}</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div> );
-    if (!detailData || !properties) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-slate-700 mb-4">Details Not Available</h3><p className="text-slate-600 mb-6">Could not retrieve or parse details.</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div> );
+    const pageTitle = useMemo(() => {
+        if (isLoading) return 'Loading Earthquake Details...';
+        if (!detailData?.properties) return 'Earthquake Details';
+        const { mag, place, time } = detailData.properties;
+        const titleParts = [];
+        if (isValidNumber(mag)) titleParts.push(`M ${formatNumber(mag,1)}`);
+        if (isValidString(place)) titleParts.push(place);
+        if (isValuePresent(time)) titleParts.push(formatDate(time).split(',')[0]); // Date part only
+        return titleParts.length > 0 ? titleParts.join(' - ') : 'Earthquake Event Details';
+    }, [detailData, isLoading, properties]);
+
+    const pageDescription = useMemo(() => {
+        if (isLoading) return 'Fetching detailed earthquake data...';
+        if (!detailData?.properties) return 'Detailed information about a specific earthquake event.';
+        const { mag, place, time, mmi, alert: pagerAlert } = detailData.properties;
+        let description = `Details for a M ${isValidNumber(mag) ? formatNumber(mag,1) : '?'} earthquake`;
+        if (isValidString(place)) description += ` near ${place}`;
+        if (isValuePresent(time)) description += ` on ${formatDate(time)}`;
+        description += `. View ShakeMap (MMI: ${isValidNumber(mmi) ? formatNumber(mmi,1) : 'N/A'}), PAGER alert (${pagerAlert || 'N/A'}), magnitude, depth, and fault mechanics.`;
+        return description;
+    }, [detailData, isLoading, properties]);
+
+    const shakemapAltText = useMemo(() => {
+        if (!properties) return 'USGS ShakeMap Estimated Shaking Intensity';
+        const mag = properties.mag;
+        const place = properties.place;
+        if (isValidNumber(mag) && isValidString(place)) {
+            return `ShakeMap for M ${formatNumber(mag,1)} earthquake near ${place} showing estimated shaking intensity.`;
+        } else if (isValidNumber(mag)) {
+            return `ShakeMap for M ${formatNumber(mag,1)} earthquake showing estimated shaking intensity.`;
+        } else if (isValidString(place)) {
+            return `ShakeMap for earthquake near ${place} showing estimated shaking intensity.`;
+        }
+        return 'USGS ShakeMap Estimated Shaking Intensity';
+    }, [properties]);
+
+    const structuredData = useMemo(() => {
+        if (!properties || !geometry?.coordinates || !detailData?.id) {
+            return null;
+        }
+
+        const mag = properties.mag;
+        const place = properties.place;
+        const time = properties.time;
+        const depth = geometry.coordinates[2];
+        const id = detailData.id;
+        const usgsUrl = properties.url;
+
+        const name = isValidString(properties.title) ? properties.title :
+            (isValidNumber(mag) && isValidString(place)) ? `M ${formatNumber(mag,1)} Earthquake - ${place}` :
+                isValidNumber(mag) ? `M ${formatNumber(mag,1)} Earthquake` :
+                    'Earthquake Event';
+
+        let description = `An M ${isValidNumber(mag) ? formatNumber(mag,1) : '?'} earthquake`;
+        if (isValidString(place)) description += ` occurred near ${place}`;
+        if (isValuePresent(time)) description += ` on ${new Date(time).toLocaleDateString()}`; // Using toLocaleDateString for brevity in description
+        if (isValidNumber(depth)) description += `. Depth: ${formatNumber(depth,1)} km.`;
+        else description += ".";
+
+        const keywordsList = ['earthquake', 'seismic', 'tremor', 'geological event'];
+        if (isValidString(place)) keywordsList.push(place.split(',').map(s => s.trim()).filter(s => s.length > 0));
+        if (isValidNumber(mag)) keywordsList.push(`M ${formatNumber(mag,1)}`);
+
+
+        const data = {
+            '@context': 'https://schema.org',
+            '@type': 'Event',
+            'additionalType': 'https://schema.org/GeologicalEvent',
+            'name': name,
+            'description': description,
+            'startDate': isValuePresent(time) ? new Date(time).toISOString() : undefined,
+            'location': {
+                '@type': 'Place',
+                'name': isValidString(place) ? place : undefined,
+                'geo': {
+                    '@type': 'GeoCoordinates',
+                    'latitude': isValidNumber(geometry.coordinates[1]) ? geometry.coordinates[1] : undefined,
+                    'longitude': isValidNumber(geometry.coordinates[0]) ? geometry.coordinates[0] : undefined,
+                    'elevation': isValidNumber(depth) ? -(depth * 1000) : undefined, // Convert km (positive down) to m (negative for depth)
+                }
+            },
+            'url': isValidString(usgsUrl) ? usgsUrl : undefined,
+            'identifier': id,
+            'keywords': keywordsList.flat().join(', '),
+            // 'subjectOf': window.location.href, // Could use this if the URL is stable for the detail view
+        };
+        // Clean undefined values
+        Object.keys(data).forEach(key => data[key] === undefined && delete data[key]);
+        if (data.location) {
+            Object.keys(data.location).forEach(key => data.location[key] === undefined && delete data.location[key]);
+            if (data.location.geo) {
+                Object.keys(data.location.geo).forEach(key => data.location.geo[key] === undefined && delete data.location.geo[key]);
+                if (Object.keys(data.location.geo).length === 1 && data.location.geo['@type']) delete data.location.geo; // Remove empty geo
+            }
+            if (Object.keys(data.location).length === 1 && data.location['@type']) delete data.location; // Remove empty location
+        }
+
+        return data;
+
+    }, [properties, geometry, detailData?.id]);
+
+
+    if (isLoading) return (
+        <>
+            <Helmet>
+                <title>Loading Earthquake Details...</title>
+                <meta name="description" content="Fetching detailed earthquake data..." />
+            </Helmet>
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-8 rounded-lg max-w-3xl w-full animate-pulse"><SkeletonText width="w-3/4" height="h-8 mb-6 mx-auto" /><SkeletonBlock height="h-40 mb-4" /><SkeletonBlock height="h-64" /></div></div>
+        </>
+    );
+
+    if (error) return (
+        <>
+            <Helmet>
+                <title>Error Loading Details</title>
+                <meta name="description" content={`Error fetching earthquake details: ${error}`} />
+            </Helmet>
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-red-600 mb-4">Error Loading Details</h3><p className="text-slate-700 mb-6">{error}</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div>
+        </>
+    );
+
+    if (!detailData || !properties) return (
+        <>
+            <Helmet>
+                <title>Earthquake Details Not Available</title>
+                <meta name="description" content="Could not retrieve or parse details for this earthquake." />
+            </Helmet>
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-slate-700 mb-4">Details Not Available</h3><p className="text-slate-600 mb-6">Could not retrieve or parse details.</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div>
+        </>
+    );
 
     const exhibitPanelClass = "bg-white rounded-xl p-3 md:p-4 shadow border-l-4";
     const exhibitTitleClass = "text-lg md:text-xl font-bold mb-3 pb-1 border-b";
@@ -354,13 +483,23 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
     const pagerAlertValue = losspagerProductProps?.alertlevel ?? properties?.alert;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-40 p-2 sm:p-4 pt-10 md:pt-16 overflow-y-auto" onClick={onClose}>
-            <div className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800" onClick={(e) => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-1 right-1 md:top-3 md:right-3 text-gray-300 bg-gray-700 bg-opacity-50 rounded-full w-8 h-8 flex items-center justify-center hover:bg-opacity-75 hover:text-white text-2xl font-light z-50" aria-label="Close detail view">&times;</button>
+        <>
+            <Helmet>
+                <title>{pageTitle}</title>
+                <meta name="description" content={pageDescription} />
+                {structuredData && (
+                    <script type="application/ld+json">
+                        {JSON.stringify(structuredData)}
+                    </script>
+                )}
+            </Helmet>
+            <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-40 p-2 sm:p-4 pt-10 md:pt-16 overflow-y-auto" onClick={onClose}>
+                <div className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={onClose} className="absolute top-1 right-1 md:top-3 md:right-3 text-gray-300 bg-gray-700 bg-opacity-50 rounded-full w-8 h-8 flex items-center justify-center hover:bg-opacity-75 hover:text-white text-2xl font-light z-50" aria-label="Close detail view">&times;</button>
 
-                {isValidString(properties.title) && (
+                    {isValidString(properties.title) && (
                     <header className="text-center p-4 md:p-5 bg-white rounded-t-lg border-b border-gray-300">
-                        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-blue-700">Unpacking the Shakes!</h1>
+                        <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-blue-700">Unpacking the Shakes!</h2>
                         <p className="text-md text-slate-600 mt-1">{properties.title}</p>
                     </header>
                 )}
@@ -368,7 +507,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                 <div className="p-3 md:p-5 space-y-5 text-sm">
                     {/* --- Snapshot Panel --- */}
                     <div className={`${exhibitPanelClass} border-blue-500`}>
-                        <h2 className={`${exhibitTitleClass} text-blue-800 border-blue-200`}>Earthquake Snapshot</h2>
+                        <h3 className={`${exhibitTitleClass} text-blue-800 border-blue-200`}>Earthquake Snapshot</h3>
                         <table className="w-full text-xs md:text-sm"><tbody>
                         {isValidString(properties.title) && (
                             <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600 w-2/5 md:w-1/3">Event Name</td><td className="py-1.5">{properties.title}</td></tr>
@@ -424,7 +563,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                     {/* --- Energy Unleashed Panel --- */}
                     {isValidNumber(energyJoules) && ( // energyJoules can be 0
                         <div className={`${exhibitPanelClass} border-orange-500`}>
-                            <h2 className={`${exhibitTitleClass} text-orange-800 border-orange-200`}>Energy Unleashed</h2>
+                            <h3 className={`${exhibitTitleClass} text-orange-800 border-orange-200`}>Energy Unleashed</h3>
                             <p className="mb-3">Approx. Energy: <strong className={`${highlightClass} text-orange-600`}>{formatLargeNumber(energyJoules)} Joules</strong>.</p>
                             <div className="space-y-2">
                                 {energyJoules > 0 && ( // Only show comparisons if energy is greater than 0
@@ -440,17 +579,17 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
 
                     {/* --- Understanding Seismic Waves Panel (Static content) --- */}
                     <div className={`${exhibitPanelClass} border-fuchsia-500`}>
-                        <h2 className={`${exhibitTitleClass} text-fuchsia-800 border-fuchsia-200`}>Understanding Seismic Waves</h2>
+                        <h3 className={`${exhibitTitleClass} text-fuchsia-800 border-fuchsia-200`}>Understanding Seismic Waves</h3>
                         <div className="grid md:grid-cols-2 gap-4 mt-2">
-                            <div className="text-center p-2 bg-blue-50 rounded-md"><strong>P-Waves (Primary)</strong><svg width="150" height="80" viewBox="0 0 150 80" className="mx-auto mt-1"><line x1="10" y1="40" x2="140" y2="40" stroke="#4b5563" strokeWidth="1"/><line x1="20" y1="30" x2="20" y2="50" stroke="#3b82f6" strokeWidth="2"/><line x1="25" y1="30" x2="25" y2="50" stroke="#3b82f6" strokeWidth="2"/><line x1="70" y1="30" x2="70" y2="50" stroke="#3b82f6" strokeWidth="2"/><line x1="75" y1="30" x2="75" y2="50" stroke="#3b82f6" strokeWidth="2"/><text x="75" y="70" fontSize="10" textAnchor="middle">Push-Pull Motion →</text></svg><p className="text-xs text-slate-600">Fastest, compressional.</p></div>
-                            <div className="text-center p-2 bg-red-50 rounded-md"><strong>S-Waves (Secondary)</strong><svg width="150" height="80" viewBox="0 0 150 80" className="mx-auto mt-1"><path d="M10 40 Q 25 20 40 40 T 70 40 T 100 40 T 130 40" stroke="#ef4444" strokeWidth="2" fill="none"/><line x1="10" y1="40" x2="140" y2="40" stroke="#4b5563" strokeWidth="0.5" strokeDasharray="2,2"/><text x="75" y="70" fontSize="10" textAnchor="middle">Side-to-Side Motion ↕</text></svg><p className="text-xs text-slate-600">Slower, shear, solids only.</p></div>
+                            <div className="text-center p-2 bg-blue-50 rounded-md"><strong>P-Waves (Primary)</strong><svg role="img" width="150" height="80" viewBox="0 0 150 80" className="mx-auto mt-1"><title>Illustration of P-Wave compressional motion</title><line x1="10" y1="40" x2="140" y2="40" stroke="#4b5563" strokeWidth="1"/><line x1="20" y1="30" x2="20" y2="50" stroke="#3b82f6" strokeWidth="2"/><line x1="25" y1="30" x2="25" y2="50" stroke="#3b82f6" strokeWidth="2"/><line x1="70" y1="30" x2="70" y2="50" stroke="#3b82f6" strokeWidth="2"/><line x1="75" y1="30" x2="75" y2="50" stroke="#3b82f6" strokeWidth="2"/><text x="75" y="70" fontSize="10" textAnchor="middle">Push-Pull Motion →</text></svg><p className="text-xs text-slate-600">Fastest, compressional.</p></div>
+                            <div className="text-center p-2 bg-red-50 rounded-md"><strong>S-Waves (Secondary)</strong><svg role="img" width="150" height="80" viewBox="0 0 150 80" className="mx-auto mt-1"><title>Illustration of S-Wave shear motion</title><path d="M10 40 Q 25 20 40 40 T 70 40 T 100 40 T 130 40" stroke="#ef4444" strokeWidth="2" fill="none"/><line x1="10" y1="40" x2="140" y2="40" stroke="#4b5563" strokeWidth="0.5" strokeDasharray="2,2"/><text x="75" y="70" fontSize="10" textAnchor="middle">Side-to-Side Motion ↕</text></svg><p className="text-xs text-slate-600">Slower, shear, solids only.</p></div>
                         </div>
                         <p className={`${captionClass} mt-3`}>Surface waves (Love & Rayleigh) arrive later and often cause most shaking.</p>
                     </div>
                     {/* --- Pinpointing the Quake (Location Quality) --- */}
                     {(originProductProps || (properties && (isValidNumber(properties.nst) || isValidNumber(properties.gap) || isValidNumber(properties.dmin) || isValidNumber(properties.rms)))) && (
                         <div className={`${exhibitPanelClass} border-yellow-500`}>
-                            <h2 className={`${exhibitTitleClass} text-yellow-800 border-yellow-300`}>Pinpointing the Quake</h2>
+                            <h3 className={`${exhibitTitleClass} text-yellow-800 border-yellow-300`}>Pinpointing the Quake</h3>
                             <p className="mb-2 text-xs md:text-sm">Location quality based on available data:</p>
                             <ul className="text-xs md:text-sm space-y-1 list-disc list-inside ml-4">
                                 {(isValidNumber(originProductProps?.['num-stations-used']) || isValidNumber(properties?.nst)) && (
@@ -467,7 +606,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                                 )}
                             </ul>
                             <div className={`${diagramContainerClass} bg-purple-50 mt-3`} style={{minHeight: '160px'}}>
-                                <svg width="200" height="150" viewBox="0 0 200 150"><circle cx="40" cy="40" r="5" fill="#1d4ed8"/><text x="40" y="30" fontSize="8">Sta 1</text><circle cx="160" cy="50" r="5" fill="#1d4ed8"/><text x="160" y="40" fontSize="8">Sta 2</text><circle cx="100" cy="130" r="5" fill="#1d4ed8"/><text x="100" y="145" fontSize="8">Sta 3</text><circle cx="40" cy="40" r="50" fill="none" stroke="#60a5fa" strokeWidth="1" strokeDasharray="2,2"/><circle cx="160" cy="50" r="65" fill="none" stroke="#60a5fa" strokeWidth="1" strokeDasharray="2,2"/><circle cx="100" cy="130" r="45" fill="none" stroke="#60a5fa" strokeWidth="1" strokeDasharray="2,2"/><circle cx="105" cy="85" r="4" fill="#ef4444"/><text x="105" y="78" fontSize="8" fill="#b91c1c">Epicenter</text></svg>
+                                <svg role="img" width="200" height="150" viewBox="0 0 200 150"><title>Diagram of earthquake location by triangulation from seismic stations</title><circle cx="40" cy="40" r="5" fill="#1d4ed8"/><text x="40" y="30" fontSize="8">Sta 1</text><circle cx="160" cy="50" r="5" fill="#1d4ed8"/><text x="160" y="40" fontSize="8">Sta 2</text><circle cx="100" cy="130" r="5" fill="#1d4ed8"/><text x="100" y="145" fontSize="8">Sta 3</text><circle cx="40" cy="40" r="50" fill="none" stroke="#60a5fa" strokeWidth="1" strokeDasharray="2,2"/><circle cx="160" cy="50" r="65" fill="none" stroke="#60a5fa" strokeWidth="1" strokeDasharray="2,2"/><circle cx="100" cy="130" r="45" fill="none" stroke="#60a5fa" strokeWidth="1" strokeDasharray="2,2"/><circle cx="105" cy="85" r="4" fill="#ef4444"/><text x="105" y="78" fontSize="8" fill="#b91c1c">Epicenter</text></svg>
                             </div>
                             <p className={captionClass}>Epicenter is found by triangulating arrival times from multiple seismometers.</p>
                         </div>
@@ -476,7 +615,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                     {/* --- ShakeMap / PAGER Impact Panel --- */}
                     {(shakemapProductProps || losspagerProductProps || isValidNumber(properties?.mmi) || isValidString(properties?.alert)) && (
                         <div className={`${exhibitPanelClass} border-gray-500`}>
-                            <h2 className={`${exhibitTitleClass} text-gray-800 border-gray-300`}>Shaking & Impact Assessment</h2>
+                            <h3 className={`${exhibitTitleClass} text-gray-800 border-gray-300`}>Shaking & Impact Assessment</h3>
                             {isValidNumber(mmiValue) && (
                                 <p>Est. Max Shaking Intensity (MMI): <strong className={highlightClass}>{formatNumber(mmiValue, 1)}</strong></p>
                             )}
@@ -484,7 +623,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                                 <p>USGS PAGER Alert Level: <span className={`font-bold capitalize px-1.5 py-0.5 rounded-sm text-xs ${pagerAlertValue === 'green' ? 'bg-green-100 text-green-700' : pagerAlertValue === 'yellow' ? 'bg-yellow-100 text-yellow-700' : pagerAlertValue === 'orange' ? 'bg-orange-100 text-orange-700' : pagerAlertValue === 'red' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-slate-700'}`}>{pagerAlertValue}</span></p>
                             )}
                             {isValidString(shakemapIntensityImageUrl) ? (
-                                <div className="my-3"><img src={shakemapIntensityImageUrl} alt="ShakeMap Intensity" className="w-full max-w-sm mx-auto border border-gray-300 rounded"/><p className={captionClass}>USGS ShakeMap Estimated Intensity.</p></div>
+                                <div className="my-3"><img src={shakemapIntensityImageUrl} alt={shakemapAltText} className="w-full max-w-sm mx-auto border border-gray-300 rounded"/><p className={captionClass}>USGS ShakeMap Estimated Intensity.</p></div>
                             ) : (
                                 (shakemapProductProps || losspagerProductProps) && <p className="text-xs text-slate-500 my-3">ShakeMap image not found in products for this event.</p>
                             )}
@@ -495,13 +634,13 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                     {/* --- Real World Impact & Citizen Science --- */}
                     {(isValuePresent(properties?.felt) || isValidString(properties?.alert) || losspagerProductProps) && (
                         <div className={`${exhibitPanelClass} border-sky-500`}>
-                            <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-300`}>Real-World Impact & Citizen Science</h2>
+                            <h3 className={`${exhibitTitleClass} text-sky-800 border-sky-300`}>Real-World Impact & Citizen Science</h3>
                             <div className="space-y-2 mt-2">
                                 {isValuePresent(properties?.felt) && isValidNumber(properties.felt) && (
-                                    <div className="flex items-start p-2 bg-sky-50 rounded-md"><svg width="24" height="24" viewBox="0 0 24 24" className="mr-2 shrink-0 mt-0.5 fill-blue-500 stroke-blue-700"><path d="M17.9998 14.242L19.4138 15.656L12.0008 23.069L4.58582 15.656L5.99982 14.242L11.0008 19.242V1H13.0008V19.242L17.9998 14.242Z" /></svg><div><strong className="text-blue-700">"Did You Feel It?" (DYFI):</strong> <span className="text-xs text-slate-600">USGS collects public reports to map felt shaking intensity. This event had <strong className={highlightClass}>{properties.felt}</strong> felt reports.</span></div></div>
+                                    <div className="flex items-start p-2 bg-sky-50 rounded-md"><svg role="img" width="24" height="24" viewBox="0 0 24 24" className="mr-2 shrink-0 mt-0.5 fill-blue-500 stroke-blue-700"><title>DYFI Icon</title><path d="M17.9998 14.242L19.4138 15.656L12.0008 23.069L4.58582 15.656L5.99982 14.242L11.0008 19.242V1H13.0008V19.242L17.9998 14.242Z" /></svg><div><strong className="text-blue-700">"Did You Feel It?" (DYFI):</strong> <span className="text-xs text-slate-600">USGS collects public reports to map felt shaking intensity. This event had <strong className={highlightClass}>{properties.felt}</strong> felt reports.</span></div></div>
                                 )}
                                 {(isValidString(pagerAlertValue)) && (
-                                    <div className="flex items-start p-2 bg-green-50 rounded-md"><svg width="24" height="24" viewBox="0 0 24 24" className="mr-2 shrink-0 mt-0.5 fill-green-500 stroke-green-700"><path d="M12 21C16.9706 21 21 16.9706 21 12C21 7.02944 16.9706 3 12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21Z" strokeWidth="2" /><path d="M9 12L11 14L15 10" strokeWidth="2" /></svg><div><strong className="text-green-700">PAGER System:</strong> <span className="text-xs text-slate-600">Rapid impact assessment. Alert for this event: <strong className={`capitalize font-semibold ${pagerAlertValue === 'green' ? 'text-green-700' : 'text-gray-700'}`}>{pagerAlertValue}</strong>.</span></div></div>
+                                    <div className="flex items-start p-2 bg-green-50 rounded-md"><svg role="img" width="24" height="24" viewBox="0 0 24 24" className="mr-2 shrink-0 mt-0.5 fill-green-500 stroke-green-700"><title>PAGER Alert Icon</title><path d="M12 21C16.9706 21 21 16.9706 21 12C21 7.02944 16.9706 3 12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21Z" strokeWidth="2" /><path d="M9 12L11 14L15 10" strokeWidth="2" /></svg><div><strong className="text-green-700">PAGER System:</strong> <span className="text-xs text-slate-600">Rapid impact assessment. Alert for this event: <strong className={`capitalize font-semibold ${pagerAlertValue === 'green' ? 'text-green-700' : 'text-gray-700'}`}>{pagerAlertValue}</strong>.</span></div></div>
                                 )}
                             </div>
                         </div>
@@ -514,7 +653,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                             {/* Render if selectedFaultPlane (which depends on np1/np2) has a valid strike for the diagram */}
                             {isValidNumber(selectedFaultPlane.strike) && (
                                 <div className={`${exhibitPanelClass} border-purple-500`}>
-                                    <h2 className={`${exhibitTitleClass} text-purple-800 border-purple-200`}>How Did the Ground Break?</h2>
+                                    <h3 className={`${exhibitTitleClass} text-purple-800 border-purple-200`}>How Did the Ground Break?</h3>
                                     <div className="text-center mb-3 space-x-2">
                                         {isValidNumber(np1Data.strike) && /* Only show button if np1 has valid strike */
                                             <button onClick={() => setSelectedFaultPlaneKey('np1')} className={`px-3 py-1.5 rounded text-xs sm:text-sm font-medium transition-colors ${selectedFaultPlaneKey === 'np1' ? 'bg-purple-600 text-white shadow-md' : 'bg-purple-100 text-purple-800 hover:bg-purple-200'}`}>Nodal Plane 1</button>
@@ -544,7 +683,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                             {/* Render if selectedFaultPlane has valid strike, dip, or rake for explanations */}
                             {(isValidNumber(selectedFaultPlane.strike) || isValidNumber(selectedFaultPlane.dip) || isValidNumber(selectedFaultPlane.rake)) && (
                                 <div className={`${exhibitPanelClass} border-green-500`}>
-                                    <h2 className={`${exhibitTitleClass} text-green-800 border-green-200`}>Decoding the Fault Parameters</h2>
+                                    <h3 className={`${exhibitTitleClass} text-green-800 border-green-200`}>Decoding the Fault Parameters</h3>
                                     <p className="text-xs text-slate-600 mb-3">Parameters for <strong className="font-semibold text-indigo-600">{selectedFaultPlaneKey === 'np1' ? 'Nodal Plane 1' : 'Nodal Plane 2'}</strong>:</p>
                                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4"> {/* text-center removed from grid for better snippet alignment */}
 
@@ -554,7 +693,8 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                                                 <div className="p-2 bg-blue-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[150px] sm:min-h-[200px]"> {/* Diagram and primary text in this div */}
                                                     <strong className="block text-blue-700 text-sm">Strike ({formatNumber(selectedFaultPlane.strike,0)}°)</strong>
                                                     {/* ... SVG for Strike (as corrected previously) ... */}
-                                                    <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
+                                                    <svg role="img" width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
+                                                        <title>Illustration of fault strike: {formatNumber(selectedFaultPlane.strike,0)} degrees</title>
                                                         <rect x="5" y="40" width="150" height="75" fill="#e9ecef" stroke="#adb5bd" strokeWidth="1"/>
                                                         <text x="80" y="35" fontSize="10" textAnchor="middle" fill="#495057">Surface</text>
                                                         <text x="15" y="15" fontSize="10" textAnchor="middle" fill="#333">N</text>
@@ -590,7 +730,8 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                                                 <div className="p-2 bg-red-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[150px] sm:min-h-[200px]">
                                                     <strong className="block text-red-700 text-sm">Dip ({formatNumber(selectedFaultPlane.dip,0)}°)</strong>
                                                     {/* ... SVG for Dip ... */}
-                                                    <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
+                                                    <svg role="img" width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
+                                                        <title>Illustration of fault dip: {formatNumber(selectedFaultPlane.dip,0)} degrees</title>
                                                         <line x1="10" y1="40" x2="150" y2="40" stroke="#adb5bd" strokeWidth="1.5" />
                                                         <text x="80" y="30" fontSize="10" textAnchor="middle" fill="#495057">Surface</text>
                                                         <line x1="40" y1="40" x2="120" y2="100" stroke="#495057" strokeWidth="2" />
@@ -609,7 +750,8 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                                                 <div className="p-2 bg-emerald-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[150px] sm:min-h-[200px]">
                                                     <strong className="block text-emerald-700 text-sm">Rake ({formatNumber(selectedFaultPlane.rake,0)}°)</strong>
                                                     {/* ... SVG for Rake ... */}
-                                                    <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
+                                                    <svg role="img" width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
+                                                        <title>Illustration of fault rake: {formatNumber(selectedFaultPlane.rake,0)} degrees</title>
                                                         <rect x="25" y="10" width="110" height="100" fill="#e0e7ff" stroke="#6d28d9" strokeWidth="1.5" />
                                                         <line x1="25" y1="60" x2="135" y2="60" stroke="#4f46e5" strokeWidth="1" strokeDasharray="2,2" />
                                                         <defs><marker id="arrow-rake-detail-diag-decoder" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="strokeWidth" markerWidth="4" markerHeight="3" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/></marker></defs>
@@ -631,7 +773,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                     {/* --- Mww Explanation Panel --- */}
                     {isValidString(properties?.magType) && isValidNumber(scalarMomentValue) && isValidNumber(properties?.mag) && (
                         <div className={`${exhibitPanelClass} border-pink-500`}>
-                            <h2 className={`${exhibitTitleClass} text-pink-800 border-pink-200`}>Mww: The Modern Measure</h2>
+                            <h3 className={`${exhibitTitleClass} text-pink-800 border-pink-200`}>Mww: The Modern Measure</h3>
                             <p>This earthquake was <strong className={highlightClass}>{properties.magType.toUpperCase()} {formatNumber(properties.mag,1)}</strong>.</p>
                             <ul className="list-disc list-inside text-xs md:text-sm text-slate-600 mt-2 space-y-1">
                                 <li>Moment Magnitude (Mww) is standard for moderate to large quakes.</li>
@@ -645,7 +787,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                     {/* --- Magnitude Comparison Bar Chart Panel --- */}
                     {/* This panel is mostly static except for "This Quake" bar, so it can always render its structure */}
                     <div className={`${exhibitPanelClass} border-rose-500`}>
-                        <h2 className={`${exhibitTitleClass} text-rose-800 border-rose-200`}>Magnitude Comparison</h2>
+                        <h3 className={`${exhibitTitleClass} text-rose-800 border-rose-200`}>Magnitude Comparison</h3>
                         <div className="flex items-end justify-around h-48 md:h-56 w-full p-4 bg-rose-50 rounded-md mt-2 relative">
                             {[
                                 {h:20,l:"M2-3",b:"Minor"},
@@ -672,12 +814,13 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                     {/* --- What Pushed and Pulled Panel (Stress Axes) --- */}
                     {pAxis && tAxis && (isValidNumber(pAxis.azimuth) || isValidNumber(pAxis.plunge) || isValidNumber(tAxis.azimuth) || isValidNumber(tAxis.plunge)) && (
                         <div className={`${exhibitPanelClass} border-lime-500`}>
-                            <h2 className={`${exhibitTitleClass} text-lime-800 border-lime-200 flex justify-between items-center`}>
+                            <h3 className={`${exhibitTitleClass} text-lime-800 border-lime-200 flex justify-between items-center`}>
                                 <span>What Pushed and Pulled? (Stress Axes)</span>
-                            </h2>
+                            </h3>
                             <div className={`${diagramContainerClass} bg-green-50 py-4`} style={{minHeight: '200px'}}>
                                 {/* Adjusted SVG viewbox and element positions for better label spacing */}
-                                <svg width="280" height="180" viewBox="0 0 280 180">
+                                <svg role="img" width="280" height="180" viewBox="0 0 280 180">
+                                    <title>Diagram of P-axis (pressure) and T-axis (tension) for earthquake stress</title>
                                     <defs>
                                         <marker id="arrRedDetailPushClean" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto" fill="#dc2626">
                                             <polygon points="0 3.5, 10 0, 10 7" />
@@ -743,9 +886,10 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                     {/* --- Beach Ball Panel --- */}
                     {momentTensorProductProps && (isValidNumber(np1Data.strike) || isValidNumber(np2Data.strike) || isValidNumber(pAxis.azimuth) || isValidNumber(tAxis.azimuth)) && (
                         <div className={`${exhibitPanelClass} border-teal-500`}>
-                            <h2 className={`${exhibitTitleClass} text-teal-800 border-teal-200`}>"Beach Ball" Diagram</h2>
+                            <h3 className={`${exhibitTitleClass} text-teal-800 border-teal-200`}>"Beach Ball" Diagram</h3>
                             <div className={`${diagramContainerClass} bg-sky-50`} style={{ minHeight: '220px' }}>
-                                <svg width="150" height="150" viewBox="0 0 120 120">
+                                <svg role="img" width="150" height="150" viewBox="0 0 120 120">
+                                    <title>Focal mechanism (beach ball) diagram showing fault planes and stress axes for the earthquake</title>
                                     {(() => {
                                         const selectedPlane = selectedFaultPlaneKey === 'np1' ? np1Data : np2Data;
                                         const orientationStrike = parseFloat(np1Data.strike);
@@ -799,7 +943,7 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                     {/* --- Further Information Panel --- */}
                     {isValidString(properties?.url) && (
                         <div className={`${exhibitPanelClass} border-gray-400`}>
-                            <h2 className={`${exhibitTitleClass} text-gray-700 border-gray-200`}>Further Information</h2>
+                            <h3 className={`${exhibitTitleClass} text-gray-700 border-gray-200`}>Further Information</h3>
                             <p className="text-xs md:text-sm text-slate-600">
                                 For the most comprehensive and up-to-date scientific details, including additional data products, maps, and information from contributing seismic networks, please refer to the official
                                 <a href={properties.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline ml-1">
@@ -810,8 +954,16 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                     )}
                 </div>
             </div>
-        </div>
+        </>
     );
 }
 
 export default EarthquakeDetailView;
+
+/* SVG for InteractiveFaultDiagram (inside the component) */
+/*
+<svg className="w-full max-w-xs md:max-w-sm mx-auto" height="250" viewBox="0 0 350 280" xmlns="http://www.w3.org/2000/svg" role="img">
+    <title>Interactive fault diagram illustrating {planeKey.toUpperCase()} with strike {formatNumber(planeData.strike,0)}°, dip {formatNumber(planeData.dip,0)}°, and rake {formatNumber(planeData.rake,0)}°</title>
+    ...
+</svg>
+*/
