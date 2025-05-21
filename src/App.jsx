@@ -498,15 +498,15 @@ function App() {
     const [currentLoadingMessages, setCurrentLoadingMessages] = useState(INITIAL_LOADING_MESSAGES);
     const [highestRecentAlert, setHighestRecentAlert] = useState(null);
     const [activeAlertTriggeringQuakes, setActiveAlertTriggeringQuakes] = useState([]);
-    const [earthquakesLastHour, setEarthquakesLastHour] = useState(null);
-    const [earthquakesLast24Hours, setEarthquakesLast24Hours] = useState(null);
-    const [earthquakesLast72Hours, setEarthquakesLast72Hours] = useState(null);
-    const [earthquakesLast7Days, setEarthquakesLast7Days] = useState(null);
-    const [earthquakesLast14Days, setEarthquakesLast14Days] = useState(null);
-    const [earthquakesLast30Days, setEarthquakesLast30Days] = useState(null);
-    const [prev24HourData, setPrev24HourData] = useState(null);
-    const [prev7DayData, setPrev7DayData] = useState(null);
-    const [prev14DayData, setPrev14DayData] = useState(null);
+    const [earthquakesLastHour, setEarthquakesLastHour] = useState([]);
+    const [earthquakesLast24Hours, setEarthquakesLast24Hours] = useState([]);
+    const [earthquakesLast72Hours, setEarthquakesLast72Hours] = useState([]);
+    const [earthquakesLast7Days, setEarthquakesLast7Days] = useState([]);
+    const [earthquakesLast14Days, setEarthquakesLast14Days] = useState([]);
+    const [earthquakesLast30Days, setEarthquakesLast30Days] = useState([]);
+    const [prev24HourData, setPrev24HourData] = useState([]);
+    const [prev7DayData, setPrev7DayData] = useState([]);
+    const [prev14DayData, setPrev14DayData] = useState([]);
     // const [selectedDetailUrl, setSelectedDetailUrl] = useState(null); // Removed
     const isInitialAppLoad = useRef(true);
     const [globeEarthquakes, setGlobeEarthquakes] = useState([]);
@@ -648,9 +648,9 @@ function App() {
         const orchestrateInitialDataLoad = async () => {
             if (!isMounted) return;
             setLoadingMessageIndex(0); setCurrentLoadingMessages(INITIAL_LOADING_MESSAGES);
-            setIsLoadingDaily(true); setIsLoadingWeekly(true); setError(null);
-            setEarthquakesLastHour(null); setEarthquakesLast24Hours(null); setEarthquakesLast72Hours(null); setEarthquakesLast7Days(null);
-            setPrev24HourData(null);
+            setIsLoadingDaily(true); setIsLoadingWeekly(true); // setError(null) will be handled later by the new logic
+            setEarthquakesLastHour([]); setEarthquakesLast24Hours([]); setEarthquakesLast72Hours([]); setEarthquakesLast7Days([]);
+            setPrev24HourData([]); // Initialize to empty array
             setGlobeEarthquakes([]); setActiveAlertTriggeringQuakes([]);
 
             const nowForFiltering = Date.now();
@@ -660,6 +660,8 @@ function App() {
             let currentLocalLastMajorQuake = null;
             setLastMajorQuake(prev => { currentLocalLastMajorQuake = prev; return prev; });
 
+            let dailyErrorMsg = null;
+            let weeklyErrorMsg = null;
 
             try {
                 if (isMounted) setLoadingMessageIndex(0);
@@ -685,8 +687,23 @@ function App() {
                         });
                     }
                     setDataFetchTime(nowForFiltering); setLastUpdated(new Date(dailyRes.metadata?.generated || nowForFiltering).toLocaleString());
+                } else {
+                    dailyErrorMsg = "Daily data features are missing."; // Handle case where features might be missing
+                    if (isMounted) {
+                        setEarthquakesLastHour([]);
+                        setEarthquakesLast24Hours([]);
+                        setActiveAlertTriggeringQuakes([]);
+                    }
                 }
-            } catch (e) { if (!isMounted) return; setError(pE => (pE ? pE + " | " : "") + `Daily: ${e.message}`); setEarthquakesLastHour([]); setEarthquakesLast24Hours([]); setActiveAlertTriggeringQuakes([]); }
+            } catch (e) {
+                if (!isMounted) return;
+                dailyErrorMsg = e.message;
+                if (isMounted) {
+                    setEarthquakesLastHour([]);
+                    setEarthquakesLast24Hours([]);
+                    setActiveAlertTriggeringQuakes([]);
+                }
+            }
             finally { if (isMounted) setIsLoadingDaily(false); }
 
             let weeklyMajorsList = [];
@@ -698,7 +715,7 @@ function App() {
                     const weeklyData = weeklyResult.features;
                     const last72HoursData = filterByTime(weeklyData, 72);
                     setEarthquakesLast72Hours(last72HoursData);
-                    setPrev24HourData(filterByTime(weeklyData, 48, 24));
+                    setPrev24HourData(filterByTime(weeklyData, 48, 24)); // This should use [] on error
                     const last7DaysData = filterByTime(weeklyData, 7 * 24);
                     setEarthquakesLast7Days(last7DaysData);
                     const sortedForGlobe = [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
@@ -723,12 +740,11 @@ function App() {
                     const newLastMajorQuake = consolidatedMajors.length > 0 ? consolidatedMajors[0] : null;
                     const newPreviousMajorQuake = consolidatedMajors.length > 1 ? consolidatedMajors[1] : null;
 
-                    // Update lastMajorQuake if the new one is more recent or if no lastMajorQuake is set
                     setLastMajorQuake(prev => {
                         if (newLastMajorQuake && (!prev || newLastMajorQuake.properties.time > prev.properties.time)) {
                             return newLastMajorQuake;
                         }
-                        return prev || newLastMajorQuake; // Handles initial set if prev is null
+                        return prev || newLastMajorQuake;
                     });
                     setPreviousMajorQuake(newPreviousMajorQuake);
 
@@ -737,19 +753,45 @@ function App() {
                     } else {
                         setTimeBetweenPreviousMajorQuakes(null);
                     }
+                } else {
+                    weeklyErrorMsg = "Weekly data features are missing."; // Handle case where features might be missing
+                    if (isMounted) {
+                        setEarthquakesLast72Hours([]);
+                        setEarthquakesLast7Days([]);
+                        setPrev24HourData([]); 
+                        setGlobeEarthquakes([]);
+                    }
                 }
-            } catch (e) { if (!isMounted) return; setError(pE => (pE ? pE + " | " : "") + `Weekly: ${e.message}`); setEarthquakesLast72Hours([]); setEarthquakesLast7Days([]); setPrev24HourData(null); setGlobeEarthquakes([]); }
+            } catch (e) {
+                if (!isMounted) return;
+                weeklyErrorMsg = e.message;
+                if (isMounted) {
+                    setEarthquakesLast72Hours([]);
+                    setEarthquakesLast7Days([]);
+                    setPrev24HourData([]); 
+                    setGlobeEarthquakes([]);
+                }
+            }
             finally {
                 if (isMounted) {
                     setIsLoadingWeekly(false);
+
+                    if (dailyErrorMsg && weeklyErrorMsg) {
+                        setError("Failed to fetch critical earthquake data from primary sources. Some features may be unavailable. Please check your connection or try again later.");
+                    } else if (dailyErrorMsg) {
+                        setError(`Daily data error: ${dailyErrorMsg}. Display may be incomplete.`);
+                    } else if (weeklyErrorMsg) {
+                        setError(`Weekly data error: ${weeklyErrorMsg}. Some historical data might be missing.`);
+                    } else {
+                        setError(null); // Clear any previous error if both fetches were successful
+                    }
                     if (isInitialAppLoad.current) {
                         isInitialAppLoad.current = false;
-                        // Add this setTimeout:
                         setTimeout(() => {
-                            if (isMounted) { // Check isMounted again inside timeout
+                            if (isMounted) {
                                 setAppRenderTrigger(prev => prev + 1);
                             }
-                        }, 100); // 100ms delay
+                        }, 100);
                     }
                 }
             }
@@ -765,6 +807,12 @@ function App() {
         const nowForFiltering = Date.now();
         const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0) => data ? data.filter(q => q.properties.time >= (nowForFiltering - hoursAgoStart * 36e5) && q.properties.time < (nowForFiltering - hoursAgoEnd * 36e5)) : [];
 
+        // Initialize to empty arrays in case of error, before try block
+        setEarthquakesLast14Days([]);
+        setEarthquakesLast30Days([]);
+        setPrev7DayData([]);
+        setPrev14DayData([]);
+
         let currentOverallLastMajorQuakeForMonthly = null;
         setLastMajorQuake(prev => {
             currentOverallLastMajorQuakeForMonthly = prev;
@@ -776,11 +824,17 @@ function App() {
             const monthlyResult = await fetchDataCb(USGS_API_URL_MONTH); if (!isMounted) return;
             if (monthlyResult?.features) {
                 if(isMounted) setLoadingMessageIndex(1);
-                const monthlyData = monthlyResult.features; setAllEarthquakes(monthlyData);
-                setEarthquakesLast14Days(filterByTime(monthlyData, 14 * 24));
-                const last30DaysData = filterByTime(monthlyData, 30 * 24);
-                setEarthquakesLast30Days(last30DaysData);
-                setPrev7DayData(filterByTime(monthlyData, 14 * 24, 7 * 24)); setPrev14DayData(filterByTime(monthlyData, 28 * 24, 14 * 24));
+                const monthlyData = monthlyResult.features;
+                setAllEarthquakes(monthlyData); // This is the main store for all monthly data
+                
+                const last14Days = filterByTime(monthlyData, 14 * 24);
+                setEarthquakesLast14Days(last14Days);
+
+                const last30DaysFiltered = filterByTime(monthlyData, 30 * 24);
+                setEarthquakesLast30Days(last30DaysFiltered);
+                
+                setPrev7DayData(filterByTime(monthlyData, 14 * 24, 7 * 24));
+                setPrev14DayData(filterByTime(monthlyData, 28 * 24, 14 * 24));
 
                 const majorQuakesMonthly = monthlyData.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
                 const latestMonthlyMajor = majorQuakesMonthly.length > 0 ? majorQuakesMonthly[0] : null;
@@ -815,8 +869,29 @@ function App() {
                 }
 
                 if(isMounted) setLoadingMessageIndex(3);
+            } else {
+                 // Handle case where monthlyResult.features might be null or undefined
+                if (!isMounted) return;
+                console.error("Monthly data features are missing in the response:", monthlyResult);
+                setMonthlyError("Monthly data is currently unavailable or incomplete.");
+                setAllEarthquakes([]); // Ensure allEarthquakes is also cleared
+                // Already initialized to [] above, but being explicit here for clarity
+                setEarthquakesLast14Days([]);
+                setEarthquakesLast30Days([]);
+                setPrev7DayData([]);
+                setPrev14DayData([]);
             }
-        } catch (e) { if (!isMounted) return; console.error("Failed to fetch monthly data:", e); setMonthlyError(`Monthly Data: ${e.message}`); setAllEarthquakes([]); setEarthquakesLast14Days([]); setEarthquakesLast30Days([]); setPrev7DayData(null); setPrev14DayData(null); }
+        } catch (e) {
+            if (!isMounted) return;
+            console.error("Failed to fetch monthly data:", e);
+            setMonthlyError(`Monthly Data Error: ${e.message}`);
+            setAllEarthquakes([]);
+            // Already initialized to [] above
+            setEarthquakesLast14Days([]);
+            setEarthquakesLast30Days([]);
+            setPrev7DayData([]);
+            setPrev14DayData([]);
+        }
         finally { if (isMounted) setIsLoadingMonthly(false); }
         return () => { isMounted = false; };
     }, [fetchDataCb]);

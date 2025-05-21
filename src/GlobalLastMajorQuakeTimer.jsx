@@ -28,7 +28,7 @@ const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, MAJOR_QUAKE_THRESHOLD, form
         <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-10 p-2.5 bg-slate-900 bg-opacity-85 text-white rounded-lg shadow-xl text-center backdrop-blur-md border border-slate-700 min-w-[300px] max-w-[90%]">
             <p className="text-[10px] sm:text-xs uppercase text-slate-400">Time Since Last Major (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) Quake Globally:</p>
             <div className="text-xl sm:text-2xl font-bold text-orange-400 my-0.5">{timeSinceFormatted}</div>
-            {lastMajorQuake && (
+            {lastMajorQuake && lastMajorQuake.properties && (
                 <p className="text-[10px] sm:text-xs text-slate-300 truncate">
                     M{lastMajorQuake.properties.mag?.toFixed(1)} - {lastMajorQuake.properties.place}
                 </p>
