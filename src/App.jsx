@@ -1,6 +1,7 @@
 // src/App.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
 import EarthquakeDetailView from './EarthquakeDetailView';
 import InteractiveGlobeView from './InteractiveGlobeView';
 import NotableQuakeFeature from './NotableQuakeFeature';
@@ -961,6 +962,52 @@ function App() {
         }
     }, [navigate]);
 
+    // Helper function for /feeds SEO
+    const getFeedPageSeoInfo = (feedTitle, activePeriod) => {
+        let periodDescription = "the latest updates";
+        let periodKeywords = "earthquake feed, live seismic data";
+
+        switch (activePeriod) {
+            case 'last_hour':
+                periodDescription = "the last hour";
+                periodKeywords = "last hour earthquakes, real-time seismic events";
+                break;
+            case 'last_24_hours':
+                periodDescription = "the last 24 hours";
+                periodKeywords = "24 hour earthquakes, daily seismic summary";
+                break;
+            case 'last_7_days':
+                periodDescription = "the last 7 days";
+                periodKeywords = "7 day earthquakes, weekly seismic activity";
+                break;
+            case 'last_14_days':
+                periodDescription = "the last 14 days";
+                periodKeywords = "14 day earthquakes, biweekly seismic overview";
+                break;
+            case 'last_30_days':
+                periodDescription = "the last 30 days";
+                periodKeywords = "30 day earthquakes, monthly seismic analysis";
+                break;
+            case 'feelable_quakes':
+                periodDescription = `feelable quakes (M${FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+)`;
+                periodKeywords = "feelable earthquakes, noticeable seismic events";
+                break;
+            case 'significant_quakes':
+                periodDescription = `significant quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)`;
+                periodKeywords = "significant earthquakes, major seismic events";
+                break;
+            default:
+                periodDescription = "selected period";
+                break;
+        }
+
+        const title = feedTitle ? `${feedTitle} | Seismic Monitor` : 'Earthquake Feeds | Seismic Monitor';
+        const description = `Explore earthquake data for ${periodDescription}. View lists, statistics, and details of seismic events.`;
+        const keywords = `earthquake feed, live seismic data, earthquake list, ${periodKeywords}, seismic monitor`;
+
+        return { title, description, keywords };
+    };
+
     // const handleCloseDetail = useCallback(() => setSelectedDetailUrl(null), []); // Removed
     const handleNotableQuakeSelect = useCallback((quakeFromFeature) => {
         setFocusedNotableQuake(quakeFromFeature);
@@ -998,9 +1045,17 @@ function App() {
                 <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto">
                     <Routes>
                         <Route path="/" element={
-                            <div className="lg:block h-full w-full">
-                                <InteractiveGlobeView
-                                    earthquakes={globeEarthquakes}
+                            <>
+                                <SeoMetadata
+                                    title="Global Seismic Activity Monitor | Real-time Earthquake Data"
+                                    description="Track live earthquakes around the world with our interactive globe. Get real-time data, view significant quake details, and explore seismic activity trends."
+                                    keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology"
+                                    imageUrl="/vite.svg"
+                                    type="website"
+                                />
+                                <div className="lg:block h-full w-full">
+                                    <InteractiveGlobeView
+                                        earthquakes={globeEarthquakes}
                                     onQuakeClick={handleQuakeClick}
                                     getMagnitudeColorFunc={getMagnitudeColor}
                                     allowUserDragRotation={true}
@@ -1039,13 +1094,22 @@ function App() {
                                     formatTimeDuration={formatTimeDuration}
                                     SkeletonText={SkeletonText}
                                 />
-                            </div>
+                                </div>
+                            </>
                         } />
                         <Route path="/overview" element={
-                            <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
-                                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                    Overview
-                                </h2>
+                            <>
+                                <SeoMetadata
+                                    title="Earthquake Overview | Latest Seismic Summary"
+                                    description="Get a summary of the latest global earthquake activity, including significant events, regional distributions, and key statistics."
+                                    keywords="earthquake summary, seismic overview, recent earthquakes, earthquake statistics"
+                                    imageUrl="/vite.svg"
+                                    type="website"
+                                />
+                                <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
+                                    <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                        Overview
+                                    </h2>
                                 {currentAlertConfig && (
                                     <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}>
                                         <p className="font-bold text-sm mb-1">Active USGS Alert: {currentAlertConfig.text}</p>
@@ -1148,13 +1212,25 @@ function App() {
                                         Learn More About Earthquakes
                                     </button>
                                 </div>
-                            </div>
+                                </div>
+                            </>
                         } />
                         <Route path="/feeds" element={
-                            <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
-                                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                    Feeds & Details
-                                </h2>
+                            () => { // Using a function to capture current state for SEO
+                                const seoInfo = getFeedPageSeoInfo(currentFeedTitle, activeFeedPeriod);
+                                return (
+                                    <>
+                                        <SeoMetadata
+                                            title={seoInfo.title}
+                                            description={seoInfo.description}
+                                            keywords={seoInfo.keywords}
+                                            imageUrl="/vite.svg"
+                                            type="website"
+                                        />
+                                        <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
+                                            <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                                Feeds & Details
+                                            </h2>
                                 <div className="my-2 flex flex-wrap gap-2 pb-2">
                                     <button onClick={() => setActiveFeedPeriod('last_hour')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_hour' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last Hour</button>
                                     <button onClick={() => setActiveFeedPeriod('feelable_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'feelable_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Feelable (M{FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+)</button>
@@ -1189,14 +1265,25 @@ function App() {
                                         </button>
                                     </div>
                                 )}
-                                {hasAttemptedMonthlyLoad && isLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
-                            </div>
+                                            {hasAttemptedMonthlyLoad && isLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
+                                        </div>
+                                    </>
+                                );
+                            }
                         } />
                         <Route path="/learn" element={
-                            <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
-                                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                    Learn About Earthquakes
-                                </h2>
+                            <>
+                                <SeoMetadata
+                                    title="Learn About Earthquakes | Seismic Science Explained"
+                                    description="Understand earthquake science, including magnitude, depth, fault types, seismic waves, and how earthquake data is interpreted."
+                                    keywords="earthquake science, seismology basics, magnitude, fault types, seismic waves, earthquake education"
+                                    imageUrl="/vite.svg"
+                                    type="website"
+                                />
+                                <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
+                                    <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                        Learn About Earthquakes
+                                    </h2>
                                 <InfoSnippet topic="magnitude" />
                                 <InfoSnippet topic="depth" />
                                 <InfoSnippet topic="intensity" />
@@ -1209,7 +1296,8 @@ function App() {
                                 <InfoSnippet topic="stationsUsed"/>
                                 <InfoSnippet topic="azimuthalGap"/>
                                 <InfoSnippet topic="rmsError"/>
-                            </div>
+                                </div>
+                            </>
                         } />
                         <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModal />} />
                     </Routes>

@@ -146,7 +146,7 @@ const getBeachballPathsAndType = (rake, dip = 45) => {
 const SkeletonText = ({ width = 'w-3/4', height = 'h-4', className = '' }) => <div className={`bg-gray-300 rounded ${width} ${height} animate-pulse mb-2 ${className}`}></div>;
 const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`bg-gray-300 rounded ${height} animate-pulse ${className}`}></div>;
 
-function EarthquakeDetailView({ detailUrl, onClose }) {
+function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // Added onDataLoadedForSeo
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -161,7 +161,27 @@ function EarthquakeDetailView({ detailUrl, onClose }) {
                 const response = await fetch(detailUrl);
                 if (!response.ok) throw new Error(`HTTP error! Status: ${response.status} ${response.url}`);
                 const data = await response.json();
-                if (isMounted) setDetailData(data);
+                if (isMounted) {
+                    setDetailData(data);
+                    if (onDataLoadedForSeo && data) {
+                        const props = data.properties;
+                        const geom = data.geometry;
+                        // Derive shakemapIntensityImageUrl directly here before calling callback
+                        const shakemapProduct = props?.products?.shakemap?.[0];
+                        const shakemapIntensityImageUrl = shakemapProduct?.contents?.['download/intensity.jpg']?.url;
+
+                        onDataLoadedForSeo({
+                            title: props?.title,
+                            place: props?.place,
+                            time: props?.time,
+                            mag: props?.mag,
+                            updated: props?.updated,
+                            depth: geom?.coordinates?.[2],
+                            shakemapIntensityImageUrl: shakemapIntensityImageUrl,
+                            // Potentially add other fields if needed by SEO in App.jsx
+                        });
+                    }
+                }
             } catch (e) {
                 console.error("Failed to fetch detail data:", e);
                 if (isMounted) setError(`Failed to load details: ${e.message}`);
