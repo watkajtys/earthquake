@@ -28,6 +28,7 @@ const InteractiveGlobeView = ({
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
     const [ringsData, setRingsData] = useState([]);
+    const [isGlobeReadyForRender, setIsGlobeReadyForRender] = useState(false);
 
     const debounce = (func, delay) => {
         let timeout;
@@ -51,7 +52,10 @@ const InteractiveGlobeView = ({
         };
         const debouncedUpdateDimensions = debounce(updateDimensions, 200);
         updateDimensions(); // Initial immediate call
-        const animationFrameId = requestAnimationFrame(updateDimensions); // Delayed call using requestAnimationFrame
+        const animationFrameId = requestAnimationFrame(() => {
+            updateDimensions();
+            setIsGlobeReadyForRender(true);
+        }); // Delayed call using requestAnimationFrame
 
         const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
         resizeObserver.observe(currentContainerRef);
@@ -336,20 +340,15 @@ const InteractiveGlobeView = ({
 
 
 
-    if (globeDimensions.width === null || globeDimensions.height === null) {
-        return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe...</div>;
-    }
-
-
     return (
         <div
-            ref={containerRef}
+            ref={containerRef} // containerRef is on this persistent outer div
             className="w-full h-full"
             style={{ position: 'relative', cursor: 'default' }}
-            onMouseMove={handleContainerMouseMove}
-            onMouseLeave={handleContainerMouseLeave}
+            onMouseMove={handleContainerMouseMove} // Assuming these are for the main container
+            onMouseLeave={handleContainerMouseLeave} // Assuming these are for the main container
         >
-            {globeDimensions.width > 0 && globeDimensions.height > 0 && (
+            {(globeDimensions.width > 0 && globeDimensions.height > 0 && isGlobeReadyForRender) ? (
                 <Globe
                     ref={globeRef}
                     width={globeDimensions.width}
@@ -384,6 +383,10 @@ const InteractiveGlobeView = ({
 
                     enablePointerInteraction={true}
                 />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-500">
+                    Initializing Interactive Globe...
+                </div>
             )}
         </div>
     );
