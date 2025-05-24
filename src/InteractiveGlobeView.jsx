@@ -155,9 +155,19 @@ const InteractiveGlobeView = ({
 
     useEffect(() => {
         if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {
-            globeRef.current.pointOfView({ lat: defaultFocusLat, lng: defaultFocusLng, altitude: defaultFocusAltitude }, 0);
+            let targetLng = defaultFocusLng;
+            if (
+                latestMajorQuakeForRing &&
+                latestMajorQuakeForRing.geometry &&
+                Array.isArray(latestMajorQuakeForRing.geometry.coordinates) &&
+                latestMajorQuakeForRing.geometry.coordinates.length > 0 &&
+                typeof latestMajorQuakeForRing.geometry.coordinates[0] === 'number'
+            ) {
+                targetLng = latestMajorQuakeForRing.geometry.coordinates[0];
+            }
+            globeRef.current.pointOfView({ lat: defaultFocusLat, lng: targetLng, altitude: defaultFocusAltitude }, 0);
         }
-    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions]);
+    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions, latestMajorQuakeForRing]);
 
     // CONSOLIDATED Effect to manage globe controls and drag listeners
     useEffect(() => {
@@ -297,7 +307,14 @@ const InteractiveGlobeView = ({
                 lat: coords[1],
                 lng: coords[0],
                 altitude: 0.02,
-                color: () => 'rgba(255, 255, 0, 0.8)', // Bright Yellow for latest
+                color: () => {
+                    const hexColor = getMagnitudeColorFunc(mag);
+                    // Convert hex to RGB
+                    const r = parseInt(hexColor.slice(1, 3), 16);
+                    const g = parseInt(hexColor.slice(3, 5), 16);
+                    const b = parseInt(hexColor.slice(5, 7), 16);
+                    return `rgba(${r}, ${g}, ${b}, 0.8)`;
+                },
                 maxR: Math.max(6, mag * 2.2),
                 propagationSpeed: Math.max(2, mag * 0.5),
                 repeatPeriod: 1800,
@@ -321,7 +338,14 @@ const InteractiveGlobeView = ({
                 lat: coords[1],
                 lng: coords[0],
                 altitude: 0.018, // Slightly different altitude
-                color: () => 'rgba(180, 180, 180, 0.6)', // Greyish for previous
+                color: () => {
+                    const hexColor = getMagnitudeColorFunc(mag);
+                    // Convert hex to RGB
+                    const r = parseInt(hexColor.slice(1, 3), 16);
+                    const g = parseInt(hexColor.slice(3, 5), 16);
+                    const b = parseInt(hexColor.slice(5, 7), 16);
+                    return `rgba(${r}, ${g}, ${b}, 0.5)`; // Use alpha 0.5 for duller effect
+                },
                 maxR: Math.max(5, mag * 2.0),
                 propagationSpeed: Math.max(1.8, mag * 0.45),
                 repeatPeriod: 1900, // Slightly different period
