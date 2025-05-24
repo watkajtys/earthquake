@@ -28,7 +28,7 @@ const InteractiveGlobeView = ({
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
     const [ringsData, setRingsData] = useState([]);
-    const [isGlobeReadyForRender, setIsGlobeReadyForRender] = useState(false);
+    // Removed isGlobeReadyForRender state
 
     const debounce = (func, delay) => {
         let timeout;
@@ -40,32 +40,45 @@ const InteractiveGlobeView = ({
         return debouncedFunc;
     };
 
-    useEffect(() => {
-        const currentContainerRef = containerRef.current;
-        if (!currentContainerRef) return;
-        const updateDimensions = () => {
-            const newWidth = currentContainerRef.offsetWidth;
-            const newHeight = currentContainerRef.offsetHeight;
+const updateDimensions = useCallback(() => {
+    if (containerRef.current) {
+        const newWidth = containerRef.current.offsetWidth;
+        const newHeight = containerRef.current.offsetHeight;
             if (newWidth > 10 && newHeight > 10) {
-                setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
+            setGlobeDimensions(prev => {
+                if (prev.width !== newWidth || prev.height !== newHeight) {
+                    return { width: newWidth, height: newHeight };
+                }
+                return prev;
+            });
             }
-        };
-        const debouncedUpdateDimensions = debounce(updateDimensions, 200);
-        updateDimensions(); // Initial immediate call
-        const animationFrameId = requestAnimationFrame(() => {
-            updateDimensions();
-            setIsGlobeReadyForRender(true);
-        }); // Delayed call using requestAnimationFrame
+    }
+}, []); // Dependencies for useCallback: empty as it only uses containerRef and setGlobeDimensions
 
-        const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
-        resizeObserver.observe(currentContainerRef);
+// useEffect_InitialSizing
+useEffect(() => {
+    const currentContainerRef = containerRef.current; // Capture ref for cleanup
+    if (!currentContainerRef) return;
 
-        return () => {
-            if (animationFrameId) cancelAnimationFrame(animationFrameId); // Cancel the animation frame
-            if (currentContainerRef) resizeObserver.unobserve(currentContainerRef);
-            if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout); // Keep this for the debounced observer
-        };
-    }, []);
+    const debouncedUpdateDimensions = debounce(updateDimensions, 200);
+
+    updateDimensions(); // Initial immediate call
+
+    const animationFrameId = requestAnimationFrame(() => {
+        updateDimensions(); // Second call after first paint
+    });
+
+    const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
+    resizeObserver.observe(currentContainerRef);
+
+    return () => {
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        if (currentContainerRef) resizeObserver.unobserve(currentContainerRef);
+        // Ensure debounce timeout is cleared
+        if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
+    };
+}, [updateDimensions]); // updateDimensions is a stable useCallback dependency
+
 
     useEffect(() => {
         let allPointsData = (earthquakes || []).map(quake => {
@@ -348,7 +361,7 @@ const InteractiveGlobeView = ({
             onMouseMove={handleContainerMouseMove} // Assuming these are for the main container
             onMouseLeave={handleContainerMouseLeave} // Assuming these are for the main container
         >
-            {(globeDimensions.width > 0 && globeDimensions.height > 0 && isGlobeReadyForRender) ? (
+            {(globeDimensions.width > 0 && globeDimensions.height > 0) ? (
                 <Globe
                     ref={globeRef}
                     width={globeDimensions.width}
