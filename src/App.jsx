@@ -1,6 +1,7 @@
 // src/App.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
 import EarthquakeDetailView from './EarthquakeDetailView';
 import InteractiveGlobeView from './InteractiveGlobeView';
 import NotableQuakeFeature from './NotableQuakeFeature';
@@ -961,6 +962,52 @@ function App() {
         }
     }, [navigate]);
 
+    // Helper function for /feeds SEO
+    const getFeedPageSeoInfo = (feedTitle, activePeriod) => {
+        let periodDescription = "the latest updates";
+        let periodKeywords = "earthquake feed, live seismic data";
+
+        switch (activePeriod) {
+            case 'last_hour':
+                periodDescription = "the last hour";
+                periodKeywords = "last hour earthquakes, real-time seismic events";
+                break;
+            case 'last_24_hours':
+                periodDescription = "the last 24 hours";
+                periodKeywords = "24 hour earthquakes, daily seismic summary";
+                break;
+            case 'last_7_days':
+                periodDescription = "the last 7 days";
+                periodKeywords = "7 day earthquakes, weekly seismic activity";
+                break;
+            case 'last_14_days':
+                periodDescription = "the last 14 days";
+                periodKeywords = "14 day earthquakes, biweekly seismic overview";
+                break;
+            case 'last_30_days':
+                periodDescription = "the last 30 days";
+                periodKeywords = "30 day earthquakes, monthly seismic analysis";
+                break;
+            case 'feelable_quakes':
+                periodDescription = `feelable quakes (M${FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+)`;
+                periodKeywords = "feelable earthquakes, noticeable seismic events";
+                break;
+            case 'significant_quakes':
+                periodDescription = `significant quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)`;
+                periodKeywords = "significant earthquakes, major seismic events";
+                break;
+            default:
+                periodDescription = "selected period";
+                break;
+        }
+
+        const title = feedTitle ? `${feedTitle} | Seismic Monitor` : 'Earthquake Feeds | Seismic Monitor';
+        const description = `Explore earthquake data for ${periodDescription}. View lists, statistics, and details of seismic events.`;
+        const keywords = `earthquake feed, live seismic data, earthquake list, ${periodKeywords}, seismic monitor`;
+
+        return { title, description, keywords };
+    };
+
     // const handleCloseDetail = useCallback(() => setSelectedDetailUrl(null), []); // Removed
     const handleNotableQuakeSelect = useCallback((quakeFromFeature) => {
         setFocusedNotableQuake(quakeFromFeature);
@@ -980,6 +1027,71 @@ function App() {
     }
 
     // --- Main Render ---
+
+    // Define FeedsPageLayout component here, within App's scope or passed as prop if defined outside
+    const FeedsPageLayout = ({
+        currentFeedTitle, activeFeedPeriod, currentFeedData, currentFeedisLoading,
+        previousDataForCurrentFeed, handleQuakeClick, setActiveFeedPeriod,
+        handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly, allEarthquakes,
+        // FEELABLE_QUAKE_THRESHOLD, MAJOR_QUAKE_THRESHOLD, // These are global constants, accessible
+        getFeedPageSeoInfo, // Pass the helper function
+        SummaryStatisticsCardComponent, PaginatedEarthquakeTableComponent // Renamed to avoid conflict if defined outside
+    }) => {
+        const seoInfo = getFeedPageSeoInfo(currentFeedTitle, activeFeedPeriod);
+
+        return (
+            <>
+                <SeoMetadata
+                    title={seoInfo.title}
+                    description={seoInfo.description}
+                    keywords={seoInfo.keywords}
+                    imageUrl="/vite.svg" // Or your preferred default image
+                    type="website"
+                />
+                <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
+                    <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                        Feeds & Details
+                    </h2>
+                    <div className="my-2 flex flex-wrap gap-2 pb-2">
+                        <button onClick={() => setActiveFeedPeriod('last_hour')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_hour' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last Hour</button>
+                        <button onClick={() => setActiveFeedPeriod('feelable_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'feelable_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Feelable (M{FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+)</button>
+                        <button onClick={() => setActiveFeedPeriod('significant_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'significant_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Significant (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)</button>
+                        <button onClick={() => setActiveFeedPeriod('last_24_hours')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_24_hours' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last 24hr</button>
+                        <button onClick={() => setActiveFeedPeriod('last_7_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_7_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last 7day</button>
+                        {(hasAttemptedMonthlyLoad && allEarthquakes.length > 0) && (
+                            <React.Fragment key="monthly-feed-buttons">
+                                <button onClick={() => setActiveFeedPeriod('last_14_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_14_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>14-Day</button>
+                                <button onClick={() => setActiveFeedPeriod('last_30_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_30_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>30-Day</button>
+                            </React.Fragment>
+                        )}
+                    </div>
+                    <SummaryStatisticsCardComponent
+                        title={`Statistics for ${currentFeedTitle.replace("Earthquakes ", "").replace("Quakes ", "")}`}
+                        currentPeriodData={currentFeedData || []}
+                        previousPeriodData={(activeFeedPeriod !== 'feelable_quakes' && activeFeedPeriod !== 'significant_quakes') ? previousDataForCurrentFeed : null}
+                        isLoading={currentFeedisLoading}
+                    />
+                    <PaginatedEarthquakeTableComponent
+                        title={currentFeedTitle}
+                        earthquakes={currentFeedData || []}
+                        isLoading={currentFeedisLoading}
+                        onQuakeClick={handleQuakeClick}
+                        itemsPerPage={15}
+                        periodName={activeFeedPeriod.replace('_', ' ')}
+                    />
+                    {!hasAttemptedMonthlyLoad && (
+                        <div className="text-center py-3 mt-3 border-t border-slate-700">
+                            <button onClick={handleLoadMonthlyData} disabled={isLoadingMonthly} className="w-full bg-teal-600 hover:bg-teal-500 p-2.5 rounded-md text-white font-semibold transition-colors text-xs shadow-md disabled:opacity-60">
+                                {isLoadingMonthly ? 'Loading Extended Data...' : 'Load 14 & 30-Day Data'}
+                            </button>
+                        </div>
+                    )}
+                    {hasAttemptedMonthlyLoad && isLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
+                </div>
+            </>
+        );
+    };
+
     return (
         <div className="flex flex-col h-screen font-sans bg-slate-900 text-slate-100 antialiased">
             <header className="bg-slate-800 text-white p-2 shadow-lg z-40 border-b border-slate-700">
@@ -998,9 +1110,17 @@ function App() {
                 <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto">
                     <Routes>
                         <Route path="/" element={
-                            <div className="lg:block h-full w-full">
-                                <InteractiveGlobeView
-                                    earthquakes={globeEarthquakes}
+                            <>
+                                <SeoMetadata
+                                    title="Global Seismic Activity Monitor | Real-time Earthquake Data"
+                                    description="Track live earthquakes around the world with our interactive globe. Get real-time data, view significant quake details, and explore seismic activity trends."
+                                    keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology"
+                                    imageUrl="/vite.svg"
+                                    type="website"
+                                />
+                                <div className="lg:block h-full w-full">
+                                    <InteractiveGlobeView
+                                        earthquakes={globeEarthquakes}
                                     onQuakeClick={handleQuakeClick}
                                     getMagnitudeColorFunc={getMagnitudeColor}
                                     allowUserDragRotation={true}
@@ -1039,13 +1159,22 @@ function App() {
                                     formatTimeDuration={formatTimeDuration}
                                     SkeletonText={SkeletonText}
                                 />
-                            </div>
+                                </div>
+                            </>
                         } />
                         <Route path="/overview" element={
-                            <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
-                                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                    Overview
-                                </h2>
+                            <>
+                                <SeoMetadata
+                                    title="Earthquake Overview | Latest Seismic Summary"
+                                    description="Get a summary of the latest global earthquake activity, including significant events, regional distributions, and key statistics."
+                                    keywords="earthquake summary, seismic overview, recent earthquakes, earthquake statistics"
+                                    imageUrl="/vite.svg"
+                                    type="website"
+                                />
+                                <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
+                                    <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                        Overview
+                                    </h2>
                                 {currentAlertConfig && (
                                     <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}>
                                         <p className="font-bold text-sm mb-1">Active USGS Alert: {currentAlertConfig.text}</p>
@@ -1148,55 +1277,41 @@ function App() {
                                         Learn More About Earthquakes
                                     </button>
                                 </div>
-                            </div>
+                                </div>
+                            </>
                         } />
                         <Route path="/feeds" element={
-                            <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
-                                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                    Feeds & Details
-                                </h2>
-                                <div className="my-2 flex flex-wrap gap-2 pb-2">
-                                    <button onClick={() => setActiveFeedPeriod('last_hour')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_hour' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last Hour</button>
-                                    <button onClick={() => setActiveFeedPeriod('feelable_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'feelable_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Feelable (M{FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+)</button>
-                                    <button onClick={() => setActiveFeedPeriod('significant_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'significant_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Significant (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)</button>
-                                    <button onClick={() => setActiveFeedPeriod('last_24_hours')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_24_hours' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last 24hr</button>
-                                    <button onClick={() => setActiveFeedPeriod('last_7_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_7_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last 7day</button>
-                                    {(hasAttemptedMonthlyLoad && allEarthquakes.length > 0) && (
-                                        <React.Fragment key="monthly-feed-buttons">
-                                            <button onClick={() => setActiveFeedPeriod('last_14_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_14_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>14-Day</button>
-                                            <button onClick={() => setActiveFeedPeriod('last_30_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_30_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>30-Day</button>
-                                        </React.Fragment>
-                                   )}
-                                </div>
-                                <SummaryStatisticsCard
-                                    title={`Statistics for ${currentFeedTitle.replace("Earthquakes ", "").replace("Quakes ", "")}`}
-                                    currentPeriodData={currentFeedData || []}
-                                    previousPeriodData={(activeFeedPeriod !== 'feelable_quakes' && activeFeedPeriod !== 'significant_quakes') ? previousDataForCurrentFeed : null}
-                                    isLoading={currentFeedisLoading}
-                                />
-                                <PaginatedEarthquakeTable
-                                    title={currentFeedTitle}
-                                    earthquakes={currentFeedData || []}
-                                    isLoading={currentFeedisLoading}
-                                    onQuakeClick={handleQuakeClick}
-                                    itemsPerPage={15}
-                                    periodName={activeFeedPeriod.replace('_', ' ')}
-                                />
-                                {!hasAttemptedMonthlyLoad && (
-                                    <div className="text-center py-3 mt-3 border-t border-slate-700">
-                                        <button onClick={handleLoadMonthlyData} disabled={isLoadingMonthly} className="w-full bg-teal-600 hover:bg-teal-500 p-2.5 rounded-md text-white font-semibold transition-colors text-xs shadow-md disabled:opacity-60">
-                                            {isLoadingMonthly ? 'Loading Extended Data...' : 'Load 14 & 30-Day Data'}
-                                        </button>
-                                    </div>
-                                )}
-                                {hasAttemptedMonthlyLoad && isLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
-                            </div>
+                            <FeedsPageLayout
+                                currentFeedTitle={currentFeedTitle}
+                                activeFeedPeriod={activeFeedPeriod}
+                                currentFeedData={currentFeedData}
+                                currentFeedisLoading={currentFeedisLoading}
+                                previousDataForCurrentFeed={previousDataForCurrentFeed}
+                                handleQuakeClick={handleQuakeClick}
+                                setActiveFeedPeriod={setActiveFeedPeriod}
+                                handleLoadMonthlyData={handleLoadMonthlyData}
+                                hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
+                                isLoadingMonthly={isLoadingMonthly}
+                                allEarthquakes={allEarthquakes}
+                                // FEELABLE_QUAKE_THRESHOLD and MAJOR_QUAKE_THRESHOLD are global constants
+                                getFeedPageSeoInfo={getFeedPageSeoInfo}
+                                SummaryStatisticsCardComponent={SummaryStatisticsCard} // Pass the memoized component
+                                PaginatedEarthquakeTableComponent={PaginatedEarthquakeTable} // Pass the memoized component
+                            />
                         } />
                         <Route path="/learn" element={
-                            <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
-                                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                    Learn About Earthquakes
-                                </h2>
+                            <>
+                                <SeoMetadata
+                                    title="Learn About Earthquakes | Seismic Science Explained"
+                                    description="Understand earthquake science, including magnitude, depth, fault types, seismic waves, and how earthquake data is interpreted."
+                                    keywords="earthquake science, seismology basics, magnitude, fault types, seismic waves, earthquake education"
+                                    imageUrl="/vite.svg"
+                                    type="website"
+                                />
+                                <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
+                                    <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                                        Learn About Earthquakes
+                                    </h2>
                                 <InfoSnippet topic="magnitude" />
                                 <InfoSnippet topic="depth" />
                                 <InfoSnippet topic="intensity" />
@@ -1209,7 +1324,8 @@ function App() {
                                 <InfoSnippet topic="stationsUsed"/>
                                 <InfoSnippet topic="azimuthalGap"/>
                                 <InfoSnippet topic="rmsError"/>
-                            </div>
+                                </div>
+                            </>
                         } />
                         <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModal />} />
                     </Routes>
