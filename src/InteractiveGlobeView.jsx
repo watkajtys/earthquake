@@ -21,6 +21,66 @@ const InteractiveGlobeView = ({
                               }) => {
     const globeRef = useRef();
     const containerRef = useRef(null);
+
+    // Helper function to desaturate color and apply alpha
+    const desaturateAndApplyAlpha = (hexColor, alpha) => {
+        if (!hexColor || !hexColor.startsWith('#') || hexColor.length !== 7) {
+            console.warn(`Invalid hexColor: ${hexColor}, returning default dull color.`);
+            return `rgba(128, 128, 128, ${alpha})`; // Default grey with alpha
+        }
+
+        // 1. Hex to RGB
+        let r = parseInt(hexColor.slice(1, 3), 16);
+        let g = parseInt(hexColor.slice(3, 5), 16);
+        let b = parseInt(hexColor.slice(5, 7), 16);
+
+        // 2. RGB to HSL
+        const rNorm = r / 255;
+        const gNorm = g / 255;
+        const bNorm = b / 255;
+
+        const cMax = Math.max(rNorm, gNorm, bNorm);
+        const cMin = Math.min(rNorm, gNorm, bNorm);
+        const delta = cMax - cMin;
+
+        let h = 0;
+        let s = 0;
+        let l = (cMax + cMin) / 2;
+
+        if (delta !== 0) {
+            s = delta / (1 - Math.abs(2 * l - 1));
+            switch (cMax) {
+                case rNorm: h = 60 * (((gNorm - bNorm) / delta) % 6); break;
+                case gNorm: h = 60 * (((bNorm - rNorm) / delta) + 2); break;
+                case bNorm: h = 60 * (((rNorm - gNorm) / delta) + 4); break;
+            }
+            if (h < 0) h += 360;
+        }
+
+        // 3. Desaturate
+        s *= 0.5; // Reduce saturation by 50%
+
+        // 4. HSL to RGB
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+        const m = l - c / 2;
+
+        let rPrime = 0, gPrime = 0, bPrime = 0;
+
+        if (h >= 0 && h < 60) { rPrime = c; gPrime = x; bPrime = 0; }
+        else if (h >= 60 && h < 120) { rPrime = x; gPrime = c; bPrime = 0; }
+        else if (h >= 120 && h < 180) { rPrime = 0; gPrime = c; bPrime = x; }
+        else if (h >= 180 && h < 240) { rPrime = 0; gPrime = x; bPrime = c; }
+        else if (h >= 240 && h < 300) { rPrime = x; gPrime = 0; bPrime = c; }
+        else if (h >= 300 && h < 360) { rPrime = c; gPrime = 0; bPrime = x; }
+
+        r = Math.round((rPrime + m) * 255);
+        g = Math.round((gPrime + m) * 255);
+        b = Math.round((bPrime + m) * 255);
+
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
     const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
@@ -28,6 +88,7 @@ const InteractiveGlobeView = ({
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
     const [ringsData, setRingsData] = useState([]);
+    const [isInitialFocusAnimating, setIsInitialFocusAnimating] = useState(false);
 
     const debounce = (func, delay) => {
         let timeout;
@@ -154,19 +215,42 @@ const InteractiveGlobeView = ({
     }, [coastlineGeoJson, tectonicPlatesGeoJson]);
 
     useEffect(() => {
+        let animationTimeoutId = null;
         if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {
-            let targetLng = defaultFocusLng;
-            if (
-                latestMajorQuakeForRing &&
-                latestMajorQuakeForRing.geometry &&
-                Array.isArray(latestMajorQuakeForRing.geometry.coordinates) &&
-                latestMajorQuakeForRing.geometry.coordinates.length > 0 &&
-                typeof latestMajorQuakeForRing.geometry.coordinates[0] === 'number'
-            ) {
-                targetLng = latestMajorQuakeForRing.geometry.coordinates[0];
+            let lngForGlobe = defaultFocusLng;
+            let latForGlobe = defaultFocusLat; // Assuming defaultFocusLat is always what we want for lat
+            let altForGlobe = defaultFocusAltitude; // Assuming defaultFocusAltitude for altitude
+
+            const isLatestQuakeValid = latestMajorQuakeForRing &&
+                                     latestMajorQuakeForRing.geometry &&
+                                     Array.isArray(latestMajorQuakeForRing.geometry.coordinates) &&
+                                     latestMajorQuakeForRing.geometry.coordinates.length > 0 &&
+                                     typeof latestMajorQuakeForRing.geometry.coordinates[0] === 'number';
+
+            if (isLatestQuakeValid) {
+                lngForGlobe = latestMajorQuakeForRing.geometry.coordinates[0];
+                // Optional: You might want to adjust latForGlobe if the quake's latitude is preferred
+                // latForGlobe = latestMajorQuakeForRing.geometry.coordinates[1];
             }
-            globeRef.current.pointOfView({ lat: defaultFocusLat, lng: targetLng, altitude: defaultFocusAltitude }, 0);
+
+            globeRef.current.pointOfView({ lat: latForGlobe, lng: lngForGlobe, altitude: altForGlobe }, 0);
+
+            if (isLatestQuakeValid && lngForGlobe === latestMajorQuakeForRing.geometry.coordinates[0]) {
+                // Only animate if we are indeed focusing on the latest major quake
+                setIsInitialFocusAnimating(true);
+                animationTimeoutId = setTimeout(() => {
+                    setIsInitialFocusAnimating(false);
+                }, 2500);
+            } else {
+                // If not focusing on the latest quake (e.g. fallback or no quake), ensure animation state is false
+                setIsInitialFocusAnimating(false);
+            }
         }
+        return () => {
+            if (animationTimeoutId) {
+                clearTimeout(animationTimeoutId);
+            }
+        };
     }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions, latestMajorQuakeForRing]);
 
     // CONSOLIDATED Effect to manage globe controls and drag listeners
@@ -302,6 +386,9 @@ const InteractiveGlobeView = ({
         ) {
             const coords = latestMajorQuakeForRing.geometry.coordinates;
             const mag = parseFloat(latestMajorQuakeForRing.properties.mag);
+            const basePropagationSpeed = Math.max(2, mag * 0.5);
+            const baseMaxR = Math.max(6, mag * 2.2);
+
             newRings.push({
                 id: `major_quake_ring_latest_${latestMajorQuakeForRing.id}_${latestMajorQuakeForRing.properties.time}_${Date.now()}`,
                 lat: coords[1],
@@ -309,14 +396,14 @@ const InteractiveGlobeView = ({
                 altitude: 0.02,
                 color: () => {
                     const hexColor = getMagnitudeColorFunc(mag);
-                    // Convert hex to RGB
                     const r = parseInt(hexColor.slice(1, 3), 16);
                     const g = parseInt(hexColor.slice(3, 5), 16);
                     const b = parseInt(hexColor.slice(5, 7), 16);
-                    return `rgba(${r}, ${g}, ${b}, 0.8)`;
+                    const alpha = isInitialFocusAnimating ? 0.95 : 0.8; // Brighter during animation
+                    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
                 },
-                maxR: Math.max(6, mag * 2.2),
-                propagationSpeed: Math.max(2, mag * 0.5),
+                maxR: isInitialFocusAnimating ? baseMaxR * 1.5 : baseMaxR,
+                propagationSpeed: isInitialFocusAnimating ? basePropagationSpeed * 2.5 : basePropagationSpeed,
                 repeatPeriod: 1800,
             });
         }
@@ -339,12 +426,8 @@ const InteractiveGlobeView = ({
                 lng: coords[0],
                 altitude: 0.018, // Slightly different altitude
                 color: () => {
-                    const hexColor = getMagnitudeColorFunc(mag);
-                    // Convert hex to RGB
-                    const r = parseInt(hexColor.slice(1, 3), 16);
-                    const g = parseInt(hexColor.slice(3, 5), 16);
-                    const b = parseInt(hexColor.slice(5, 7), 16);
-                    return `rgba(${r}, ${g}, ${b}, 0.5)`; // Use alpha 0.5 for duller effect
+                    const baseColorHex = getMagnitudeColorFunc(mag);
+                    return desaturateAndApplyAlpha(baseColorHex, 0.5);
                 },
                 maxR: Math.max(5, mag * 2.0),
                 propagationSpeed: Math.max(1.8, mag * 0.45),
@@ -356,7 +439,7 @@ const InteractiveGlobeView = ({
              setRingsData(newRings);
         }
 
-    }, [latestMajorQuakeForRing, previousMajorQuake, ringsData.length]); // Added previousMajorQuake and ringsData.length to dependency array
+    }, [latestMajorQuakeForRing, previousMajorQuake, ringsData.length, getMagnitudeColorFunc, desaturateAndApplyAlpha, isInitialFocusAnimating]);
 
 
 
