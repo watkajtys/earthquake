@@ -50,10 +50,14 @@ const InteractiveGlobeView = ({
             }
         };
         const debouncedUpdateDimensions = debounce(updateDimensions, 200);
-        updateDimensions();
+        updateDimensions(); // Initial immediate call
+        const timerId = setTimeout(updateDimensions, 50); // Delayed call
+
         const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
         resizeObserver.observe(currentContainerRef);
+
         return () => {
+            if (timerId) clearTimeout(timerId); // Clear the timeout
             if (currentContainerRef) resizeObserver.unobserve(currentContainerRef);
             if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
         };
