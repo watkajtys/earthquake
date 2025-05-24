@@ -51,15 +51,15 @@ const InteractiveGlobeView = ({
         };
         const debouncedUpdateDimensions = debounce(updateDimensions, 200);
         updateDimensions(); // Initial immediate call
-        const timerId = setTimeout(updateDimensions, 50); // Delayed call
+        const animationFrameId = requestAnimationFrame(updateDimensions); // Delayed call using requestAnimationFrame
 
         const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
         resizeObserver.observe(currentContainerRef);
 
         return () => {
-            if (timerId) clearTimeout(timerId); // Clear the timeout
+            if (animationFrameId) cancelAnimationFrame(animationFrameId); // Cancel the animation frame
             if (currentContainerRef) resizeObserver.unobserve(currentContainerRef);
-            if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
+            if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout); // Keep this for the debounced observer
         };
     }, []);
 
