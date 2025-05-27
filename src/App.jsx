@@ -158,6 +158,7 @@ function App() {
 
     const TimeSinceLastMajorQuakeBanner = React.memo(({
                                                           lastMajorQuake,
+                                                          previousMajorQuake,
                                                           timeBetweenPreviousMajorQuakes,
                                                           isLoadingInitial,
                                                           isLoadingMonthly,
@@ -199,15 +200,38 @@ function App() {
         const depth = lastMajorQuake?.geometry?.coordinates?.[2]?.toFixed(1);
         const magColor = lastMajorQuake ? getMagnitudeColor(lastMajorQuake.properties.mag) : '#D1D5DB';
 
+        // Details for the previous major quake
+        const prevRegion = previousMajorQuake ? getRegionForEarthquake(previousMajorQuake) : null;
+        const prevLocation = previousMajorQuake?.properties.place || 'Unknown Location';
+        const prevMag = previousMajorQuake?.properties.mag?.toFixed(1);
+        const prevDepth = previousMajorQuake?.geometry?.coordinates?.[2]?.toFixed(1);
+        const prevMagColor = previousMajorQuake ? getMagnitudeColor(previousMajorQuake.properties.mag) : '#D1D5DB';
+
         return (<div className="bg-slate-700 p-4 rounded-lg border border-slate-600 text-center text-slate-200">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">IT HAS BEEN:</p>
             <p className="text-2xl md:text-3xl font-bold text-indigo-400 tracking-tight mb-2 min-h-[36px] md:min-h-[44px] flex items-center justify-center">
                 {lastMajorQuake ? timeAgoFormatted : <SkeletonText width="w-1/2 mx-auto" height="h-10"/>}
             </p>
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Since the last significant (M<span style={{color: magColor, fontWeight: 'bold'}}>{majorQuakeThreshold.toFixed(1)}</span>+) earthquake.</p>
-            {lastMajorQuake ? (<p className="text-sm text-slate-300 mt-1 mb-3">(M<span style={{ color: magColor, fontWeight: 'bold' }}>{mag || '...'}</span>{depth !== undefined ? `, ${depth}km depth` : ''}){region ? <> in <span className="font-semibold" style={{color: region.color}}>{region.name}</span></> : ''} - {location || 'Details Pending...'}<a href={lastMajorQuake.properties.url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 ml-2 text-xs">(details)</a></p>) : (<SkeletonText width="w-full mx-auto mt-1 mb-3" height="h-5"/>)}
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Since the last significant (M<span style={{fontWeight: 'bold'}}>{majorQuakeThreshold.toFixed(1)}</span>+) earthquake.</p>
+            {lastMajorQuake ? (<p className="text-sm text-slate-300 mt-1 mb-3">M<span style={{ color: magColor, fontWeight: 'bold' }}>{mag || '...'}</span> - {location || 'Details Pending...'}<a href="#" onClick={(e) => { e.preventDefault(); handleQuakeClick(lastMajorQuake); }} className="text-indigo-400 hover:text-indigo-300 ml-2 text-xs">(details)</a></p>) : (<SkeletonText width="w-full mx-auto mt-1 mb-3" height="h-5"/>)}
             <hr className="my-3 border-slate-600"/>
-            {isLoadingMonthly && !prevIntervalFmt && lastMajorQuake ? (<><SkeletonText width="w-1/4 mx-auto"/> <div className="h-8 bg-slate-600 rounded w-1/3 mx-auto my-2"></div> <SkeletonText width="w-1/3 mx-auto"/></>) : (<><p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">PREVIOUSLY IT HAD BEEN:</p><p className="text-xl md:text-2xl font-bold text-slate-400 tracking-tight mb-2 min-h-[30px] md:min-h-[36px] flex items-center justify-center">{prevIntervalFmt ?? (lastMajorQuake ? 'N/A (Only one M5+ found or data pending)' : 'N/A')}</p><p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Between significant earthquakes.</p></>)}
+            {isLoadingMonthly && !prevIntervalFmt && lastMajorQuake ? (
+                                <><SkeletonText width="w-1/4 mx-auto"/> <div className="h-8 bg-slate-600 rounded w-1/3 mx-auto my-2"></div> <SkeletonText width="w-1/3 mx-auto"/> <SkeletonText width="w-full mx-auto mt-1 mb-1" height="h-4"/> </>
+                            ) : (
+                                <>
+                                        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">PREVIOUSLY IT HAD BEEN:</p>
+                                        <p className="text-xl md:text-2xl font-bold text-slate-400 tracking-tight mb-1 min-h-[30px] md:min-h-[36px] flex items-center justify-center">
+                                            {prevIntervalFmt ?? (lastMajorQuake ? 'N/A (Only one M4.5+ found or data pending)' : 'N/A')}
+                                        </p>
+                                        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Between significant earthquakes.</p>
+                                        {previousMajorQuake && prevIntervalFmt ? (
+                                            <p className="text-xs text-slate-400 mt-1">
+                                                    (M<span style={{ color: prevMagColor, fontWeight: 'bold' }}>{prevMag || '...'}</span>
+                                                    {' - '}{prevLocation || 'Details Pending...'}
+                                                <a href="#" onClick={(e) => { e.preventDefault(); handleQuakeClick(previousMajorQuake); }} className="text-indigo-400 hover:text-indigo-300 ml-2 text-xs">(details)</a>
+                                                </p>
+                                        ) : prevIntervalFmt && <SkeletonText width="w-full mx-auto mt-1" height="h-4" className="bg-slate-600" /> }                </>
+                            )}
         </div>);
     });
 
@@ -1244,6 +1268,7 @@ function App() {
                                 <TimeSinceLastMajorQuakeBanner
                                     lastMajorQuake={lastMajorQuake}
                                     timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
+                                    previousMajorQuake={previousMajorQuake}
                                     isLoadingInitial={isLoadingInitialData}
                                     isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad}
                                     majorQuakeThreshold={MAJOR_QUAKE_THRESHOLD}
@@ -1352,6 +1377,7 @@ function App() {
                             <TimeSinceLastMajorQuakeBanner
                                 lastMajorQuake={lastMajorQuake}
                                 timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
+                                previousMajorQuake={previousMajorQuake}
                                 isLoadingInitial={isLoadingInitialData}
                                 isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad}
                                 majorQuakeThreshold={MAJOR_QUAKE_THRESHOLD}
