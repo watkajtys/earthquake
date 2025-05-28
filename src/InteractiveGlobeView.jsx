@@ -2,6 +2,32 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
 
+const makeColorDuller = (rgbaColor, opacityFactor) => {
+    if (typeof rgbaColor !== 'string' || !rgbaColor.startsWith('rgba(') || !rgbaColor.endsWith(')')) {
+        return 'rgba(128,128,128,0.5)'; // Default fallback color
+    }
+    try {
+        const parts = rgbaColor.substring(5, rgbaColor.length - 1).split(',');
+        if (parts.length !== 4) {
+            return 'rgba(128,128,128,0.5)'; // Default fallback color
+        }
+        const r = parseInt(parts[0].trim(), 10);
+        const g = parseInt(parts[1].trim(), 10);
+        const b = parseInt(parts[2].trim(), 10);
+        const a = parseFloat(parts[3].trim());
+
+        if (isNaN(r) || isNaN(g) || isNaN(b) || isNaN(a)) {
+            return 'rgba(128,128,128,0.5)'; // Default fallback color if parsing fails
+        }
+
+        const newAlpha = Math.max(0, Math.min(1, a * opacityFactor));
+        return `rgba(${r},${g},${b},${newAlpha.toFixed(3)})`; // toFixed(3) for reasonable precision
+    } catch (error) {
+        console.error("Error parsing color in makeColorDuller:", error);
+        return 'rgba(128,128,128,0.5)'; // Default fallback color on any other error
+    }
+};
+
 const InteractiveGlobeView = ({
                                   earthquakes,
                                   onQuakeClick,
@@ -297,7 +323,7 @@ const InteractiveGlobeView = ({
                 lat: coords[1],
                 lng: coords[0],
                 altitude: 0.02,
-                color: () => 'rgba(255, 255, 0, 0.8)', // Bright Yellow for latest
+                color: () => getMagnitudeColorFunc(mag),
                 maxR: Math.max(6, mag * 2.2),
                 propagationSpeed: Math.max(2, mag * 0.5),
                 repeatPeriod: 1800,
@@ -316,12 +342,13 @@ const InteractiveGlobeView = ({
         ) {
             const coords = previousMajorQuake.geometry.coordinates;
             const mag = parseFloat(previousMajorQuake.properties.mag);
+            const baseColor = getMagnitudeColorFunc(mag);
             newRings.push({
                 id: `major_quake_ring_prev_${previousMajorQuake.id}_${previousMajorQuake.properties.time}_${Date.now()}`,
                 lat: coords[1],
                 lng: coords[0],
                 altitude: 0.018, // Slightly different altitude
-                color: () => 'rgba(180, 180, 180, 0.6)', // Greyish for previous
+                color: () => makeColorDuller(baseColor, 0.7),
                 maxR: Math.max(5, mag * 2.0),
                 propagationSpeed: Math.max(1.8, mag * 0.45),
                 repeatPeriod: 1900, // Slightly different period
