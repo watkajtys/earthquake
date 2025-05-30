@@ -13,9 +13,10 @@ import React from 'react';
  *     maxMagnitude: number,
  *     timeRange: string
  *   }
+ * @param {function} [props.onClusterSelect] - Optional callback when the item is clicked.
  * @returns {JSX.Element} The rendered ClusterSummaryItem component.
  */
-function ClusterSummaryItem({ clusterData }) {
+function ClusterSummaryItem({ clusterData, onClusterSelect }) {
     if (!clusterData) {
         return null; // Or some fallback UI for empty data
     }
@@ -31,7 +32,10 @@ function ClusterSummaryItem({ clusterData }) {
     // This assumes it will be part of a list, hence <li>.
     // Could also be a div if used differently.
     return (
-        <li className="py-2 px-3 bg-slate-700 rounded-md shadow-sm hover:bg-slate-600 transition-colors duration-150 ease-in-out border border-slate-600">
+        <li
+            className="py-2 px-3 bg-slate-700 rounded-md shadow-sm hover:bg-slate-600 transition-colors duration-150 ease-in-out border border-slate-600 cursor-pointer" // Added cursor-pointer
+            onClick={() => onClusterSelect && onClusterSelect(clusterData)} // Call onClusterSelect with clusterData
+        >
             <h4 className="text-sm font-semibold text-sky-300 truncate" title={locationName}>
                 {locationName || 'Unknown Cluster Location'}
             </h4>
