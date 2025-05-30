@@ -12,6 +12,7 @@ import tectonicPlatesData from './TectonicPlateBoundaries.json';
 import GlobalLastMajorQuakeTimer                                    from "./GlobalLastMajorQuakeTimer.jsx";
 import BottomNav                                                    from "./BottomNav.jsx"; // Direct import
 import ClusterSummaryItem from './ClusterSummaryItem'; // Add this line
+import ClusterDetailModal from './ClusterDetailModal'; // <-- Add this
 
 // --- Configuration & Helpers ---
 const USGS_API_URL_DAY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
@@ -722,6 +723,7 @@ function App() {
     // const [activeSidebarView, setActiveSidebarView] = useState('overview_panel'); // Replaced by useSearchParams
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeClusters, setActiveClusters] = useState([]);
+    const [detailedClusterToShow, setDetailedClusterToShow] = useState(null); // <-- Add this line
     const activeSidebarView = searchParams.get('sidebarActiveView') || 'overview_panel';
 
     const setActiveSidebarView = (view) => {
@@ -1239,9 +1241,7 @@ function App() {
                 _maxMagInternal: maxMag,
                 _quakeCountInternal: cluster.length,
                 _earliestTimeInternal: earliestTime,
-                // Store the original cluster quakes if needed for click interaction later
-                // For now, not passing all quakes to avoid bloating props if not immediately used
-                // originalQuakes: cluster
+                originalQuakes: cluster, // <-- Add this line
             };
         }).filter(Boolean); // Remove any nulls if a cluster was empty
 
@@ -1353,6 +1353,10 @@ function App() {
             alert(`Featured Quake: ${quakeFromFeature.name || quakeFromFeature.properties?.place}\n${quakeFromFeature.description || ''}`);
         }
     }, [navigate]);
+
+    const handleClusterSummaryClick = useCallback((clusterData) => {
+        setDetailedClusterToShow(clusterData);
+    }, []); // No dependencies needed if setDetailedClusterToShow is stable (which it is)
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 
@@ -1617,7 +1621,11 @@ function App() {
                                     {overviewClusters && overviewClusters.length > 0 ? (
                                         <ul className="space-y-2">
                                             {overviewClusters.map(cluster => (
-                                                <ClusterSummaryItem clusterData={cluster} key={cluster.id} />
+                                                <ClusterSummaryItem
+                                                    clusterData={cluster}
+                                                    key={cluster.id}
+                                                    onClusterSelect={handleClusterSummaryClick} // <-- Add this prop
+                                                />
                                             ))}
                                         </ul>
                                     ) : (
@@ -1757,7 +1765,11 @@ function App() {
                                     {overviewClusters && overviewClusters.length > 0 ? (
                                         <ul className="space-y-2">
                                             {overviewClusters.map(cluster => (
-                                                <ClusterSummaryItem clusterData={cluster} key={cluster.id} />
+                                                <ClusterSummaryItem
+                                                    clusterData={cluster}
+                                                    key={cluster.id}
+                                                    onClusterSelect={handleClusterSummaryClick} // <-- Add this prop
+                                                />
                                             ))}
                                         </ul>
                                     ) : (
@@ -1858,6 +1870,15 @@ function App() {
 
             <BottomNav />
 
+            {/* Conditionally render ClusterDetailModal */}
+            {detailedClusterToShow && (
+                <ClusterDetailModal
+                    cluster={detailedClusterToShow}
+                    onClose={() => setDetailedClusterToShow(null)}
+                    formatDate={formatDate} // Pass the utility function from App.jsx
+                    getMagnitudeColorStyle={getMagnitudeColorStyle} // Pass the utility function from App.jsx
+                />
+            )}
             {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
         </div>
     );
