@@ -1160,10 +1160,17 @@ function App() {
 
     // Extract longitude for globe focus
     const defaultFocusLng = useMemo(() => {
-        if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.geometry.coordinates && typeof lastMajorQuake.geometry.coordinates[0] === 'number') {
+        if (
+            lastMajorQuake &&
+            lastMajorQuake.geometry &&
+            lastMajorQuake.geometry.coordinates &&
+            Array.isArray(lastMajorQuake.geometry.coordinates) && // Check if it's an array
+            lastMajorQuake.geometry.coordinates.length > 0 &&    // Check if the array is not empty
+            typeof lastMajorQuake.geometry.coordinates[0] === 'number' // Check if the first element is a number
+        ) {
             return lastMajorQuake.geometry.coordinates[0];
         }
-        return null; // Default to null if not available
+        return null; // Default to null if any check fails
     }, [lastMajorQuake]);
 
     // --- Main Render ---
