@@ -120,7 +120,7 @@ const InteractiveGlobeView = ({
 
             if (isHighlighted) {
                 pointRadius = Math.max(0.6, (magValue / 7) + 0.4);
-                pointColor = '#FFFF00'; // Yellow for latest significant
+                pointColor = getMagnitudeColorFunc(magValue);
                 pointAltitude = 0.03;
                 pointLabel = `LATEST SIGNIFICANT: M${quake.properties.mag?.toFixed(1)} - ${quake.properties.place}`;
                 pointType = 'highlighted_significant_quake';
