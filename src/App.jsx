@@ -11,11 +11,16 @@ import coastlineData from './ne_110m_coastline.json'; // Direct import
 import tectonicPlatesData from './TectonicPlateBoundaries.json';
 import GlobalLastMajorQuakeTimer                                    from "./GlobalLastMajorQuakeTimer.jsx";
 import BottomNav                                                    from "./BottomNav.jsx"; // Direct import
+import ClusterSummaryItem from './ClusterSummaryItem'; // Add this line
+import ClusterDetailModal from './ClusterDetailModal';
 
 // --- Configuration & Helpers ---
 const USGS_API_URL_DAY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
 const USGS_API_URL_WEEK = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson';
 const USGS_API_URL_MONTH = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson';
+const CLUSTER_MAX_DISTANCE_KM = 100; // Max distance for quakes to be in the same cluster
+const CLUSTER_MIN_QUAKES = 3; // Min number of quakes to form a cluster
+const CLUSTER_TIME_WINDOW_HOURS = 48; // Time window in hours to consider for clustering
 const MAJOR_QUAKE_THRESHOLD = 4.5;
 const FEELABLE_QUAKE_THRESHOLD = 2.5;
 const FELT_REPORTS_THRESHOLD = 0;
@@ -23,6 +28,7 @@ const SIGNIFICANCE_THRESHOLD = 0;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const LOADING_MESSAGE_INTERVAL_MS = 750;
 const HEADER_TIME_UPDATE_INTERVAL_MS = 60 * 1000;
+const TOP_N_CLUSTERS_OVERVIEW = 3; // Number of top clusters to show in overview
 
 const INITIAL_LOADING_MESSAGES = [
     "Connecting to Global Seismic Network...", "Fetching Most Recent Events...", "Processing Live Data...",
@@ -40,6 +46,76 @@ const ALERT_LEVELS = {
     YELLOW: { text: "YELLOW", colorClass: "bg-yellow-100 border-yellow-500 text-yellow-700", detailsColorClass: "bg-yellow-50 border-yellow-400 text-yellow-800", description: "Potential for 1-99 fatalities / $1M-$100M losses." },
     GREEN: { text: "GREEN", colorClass: "bg-green-100 border-green-500 text-green-700", detailsColorClass: "bg-green-50 border-green-400 text-green-800", description: "No significant impact expected (<1 fatality / <$1M losses)." }
 };
+
+/**
+ * Calculates the distance between two geographical coordinates using the Haversine formula.
+ * @param {number} lat1 Latitude of the first point.
+ * @param {number} lon1 Longitude of the first point.
+ * @param {number} lat2 Latitude of the second point.
+ * @param {number} lon2 Longitude of the second point.
+ * @returns {number} Distance in kilometers.
+ */
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the Earth in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+    return distance;
+}
+
+/**
+ * Finds clusters of earthquakes based on proximity and time.
+ * @param {Array<object>} earthquakes - Array of earthquake objects. Expected to have `properties.time` and `geometry.coordinates`.
+ * @param {number} maxDistanceKm - Maximum distance between quakes to be considered in the same cluster.
+ * @param {number} minQuakes - Minimum number of quakes to form a valid cluster.
+ * @returns {Array<Array<object>>} An array of clusters, where each cluster is an array of earthquake objects.
+ */
+function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
+    const clusters = [];
+    const processedQuakeIds = new Set();
+
+    // Sort earthquakes by magnitude (descending) to potentially form clusters around stronger events first.
+    const sortedEarthquakes = [...earthquakes].sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
+
+    for (const quake of sortedEarthquakes) {
+        if (processedQuakeIds.has(quake.id)) {
+            continue;
+        }
+
+        const newCluster = [quake];
+        processedQuakeIds.add(quake.id);
+        const baseLat = quake.geometry.coordinates[1];
+        const baseLon = quake.geometry.coordinates[0];
+
+        for (const otherQuake of sortedEarthquakes) {
+            if (processedQuakeIds.has(otherQuake.id) || otherQuake.id === quake.id) {
+                continue;
+            }
+
+            const dist = calculateDistance(
+                baseLat,
+                baseLon,
+                otherQuake.geometry.coordinates[1],
+                otherQuake.geometry.coordinates[0]
+            );
+
+            if (dist <= maxDistanceKm) {
+                newCluster.push(otherQuake);
+                processedQuakeIds.add(otherQuake.id);
+            }
+        }
+
+        if (newCluster.length >= minQuakes) {
+            clusters.push(newCluster);
+        }
+    }
+    return clusters;
+}
 
 // --- App Component ---
 /**
@@ -646,6 +722,8 @@ function App() {
     const [focusedNotableQuake, setFocusedNotableQuake] = useState(null);
     // const [activeSidebarView, setActiveSidebarView] = useState('overview_panel'); // Replaced by useSearchParams
     const [searchParams, setSearchParams] = useSearchParams();
+    const [activeClusters, setActiveClusters] = useState([]);
+    const [detailedClusterToShow, setDetailedClusterToShow] = useState(null); // <-- Add this line
     const activeSidebarView = searchParams.get('sidebarActiveView') || 'overview_panel';
 
     const setActiveSidebarView = (view) => {
@@ -1034,6 +1112,19 @@ function App() {
         return () => clearInterval(timerId);
     }, []);
 
+    useEffect(() => {
+        if (earthquakesLast72Hours && earthquakesLast72Hours.length > 0) {
+            const foundClusters = findActiveClusters(
+                earthquakesLast72Hours,
+                CLUSTER_MAX_DISTANCE_KM,
+                CLUSTER_MIN_QUAKES
+            );
+            setActiveClusters(foundClusters);
+        } else {
+            setActiveClusters([]); // Clear clusters if no source data
+        }
+    }, [earthquakesLast72Hours]); // Dependency: run when earthquakesLast72Hours changes.
+
     // --- UI Calculations & Memos ---
     const showFullScreenLoader = useMemo(() => (isLoadingDaily || isLoadingWeekly) && isInitialAppLoad.current, [isLoadingDaily, isLoadingWeekly]);
     const headerTimeDisplay = useMemo(() => { if (isInitialAppLoad.current && (isLoadingDaily || isLoadingWeekly) && !dataFetchTime) return "Connecting to Seismic Network..."; if (!dataFetchTime) return "Awaiting Initial Data..."; const timeSinceFetch = appCurrentTime - dataFetchTime; return `Live Data (7-day): ${timeSinceFetch < 30000 ? 'just now' : formatTimeAgo(timeSinceFetch)} | USGS Feed Updated: ${lastUpdated || 'N/A'}`; }, [isLoadingDaily, isLoadingWeekly, dataFetchTime, appCurrentTime, lastUpdated, isInitialAppLoad, formatTimeAgo]);
@@ -1082,15 +1173,127 @@ function App() {
         return sortedRegions.length > 0 ? sortedRegions[0] : { name: "No activity in defined regions", count: 0, color: "#9CA3AF" };
     }, [earthquakesLast24Hours, REGIONS, getRegionForEarthquake]);
 
+    const overviewClusters = useMemo(() => {
+        if (!activeClusters || activeClusters.length === 0) {
+            return [];
+        }
+
+        const processed = activeClusters.map(cluster => {
+            if (!cluster || cluster.length === 0) {
+                return null;
+            }
+
+            let maxMag = -Infinity;
+            let earliestTime = Infinity;
+            let latestTime = -Infinity;
+            let strongestQuakeInCluster = null;
+
+            cluster.forEach(quake => {
+                if (quake.properties.mag > maxMag) {
+                    maxMag = quake.properties.mag;
+                    strongestQuakeInCluster = quake;
+                }
+                if (quake.properties.time < earliestTime) {
+                    earliestTime = quake.properties.time;
+                }
+                if (quake.properties.time > latestTime) {
+                    latestTime = quake.properties.time;
+                }
+            });
+
+            if (!strongestQuakeInCluster) strongestQuakeInCluster = cluster[0]; // Fallback if all mags are null/equal
+
+            const locationName = strongestQuakeInCluster.properties.place || 'Unknown Location';
+
+            // Determine time range string
+            let timeRangeStr = 'Time N/A';
+            const now = Date.now();
+            const durationMillis = now - earliestTime; // Duration since the earliest quake in cluster started
+
+            if (earliestTime !== Infinity) {
+                 // If the cluster's quakes are all very recent (e.g., within last 24 hours from now)
+                if (now - latestTime < 24 * 60 * 60 * 1000 && cluster.length > 1) {
+                    const clusterDurationMillis = latestTime - earliestTime;
+                    if (clusterDurationMillis < 60 * 1000) { // less than a minute
+                        timeRangeStr = `Active just now`;
+                    } else if (clusterDurationMillis < 60 * 60 * 1000) { // less than an hour
+                         timeRangeStr = `Active over ${Math.round(clusterDurationMillis / (60 * 1000))}m`;
+                    } else {
+                         timeRangeStr = `Active over ${formatTimeDuration(clusterDurationMillis)}`;
+                    }
+                } else { // Older clusters or single quake "clusters" (if minQuakes was 1)
+                    timeRangeStr = `Started ${formatTimeAgo(durationMillis)}`;
+                }
+            }
+            // A simpler alternative for timeRangeStr:
+            // if (earliestTime !== Infinity && latestTime !== Infinity) {
+            //    timeRangeStr = `Active: ${formatDate(earliestTime)} - ${formatDate(latestTime)}`;
+            // }
+
+
+            return {
+                id: `overview_cluster_${strongestQuakeInCluster.id}_${cluster.length}`, // Create a somewhat unique ID
+                locationName,
+                quakeCount: cluster.length,
+                maxMagnitude: maxMag,
+                timeRange: timeRangeStr, // Using the more dynamic one for now
+                // For sorting and potential future use:
+                _maxMagInternal: maxMag,
+                _quakeCountInternal: cluster.length,
+                _earliestTimeInternal: earliestTime,
+                originalQuakes: cluster, // <-- Add this line
+            };
+        }).filter(Boolean); // Remove any nulls if a cluster was empty
+
+        // Sort clusters: primarily by max magnitude (desc), then by quake count (desc)
+        processed.sort((a, b) => {
+            if (b._maxMagInternal !== a._maxMagInternal) {
+                return b._maxMagInternal - a._maxMagInternal;
+            }
+            return b._quakeCountInternal - a._quakeCountInternal;
+        });
+
+        return processed.slice(0, TOP_N_CLUSTERS_OVERVIEW);
+
+    }, [activeClusters, formatDate, formatTimeAgo, formatTimeDuration]); // Include formatDate, formatTimeAgo, formatTimeDuration if they are from useCallback/component scope
 
     // --- Event Handlers ---
     const navigate = useNavigate();
     const handleQuakeClick = useCallback((quake) => {
-        const detailUrl = quake?.properties?.detail;
-        if (detailUrl) {
-            navigate(`/quake/${encodeURIComponent(detailUrl)}`);
+        // --- NEW LOGIC ---
+        if (quake?.isCluster && quake?.clusterDetails) {
+            // This is a cluster point
+            const clusterInfo = quake.clusterDetails;
+            const numQuakesDisplay = clusterInfo.quakes.length;
+            const maxMagDisplay = quake.properties.mag; // This was set to maxMag of cluster
+
+            let message = `Cluster Information:\n`;
+            message += `------------------------\n`;
+            message += `Total Earthquakes: ${numQuakesDisplay}\n`;
+            message += `Maximum Magnitude: M ${maxMagDisplay?.toFixed(1)}\n`;
+            message += `Earthquakes in Cluster (up to 5 shown):\n`;
+
+            clusterInfo.quakes.slice(0, 5).forEach((q, index) => {
+                message += `  ${index + 1}. M ${q.mag?.toFixed(1)} - ${q.place}\n`;
+            });
+            if (clusterInfo.quakes.length > 5) {
+                message += `  ...and ${clusterInfo.quakes.length - 5} more.\n`;
+            }
+
+            alert(message);
+            // Optionally, you could also log to console for more detailed inspection
+            console.log("Cluster clicked:", quake);
+
         } else {
-            console.warn("No detail URL for earthquake:", quake?.id);
+            // Existing logic for individual earthquake clicks
+            const detailUrl = quake?.properties?.detail || quake?.properties?.url; // Check both common USGS fields
+            if (detailUrl) {
+                navigate(`/quake/${encodeURIComponent(detailUrl)}`);
+            } else {
+                console.warn("No detail URL for individual earthquake:", quake?.id, quake);
+                // Fallback alert if no detail URL for a non-cluster point
+                alert(`Earthquake: M ${quake?.properties?.mag?.toFixed(1)} - ${quake?.properties?.place || 'Unknown location'}. No further details link available.`);
+            }
         }
     }, [navigate]);
 
@@ -1150,6 +1353,10 @@ function App() {
             alert(`Featured Quake: ${quakeFromFeature.name || quakeFromFeature.properties?.place}\n${quakeFromFeature.description || ''}`);
         }
     }, [navigate]);
+
+    const handleClusterSummaryClick = useCallback((clusterData) => {
+        setDetailedClusterToShow(clusterData);
+    }, []); // No dependencies needed if setDetailedClusterToShow is stable (which it is)
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 
@@ -1281,6 +1488,7 @@ function App() {
                                     highlightedQuakeId={lastMajorQuake?.id}
                                     latestMajorQuakeForRing={lastMajorQuake}
                                     previousMajorQuake={previousMajorQuake}
+                                    activeClusters={activeClusters} // <-- New prop
                                 />
                                 <div className="absolute top-2 left-2 z-10 space-y-2">
                                     <NotableQuakeFeature
@@ -1404,6 +1612,29 @@ function App() {
                                     previousPeriodData={prev24HourData}
                                     isLoading={isLoadingDaily || (isLoadingWeekly && !earthquakesLast24Hours)}
                                 />
+
+                                {/* Active Earthquake Clusters Section - Mobile */}
+                                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
+                                    <h3 className="text-md font-semibold mb-2 text-indigo-300">
+                                        Active Earthquake Clusters
+                                    </h3>
+                                    {overviewClusters && overviewClusters.length > 0 ? (
+                                        <ul className="space-y-2">
+                                            {overviewClusters.map(cluster => (
+                                                <ClusterSummaryItem
+                                                    clusterData={cluster}
+                                                    key={cluster.id}
+                                                    onClusterSelect={handleClusterSummaryClick} // <-- Add this prop
+                                                />
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-xs text-slate-400 text-center py-2">
+                                            No significant active clusters detected currently.
+                                        </p>
+                                    )}
+                                </div>
+
                                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
                                     <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
                                     {isLoadingDaily && !earthquakesLast24Hours ? (
@@ -1525,6 +1756,29 @@ function App() {
                                     </p>
                                 )}
                             </div>
+
+                                {/* Active Earthquake Clusters Section - Desktop Sidebar */}
+                                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
+                                    <h3 className="text-md font-semibold mb-2 text-indigo-300">
+                                        Active Earthquake Clusters
+                                    </h3>
+                                    {overviewClusters && overviewClusters.length > 0 ? (
+                                        <ul className="space-y-2">
+                                            {overviewClusters.map(cluster => (
+                                                <ClusterSummaryItem
+                                                    clusterData={cluster}
+                                                    key={cluster.id}
+                                                    onClusterSelect={handleClusterSummaryClick} // <-- Add this prop
+                                                />
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-xs text-slate-400 text-center py-2">
+                                            No significant active clusters detected currently.
+                                        </p>
+                                    )}
+                                </div>
+
                             {recentSignificantQuakesForOverview.length > 0 && (
                                 <PaginatedEarthquakeTable
                                     title={`Recent Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)`}
@@ -1616,6 +1870,16 @@ function App() {
 
             <BottomNav />
 
+            {/* Conditionally render ClusterDetailModal */}
+            {detailedClusterToShow && (
+                <ClusterDetailModal
+                    cluster={detailedClusterToShow}
+                    onClose={() => setDetailedClusterToShow(null)}
+                    formatDate={formatDate} // Pass the utility function from App.jsx
+                    getMagnitudeColorStyle={getMagnitudeColorStyle} // Pass the utility function from App.jsx
+                    onIndividualQuakeSelect={handleQuakeClick} // <-- Add this line
+                />
+            )}
             {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
         </div>
     );
