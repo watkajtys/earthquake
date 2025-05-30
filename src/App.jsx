@@ -12,7 +12,7 @@ import tectonicPlatesData from './TectonicPlateBoundaries.json';
 import GlobalLastMajorQuakeTimer                                    from "./GlobalLastMajorQuakeTimer.jsx";
 import BottomNav                                                    from "./BottomNav.jsx"; // Direct import
 import ClusterSummaryItem from './ClusterSummaryItem'; // Add this line
-import ClusterDetailModal from './ClusterDetailModal'; // <-- Add this
+import ClusterDetailModal from './ClusterDetailModal';
 
 // --- Configuration & Helpers ---
 const USGS_API_URL_DAY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
@@ -1877,6 +1877,7 @@ function App() {
                     onClose={() => setDetailedClusterToShow(null)}
                     formatDate={formatDate} // Pass the utility function from App.jsx
                     getMagnitudeColorStyle={getMagnitudeColorStyle} // Pass the utility function from App.jsx
+                    onIndividualQuakeSelect={handleQuakeClick} // <-- Add this line
                 />
             )}
             {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
