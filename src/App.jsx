@@ -11,6 +11,7 @@ import coastlineData from './ne_110m_coastline.json'; // Direct import
 import tectonicPlatesData from './TectonicPlateBoundaries.json';
 import GlobalLastMajorQuakeTimer                                    from "./GlobalLastMajorQuakeTimer.jsx";
 import BottomNav                                                    from "./BottomNav.jsx"; // Direct import
+import ClusterSummaryItem from './ClusterSummaryItem'; // Add this line
 
 // --- Configuration & Helpers ---
 const USGS_API_URL_DAY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
@@ -26,6 +27,7 @@ const SIGNIFICANCE_THRESHOLD = 0;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const LOADING_MESSAGE_INTERVAL_MS = 750;
 const HEADER_TIME_UPDATE_INTERVAL_MS = 60 * 1000;
+const TOP_N_CLUSTERS_OVERVIEW = 3; // Number of top clusters to show in overview
 
 const INITIAL_LOADING_MESSAGES = [
     "Connecting to Global Seismic Network...", "Fetching Most Recent Events...", "Processing Live Data...",
@@ -1169,6 +1171,91 @@ function App() {
         return sortedRegions.length > 0 ? sortedRegions[0] : { name: "No activity in defined regions", count: 0, color: "#9CA3AF" };
     }, [earthquakesLast24Hours, REGIONS, getRegionForEarthquake]);
 
+    const overviewClusters = useMemo(() => {
+        if (!activeClusters || activeClusters.length === 0) {
+            return [];
+        }
+
+        const processed = activeClusters.map(cluster => {
+            if (!cluster || cluster.length === 0) {
+                return null;
+            }
+
+            let maxMag = -Infinity;
+            let earliestTime = Infinity;
+            let latestTime = -Infinity;
+            let strongestQuakeInCluster = null;
+
+            cluster.forEach(quake => {
+                if (quake.properties.mag > maxMag) {
+                    maxMag = quake.properties.mag;
+                    strongestQuakeInCluster = quake;
+                }
+                if (quake.properties.time < earliestTime) {
+                    earliestTime = quake.properties.time;
+                }
+                if (quake.properties.time > latestTime) {
+                    latestTime = quake.properties.time;
+                }
+            });
+
+            if (!strongestQuakeInCluster) strongestQuakeInCluster = cluster[0]; // Fallback if all mags are null/equal
+
+            const locationName = strongestQuakeInCluster.properties.place || 'Unknown Location';
+
+            // Determine time range string
+            let timeRangeStr = 'Time N/A';
+            const now = Date.now();
+            const durationMillis = now - earliestTime; // Duration since the earliest quake in cluster started
+
+            if (earliestTime !== Infinity) {
+                 // If the cluster's quakes are all very recent (e.g., within last 24 hours from now)
+                if (now - latestTime < 24 * 60 * 60 * 1000 && cluster.length > 1) {
+                    const clusterDurationMillis = latestTime - earliestTime;
+                    if (clusterDurationMillis < 60 * 1000) { // less than a minute
+                        timeRangeStr = `Active just now`;
+                    } else if (clusterDurationMillis < 60 * 60 * 1000) { // less than an hour
+                         timeRangeStr = `Active over ${Math.round(clusterDurationMillis / (60 * 1000))}m`;
+                    } else {
+                         timeRangeStr = `Active over ${formatTimeDuration(clusterDurationMillis)}`;
+                    }
+                } else { // Older clusters or single quake "clusters" (if minQuakes was 1)
+                    timeRangeStr = `Started ${formatTimeAgo(durationMillis)}`;
+                }
+            }
+            // A simpler alternative for timeRangeStr:
+            // if (earliestTime !== Infinity && latestTime !== Infinity) {
+            //    timeRangeStr = `Active: ${formatDate(earliestTime)} - ${formatDate(latestTime)}`;
+            // }
+
+
+            return {
+                id: `overview_cluster_${strongestQuakeInCluster.id}_${cluster.length}`, // Create a somewhat unique ID
+                locationName,
+                quakeCount: cluster.length,
+                maxMagnitude: maxMag,
+                timeRange: timeRangeStr, // Using the more dynamic one for now
+                // For sorting and potential future use:
+                _maxMagInternal: maxMag,
+                _quakeCountInternal: cluster.length,
+                _earliestTimeInternal: earliestTime,
+                // Store the original cluster quakes if needed for click interaction later
+                // For now, not passing all quakes to avoid bloating props if not immediately used
+                // originalQuakes: cluster
+            };
+        }).filter(Boolean); // Remove any nulls if a cluster was empty
+
+        // Sort clusters: primarily by max magnitude (desc), then by quake count (desc)
+        processed.sort((a, b) => {
+            if (b._maxMagInternal !== a._maxMagInternal) {
+                return b._maxMagInternal - a._maxMagInternal;
+            }
+            return b._quakeCountInternal - a._quakeCountInternal;
+        });
+
+        return processed.slice(0, TOP_N_CLUSTERS_OVERVIEW);
+
+    }, [activeClusters, formatDate, formatTimeAgo, formatTimeDuration]); // Include formatDate, formatTimeAgo, formatTimeDuration if they are from useCallback/component scope
 
     // --- Event Handlers ---
     const navigate = useNavigate();
@@ -1521,6 +1608,25 @@ function App() {
                                     previousPeriodData={prev24HourData}
                                     isLoading={isLoadingDaily || (isLoadingWeekly && !earthquakesLast24Hours)}
                                 />
+
+                                {/* Active Earthquake Clusters Section - Mobile */}
+                                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
+                                    <h3 className="text-md font-semibold mb-2 text-indigo-300">
+                                        Active Earthquake Clusters
+                                    </h3>
+                                    {overviewClusters && overviewClusters.length > 0 ? (
+                                        <ul className="space-y-2">
+                                            {overviewClusters.map(cluster => (
+                                                <ClusterSummaryItem clusterData={cluster} key={cluster.id} />
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-xs text-slate-400 text-center py-2">
+                                            No significant active clusters detected currently.
+                                        </p>
+                                    )}
+                                </div>
+
                                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
                                     <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
                                     {isLoadingDaily && !earthquakesLast24Hours ? (
@@ -1642,6 +1748,25 @@ function App() {
                                     </p>
                                 )}
                             </div>
+
+                                {/* Active Earthquake Clusters Section - Desktop Sidebar */}
+                                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
+                                    <h3 className="text-md font-semibold mb-2 text-indigo-300">
+                                        Active Earthquake Clusters
+                                    </h3>
+                                    {overviewClusters && overviewClusters.length > 0 ? (
+                                        <ul className="space-y-2">
+                                            {overviewClusters.map(cluster => (
+                                                <ClusterSummaryItem clusterData={cluster} key={cluster.id} />
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-xs text-slate-400 text-center py-2">
+                                            No significant active clusters detected currently.
+                                        </p>
+                                    )}
+                                </div>
+
                             {recentSignificantQuakesForOverview.length > 0 && (
                                 <PaginatedEarthquakeTable
                                     title={`Recent Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)`}
