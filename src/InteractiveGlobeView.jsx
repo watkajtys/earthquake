@@ -2,6 +2,55 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
 
+const makeColorDuller = (colorString, opacityFactor) => {
+    const fallbackColor = 'rgba(128,128,128,0.5)';
+    let r, g, b, currentAlpha = 1.0;
+
+    if (typeof colorString !== 'string') {
+        return fallbackColor;
+    }
+
+    try {
+        if (colorString.startsWith('#')) {
+            let hex = colorString.slice(1);
+            if (hex.length === 3) {
+                hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+            }
+            if (hex.length === 6) {
+                r = parseInt(hex.substring(0, 2), 16);
+                g = parseInt(hex.substring(2, 4), 16);
+                b = parseInt(hex.substring(4, 6), 16);
+                currentAlpha = 1.0; // Hex implies full opacity initially
+            } else {
+                return fallbackColor; // Invalid hex length
+            }
+        } else if (colorString.startsWith('rgba(') && colorString.endsWith(')')) {
+            const parts = colorString.substring(5, colorString.length - 1).split(',');
+            if (parts.length === 4) {
+                r = parseInt(parts[0].trim(), 10);
+                g = parseInt(parts[1].trim(), 10);
+                b = parseInt(parts[2].trim(), 10);
+                currentAlpha = parseFloat(parts[3].trim());
+            } else {
+                return fallbackColor; // Invalid rgba format
+            }
+        } else {
+            return fallbackColor; // Not a recognized format
+        }
+
+        if (isNaN(r) || isNaN(g) || isNaN(b) || isNaN(currentAlpha)) {
+            return fallbackColor; // Parsing resulted in NaN
+        }
+
+        const newAlpha = Math.max(0, Math.min(1, currentAlpha * opacityFactor));
+        return `rgba(${r},${g},${b},${newAlpha.toFixed(3)})`;
+
+    } catch (error) {
+        console.error("Error processing color in makeColorDuller:", colorString, error);
+        return fallbackColor; // Catch-all for any unexpected errors during parsing/processing
+    }
+};
+
 const InteractiveGlobeView = ({
                                   earthquakes,
                                   onQuakeClick,
@@ -71,7 +120,7 @@ const InteractiveGlobeView = ({
 
             if (isHighlighted) {
                 pointRadius = Math.max(0.6, (magValue / 7) + 0.4);
-                pointColor = '#FFFF00'; // Yellow for latest significant
+                pointColor = getMagnitudeColorFunc(magValue);
                 pointAltitude = 0.03;
                 pointLabel = `LATEST SIGNIFICANT: M${quake.properties.mag?.toFixed(1)} - ${quake.properties.place}`;
                 pointType = 'highlighted_significant_quake';
@@ -106,7 +155,7 @@ const InteractiveGlobeView = ({
                     return {
                         ...p,
                         radius: Math.max(0.55, (prevMagValue / 7) + 0.35), // Slightly smaller than latest highlighted
-                        color: '#B0BEC5', // Distinct grey
+                        color: getMagnitudeColorFunc(prevMagValue),
                         altitude: 0.025, // Slightly different altitude
                         label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
                         type: 'previous_major_quake'
@@ -123,7 +172,7 @@ const InteractiveGlobeView = ({
                         lng: previousMajorQuake.geometry.coordinates[0],
                         altitude: 0.025,
                         radius: Math.max(0.55, (prevMagValue / 7) + 0.35),
-                        color: '#B0BEC5', // Distinct grey
+                        color: getMagnitudeColorFunc(prevMagValue),
                         label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
                         quakeData: previousMajorQuake,
                         type: 'previous_major_quake'
@@ -297,7 +346,7 @@ const InteractiveGlobeView = ({
                 lat: coords[1],
                 lng: coords[0],
                 altitude: 0.02,
-                color: () => 'rgba(255, 255, 0, 0.8)', // Bright Yellow for latest
+                color: () => getMagnitudeColorFunc(mag),
                 maxR: Math.max(6, mag * 2.2),
                 propagationSpeed: Math.max(2, mag * 0.5),
                 repeatPeriod: 1800,
@@ -316,12 +365,13 @@ const InteractiveGlobeView = ({
         ) {
             const coords = previousMajorQuake.geometry.coordinates;
             const mag = parseFloat(previousMajorQuake.properties.mag);
+            const baseColor = getMagnitudeColorFunc(mag);
             newRings.push({
                 id: `major_quake_ring_prev_${previousMajorQuake.id}_${previousMajorQuake.properties.time}_${Date.now()}`,
                 lat: coords[1],
                 lng: coords[0],
                 altitude: 0.018, // Slightly different altitude
-                color: () => 'rgba(180, 180, 180, 0.6)', // Greyish for previous
+                color: () => makeColorDuller(baseColor, 0.7),
                 maxR: Math.max(5, mag * 2.0),
                 propagationSpeed: Math.max(1.8, mag * 0.45),
                 repeatPeriod: 1900, // Slightly different period
