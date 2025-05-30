@@ -54,7 +54,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
 
     return (
         <div
-            className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4 transition-opacity duration-300 ease-in-out"
+            className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-40 p-4 transition-opacity duration-300 ease-in-out"
             onClick={onClose} // Close on backdrop click
         >
             <div
