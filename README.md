@@ -86,3 +86,87 @@ To run this project locally:
 5.  Open your browser and navigate to the local URL provided by Vite (usually `http://localhost:5173` or similar).
 
 ## Project Structure
+
+## Technical Documentation
+
+JSDoc comments have been added throughout the `.jsx` files in the `src` directory. These comments provide explanations for components, functions, props, and data structures to facilitate understanding and maintenance of the codebase.
+
+### Generating HTML Documentation
+
+You can generate HTML documentation from these JSDoc comments using the `jsdoc` npm package.
+
+1.  **Install JSDoc and a template (e.g., Docdash)**:
+    You can install `jsdoc` globally or as a development dependency in your project. `docdash` is a popular clean template.
+    ```bash
+    # Global installation
+    npm install -g jsdoc docdash
+
+    # Or, as dev dependencies
+    npm install --save-dev jsdoc docdash
+    ```
+
+2.  **Create a JSDoc Configuration File (Optional but Recommended)**:
+    Create a `jsdoc.json` (or `conf.json`) file in your project root for better control over the documentation generation process.
+    Example `jsdoc.json`:
+    ```json
+    {
+      "source": {
+        "include": ["src"],
+        "includePattern": ".+\\.jsx?$",
+        "excludePattern": "(node_modules|docs)"
+      },
+      "opts": {
+        "destination": "./docs/jsdoc/",
+        "recurse": true,
+        "readme": "./README.md",
+        "template": "node_modules/docdash"
+      },
+      "plugins": ["plugins/markdown"],
+      "templates": {
+        "default": {
+          "outputSourceFiles": false
+        },
+        "docdash": {
+          "static": true,
+          "sort": true,
+          "search": true,
+          "collapse": true,
+          "typedefs": true,
+          "removeQuotes": "none",
+          "menu": {
+            "Github repo": {
+              "href": "https://github.com/your-repo/your-project",
+              "target": "_blank"
+            }
+          }
+        }
+      }
+    }
+    ```
+    *Note: If you installed `docdash` locally, the path to the template would be `node_modules/docdash`. If globally, you might need to provide the full path to the global `docdash` template or use a JSDoc plugin to resolve global templates.*
+
+3.  **Run JSDoc**:
+    If you are using a configuration file:
+    ```bash
+    jsdoc -c jsdoc.json
+    ```
+    Alternatively, you can specify options directly on the command line:
+    ```bash
+    jsdoc src -r -d docs/jsdoc --template node_modules/docdash --readme README.md
+    ```
+    This will generate the documentation in the `docs/jsdoc/` directory. Open the `index.html` file in that directory to view the documentation.
+
+### Main Components Overview
+
+The `src/` directory contains the core components of the application:
+
+-   `main.jsx`: The main entry point for the React application. It initializes the `App` component and sets up routing.
+-   `App.jsx`: The root application component. It manages global state, data fetching for earthquake feeds, routing logic, and the overall layout of the application, including the globe view and sidebars.
+-   `InteractiveGlobeView.jsx`: Renders the interactive 3D globe using `react-globe.gl`. It's responsible for plotting earthquake points, coastlines, tectonic plates, and visual rings for significant quakes.
+-   `EarthquakeDetailView.jsx`: A modal component that displays comprehensive information about a selected earthquake, including its properties, related products (like ShakeMap or PAGER), and explanatory diagrams.
+-   `BottomNav.jsx`: Provides the primary navigation interface for mobile users, allowing access to different sections like the Globe, Overview, Feeds, and Learn.
+-   `GlobalLastMajorQuakeTimer.jsx`: Displays a live timer counting up from the last globally significant earthquake, shown prominently on the globe view.
+-   `InfoSnippet.jsx`: A reusable UI component that displays toggleable information blurbs. Used in various parts of the application to provide contextual explanations about earthquake science and data.
+-   `NotableQuakeFeature.jsx`: Displays a feature card for the most recent significant earthquake or cycles through a list of historical notable quakes.
+-   `PreviousNotableQuakeFeature.jsx`: Similar to `NotableQuakeFeature`, but specifically displays the second most recent significant earthquake.
+-   `SeoMetadata.jsx`: A utility component that dynamically updates HTML meta tags (title, description, Open Graph, Twitter cards) for SEO purposes based on the current view or content.
