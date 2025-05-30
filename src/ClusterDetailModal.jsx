@@ -15,9 +15,10 @@ import React from 'react';
  * @param {function} props.onClose - Function to call when the modal should be closed.
  * @param {function} props.formatDate - Function to format timestamps.
  * @param {function} props.getMagnitudeColorStyle - Function to get Tailwind CSS color styles for magnitude.
+ * @param {function} [props.onIndividualQuakeSelect] - Callback when an individual quake item is selected.
  * @returns {JSX.Element | null} The rendered ClusterDetailModal component or null if no cluster data.
  */
-function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorStyle }) {
+function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
     if (!cluster) {
         return null;
     }
@@ -29,6 +30,13 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
         timeRange,
         originalQuakes = [] // Default to empty array if not provided
     } = cluster;
+
+    // Sort quakes by time (most recent first)
+    const sortedQuakes = [...originalQuakes].sort((a, b) => {
+        const timeA = a.properties?.time || 0;
+        const timeB = b.properties?.time || 0;
+        return timeB - timeA; // Descending order
+    });
 
     // Calculate Depth Range (Optional, as designed)
     let minDepth = Infinity;
@@ -82,27 +90,20 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                     Earthquakes in this Cluster
                 </h3>
                 <div className="flex-grow overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
-                    {originalQuakes.length > 0 ? (
-                        originalQuakes.map(quake => (
+                    {sortedQuakes.length > 0 ? (
+                        sortedQuakes.map(quake => (
                             <div
                                 key={quake.id}
-                                className={`p-2.5 rounded-md border ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : 'bg-slate-700 border-slate-600'} hover:border-slate-500 transition-colors`}
+                                className={`p-2.5 rounded-md border ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : 'bg-slate-700 border-slate-600'} hover:border-slate-500 transition-colors cursor-pointer`} // Added cursor-pointer
+                                onClick={() => onIndividualQuakeSelect && onIndividualQuakeSelect(quake)} // Added onClick
+                                title={`Click to view details for M ${quake.properties?.mag?.toFixed(1)} - ${quake.properties?.place}`} // Added title attribute
                             >
                                 <div className="flex justify-between items-start mb-0.5">
                                     <p className="text-sm font-semibold">
                                         M {quake.properties?.mag?.toFixed(1) || 'N/A'}
                                     </p>
-                                    {quake.properties?.url || quake.properties?.detail ? (
-                                        <a
-                                            href={quake.properties.url || quake.properties.detail}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-xs text-sky-400 hover:text-sky-300 hover:underline whitespace-nowrap"
-                                            title="View USGS Event Page"
-                                        >
-                                            USGS Detail &rarr;
-                                        </a>
-                                    ) : <span className="text-xs text-slate-500">No Detail Link</span>}
+                                    {/* Optionally, keep a more subtle indicator if a USGS link exists, or remove entirely */}
+                                    {/* For now, removing the explicit "USGS Detail ->" link from this spot */}
                                 </div>
                                 <p className="text-xs text-slate-200 truncate" title={quake.properties?.place}>
                                     {quake.properties?.place || 'Unknown place'}
