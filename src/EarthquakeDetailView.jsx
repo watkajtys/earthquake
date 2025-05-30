@@ -454,7 +454,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // A
     const pagerAlertValue = losspagerProductProps?.alertlevel ?? properties?.alert;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-60 p-2 sm:p-4 pt-10 md:pt-16 overflow-y-auto" onClick={onClose}>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-50 p-2 sm:p-4 pt-10 md:pt-16 overflow-y-auto" onClick={onClose}>
             <div className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800" onClick={(e) => e.stopPropagation()}>
                 <button onClick={onClose} className="absolute top-1 right-1 md:top-3 md:right-3 text-gray-300 bg-gray-700 bg-opacity-50 rounded-full w-8 h-8 flex items-center justify-center hover:bg-opacity-75 hover:text-white text-2xl font-light z-50" aria-label="Close detail view">&times;</button>
 
