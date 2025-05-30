@@ -210,77 +210,77 @@ const InteractiveGlobeView = ({
         }
 
         // --- NEW: Process activeClusters ---
-        if (activeClusters && activeClusters.length > 0) {
-            activeClusters.forEach((cluster, index) => {
-                if (cluster.length === 0) return;
+        // if (activeClusters && activeClusters.length > 0) {
+        //     activeClusters.forEach((cluster, index) => {
+        //         if (cluster.length === 0) return;
 
-                let sumLat = 0, sumLng = 0, maxMag = 0;
-                let quakesInClusterDetails = [];
+        //         let sumLat = 0, sumLng = 0, maxMag = 0;
+        //         let quakesInClusterDetails = [];
 
-                cluster.forEach(quake => {
-                    sumLat += quake.geometry.coordinates[1];
-                    sumLng += quake.geometry.coordinates[0];
-                    if (quake.properties.mag > maxMag) {
-                        maxMag = quake.properties.mag;
-                    }
-                    quakesInClusterDetails.push({
-                        id: quake.id,
-                        mag: quake.properties.mag,
-                        place: quake.properties.place,
-                        time: quake.properties.time
-                    });
-                });
+        //         cluster.forEach(quake => {
+        //             sumLat += quake.geometry.coordinates[1];
+        //             sumLng += quake.geometry.coordinates[0];
+        //             if (quake.properties.mag > maxMag) {
+        //                 maxMag = quake.properties.mag;
+        //             }
+        //             quakesInClusterDetails.push({
+        //                 id: quake.id,
+        //                 mag: quake.properties.mag,
+        //                 place: quake.properties.place,
+        //                 time: quake.properties.time
+        //             });
+        //         });
 
-                const centroidLat = sumLat / cluster.length;
-                const centroidLng = sumLng / cluster.length;
+        //         const centroidLat = sumLat / cluster.length;
+        //         const centroidLng = sumLng / cluster.length;
 
-                allPointsData.push({
-                    lat: centroidLat,
-                    lng: centroidLng,
-                    altitude: 0.02, // Slightly elevated to distinguish, if needed
-                    radius: 0.5 + (cluster.length / 10), // Radius based on cluster size, adjust as needed
-                    color: 'rgba(255, 255, 0, 0.75)', // Bright yellow for clusters, with some transparency
-                    label: `Cluster: ${cluster.length} quakes (Max Mag: ${maxMag.toFixed(1)})`,
-                    type: 'cluster_center',
-                    // Store the original cluster data for potential interaction
-                    clusterData: {
-                        id: `cluster_${index}_${Date.now()}`, // Create a unique ID for the cluster point
-                        quakes: quakesInClusterDetails,
-                        centroidLat,
-                        centroidLng,
-                        numQuakes: cluster.length,
-                        maxMag
-                    },
-                    // To make it clickable and identifiable by onQuakeClick,
-                    // we can mock a minimal 'quakeData' structure for clusters.
-                    // App.jsx's onQuakeClick expects properties.detail or properties.url.
-                    // We'll need to handle 'cluster_center' type clicks differently there, or adapt this.
-                    // For now, this structure helps avoid errors in existing onPointClick if it tries to access quakeData.properties.detail
-                    quakeData: {
-                        id: `cluster_vis_${index}_${Date.now()}`, // Unique ID for this visual point
-                        properties: {
-                            place: `Cluster of ${cluster.length} earthquakes`,
-                            mag: maxMag,
-                            // No 'detail' or 'url' for clusters in the same way as individual quakes
-                        },
-                        geometry: {
-                            type: "Point",
-                            coordinates: [centroidLng, centroidLat, 0] // Mock geometry
-                        },
-                        isCluster: true, // Custom flag
-                        clusterDetails: { // Pass actual detailed quake list
-                            quakes: cluster.map(q => ({ // Map to avoid passing huge objects if not needed directly by globe label
-                                id: q.id,
-                                mag: q.properties.mag,
-                                place: q.properties.place,
-                                time: q.properties.time,
-                                detail: q.properties.detail || q.properties.url // Keep detail for individual quakes within cluster
-                            }))
-                        }
-                    }
-                });
-            });
-        }
+        //         allPointsData.push({
+        //             lat: centroidLat,
+        //             lng: centroidLng,
+        //             altitude: 0.02, // Slightly elevated to distinguish, if needed
+        //             radius: 0.5 + (cluster.length / 10), // Radius based on cluster size, adjust as needed
+        //             color: 'rgba(255, 255, 0, 0.75)', // Bright yellow for clusters, with some transparency
+        //             label: `Cluster: ${cluster.length} quakes (Max Mag: ${maxMag.toFixed(1)})`,
+        //             type: 'cluster_center',
+        //             // Store the original cluster data for potential interaction
+        //             clusterData: {
+        //                 id: `cluster_${index}_${Date.now()}`, // Create a unique ID for the cluster point
+        //                 quakes: quakesInClusterDetails,
+        //                 centroidLat,
+        //                 centroidLng,
+        //                 numQuakes: cluster.length,
+        //                 maxMag
+        //             },
+        //             // To make it clickable and identifiable by onQuakeClick,
+        //             // we can mock a minimal 'quakeData' structure for clusters.
+        //             // App.jsx's onQuakeClick expects properties.detail or properties.url.
+        //             // We'll need to handle 'cluster_center' type clicks differently there, or adapt this.
+        //             // For now, this structure helps avoid errors in existing onPointClick if it tries to access quakeData.properties.detail
+        //             quakeData: {
+        //                 id: `cluster_vis_${index}_${Date.now()}`, // Unique ID for this visual point
+        //                 properties: {
+        //                     place: `Cluster of ${cluster.length} earthquakes`,
+        //                     mag: maxMag,
+        //                     // No 'detail' or 'url' for clusters in the same way as individual quakes
+        //                 },
+        //                 geometry: {
+        //                     type: "Point",
+        //                     coordinates: [centroidLng, centroidLat, 0] // Mock geometry
+        //                 },
+        //                 isCluster: true, // Custom flag
+        //                 clusterDetails: { // Pass actual detailed quake list
+        //                     quakes: cluster.map(q => ({ // Map to avoid passing huge objects if not needed directly by globe label
+        //                         id: q.id,
+        //                         mag: q.properties.mag,
+        //                         place: q.properties.place,
+        //                         time: q.properties.time,
+        //                         detail: q.properties.detail || q.properties.url // Keep detail for individual quakes within cluster
+        //                     }))
+        //                 }
+        //             }
+        //         });
+        //     });
+        // }
         // --- END NEW ---
         setPoints(allPointsData);
     }, [earthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]);
