@@ -42,17 +42,34 @@ const ALERT_LEVELS = {
 };
 
 // --- App Component ---
+/**
+ * The main application component for the Global Seismic Activity Monitor.
+ * It fetches, processes, and displays earthquake data using various views and components.
+ * Manages application state including earthquake data, loading states, user selections, and UI display modes.
+ * Provides routing for different sections of the application like overview, feeds, learning materials, and earthquake details.
+ * @returns {JSX.Element} The rendered App component.
+ */
 function App() {
 
     const [appRenderTrigger, setAppRenderTrigger] = useState(0);
     const [activeFeedPeriod, setActiveFeedPeriod] = useState('last_24_hours'); // NEW STATE - default to 24 hours
 
     // --- Callback Hooks (Formatting, Colors, Regions, Stats) ---
+    /**
+     * Formats a timestamp into a human-readable date and time string.
+     * @param {number} timestamp - The Unix timestamp in milliseconds.
+     * @returns {string} The formatted date and time string (e.g., "Jan 1, 10:00 AM") or 'N/A' if timestamp is invalid.
+     */
     const formatDate = useCallback((timestamp) => {
         if (!timestamp) return 'N/A';
         return new Date(timestamp).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
     }, []);
 
+    /**
+     * Formats a duration in milliseconds into a human-readable "time ago" string.
+     * @param {number | null} milliseconds - The duration in milliseconds.
+     * @returns {string} The formatted time ago string (e.g., "5 min ago", "just now") or 'N/A' if input is invalid.
+     */
     const formatTimeAgo = useCallback((milliseconds) => {
         if (milliseconds === null || milliseconds < 0) return 'N/A';
         if (milliseconds < 30000) return 'just now';
@@ -66,6 +83,11 @@ function App() {
         return `${seconds} sec${seconds !== 1 ? 's' : ''} ago`;
     }, []);
 
+    /**
+     * Formats a duration in milliseconds into a human-readable string (e.g., "1 day, 2 hr, 30 min").
+     * @param {number | null} milliseconds - The duration in milliseconds.
+     * @returns {string} The formatted time duration string or 'N/A' if input is invalid. Returns "0 sec" if milliseconds is 0.
+     */
     const formatTimeDuration = useCallback((milliseconds) => {
         if (milliseconds === null || milliseconds < 0) return 'N/A';
         const totalSeconds = Math.floor(milliseconds / 1000);
@@ -82,6 +104,11 @@ function App() {
         return parts.join(', ');
     }, []);
 
+    /**
+     * Returns a hex color code based on earthquake magnitude.
+     * @param {number | null | undefined} magnitude - The earthquake magnitude.
+     * @returns {string} A hex color code string.
+     */
     const getMagnitudeColor = useCallback((magnitude) => {
         if (magnitude === null || magnitude === undefined) return '#94A3B8';
         if (magnitude < 1.0) return '#67E8F9';
@@ -94,6 +121,11 @@ function App() {
         return '#B91C1C';
     }, []);
 
+    /**
+     * Returns Tailwind CSS class strings for background and text color based on earthquake magnitude.
+     * @param {number | null | undefined} magnitude - The earthquake magnitude.
+     * @returns {string} Tailwind CSS class strings.
+     */
     const getMagnitudeColorStyle = useCallback((magnitude) => {
         if (magnitude === null || magnitude === undefined) return 'bg-slate-600 text-slate-100';
         if (magnitude < 1.0) return 'bg-cyan-800 bg-opacity-50 text-cyan-100';
@@ -129,6 +161,11 @@ function App() {
         return REGIONS[REGIONS.length - 1];
     }, [REGIONS]);
 
+    /**
+     * Calculates various statistics from a list of earthquake objects.
+     * @param {Array<object>} earthquakes - An array of earthquake feature objects.
+     * @returns {object} An object containing calculated statistics (totalEarthquakes, averageMagnitude, etc.).
+     */
     const calculateStats = useCallback((earthquakes) => {
         const baseStats = { totalEarthquakes: 0, averageMagnitude: 'N/A', strongestMagnitude: 'N/A', significantEarthquakes: 0, feelableEarthquakes: 0, averageDepth: 'N/A', deepestEarthquake: 'N/A', averageSignificance: 'N/A', highestAlertLevel: null };
         if (!earthquakes || earthquakes.length === 0) return baseStats;
@@ -149,13 +186,51 @@ function App() {
     }, []);
 
     // --- Skeleton Components ---
+    /**
+     * A skeleton loader component for text.
+     * @param {object} props - The component's props.
+     * @param {string} [props.width='w-3/4'] - Tailwind CSS class for width.
+     * @param {string} [props.height='h-4'] - Tailwind CSS class for height.
+     * @param {string} [props.className=''] - Additional Tailwind CSS classes.
+     * @returns {JSX.Element} The rendered SkeletonText component.
+     */
     const SkeletonText = ({width = 'w-3/4', height = 'h-4', className = ''}) => <div className={`bg-slate-700 rounded ${width} ${height} animate-pulse mb-2 ${className}`}></div>;
+
+    /**
+     * A skeleton loader component for a block of content.
+     * @param {object} props - The component's props.
+     * @param {string} [props.height='h-24'] - Tailwind CSS class for height.
+     * @param {string} [props.className=''] - Additional Tailwind CSS classes.
+     * @returns {JSX.Element} The rendered SkeletonBlock component.
+     */
     const SkeletonBlock = ({height = 'h-24', className = ''}) => <div className={`bg-slate-700 rounded ${height} animate-pulse ${className}`}></div>;
+
+    /**
+     * A skeleton loader component for a list item.
+     * @returns {JSX.Element} The rendered SkeletonListItem component.
+     */
     const SkeletonListItem = () => <div className="flex items-center justify-between p-2 bg-slate-700 rounded animate-pulse mb-2"><SkeletonText width="w-1/2"/><SkeletonText width="w-1/4"/></div>;
+
+    /**
+     * A skeleton loader component for a table row.
+     * @param {object} props - The component's props.
+     * @param {number} [props.cols=4] - Number of columns in the row.
+     * @returns {JSX.Element} The rendered SkeletonTableRow component.
+     */
     const SkeletonTableRow = ({cols = 4}) => (<tr className="animate-pulse bg-slate-700">{[...Array(cols)].map((_, i) => (<td key={i} className="px-3 py-2 sm:px-4 whitespace-nowrap"><SkeletonText width="w-full"/></td>))}</tr>);
 
     // --- Sub-Components (Memoized) ---
 
+    /**
+     * A React component that displays a banner with the time since the last major earthquake.
+     * @param {object} props - The component's props.
+     * @param {object | null} props.lastMajorQuake - The last major earthquake object.
+     * @param {number | null} props.timeBetweenPreviousMajorQuakes - Time in milliseconds between the last two major quakes.
+     * @param {boolean} props.isLoadingInitial - Whether initial data is loading.
+     * @param {boolean} props.isLoadingMonthly - Whether monthly data is loading.
+     * @param {number} props.majorQuakeThreshold - The magnitude threshold for a major quake.
+     * @returns {JSX.Element} The rendered TimeSinceLastMajorQuakeBanner component.
+     */
     const TimeSinceLastMajorQuakeBanner = React.memo(({
                                                           lastMajorQuake,
                                                           timeBetweenPreviousMajorQuakes,
@@ -211,6 +286,15 @@ function App() {
         </div>);
     });
 
+    /**
+     * A React component that displays a card with summary statistics for a given period.
+     * @param {object} props - The component's props.
+     * @param {string} props.title - The title of the card.
+     * @param {Array<object> | null} props.currentPeriodData - Earthquake data for the current period.
+     * @param {Array<object> | null} [props.previousPeriodData=null] - Earthquake data for the previous period (for trend comparison).
+     * @param {boolean} props.isLoading - Whether the data is currently loading.
+     * @returns {JSX.Element} The rendered SummaryStatisticsCard component.
+     */
     const SummaryStatisticsCard = React.memo(({title, currentPeriodData, previousPeriodData = null, isLoading}) => {
         const cardBg = "bg-slate-700"; const textColor = "text-slate-300"; const titleColor = "text-indigo-400"; const statBoxBg = "bg-slate-800"; const statValueColor = "text-sky-400"; const statLabelColor = "text-slate-400"; const borderColor = "border-slate-600";
         if (isLoading || currentPeriodData === null) {
@@ -237,6 +321,14 @@ function App() {
         return (<div className={`${cardBg} p-4 rounded-lg border ${borderColor} shadow-md`}> <h3 className={`text-lg font-semibold mb-3 ${titleColor}`}>{title}</h3> {(currentPeriodData.length === 0 && ["Summary (Last Hour)", "Summary (Last 24 Hours)", "Overview (Last 24 Hours)"].includes(title)) && ( <p className={`${textColor} text-center py-3 text-sm`}>No earthquakes recorded in this period.</p>)} {currentPeriodData.length > 0 && ( <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">{statsToDisplay.map(stat => ( <div key={stat.label} className={`${statBoxBg} p-2 rounded-lg text-center border border-slate-700`}> <p className={`text-lg md:text-xl font-bold ${statValueColor}`}>{stat.value}{stat.trend}</p> <p className={`text-xs ${statLabelColor}`}>{stat.label}</p> </div>))}</div>)}</div>);
     });
 
+    /**
+     * A React component that displays a list of earthquake counts by region.
+     * @param {object} props - The component's props.
+     * @param {Array<object> | null} props.earthquakes - An array of earthquake feature objects.
+     * @param {string} [props.titleSuffix='(Last 30 Days)'] - Suffix for the component's title.
+     * @param {boolean} props.isLoading - Whether the data is currently loading.
+     * @returns {JSX.Element | null} The rendered RegionalDistributionList component, or null if no data for 'Last Hour'.
+     */
     const RegionalDistributionList = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
         const cardBg = "bg-slate-700"; const textColor = "text-slate-300"; const titleColor = "text-indigo-400"; const itemBg = "bg-slate-800"; const itemHoverBg = "hover:bg-slate-600"; const countColor = "text-sky-400"; const borderColor = "border-slate-600";
         const regionalData = useMemo(() => {
@@ -255,6 +347,14 @@ function App() {
         return (<div className={`${cardBg} p-3 rounded-lg mt-4 border ${borderColor} shadow-md`}> <h3 className={`text-md font-semibold mb-2 ${titleColor}`}>Regional Distribution {titleSuffix}</h3> <ul className="space-y-1 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">{regionalData.map(region => (<li key={region.name} className={`flex items-center justify-between p-1.5 ${itemBg} rounded ${itemHoverBg} transition-colors`}> <div className="flex items-center min-w-0 mr-2"><span className="w-3 h-3 rounded-sm mr-2 flex-shrink-0" style={{backgroundColor: region.color}}></span><span className={`text-xs ${textColor} truncate`} title={region.name}>{region.name}</span></div> <span className={`text-xs font-medium ${countColor} flex-shrink-0`}>{region.count}</span></li>))}</ul> </div>);
     });
 
+    /**
+     * A React component that displays an SVG bar chart of earthquake magnitude distribution.
+     * @param {object} props - The component's props.
+     * @param {Array<object> | null} props.earthquakes - An array of earthquake feature objects.
+     * @param {string} [props.titleSuffix='(Last 30 Days)'] - Suffix for the component's title.
+     * @param {boolean} props.isLoading - Whether the data is currently loading.
+     * @returns {JSX.Element} The rendered MagnitudeDistributionSVGChart component.
+     */
     const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
         const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const barCountLabelColor = "text-slate-300"; const borderColor = "border-slate-600";
         const magnitudeRanges = useMemo(() => [
@@ -282,6 +382,15 @@ function App() {
         return (<div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}> <h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Magnitude Distribution {titleSuffix}</h3> <svg width="100%" height={chartHeight + xAxisLabelOffset} viewBox={`0 0 ${svgWidth} ${chartHeight + xAxisLabelOffset}`} className="overflow-visible"> <text transform={`translate(${yAxisLabelOffset / 3}, ${chartHeight / 2}) rotate(-90)`} textAnchor="middle" className={`text-xs fill-current ${axisLabelColor}`}>Count </text> <text x={yAxisLabelOffset + (svgWidth - yAxisLabelOffset) / 2} y={chartHeight + xAxisLabelOffset - 5} textAnchor="middle" className={`text-xs fill-current ${axisLabelColor}`}>Magnitude Range </text> {yAxisLabels.map((l, i) => { const yP = chartHeight - (l / (maxCount > 0 ? maxCount : 1) * chartHeight); return (<g key={`y-mag-${i}`}> <text x={yAxisLabelOffset - 5} y={yP + 4} textAnchor="end" className={`text-xs fill-current ${tickLabelColor}`}>{l}</text> <line x1={yAxisLabelOffset} y1={yP} x2={svgWidth} y2={yP} stroke="#475569" strokeDasharray="2,2"/> </g>); })} {data.map((item, i) => { const bH = maxCount > 0 ? (item.count / maxCount) * chartHeight : 0; const x = yAxisLabelOffset + i * (barWidth + barPadding); const y = chartHeight - bH; return (<g key={item.name}><title>{`${item.name}: ${item.count}`}</title> <rect x={x} y={y} width={barWidth} height={bH} fill={item.color} className="transition-all duration-300 ease-in-out hover:opacity-75"/> <text x={x + barWidth / 2} y={chartHeight + 15} textAnchor="middle" className={`text-xs fill-current ${tickLabelColor}`}>{item.name}</text> <text x={x + barWidth / 2} y={y - 5 > 10 ? y - 5 : 10} textAnchor="middle" className={`text-xs font-medium fill-current ${barCountLabelColor}`}>{item.count > 0 ? item.count : ''}</text> </g>); })} </svg> </div>);
     });
 
+    /**
+     * A React component that displays an SVG bar chart of earthquake frequency over a timeline.
+     * @param {object} props - The component's props.
+     * @param {Array<object> | null} props.earthquakes - An array of earthquake feature objects.
+     * @param {number} [props.days=7] - The number of days to display on the timeline.
+     * @param {string} [props.titleSuffix='(Last 7 Days)'] - Suffix for the component's title.
+     * @param {boolean} props.isLoading - Whether the data is currently loading.
+     * @returns {JSX.Element} The rendered EarthquakeTimelineSVGChart component.
+     */
     const EarthquakeTimelineSVGChart = React.memo(({earthquakes, days = 7, titleSuffix = "(Last 7 Days)", isLoading}) => {
         const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const barCountLabelColor = "text-slate-300"; const barFillColor = "#818CF8"; const borderColor = "border-slate-600";
         const data = useMemo(() => { if (!earthquakes) return []; const countsByDay = {}; const today = new Date(); today.setHours(0, 0, 0, 0); const startDate = new Date(today); startDate.setDate(today.getDate() - (days - 1)); for (let i = 0; i < days; i++) { const d = new Date(startDate); d.setDate(startDate.getDate() + i); countsByDay[d.toLocaleDateString([], {month: 'short', day: 'numeric'})] = 0; } earthquakes.forEach(q => { const eD = new Date(q.properties.time); if (eD >= startDate && eD <= new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1)) { const dS = eD.toLocaleDateString([], {month: 'short', day: 'numeric'}); if (countsByDay.hasOwnProperty(dS)) countsByDay[dS]++; } }); return Object.entries(countsByDay).map(([date, count]) => ({date, count})); }, [earthquakes, days]);
@@ -292,6 +401,15 @@ function App() {
         return (<div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}> <h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Earthquake Frequency {titleSuffix}</h3>  <svg width="100%" height={chartHeight + xOffset} viewBox={`0 0 ${svgW} ${chartHeight + xOffset}`} className="overflow-visible"> <text transform={`translate(${yOffset / 3},${chartHeight / 2}) rotate(-90)`} textAnchor="middle" className={`text-xs fill-current ${axisLabelColor}`}>Count </text> <text x={yOffset + (svgW - yOffset) / 2} y={chartHeight + xOffset - 5} textAnchor="middle" className={`text-xs fill-current ${axisLabelColor}`}>Date </text> {yLbls.map((l, i) => { const yP = chartHeight - (l / (maxC > 0 ? maxC : 1) * chartHeight); return (<g key={`y-tl-${i}`}> <text x={yOffset - 5} y={yP + 4} textAnchor="end" className={`text-xs fill-current ${tickLabelColor}`}>{l}</text> <line x1={yOffset} y1={yP} x2={svgW} y2={yP} stroke="#475569" strokeDasharray="2,2"/> </g>); })} {data.map((item, i) => { const bH = maxC > 0 ? (item.count / maxC) * chartHeight : 0; const x = yOffset + i * (barW + barP); const y = chartHeight - bH; return (<g key={item.date}><title>{`${item.date}: ${item.count}`}</title> <rect x={x} y={y} width={barW} height={bH} fill={barFillColor} className="transition-all duration-300 ease-in-out hover:opacity-75"/> {i % lblInt === 0 && (<text x={x + barW / 2} y={chartHeight + 15} textAnchor="middle" className={`text-xs fill-current ${tickLabelColor}`}>{item.date}</text>)} <text x={x + barW / 2} y={y - 5 > 10 ? y - 5 : 10} textAnchor="middle" className={`text-xs font-medium fill-current ${barCountLabelColor}`}>{item.count > 0 ? item.count : ''}</text> </g>); })} </svg> </div>);
     });
 
+    /**
+     * A React component that displays an SVG scatter plot of earthquake magnitude versus depth.
+     * It uses a ResizeObserver to dynamically adjust chart dimensions.
+     * @param {object} props - The component's props.
+     * @param {Array<object> | null} props.earthquakes - An array of earthquake feature objects.
+     * @param {string} [props.titleSuffix='(Last 30 Days)'] - Suffix for the component's title.
+     * @param {boolean} props.isLoading - Whether the data is currently loading.
+     * @returns {JSX.Element} The rendered MagnitudeDepthScatterSVGChart component.
+     */
     const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
         const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const gridLineColor = "text-slate-600"; const borderColor = "border-slate-600";
         const chartContainerRef = useRef(null);
@@ -399,6 +517,20 @@ function App() {
         );
     });
 
+    /**
+     * A React component that displays a paginated and sortable table of earthquake data.
+     * @param {object} props - The component's props.
+     * @param {string} props.title - The title of the table.
+     * @param {Array<object> | null} props.earthquakes - An array of earthquake feature objects.
+     * @param {boolean} props.isLoading - Whether the data is currently loading.
+     * @param {function} props.onQuakeClick - Callback function when an earthquake row is clicked.
+     * @param {number} [props.itemsPerPage=10] - Number of items to display per page.
+     * @param {string} [props.defaultSortKey='time'] - The default key to sort by.
+     * @param {string} [props.initialSortDirection='descending'] - The initial sort direction ('ascending' or 'descending').
+     * @param {string} [props.periodName] - Name of the period for display purposes (e.g., "last 24 hours").
+     * @param {function} [props.filterPredicate] - An optional function to filter earthquakes before display.
+     * @returns {JSX.Element} The rendered PaginatedEarthquakeTable component.
+     */
     const PaginatedEarthquakeTable = React.memo(({ title, earthquakes, isLoading, onQuakeClick, itemsPerPage = 10, defaultSortKey = 'time', initialSortDirection = 'descending', periodName, filterPredicate }) => {
         const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const tableHeaderBg = "bg-slate-800"; const tableHeaderTextColor = "text-slate-400"; const tableRowHover = "hover:bg-slate-600"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-slate-300 border-slate-500 disabled:opacity-40"; const paginationText = "text-slate-400";
         const [sortConfig, setSortConfig] = useState({key: defaultSortKey, direction: initialSortDirection}); const [currentPage, setCurrentPage] = useState(1);
@@ -1028,7 +1160,25 @@ function App() {
 
     // --- Main Render ---
 
-    // Define FeedsPageLayout component here, within App's scope or passed as prop if defined outside
+    /**
+     * A layout component for the feeds page, handling SEO and presentation of feed-specific content.
+     * @param {object} props - The component's props.
+     * @param {string} props.currentFeedTitle - Title of the current feed.
+     * @param {string} props.activeFeedPeriod - Identifier for the active feed period (e.g., 'last_24_hours').
+     * @param {Array<object> | null} props.currentFeedData - Data for the current feed.
+     * @param {boolean} props.currentFeedisLoading - Loading state for the current feed.
+     * @param {Array<object> | null} props.previousDataForCurrentFeed - Data for the previous period, for trend comparison.
+     * @param {function} props.handleQuakeClick - Callback for when an earthquake is clicked.
+     * @param {function} props.setActiveFeedPeriod - Callback to set the active feed period.
+     * @param {function} props.handleLoadMonthlyData - Callback to load monthly data.
+     * @param {boolean} props.hasAttemptedMonthlyLoad - Whether an attempt to load monthly data has been made.
+     * @param {boolean} props.isLoadingMonthly - Loading state for monthly data.
+     * @param {Array<object>} props.allEarthquakes - All earthquake data (used if monthly is loaded).
+     * @param {function} props.getFeedPageSeoInfo - Helper function to get SEO information for the feed page.
+     * @param {React.ComponentType} props.SummaryStatisticsCardComponent - The SummaryStatisticsCard component.
+     * @param {React.ComponentType} props.PaginatedEarthquakeTableComponent - The PaginatedEarthquakeTable component.
+     * @returns {JSX.Element} The rendered FeedsPageLayout component.
+     */
     const FeedsPageLayout = ({
         currentFeedTitle, activeFeedPeriod, currentFeedData, currentFeedisLoading,
         previousDataForCurrentFeed, handleQuakeClick, setActiveFeedPeriod,
@@ -1471,7 +1621,12 @@ function App() {
     );
 }
 
-// New component to handle the detail modal via routing
+/**
+ * A component that wraps EarthquakeDetailView and handles its presentation as a modal
+ * controlled by routing parameters. It extracts the detail URL from the route and
+ * manages the modal's open/close state based on navigation.
+ * @returns {JSX.Element} The rendered EarthquakeDetailView component configured as a modal.
+ */
 const EarthquakeDetailModal = () => {
     const { detailUrlParam } = useParams();
     const navigate = useNavigate();

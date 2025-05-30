@@ -3,6 +3,13 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { FaGlobe, FaListAlt, FaStream, FaBook } from 'react-icons/fa';
 
+/**
+ * A React component that renders the bottom navigation bar for mobile views.
+ * It uses NavLink from 'react-router-dom' to provide navigation to different
+ * sections of the application: Globe, Overview, Feeds, and Learn.
+ * The active tab is highlighted.
+ * @returns {JSX.Element} The rendered BottomNav component.
+ */
 const BottomNav = () => { // Removed activeMobileView and setActiveMobileView props
     const tabs = [
         { name: 'Globe', path: '/', icon: <FaGlobe /> },

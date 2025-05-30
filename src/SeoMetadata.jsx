@@ -2,6 +2,21 @@
 import React, { useEffect } from 'react';
 import PropTypes from 'prop-types'; // Optional: for prop type validation
 
+/**
+ * A React component that dynamically updates SEO-related meta tags in the document's head.
+ * It manages title, description, keywords, and Open Graph / Twitter card metadata.
+ * This component does not render any visible elements to the DOM.
+ * @param {object} props - The component's props.
+ * @param {string} props.title - The title of the page, used for `<title>` and `og:title`, `twitter:title`.
+ * @param {string} props.description - The meta description, used for `description`, `og:description`, `twitter:description`.
+ * @param {string} [props.imageUrl] - URL of an image for `og:image` and `twitter:image`.
+ * @param {string} [props.pageUrl] - The canonical URL of the page for `og:url` and `twitter:url`. Defaults to `window.location.href`.
+ * @param {string} [props.type="website"] - The Open Graph type (e.g., "website", "article").
+ * @param {string} [props.publishedTime] - Publication time for articles (ISO 8601 format), used for `article:published_time`.
+ * @param {string} [props.modifiedTime] - Modification time for articles (ISO 8601 format), used for `article:modified_time`.
+ * @param {string} [props.keywords] - Comma-separated keywords for the `keywords` meta tag.
+ * @returns {null} This component does not render any DOM elements.
+ */
 const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', publishedTime, modifiedTime, keywords }) => {
   useEffect(() => {
     document.title = title;
