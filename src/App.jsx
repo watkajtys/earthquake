@@ -1,7 +1,9 @@
 // src/App.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Routes, Route, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
+// useEffect was already imported, no change needed for that. (useLocation added)
+// useState, useCallback are also already imported.
 import EarthquakeDetailView from './EarthquakeDetailView';
 import InteractiveGlobeView from './InteractiveGlobeView';
 import NotableQuakeFeature from './NotableQuakeFeature';
@@ -127,6 +129,8 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
  */
 function App() {
 
+    const [detailPageSeoData, setDetailPageSeoData] = useState(null);
+    const location = useLocation(); // Import useLocation from react-router-dom
     const [appRenderTrigger, setAppRenderTrigger] = useState(0);
     const [activeFeedPeriod, setActiveFeedPeriod] = useState('last_24_hours'); // NEW STATE - default to 24 hours
 
@@ -854,6 +858,13 @@ function App() {
     }, [activeFeedPeriod, prev24HourData, prev7DayData, prev14DayData]);
 
     // --- Effect Hooks ---
+    // Effect to clear detailPageSeoData when navigating away from a quake detail page
+    useEffect(() => {
+        if (!location.pathname.startsWith('/quake/')) {
+            setDetailPageSeoData(null);
+        }
+    }, [location.pathname, setDetailPageSeoData]); // Added setDetailPageSeoData to dependency array
+
     useEffect(() => {
         let isMounted = true;
         const orchestrateInitialDataLoad = async () => {
@@ -1360,6 +1371,32 @@ function App() {
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 
+    const handleSeoDataForDetailPage = useCallback((data) => {
+      if (data) {
+        const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
+        // Construct a more specific title if possible
+        let seoTitle = data.title || 'Earthquake Event Details';
+        if (data.mag && data.place) {
+            seoTitle = `M ${parseFloat(data.mag).toFixed(1)} - ${data.place} | Seismic Monitor`;
+        } else if (data.title) {
+            seoTitle = `${data.title} | Seismic Monitor`;
+        }
+
+        setDetailPageSeoData({
+          title: seoTitle,
+          description: `Detailed information for earthquake: ${data.title}. Magnitude: ${data.mag || 'N/A'}, Location: ${data.place || 'N/A'}, Time: ${data.time ? new Date(data.time).toISOString() : 'N/A'}. Updated: ${data.updated ? new Date(data.updated).toISOString() : 'N/A'}. Depth: ${data.depth ? data.depth.toFixed(1) + ' km' : 'N/A'}.`,
+          imageUrl: data.shakemapIntensityImageUrl,
+          pageUrl: pageUrl,
+          type: 'article', // Individual earthquake pages are like articles
+          publishedTime: data.time ? new Date(data.time).toISOString() : undefined,
+          modifiedTime: data.updated ? new Date(data.updated).toISOString() : undefined,
+          keywords: `earthquake, M ${data.mag}, ${data.place}, seismic event, earthquake details, magnitude, depth`
+        });
+      } else {
+        setDetailPageSeoData(null); // Clear SEO data if no data is provided (e.g., on modal close)
+      }
+    }, []);
+
     // --- Full Screen Loader ---
     if (showFullScreenLoader) {
         return ( <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white antialiased"> <svg className="animate-spin h-12 w-12 text-indigo-400 mb-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"> <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle> <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> </svg> <p className="text-2xl font-light text-indigo-300 mb-3">{currentLoadingMessages[loadingMessageIndex]}</p> <div className="w-1/3 h-1 bg-indigo-700 rounded-full overflow-hidden mt-2"> <div className="h-full bg-indigo-400 animate-pulse-short" style={{ animationDuration: `${LOADING_MESSAGE_INTERVAL_MS * INITIAL_LOADING_MESSAGES.length / 1000}s`}}></div> </div> <style>{`@keyframes pulseShort{0%{width:0%}100%{width:100%}}.animate-pulse-short{animation:pulseShort linear infinite}`}</style> <p className="text-xs text-slate-500 mt-10">Seismic Data Visualization</p> </div> );
@@ -1472,9 +1509,10 @@ function App() {
                                     title="Global Seismic Activity Monitor | Real-time Earthquake Data"
                                     description="Track live earthquakes around the world with our interactive globe. Get real-time data, view significant quake details, and explore seismic activity trends."
                                     keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology"
-                                    imageUrl="/vite.svg"
+                                    imageUrl="/vite.svg" // Assuming vite.svg is in public folder
                                     type="website"
                                 />
+                                {/* ... rest of the / route element ... */}
                                 <div className="lg:block h-full w-full">
                                     <InteractiveGlobeView
                                         earthquakes={globeEarthquakes}
@@ -1529,7 +1567,9 @@ function App() {
                                     imageUrl="/vite.svg"
                                     type="website"
                                 />
+                                {/* ... rest of the /overview route element ... */}
                                 <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
+                                    {/* ... content from your existing /overview route ... */}
                                     <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
                                         Overview
                                     </h2>
@@ -1689,7 +1729,9 @@ function App() {
                                     imageUrl="/vite.svg"
                                     type="website"
                                 />
+                                {/* ... rest of the /learn route element ... */}
                                 <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
+                                   {/* ... content from your existing /learn route ... */}
                                     <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
                                         Learn About Earthquakes
                                     </h2>
@@ -1708,7 +1750,30 @@ function App() {
                                 </div>
                             </>
                         } />
-                        <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModal />} />
+                        <Route path="/quake/:detailUrlParam" element={
+                            <>
+                                {detailPageSeoData ? (
+                                    <SeoMetadata
+                                        title={detailPageSeoData.title}
+                                        description={detailPageSeoData.description}
+                                        imageUrl={detailPageSeoData.imageUrl}
+                                        pageUrl={detailPageSeoData.pageUrl}
+                                        type={detailPageSeoData.type}
+                                        publishedTime={detailPageSeoData.publishedTime}
+                                        modifiedTime={detailPageSeoData.modifiedTime}
+                                        keywords={detailPageSeoData.keywords}
+                                    />
+                                ) : (
+                                    // Optional: Fallback SEO for when detailPageSeoData is null (e.g., loading)
+                                    <SeoMetadata
+                                        title="Loading Earthquake Details | Seismic Monitor"
+                                        description="Loading detailed information for the selected earthquake event."
+                                        keywords="earthquake, seismic event, loading"
+                                    />
+                                )}
+                                <EarthquakeDetailModal />
+                            </>
+                        } />
                     </Routes>
                 </main>
 
@@ -1897,10 +1962,27 @@ const EarthquakeDetailModal = () => {
     const detailUrl = decodeURIComponent(detailUrlParam);
 
     const handleClose = () => {
-        navigate(-1); // Go back to the previous page
+        navigate(-1);
+        // Clear SEO data when modal is closed by navigating back
+        // This will be handled by the route change effect in step 3 of the plan
     };
 
-    return <EarthquakeDetailView detailUrl={detailUrl} onClose={handleClose} />;
+    // Reset SEO data when the detailUrlParam changes (new quake selected or modal closed)
+    // This is important if the user navigates directly between quake pages or closes the modal.
+    useEffect(() => {
+        if (!detailUrlParam) {
+            setDetailPageSeoData(null);
+        }
+        // If navigating to a new quake, the onDataLoadedForSeo will set the new data.
+        // If just closing, we want to ensure it's cleared for the underlying page.
+        return () => {
+            // This cleanup might be too aggressive if we want SEO to persist until new one loads
+            // For now, we'll rely on the route change effect in the main App component
+            // to clear it when navigating away from a quake page.
+        };
+    }, [detailUrlParam, setDetailPageSeoData]); // Added setDetailPageSeoData to dependencies
+
+    return <EarthquakeDetailView detailUrl={detailUrl} onClose={handleClose} onDataLoadedForSeo={handleSeoDataForDetailPage} />;
 };
 
 export default App;
