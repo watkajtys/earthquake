@@ -1,7 +1,18 @@
 // src/NotableQuakeFeature.jsx
 import React, { useState, useEffect } from 'react';
 
-// Curated list of historically significant quakes as a fallback or secondary display
+/**
+ * @const {Array<object>} historicalNotableQuakes
+ * A curated list of historically significant earthquakes, used as a fallback or secondary display
+ * when no recent dynamic featured quake is available. Each object contains:
+ * @property {string} id - A unique identifier for the historical quake.
+ * @property {string} name - The common name or location of the earthquake.
+ * @property {number} year - The year the earthquake occurred.
+ * @property {number} mag - The magnitude of the earthquake.
+ * @property {string} source - Indicates the source as 'Historical'.
+ * @property {string} url - A URL to a page with more information about the quake.
+ * @property {string} description - A brief description of the earthquake's significance.
+ */
 const historicalNotableQuakes = [
     { id: 'nqh1', name: "Valdivia, Chile", year: 1960, mag: 9.5, source: 'Historical', url: 'https://earthquake.usgs.gov/earthquakes/eventpage/official19600522191120_30/executive', description: "Most powerful earthquake ever recorded." },
     { id: 'nqh2', name: "Anchorage, Alaska", year: 1964, mag: 9.2, source: 'Historical', url: 'https://earthquake.usgs.gov/earthquakes/eventpage/official19640328033616_26/executive', description: "Second largest instrumentally recorded quake." },
@@ -9,6 +20,16 @@ const historicalNotableQuakes = [
     { id: 'nqh4', name: "Tōhoku, Japan", year: 2011, mag: 9.1, source: 'Historical', url: 'https://earthquake.usgs.gov/earthquakes/eventpage/official20110311054624120_30/executive', description: "Caused a massive tsunami and nuclear disaster." },
 ];
 
+/**
+ * A React component that displays a feature card for a notable earthquake.
+ * It can show a dynamically provided recent significant quake or cycle through a predefined list of historical quakes if no dynamic quake is available.
+ * @param {object} props - The component's props.
+ * @param {object | null} props.dynamicFeaturedQuake - The dynamically fetched latest significant earthquake object.
+ * @param {boolean} props.isLoadingDynamicQuake - Flag indicating if the dynamic quake data is currently loading.
+ * @param {function(object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card is clicked. Receives the quake data object.
+ * @param {function(number):string} props.getMagnitudeColorFunc - Function that returns a color string based on earthquake magnitude.
+ * @returns {JSX.Element} The rendered NotableQuakeFeature component.
+ */
 const NotableQuakeFeature = ({
                                  dynamicFeaturedQuake, // This will be lastMajorQuake from App.jsx
                                  isLoadingDynamicQuake,
