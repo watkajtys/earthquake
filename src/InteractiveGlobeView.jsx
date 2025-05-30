@@ -2,29 +2,52 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
 
-const makeColorDuller = (rgbaColor, opacityFactor) => {
-    if (typeof rgbaColor !== 'string' || !rgbaColor.startsWith('rgba(') || !rgbaColor.endsWith(')')) {
-        return 'rgba(128,128,128,0.5)'; // Default fallback color
+const makeColorDuller = (colorString, opacityFactor) => {
+    const fallbackColor = 'rgba(128,128,128,0.5)';
+    let r, g, b, currentAlpha = 1.0;
+
+    if (typeof colorString !== 'string') {
+        return fallbackColor;
     }
+
     try {
-        const parts = rgbaColor.substring(5, rgbaColor.length - 1).split(',');
-        if (parts.length !== 4) {
-            return 'rgba(128,128,128,0.5)'; // Default fallback color
+        if (colorString.startsWith('#')) {
+            let hex = colorString.slice(1);
+            if (hex.length === 3) {
+                hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+            }
+            if (hex.length === 6) {
+                r = parseInt(hex.substring(0, 2), 16);
+                g = parseInt(hex.substring(2, 4), 16);
+                b = parseInt(hex.substring(4, 6), 16);
+                currentAlpha = 1.0; // Hex implies full opacity initially
+            } else {
+                return fallbackColor; // Invalid hex length
+            }
+        } else if (colorString.startsWith('rgba(') && colorString.endsWith(')')) {
+            const parts = colorString.substring(5, colorString.length - 1).split(',');
+            if (parts.length === 4) {
+                r = parseInt(parts[0].trim(), 10);
+                g = parseInt(parts[1].trim(), 10);
+                b = parseInt(parts[2].trim(), 10);
+                currentAlpha = parseFloat(parts[3].trim());
+            } else {
+                return fallbackColor; // Invalid rgba format
+            }
+        } else {
+            return fallbackColor; // Not a recognized format
         }
-        const r = parseInt(parts[0].trim(), 10);
-        const g = parseInt(parts[1].trim(), 10);
-        const b = parseInt(parts[2].trim(), 10);
-        const a = parseFloat(parts[3].trim());
 
-        if (isNaN(r) || isNaN(g) || isNaN(b) || isNaN(a)) {
-            return 'rgba(128,128,128,0.5)'; // Default fallback color if parsing fails
+        if (isNaN(r) || isNaN(g) || isNaN(b) || isNaN(currentAlpha)) {
+            return fallbackColor; // Parsing resulted in NaN
         }
 
-        const newAlpha = Math.max(0, Math.min(1, a * opacityFactor));
-        return `rgba(${r},${g},${b},${newAlpha.toFixed(3)})`; // toFixed(3) for reasonable precision
+        const newAlpha = Math.max(0, Math.min(1, currentAlpha * opacityFactor));
+        return `rgba(${r},${g},${b},${newAlpha.toFixed(3)})`;
+
     } catch (error) {
-        console.error("Error parsing color in makeColorDuller:", error);
-        return 'rgba(128,128,128,0.5)'; // Default fallback color on any other error
+        console.error("Error processing color in makeColorDuller:", colorString, error);
+        return fallbackColor; // Catch-all for any unexpected errors during parsing/processing
     }
 };
 
@@ -132,7 +155,7 @@ const InteractiveGlobeView = ({
                     return {
                         ...p,
                         radius: Math.max(0.55, (prevMagValue / 7) + 0.35), // Slightly smaller than latest highlighted
-                        color: '#B0BEC5', // Distinct grey
+                        color: getMagnitudeColorFunc(prevMagValue),
                         altitude: 0.025, // Slightly different altitude
                         label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
                         type: 'previous_major_quake'
@@ -149,7 +172,7 @@ const InteractiveGlobeView = ({
                         lng: previousMajorQuake.geometry.coordinates[0],
                         altitude: 0.025,
                         radius: Math.max(0.55, (prevMagValue / 7) + 0.35),
-                        color: '#B0BEC5', // Distinct grey
+                        color: getMagnitudeColorFunc(prevMagValue),
                         label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
                         quakeData: previousMajorQuake,
                         type: 'previous_major_quake'
