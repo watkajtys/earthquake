@@ -61,21 +61,22 @@ const makeColorDuller = (colorString, opacityFactor) => {
  * A React component that renders an interactive 3D globe displaying earthquake data,
  * coastlines, and tectonic plate boundaries. It uses 'react-globe.gl'.
  * @param {object} props - The component's props.
- * @param {Array<object>} props.earthquakes - An array of earthquake data objects to plot on the globe.
- * @param {function(object):void} props.onQuakeClick - Callback function triggered when an earthquake point is clicked. Receives the quake data object.
- * @param {function(number):string} props.getMagnitudeColorFunc - Function that returns a color string based on earthquake magnitude.
- * @param {object} [props.coastlineGeoJson] - GeoJSON data for rendering coastlines.
- * @param {object} [props.tectonicPlatesGeoJson] - GeoJSON data for rendering tectonic plate boundaries.
- * @param {string} [props.highlightedQuakeId] - The ID of an earthquake to be visually highlighted on the globe.
- * @param {object} [props.latestMajorQuakeForRing] - Data for the latest major earthquake, used to display a visual ring indicator.
- * @param {object} [props.previousMajorQuake] - Data for the previously recorded major earthquake, used to display a visual ring indicator.
+ * @param {Array<object>} [props.activeClusters=[]] - Array of active earthquake clusters. Each cluster is an array of earthquake objects. Used to visualize cluster centroids or individual quakes within them.
+ * @param {boolean} [props.allowUserDragRotation=true] - Whether to allow users to manually rotate the globe.
  * @param {string} [props.atmosphereColor="rgba(100,100,255,0.3)"] - Color of the globe's atmosphere.
+ * @param {object} [props.coastlineGeoJson] - GeoJSON data for rendering coastlines.
+ * @param {number} [props.defaultFocusAltitude=2.5] - Initial altitude (zoom level) for the globe's camera focus.
  * @param {number} [props.defaultFocusLat=20] - Initial latitude for the globe's camera focus.
  * @param {number} [props.defaultFocusLng=0] - Initial longitude for the globe's camera focus.
- * @param {number} [props.defaultFocusAltitude=2.5] - Initial altitude (zoom level) for the globe's camera focus.
- * @param {boolean} [props.allowUserDragRotation=true] - Whether to allow users to manually rotate the globe.
+ * @param {Array<object>} props.earthquakes - An array of earthquake data objects to plot on the globe.
  * @param {boolean} [props.enableAutoRotation=true] - Whether the globe should auto-rotate.
+ * @param {function(number):string} props.getMagnitudeColorFunc - Function that returns a color string based on earthquake magnitude.
  * @param {number} [props.globeAutoRotateSpeed=0.1] - Speed of the auto-rotation.
+ * @param {string} [props.highlightedQuakeId] - The ID of an earthquake to be visually highlighted on the globe.
+ * @param {object} [props.latestMajorQuakeForRing] - Data for the latest major earthquake, used to display a visual ring indicator.
+ * @param {function(object):void} props.onQuakeClick - Callback function triggered when an earthquake point is clicked. Receives the quake data object.
+ * @param {object} [props.previousMajorQuake] - Data for the previously recorded major earthquake, used to display a visual ring indicator.
+ * @param {object} [props.tectonicPlatesGeoJson] - GeoJSON data for rendering tectonic plate boundaries.
  * @returns {JSX.Element} The rendered InteractiveGlobeView component.
  */
 const InteractiveGlobeView = ({

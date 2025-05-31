@@ -25,6 +25,20 @@ const getTectonicPlateStyle = (feature) => {
   };
 };
 
+/**
+ * Renders a small Leaflet map to visualize the geographic distribution of earthquakes within a cluster.
+ * It displays each earthquake as a CircleMarker, sized and colored by its magnitude,
+ * and shows tectonic plate boundaries. The map automatically adjusts its center and zoom level
+ * based on the spread of the earthquakes in the cluster.
+ *
+ * @param {object} props - The component's props.
+ * @param {object} props.cluster - The cluster data. Must contain an `originalQuakes` array.
+ * @param {Array<object>} props.cluster.originalQuakes - An array of earthquake objects. Each object is expected
+ *   to have `id`, `geometry.coordinates` (lng, lat, depth), and `properties.mag` (magnitude) and `properties.place`.
+ * @param {function} props.getMagnitudeColor - A function that takes an earthquake's magnitude
+ *   and returns a color string for its marker.
+ * @returns {JSX.Element | null} The rendered Leaflet map component or null if cluster data is invalid.
+ */
 const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
   const mapRef = useRef(null);
 

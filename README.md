@@ -162,12 +162,20 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
 The `src/` directory contains the core components of the application:
 
 -   `main.jsx`: The main entry point for the React application. It initializes the `App` component and sets up routing.
--   `App.jsx`: The root application component. It manages global state, data fetching for earthquake feeds, routing logic, and the overall layout of the application, including the globe view and sidebars.
+-   `App.jsx`: The root application component. It manages global state, data fetching for earthquake feeds, routing logic, and the overall layout of the application, including the globe view and sidebars. It also defines several key sub-components for displaying statistics and data tables.
 -   `InteractiveGlobeView.jsx`: Renders the interactive 3D globe using `react-globe.gl`. It's responsible for plotting earthquake points, coastlines, tectonic plates, and visual rings for significant quakes.
--   `EarthquakeDetailView.jsx`: A modal component that displays comprehensive information about a selected earthquake, including its properties, related products (like ShakeMap or PAGER), and explanatory diagrams.
+-   `EarthquakeMap.jsx`: Renders a 2D Leaflet map used within the `EarthquakeDetailView` to show a regional view of an earthquake's epicenter, ShakeMap, and tectonic plate boundaries.
+-   `EarthquakeDetailView.jsx`: A modal component that displays comprehensive information about a selected earthquake, including its properties, related products (like ShakeMap or PAGER), the `EarthquakeMap`, and explanatory diagrams.
+-   `ClusterDetailModal.jsx`: Displays detailed information about a cluster of earthquakes, including a list of individual seismic events within the cluster and a `ClusterMiniMap`.
+-   `ClusterDetailModalWrapper.jsx`: A wrapper component that handles the presentation of the `ClusterDetailModal` based on routing parameters.
+-   `ClusterMiniMap.jsx`: Renders a small 2D Leaflet map specifically designed to show the geographic spread of an earthquake cluster.
+-   `ClusterSummaryItem.jsx`: A UI component used to display a summary of an earthquake cluster, typically in a list format, allowing users to select a cluster for more details.
 -   `BottomNav.jsx`: Provides the primary navigation interface for mobile users, allowing access to different sections like the Globe, Overview, Feeds, and Learn.
 -   `GlobalLastMajorQuakeTimer.jsx`: Displays a live timer counting up from the last globally significant earthquake, shown prominently on the globe view.
 -   `InfoSnippet.jsx`: A reusable UI component that displays toggleable information blurbs. Used in various parts of the application to provide contextual explanations about earthquake science and data.
 -   `NotableQuakeFeature.jsx`: Displays a feature card for the most recent significant earthquake or cycles through a list of historical notable quakes.
 -   `PreviousNotableQuakeFeature.jsx`: Similar to `NotableQuakeFeature`, but specifically displays the second most recent significant earthquake.
+-   `RegionalSeismicityChart.jsx`: A component likely responsible for rendering charts related to regional earthquake activity (e.g., magnitude distribution, frequency over time for a specific region). *(Self-correction: Based on the plan, I will verify the exact functionality of this component and its JSDocs in a later step. This is an inferred description.)*
 -   `SeoMetadata.jsx`: A utility component that dynamically updates HTML meta tags (title, description, Open Graph, Twitter cards) for SEO purposes based on the current view or content.
+-   `SimplifiedDepthProfile.jsx`: A component likely used to visualize a simplified cross-section or profile illustrating the depth of an earthquake. *(Self-correction: Based on the plan, I will verify the exact functionality of this component and its JSDocs in a later step. This is an inferred description.)*
+-   `utils.js`: Contains utility functions used throughout the application, such as for calculating distances, formatting dates, and determining colors based on magnitude. (Note: This is a `.js` file, not a `.jsx` component, but crucial for understanding the project structure).

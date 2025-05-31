@@ -6,6 +6,12 @@ import ClusterDetailModal from './ClusterDetailModal';
 /**
  * Wrapper component for ClusterDetailModal to integrate with React Router.
  * It fetches cluster details based on URL parameters and handles navigation.
+ * @param {object} props - The component's props.
+ * @param {Array<object>} props.overviewClusters - An array of cluster summary objects, used to find the full cluster data. Each object should have an 'id'.
+ * @param {function} props.formatDate - Function to format timestamps into human-readable strings.
+ * @param {function} props.getMagnitudeColorStyle - Function that returns Tailwind CSS class strings for magnitude-based coloring.
+ * @param {function} [props.onIndividualQuakeSelect] - Optional callback function invoked when an individual earthquake within the cluster is selected.
+ * @returns {JSX.Element} The rendered ClusterDetailModal or a "not found" message.
  */
 function ClusterDetailModalWrapper({ overviewClusters, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
     const { clusterId } = useParams();
