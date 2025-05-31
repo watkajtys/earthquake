@@ -720,6 +720,7 @@ function App() {
     // const [activeSidebarView, setActiveSidebarView] = useState('overview_panel'); // Replaced by useSearchParams
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeClusters, setActiveClusters] = useState([]);
+    const [latestQuakeLongitude, setLatestQuakeLongitude] = useState(null);
     const activeSidebarView = searchParams.get('sidebarActiveView') || 'overview_panel';
 
     const setActiveSidebarView = (view) => {
@@ -927,6 +928,16 @@ function App() {
                     setEarthquakesLast7Days(last7DaysData);
                     const sortedForGlobe = [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
                     setGlobeEarthquakes(sortedForGlobe.slice(0, 900));
+
+                    // Find the latest earthquake from last72HoursData to set initial longitude
+                    if (last72HoursData && last72HoursData.length > 0) {
+                        const latestEarthquake = last72HoursData.reduce((latest, current) => {
+                            return (current.properties.time > latest.properties.time) ? current : latest;
+                        });
+                        if (latestEarthquake && latestEarthquake.geometry && latestEarthquake.geometry.coordinates && latestEarthquake.geometry.coordinates.length > 0) {
+                            setLatestQuakeLongitude(latestEarthquake.geometry.coordinates[0]);
+                        }
+                    }
 
                     weeklyMajorsList = weeklyData.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
                     const latestWeeklyMajor = weeklyMajorsList.length > 0 ? weeklyMajorsList[0] : null;
@@ -1474,6 +1485,7 @@ function App() {
                                 <div className="lg:block h-full w-full">
                                     <InteractiveGlobeView
                                         earthquakes={globeEarthquakes}
+                                    initialLongitude={latestQuakeLongitude}
                                     onQuakeClick={handleQuakeClick}
                                     getMagnitudeColorFunc={getMagnitudeColor}
                                     allowUserDragRotation={true}
