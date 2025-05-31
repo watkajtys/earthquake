@@ -15,11 +15,11 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
 
   const layers = [
     // Surface is handled separately in terms of drawing height calculation
-    { name: "Surface", startDepth: 0, endDepth: 0, color: "bg-green-400", textColor: "text-green-900", zIndex: 10 }, // Increased zIndex for surface
-    { name: "Sedimentary/Upper Crust", startDepth: 0, endDepth: 10, color: "bg-yellow-300", textColor: "text-yellow-800", zIndex: 4 },
-    { name: "Continental Crust", startDepth: 10, endDepth: 35, color: "bg-orange-300", textColor: "text-orange-800", zIndex: 3 },
-    { name: "Lithospheric Mantle", startDepth: 35, endDepth: 100, color: "bg-red-300", textColor: "text-red-800", zIndex: 2 },
-    { name: "Asthenosphere (Upper Mantle)", startDepth: 100, endDepth: 700, color: "bg-purple-300", textColor: "text-purple-800", zIndex: 1 },
+    { name: "Surface", startDepth: 0, endDepth: 0, color: "bg-lime-200", textColor: "text-lime-800", zIndex: 10 },
+    { name: "Sedimentary/Upper Crust", startDepth: 0, endDepth: 10, color: "bg-stone-300", textColor: "text-stone-800", zIndex: 4 },
+    { name: "Continental Crust", startDepth: 10, endDepth: 35, color: "bg-neutral-400", textColor: "text-neutral-800", zIndex: 3 },
+    { name: "Lithospheric Mantle", startDepth: 35, endDepth: 100, color: "bg-slate-500", textColor: "text-slate-100", zIndex: 2 },
+    { name: "Asthenosphere (Upper Mantle)", startDepth: 100, endDepth: 700, color: "bg-indigo-800", textColor: "text-indigo-100", zIndex: 1 },
   ];
 
   const diagramTotalRealDepthKm = 700; // Max real depth the diagram represents for scaling layers
