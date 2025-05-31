@@ -1,3 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* This is for the DivIcon itself, to ensure no default styles interfere */
+.custom-pulsing-icon {
+  background: none !important;
+  border: none !important;
+}
