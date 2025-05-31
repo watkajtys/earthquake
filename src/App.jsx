@@ -721,7 +721,7 @@ function App() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeClusters, setActiveClusters] = useState([]);
     // const [latestQuakeLongitude, setLatestQuakeLongitude] = useState(null); // Removed
-    const [globeFocusLat, setGlobeFocusLat] = useState(20); // Default latitude
+    // const [globeFocusLat, setGlobeFocusLat] = useState(20); // Default latitude - REMOVED
     const [globeFocusLng, setGlobeFocusLng] = useState(0);  // Default longitude
     const activeSidebarView = searchParams.get('sidebarActiveView') || 'overview_panel';
 
@@ -1130,16 +1130,14 @@ function App() {
     // Effect to update globe focus coordinates when lastMajorQuake changes
     useEffect(() => {
         if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.geometry.coordinates && lastMajorQuake.geometry.coordinates.length >= 2) {
-            const lat = lastMajorQuake.geometry.coordinates[1];
             const lng = lastMajorQuake.geometry.coordinates[0];
-            if (typeof lat === 'number' && !isNaN(lat) && typeof lng === 'number' && !isNaN(lng)) {
-                setGlobeFocusLat(lat);
+            if (typeof lng === 'number' && !isNaN(lng)) {
+                // setGlobeFocusLat(lat); // Removed
                 setGlobeFocusLng(lng);
             }
         }
         // If lastMajorQuake is null, we could reset to defaults here, e.g.:
         // else {
-        //   setGlobeFocusLat(20); // Default latitude
         //   setGlobeFocusLng(0);  // Default longitude
         // }
     }, [lastMajorQuake]);
@@ -1498,8 +1496,8 @@ function App() {
                                     <InteractiveGlobeView
                                         earthquakes={globeEarthquakes}
                                     // initialLongitude={latestQuakeLongitude} // Removed
-                                    defaultFocusLat={globeFocusLat} // New prop
-                                    defaultFocusLng={globeFocusLng} // New prop
+                                    defaultFocusLat={20} // Static default latitude
+                                    defaultFocusLng={globeFocusLng} // Dynamic longitude
                                     onQuakeClick={handleQuakeClick}
                                     getMagnitudeColorFunc={getMagnitudeColor}
                                     allowUserDragRotation={true}
