@@ -524,9 +524,9 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // A
 
                     {/* Earthquake Map Section - Restructured as a standard panel */}
                     {geometry && geometry.coordinates && isValidNumber(geometry.coordinates[1]) && isValidNumber(geometry.coordinates[0]) && (
-                        <div className={`${exhibitPanelClass} border-sky-500`}> {/* Using sky-500 border for map panel */}
+                        <div className={`${exhibitPanelClass} border-sky-500`}>
                             <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
-                            <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2"> {/* Adjusted height slightly, ensure mt-2 if title is present */}
+                            <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
                                 <EarthquakeMap
                                     latitude={geometry.coordinates[1]}
                                     longitude={geometry.coordinates[0]}
