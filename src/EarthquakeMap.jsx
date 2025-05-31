@@ -64,21 +64,42 @@ const createEpicenterIcon = (magnitude) => {
  */
 const getTectonicPlateStyle = (feature) => {
   let color = 'rgba(255, 165, 0, 0.8)'; // Default: Orange
+  let dashArray = null; // Default: solid line
   const type = feature?.properties?.Boundary_Type;
 
   if (type === 'Convergent') {
     color = 'rgba(220, 20, 60, 0.8)'; // Crimson
+    // dashArray remains null for solid line
   } else if (type === 'Divergent') {
     color = 'rgba(60, 179, 113, 0.8)'; // MediumSeaGreen
+    dashArray = '5, 10';
   } else if (type === 'Transform') {
     color = 'rgba(70, 130, 180, 0.8)'; // SteelBlue
+    dashArray = '2, 7';
   }
+  // For 'Unknown' or unspecified type, color remains default orange and dashArray remains null.
 
   return {
     color: color,
     weight: 1, // Consistent with InteractiveGlobeView's stroke weight
     opacity: 0.8, // Opacity is handled by the RGBA color string
+    dashArray: dashArray,
   };
+};
+
+/**
+ * Function to be called for each GeoJSON feature (tectonic plate boundary).
+ * It checks for the presence of `Boundary_Type` property and, if found,
+ * binds a popup to the layer displaying this information.
+ *
+ * @param {object} feature - The GeoJSON feature object.
+ * @param {L.Layer} layer - The Leaflet layer corresponding to the feature.
+ */
+const onEachPlateBoundaryFeature = (feature, layer) => {
+  if (feature.properties && feature.properties.Boundary_Type) {
+    const message = `<strong>Boundary Type:</strong> ${feature.properties.Boundary_Type}`;
+    layer.bindPopup(message);
+  }
 };
 
 /**
@@ -120,7 +141,7 @@ const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl }) =
           )}
         </Popup>
       </Marker>
-      <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
+      <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} onEachFeature={onEachPlateBoundaryFeature} />
     </MapContainer>
   );
 };
