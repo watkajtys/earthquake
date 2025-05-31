@@ -60,7 +60,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
             onClick={onClose} // Close on backdrop click
         >
             <div
-                className="bg-slate-800 p-4 sm:p-6 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700"
+                className="bg-slate-800 p-4 sm:p-6 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700 overflow-y-auto"
                 onClick={e => e.stopPropagation()} // Prevent backdrop click from triggering inside modal
             >
                 {/* Header */}
