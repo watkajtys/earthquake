@@ -15,7 +15,7 @@ import ClusterSummaryItem from './ClusterSummaryItem'; // Add this line
 import ClusterDetailModal from './ClusterDetailModal';
 import ClusterDetailModalWrapper from './ClusterDetailModalWrapper.jsx';
 import { calculateDistance, getMagnitudeColor } from './utils';
-import PullToRefresh from 'react-simple-pull-to-refresh';
+import { usePullToRefresh } from 'use-pull-to-refresh';
 
 // --- Configuration & Helpers ---
 const USGS_API_URL_DAY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
@@ -732,6 +732,14 @@ function App() {
 
     // --- Derived State & Memos ---
     const isLoadingInitialData = useMemo(() => isLoadingDaily || isLoadingWeekly, [isLoadingDaily, isLoadingWeekly]);
+
+    // Call the usePullToRefresh hook
+    const { isRefreshing, pullPosition } = usePullToRefresh({
+        onRefresh: handleRefresh, // Existing handleRefresh function
+        isDisabled: isLoadingInitialData, // Disable if initial data is already loading
+        refreshThreshold: 100, // Pixels to pull before refresh triggers
+        maximumPullLength: 150, // Max distance the pull indicator can go
+    });
 
     // --- Data Fetching Callbacks ---
     const fetchDataCb = useCallback(async (url) => {
@@ -1484,7 +1492,28 @@ function App() {
                 {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
                 {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
                 <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto">
-                    <PullToRefresh onRefresh={handleRefresh}>
+                    {/* Pull-to-refresh Indicator */}
+                    <div
+                      style={{
+                        transform: `translateY(${pullPosition}px)`,
+                        opacity: (isRefreshing || pullPosition > 0) ? 1 : 0,
+                        transition: 'transform 0.3s, opacity 0.3s',
+                        position: 'absolute',
+                        top: '-50px', // Start off-screen, adjusted by pullPosition
+                        left: '0',
+                        right: '0',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        zIndex: 50, // Ensure visibility
+                      }}
+                    >
+                      <div
+                        className={`bg-slate-700 text-white p-3 rounded-full shadow-lg ${isRefreshing ? 'animate-spin' : ''}`}
+                      >
+                        {isRefreshing ? '🔄' : '⬇️'}
+                      </div>
+                    </div>
                     <Routes>
                         <Route path="/" element={
                             <>
@@ -1744,7 +1773,6 @@ function App() {
                         />
                         <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper overviewClusters={overviewClusters} formatDate={formatDate} getMagnitudeColorStyle={getMagnitudeColorStyle} onIndividualQuakeSelect={handleQuakeClick} />} />
                     </Routes>
-                    </PullToRefresh>
                 </main>
 
                 {/* DESKTOP SIDEBAR (hidden on small screens, flex on large) */}
