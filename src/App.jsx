@@ -863,7 +863,7 @@ function App() {
         if (!location.pathname.startsWith('/quake/')) {
             setDetailPageSeoData(null);
         }
-    }, [location.pathname, setDetailPageSeoData]); // Added setDetailPageSeoData to dependency array
+    }, [location.pathname]);
 
     useEffect(() => {
         let isMounted = true;
@@ -1967,20 +1967,7 @@ const EarthquakeDetailModal = () => {
         // This will be handled by the route change effect in step 3 of the plan
     };
 
-    // Reset SEO data when the detailUrlParam changes (new quake selected or modal closed)
-    // This is important if the user navigates directly between quake pages or closes the modal.
-    useEffect(() => {
-        if (!detailUrlParam) {
-            setDetailPageSeoData(null);
-        }
-        // If navigating to a new quake, the onDataLoadedForSeo will set the new data.
-        // If just closing, we want to ensure it's cleared for the underlying page.
-        return () => {
-            // This cleanup might be too aggressive if we want SEO to persist until new one loads
-            // For now, we'll rely on the route change effect in the main App component
-            // to clear it when navigating away from a quake page.
-        };
-    }, [detailUrlParam, setDetailPageSeoData]); // Added setDetailPageSeoData to dependencies
+    // The useEffect hook that was here has been removed as it's now handled by the App-level useEffect.
 
     return <EarthquakeDetailView detailUrl={detailUrl} onClose={handleClose} onDataLoadedForSeo={handleSeoDataForDetailPage} />;
 };
