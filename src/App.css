@@ -41,63 +41,35 @@
   color: #888;
 }
 
-/* src/App.css (or src/index.css) */
-@keyframes pulse-glow-effect {
+/* Custom Epicenter Icon Animation for EarthquakeMap.jsx */
+@keyframes pulseEpicenterMap {
   0% {
-    transform: scale(0.9) translate(-50%, -50%); /* translate(-50%, -50%) is for centering the div on its coordinate */
-    box-shadow: 0 0 0 0 rgba(255, 255, 0, 0.8); /* Bright Yellow glow */
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.4) translate(-50%, -50%);
-    box-shadow: 0 0 0 15px rgba(255, 255, 0, 0); /* Glow expands and fades */
+    transform: scale(0.75); /* Start slightly larger than the static dot for initial visibility */
     opacity: 1;
-  }
-  100% {
-    transform: scale(0.9) translate(-50%, -50%);
-    box-shadow: 0 0 0 0 rgba(255, 255, 0, 0);
-    opacity: 0.8;
-  }
-}
-
-.pulsing-significant-quake-dot {
-  background-color: rgba(255, 255, 0, 0.95); /* Bright Yellow, slightly transparent */
-  border-radius: 50%;
-  animation: pulse-glow-effect 2s infinite ease-in-out;
-  pointer-events: auto; /* Make sure this HTML element is clickable */
-  cursor: pointer;
-  /* Position is handled by react-globe.gl, but transform above is important for centering */
-  /* No explicit width/height here, it will be set dynamically via style attribute in JS */
-  /* Ensure it's visible if it somehow ends up with 0x0 dimensions before JS sets it */
-  min-width: 5px;
-  min-height: 5px;
-}
-
-/* Styles for the custom pulsing epicenter marker */
-.custom-pulsing-icon .leaflet-div-icon {
-  background: none !important; /* Remove Leaflet's default background */
-  border: none !important; /* Remove Leaflet's default border */
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(0.95);
-    opacity: 0.7;
+    stroke-width: 3; /* Thicker start */
   }
   70% {
-    transform: scale(1.4);
-    opacity: 0;
+    opacity: 0.7; /* Keep it visible longer */
+    stroke-width: 1.5;
   }
   100% {
-    transform: scale(0.95);
+    transform: scale(3); /* Larger pulse effect */
     opacity: 0;
+    stroke-width: 0.5; /* Thinner end */
   }
 }
 
-/* Apply animation to the SVG within the custom icon if not directly styled on SVG element */
-/* .custom-pulsing-icon svg { */
-  /* The animation is already applied inline in the SVG HTML for simplicity, */
-  /* but could be applied here if preferred: */
-  /* animation: pulse 1.5s infinite; */
-  /* transform-origin: center; */
-/* } */
+.pulse-circle-map {
+  animation-name: pulseEpicenterMap;
+  animation-duration: 2.5s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-out;
+  transform-origin: center center; /* Explicitly set transform origin */
+}
+
+/*
+  Note: The .custom-pulsing-icon class style (background: none, border: none)
+  is now expected to be primarily handled by src/index.css for global Leaflet DivIcon overrides.
+  If specific overrides for .leaflet-div-icon within .custom-pulsing-icon are still needed,
+  they could be added back here, but the global one in index.css should cover most cases.
+*/
