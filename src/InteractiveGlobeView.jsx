@@ -67,7 +67,8 @@ const makeColorDuller = (colorString, opacityFactor) => {
  * @param {object} [props.coastlineGeoJson] - GeoJSON data for rendering coastlines.
  * @param {number} [props.defaultFocusAltitude=2.5] - Initial altitude (zoom level) for the globe's camera focus.
  * @param {number} [props.defaultFocusLat=20] - Initial latitude for the globe's camera focus.
- * @param {number} [props.defaultFocusLng=0] - Initial longitude for the globe's camera focus.
+ * @param {number} [props.defaultFocusLng=0] - Default initial longitude for the globe's camera focus, used if `initialLongitude` is not valid.
+ * @param {number | null} [props.initialLongitude=null] - Specific initial longitude for the globe's camera focus. Overrides `defaultFocusLng` if valid.
  * @param {Array<object>} props.earthquakes - An array of earthquake data objects to plot on the globe.
  * @param {boolean} [props.enableAutoRotation=true] - Whether the globe should auto-rotate.
  * @param {function(number):string} props.getMagnitudeColorFunc - Function that returns a color string based on earthquake magnitude.
@@ -92,6 +93,7 @@ const InteractiveGlobeView = ({
                                   atmosphereColor = "rgba(100,100,255,0.3)",
                                   defaultFocusLat = 20,
                                   defaultFocusLng = 0,
+                                  initialLongitude = null, // Added new prop
                                   defaultFocusAltitude = 2.5,
                                   allowUserDragRotation = true,
                                   enableAutoRotation = true,
@@ -307,9 +309,12 @@ const InteractiveGlobeView = ({
 
     useEffect(() => {
         if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {
-            globeRef.current.pointOfView({ lat: defaultFocusLat, lng: defaultFocusLng, altitude: defaultFocusAltitude }, 0);
+            const targetLng = (typeof initialLongitude === 'number' && !isNaN(initialLongitude))
+                ? initialLongitude
+                : defaultFocusLng;
+            globeRef.current.pointOfView({ lat: defaultFocusLat, lng: targetLng, altitude: defaultFocusAltitude }, 0);
         }
-    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions]);
+    }, [defaultFocusLat, defaultFocusLng, initialLongitude, defaultFocusAltitude, globeDimensions]);
 
     // CONSOLIDATED Effect to manage globe controls and drag listeners
     useEffect(() => {
