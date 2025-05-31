@@ -215,9 +215,10 @@ const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`
  * @param {function} props.onClose - Callback function to close the detail view.
  * @param {function} [props.onDataLoadedForSeo] - Optional callback that receives key data points once details are loaded, for SEO purposes.
  * @param {object} props.broaderEarthquakeData - Data for nearby earthquakes for regional seismicity chart.
+ * @param {number} props.dataSourceTimespanDays - The timespan of the source data (e.g., 7 or 30 days).
  * @returns {JSX.Element} The rendered EarthquakeDetailView component.
  */
-function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData }) { // Added onDataLoadedForSeo and broaderEarthquakeData
+function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays }) { // Add dataSourceTimespanDays
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -547,6 +548,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                             <RegionalSeismicityChart
                                 currentEarthquake={detailData}
                                 nearbyEarthquakesData={broaderEarthquakeData}
+                                dataSourceTimespanDays={dataSourceTimespanDays} // Pass it
                             />
                         </div>
                     )}
