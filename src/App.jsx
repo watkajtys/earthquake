@@ -1737,9 +1737,7 @@ function App() {
                         } />
                         <Route
                             path="/quake/:detailUrlParam"
-                            element={<EarthquakeDetailModal broaderEarthquakeData={
-                                (allEarthquakes && allEarthquakes.length > 0 && earthquakesLast30Days && earthquakesLast30Days.length > 0) ? earthquakesLast30Days : earthquakesLast7Days
-                            } />}
+                            element={<EarthquakeDetailModal broaderEarthquakeData={ (allEarthquakes && allEarthquakes.length > 0 && earthquakesLast30Days && earthquakesLast30Days.length > 0) ? earthquakesLast30Days : earthquakesLast7Days } handleLoadMonthlyData={handleLoadMonthlyData} hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad} isLoadingMonthly={isLoadingMonthly} />}
                         />
                         <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper overviewClusters={overviewClusters} formatDate={formatDate} getMagnitudeColorStyle={getMagnitudeColorStyle} onIndividualQuakeSelect={handleQuakeClick} />} />
                     </Routes>
@@ -1921,7 +1919,7 @@ function App() {
  * manages the modal's open/close state based on navigation.
  * @returns {JSX.Element} The rendered EarthquakeDetailView component configured as a modal.
  */
-const EarthquakeDetailModal = ({ broaderEarthquakeData, dataSourceTimespanDays }) => { // Add dataSourceTimespanDays
+const EarthquakeDetailModal = ({ broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) => { // Add dataSourceTimespanDays
     const { detailUrlParam } = useParams();
     const navigate = useNavigate();
     const detailUrl = decodeURIComponent(detailUrlParam);
@@ -1937,6 +1935,9 @@ const EarthquakeDetailModal = ({ broaderEarthquakeData, dataSourceTimespanDays }
                 onClose={handleClose}
                 broaderEarthquakeData={broaderEarthquakeData}
                 dataSourceTimespanDays={dataSourceTimespanDays} // Pass it down
+                handleLoadMonthlyData={handleLoadMonthlyData}
+                hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
+                isLoadingMonthly={isLoadingMonthly}
             />;
 };
 
