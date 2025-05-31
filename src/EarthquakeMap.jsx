@@ -22,17 +22,16 @@ L.Icon.Default.mergeOptions({
  */
 const createEpicenterIcon = (magnitude) => {
   const fillColor = getMagnitudeColor(magnitude);
-  const innerColor = '#FFFFFF'; // Inner circle color set to white
 
   return new L.DivIcon({
     html: `
-      <svg width="24" height="24" viewBox="0 0 24 24" style="transform-origin: center; animation: pulse 1.5s infinite;">
-        <circle cx="12" cy="12" r="8" fill="${fillColor}" stroke="#fff" stroke-width="2"/>
-        <circle cx="12" cy="12" r="4" fill="${innerColor}"/>
+      <svg width="32" height="32" viewBox="0 0 32 32" style="transform-origin: center;">
+        <circle cx="16" cy="16" r="10" fill="none" stroke="${fillColor}" stroke-width="2" class="pulse-ring" />
+        <circle cx="16" cy="16" r="7" fill="${fillColor}" stroke="#FFFFFF" stroke-width="1.5"/>
       </svg>`,
     className: 'custom-pulsing-icon', // Used to override default Leaflet icon background/border
-    iconSize: [24, 24], // Size of the icon
-    iconAnchor: [12, 12], // Anchor point of the icon (center for this SVG)
+    iconSize: [32, 32], // Size of the icon
+    iconAnchor: [16, 16], // Anchor point of the icon (center for this SVG)
   });
 };
 
