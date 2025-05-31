@@ -4,6 +4,10 @@ import RegionalSeismicityChart from './RegionalSeismicityChart';
 import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
+import { calculateDistance } from './utils'; // Import calculateDistance
+
+// Define REGIONAL_RADIUS_KM
+const REGIONAL_RADIUS_KM = 804.672; // 500 miles
 
 // Helper Functions
 /**
@@ -278,6 +282,26 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     const shakemapProductProps = useMemo(() => shakemapProduct?.properties, [shakemapProduct]);
     const losspagerProductProps = useMemo(() => getProduct('losspager')?.properties, [getProduct]);
 
+    const mainQuakeLat = useMemo(() => geometry?.coordinates?.[1], [geometry]);
+    const mainQuakeLon = useMemo(() => geometry?.coordinates?.[0], [geometry]);
+    const mainQuakeId = useMemo(() => detailData?.id, [detailData]);
+
+    const regionalQuakes = useMemo(() => {
+        if (!broaderEarthquakeData || typeof mainQuakeLat !== 'number' || typeof mainQuakeLon !== 'number' || !mainQuakeId) {
+            return [];
+        }
+        return broaderEarthquakeData.filter(quake => {
+            const qLat = quake?.geometry?.coordinates?.[1];
+            const qLon = quake?.geometry?.coordinates?.[0];
+
+            if (quake.id === mainQuakeId || typeof qLat !== 'number' || typeof qLon !== 'number') {
+                return false;
+            }
+            const distance = calculateDistance(mainQuakeLat, mainQuakeLon, qLat, qLon);
+            return distance <= REGIONAL_RADIUS_KM;
+        });
+    }, [broaderEarthquakeData, mainQuakeLat, mainQuakeLon, mainQuakeId]);
+
     // These values can be NaN if source data is missing/invalid. This is expected.
     // Conditional rendering will handle whether to display them or not.
     const np1Data = useMemo(() => ({
@@ -537,7 +561,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                                     magnitude={properties.mag}
                                     title={properties.title}
                                     shakeMapUrl={shakemapIntensityImageUrl}
-                                    nearbyQuakes={broaderEarthquakeData}
+                                    nearbyQuakes={regionalQuakes}
                                 />
                             </div>
                         </div>
