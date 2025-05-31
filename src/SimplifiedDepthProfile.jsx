@@ -160,9 +160,9 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
                                     cy="0"
                                     r="3" // Initial radius
                                     stroke={getMagnitudeColor(magnitude)}
-                                    strokeWidth="1.5"
+                                    strokeWidth="2" // Changed
                                     fill="none"
-                                    strokeOpacity="0.7"
+                                    strokeOpacity="0.9" // Changed (this is the initial value for the SVG element itself)
                                 >
                                     <animate
                                         attributeName="r"
@@ -174,7 +174,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
                                     />
                                     <animate
                                         attributeName="stroke-opacity"
-                                        from="0.7"
+                                        from="0.9" // Changed to match initial
                                         to="0"
                                         dur="3s"
                                         begin={`${i * 1}s`}
