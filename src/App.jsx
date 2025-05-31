@@ -13,6 +13,7 @@ import GlobalLastMajorQuakeTimer                                    from "./Glob
 import BottomNav                                                    from "./BottomNav.jsx"; // Direct import
 import ClusterSummaryItem from './ClusterSummaryItem'; // Add this line
 import ClusterDetailModal from './ClusterDetailModal';
+import ClusterDetailModalWrapper from './ClusterDetailModalWrapper.jsx';
 import { calculateDistance, getMagnitudeColor } from './utils';
 
 // --- Configuration & Helpers ---
@@ -719,7 +720,6 @@ function App() {
     // const [activeSidebarView, setActiveSidebarView] = useState('overview_panel'); // Replaced by useSearchParams
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeClusters, setActiveClusters] = useState([]);
-    const [detailedClusterToShow, setDetailedClusterToShow] = useState(null); // <-- Add this line
     const activeSidebarView = searchParams.get('sidebarActiveView') || 'overview_panel';
 
     const setActiveSidebarView = (view) => {
@@ -1351,8 +1351,8 @@ function App() {
     }, [navigate]);
 
     const handleClusterSummaryClick = useCallback((clusterData) => {
-        setDetailedClusterToShow(clusterData);
-    }, []); // No dependencies needed if setDetailedClusterToShow is stable (which it is)
+        navigate(`/cluster/${clusterData.id}`);
+    }, [navigate]); // Added navigate to dependencies
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 
@@ -1717,6 +1717,7 @@ function App() {
                                 (allEarthquakes && allEarthquakes.length > 0 && earthquakesLast30Days && earthquakesLast30Days.length > 0) ? earthquakesLast30Days : earthquakesLast7Days
                             } />}
                         />
+                        <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper overviewClusters={overviewClusters} formatDate={formatDate} getMagnitudeColorStyle={getMagnitudeColorStyle} onIndividualQuakeSelect={handleQuakeClick} />} />
                     </Routes>
                 </main>
 
@@ -1885,16 +1886,6 @@ function App() {
 
             <BottomNav />
 
-            {/* Conditionally render ClusterDetailModal */}
-            {detailedClusterToShow && (
-                <ClusterDetailModal
-                    cluster={detailedClusterToShow}
-                    onClose={() => setDetailedClusterToShow(null)}
-                    formatDate={formatDate} // Pass the utility function from App.jsx
-                    getMagnitudeColorStyle={getMagnitudeColorStyle} // Pass the utility function from App.jsx
-                    onIndividualQuakeSelect={handleQuakeClick} // <-- Add this line
-                />
-            )}
             {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
         </div>
     );
