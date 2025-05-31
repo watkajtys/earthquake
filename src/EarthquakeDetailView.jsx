@@ -534,6 +534,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                                 <EarthquakeMap
                                     latitude={geometry.coordinates[1]}
                                     longitude={geometry.coordinates[0]}
+                                    magnitude={properties.mag}
                                     title={properties.title}
                                     shakeMapUrl={shakemapIntensityImageUrl}
                                 />
