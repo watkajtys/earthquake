@@ -23,15 +23,32 @@ L.Icon.Default.mergeOptions({
 const createEpicenterIcon = (magnitude) => {
   const fillColor = getMagnitudeColor(magnitude);
 
+  const rings = Array(3).fill(0).map((_, i) => `
+    <circle
+      cx="0" cy="0" r="3"
+      stroke="${fillColor}" stroke-width="4" fill="none" stroke-opacity="0.6">
+      <animate attributeName="r" from="3" to="20" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
+      <animate attributeName="stroke-opacity" from="0.6" to="0" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
+    </circle>
+    <circle
+      cx="0" cy="0" r="3"
+      stroke="${fillColor}" stroke-width="2" fill="none" stroke-opacity="1">
+      <animate attributeName="r" from="3" to="17" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
+      <animate attributeName="stroke-opacity" from="1" to="0" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
+    </circle>
+  `).join('');
+
   return new L.DivIcon({
     html: `
-      <svg width="32" height="32" viewBox="0 0 32 32" style="transform-origin: center;">
-        <circle cx="16" cy="16" r="10" fill="none" stroke="${fillColor}" stroke-width="2" class="pulse-ring" />
-        <circle cx="16" cy="16" r="7" fill="${fillColor}" stroke="#FFFFFF" stroke-width="1.5"/>
+      <svg width="48" height="48" viewBox="0 0 60 60">
+        <g transform="translate(30,30)">
+          ${rings}
+          <circle cx="0" cy="0" r="4" fill="${fillColor}" stroke="#FFFFFF" stroke-width="1.5"/>
+        </g>
       </svg>`,
     className: 'custom-pulsing-icon', // Used to override default Leaflet icon background/border
-    iconSize: [32, 32], // Size of the icon
-    iconAnchor: [16, 16], // Anchor point of the icon (center for this SVG)
+    iconSize: [48, 48], // Size of the icon
+    iconAnchor: [24, 24], // Anchor point of the icon (center for this SVG)
   });
 };
 
