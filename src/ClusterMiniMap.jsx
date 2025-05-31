@@ -40,7 +40,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
   if (originalQuakes.length === 1) {
     const singleQuake = originalQuakes[0];
     mapCenter = [singleQuake.geometry.coordinates[1], singleQuake.geometry.coordinates[0]];
-    initialZoom = 8; // Zoom level for a single quake
+    initialZoom = 10; // Zoom level for a single quake
   } else {
     // Calculate map center for multiple quakes (average lat/lng)
     const latitudes = originalQuakes.map(quake => quake.geometry.coordinates[1]);
@@ -59,37 +59,31 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
 
     if (
       bounds.getSouthWest().equals(bounds.getNorthEast()) ||
-      (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.01 &&
-       Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.01)
+      (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.001 && // Refined threshold
+       Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.001)  // Refined threshold
     ) {
-      initialZoom = 10; // Higher zoom for very concentrated clusters
+      initialZoom = 13; // Increased zoom for pinpoint clusters
     } else {
       initialZoom = 2; // Fallback zoom, fitBounds will adjust this for spread out clusters
     }
   }
 
   useEffect(() => {
-    // Only call fitBounds if the cluster is not extremely concentrated,
-    // as initialZoom would have already handled it.
-    if (mapRef.current && originalQuakes.length > 1) {
+    // Call fitBounds only if originalQuakes.length > 1 AND initialZoom was NOT set to 13 (pinpoint)
+    // or 10 (single quake). The initialZoom for spread out clusters is 2.
+    if (mapRef.current && originalQuakes.length > 1 && initialZoom === 2) {
       const bounds = L.latLngBounds(
         originalQuakes.map(quake => [
           quake.geometry.coordinates[1],
           quake.geometry.coordinates[0],
         ])
       );
-      // Check concentration again, or rely on initialZoom setting.
-      // To avoid calling fitBounds unnecessarily for already zoomed concentrated clusters:
-      if (
-        !(bounds.getSouthWest().equals(bounds.getNorthEast()) ||
-        (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.01 &&
-         Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.01))
-      ) {
-        mapRef.current.fitBounds(bounds, { padding: [5, 5] });
-      }
+      // The initialZoom check above should be sufficient to prevent re-zooming pinpoint clusters.
+      mapRef.current.fitBounds(bounds, { padding: [0, 0] });
     }
-    // For a single quake or very concentrated cluster, the view is already set by mapCenter and initialZoom
-  }, [originalQuakes, mapRef]); // mapRef dependency itself doesn't change, but its .current property does.
+    // For a single quake (initialZoom=10) or pinpoint cluster (initialZoom=13),
+    // the view is already set by mapCenter and initialZoom on MapContainer.
+  }, [originalQuakes, mapRef, initialZoom]); // Added initialZoom to dependency array as its value now determines effect behavior.
                                  // originalQuakes is the primary data dependency.
 
   return (
@@ -99,6 +93,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
       style={{ height: '200px', width: '100%' }}
       scrollWheelZoom={false}
       ref={mapRef}
+      maxZoom={18}
     >
       <TileLayer
         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
