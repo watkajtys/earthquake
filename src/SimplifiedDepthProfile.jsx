@@ -31,7 +31,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
 
   // Calculate percentage height for each layer segment to display
   // And determine hypocenter's relative position
-  let hypocenterTopPercent = 0;
+  // let hypocenterTopPercent = 0; // No longer directly used for line height in pixels
   let hypocenterLayerName = "Unknown";
 
   const getLayerDisplayHeightPercent = (layerStart, layerEnd) => {
@@ -39,7 +39,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
   };
 
   if (depth >= 0) {
-      hypocenterTopPercent = (Math.min(depth, diagramHeightKm) / diagramHeightKm) * 100;
+      // hypocenterTopPercent = (Math.min(depth, diagramHeightKm) / diagramHeightKm) * 100; // Keep for potential future use or remove if truly unused
       const containingLayer = layers.find(l => depth >= l.startDepth && depth <= l.endDepth && l.name !== "Surface");
       if (containingLayer) {
           hypocenterLayerName = containingLayer.name;
@@ -48,6 +48,10 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
       }
   }
 
+  const diagramParentHeightPx = 320; // h-80
+  const surfaceLayerHeightPx = 24; // h-6
+  const remainingDiagramHeightPx = diagramParentHeightPx - surfaceLayerHeightPx;
+  const lineHeightPx = depth >= 0 ? (Math.min(depth, diagramHeightKm) / diagramHeightKm) * remainingDiagramHeightPx : 0;
 
   return (
     <div className="p-3 rounded-md">
@@ -61,7 +65,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
         {layers.map((layer) => {
           if (layer.name === "Surface") {
             return (
-              <div key={layer.name} className={`flex-shrink-0 h-8 ${layer.color} flex items-center justify-center relative`} style={{zIndex: layer.zIndex}}>
+              <div key={layer.name} className={`flex-shrink-0 h-6 ${layer.color} flex items-center justify-center relative`} style={{zIndex: layer.zIndex}}>
                 <span className={`text-xs font-medium ${layer.textColor}`}>{layer.name} (0 km)</span>
               </div>
             );
@@ -75,7 +79,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
               className={`flex-shrink-0 ${layer.color} flex items-center justify-center relative border-t border-black border-opacity-10`}
               style={{ height: `${displayHeightPercent}%`, zIndex: layer.zIndex }}
             >
-              <span className={`text-xs font-medium ${layer.textColor} p-1 rounded bg-white bg-opacity-30`}>
+              <span className={`text-xs font-medium ${layer.textColor} p-1 rounded bg-white bg-opacity-30 overflow-hidden whitespace-nowrap text-ellipsis`}>
                 {layer.name} ({layer.startDepth === 0 ? '' : `${layer.startDepth}-`}{layer.endDepth}km)
               </span>
             </div>
@@ -87,8 +91,8 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
             <div
                 className="absolute left-1/4 w-0.5 bg-red-600"
                 style={{
-                    top: '32px', /* Height of the surface layer */
-                    height: `calc(${Math.min(hypocenterTopPercent, 100)}% - 32px)`, /* Adjust height to not exceed diagram */
+                    top: `${surfaceLayerHeightPx}px`, // Start below new surface height
+                    height: `${lineHeightPx}px`, // Calculated pixel height
                     zIndex: 10
                 }}
             >
@@ -112,10 +116,10 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
             <div
                 className="absolute text-xs text-red-700 font-bold bg-white bg-opacity-80 px-1.5 py-0.5 rounded shadow-md"
                 style={{
-                    top: `calc(32px + ( (100% - 32px) * ${Math.min(depth, diagramHeightKm) / diagramHeightKm} ) - 8px)`, // Position near the marker, accounting for surface layer
-                    left: 'calc(25% + 10px)', // Offset to the side of the line
+                    top: depth < 15 ? `calc(${surfaceLayerHeightPx}px + 5px)` : `calc(${surfaceLayerHeightPx}px + ${lineHeightPx}px - 8px)`, // If shallow, fix near top; else near star
+                    left: depth < 15 ? 'calc(25% + 25px)' : 'calc(25% + 10px)', // More offset if shallow
                     zIndex: 11,
-                    display: hypocenterTopPercent < 2 && depth > 0 ? 'none' : 'block' // Hide if too close to surface and not exactly 0
+                    display: depth < 1 && depth > 0 ? 'none' : 'block' // Hide if depth is like 0.1km, too small to show meaningfully apart from star
                 }}
             >
                 {depth?.toFixed(1)} km

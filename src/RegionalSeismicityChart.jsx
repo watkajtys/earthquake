@@ -1,6 +1,19 @@
 // src/RegionalSeismicityChart.jsx
 import React, { useMemo } from 'react';
 
+// (Copied from App.jsx - ideally this would be in a shared utils.js)
+const getMagnitudeColor = (magnitude) => {
+    if (magnitude === null || magnitude === undefined) return '#94A3B8'; // slate-400
+    if (magnitude < 1.0) return '#67E8F9'; // cyan-300
+    if (magnitude < 2.5) return '#22D3EE'; // cyan-400
+    if (magnitude < 4.0) return '#34D399'; // emerald-400
+    if (magnitude < 5.0) return '#FACC15'; // yellow-400
+    if (magnitude < 6.0) return '#FB923C'; // orange-400
+    if (magnitude < 7.0) return '#F97316'; // orange-500
+    if (magnitude < 8.0) return '#EF4444'; // red-500
+    return '#B91C1C'; // red-700
+};
+
 // --- Helper Functions ---
 /**
  * Calculates the distance between two geographical coordinates using the Haversine formula.
@@ -225,7 +238,7 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData }) {
                     y={y}
                     width={barWidth}
                     height={barH}
-                    fill={dayData.avgMag ? (dayData.avgMag >= 4.5 ? "rgba(239, 68, 68, 0.7)" : dayData.avgMag >= 2.5 ? "rgba(245, 158, 11, 0.7)" : "rgba(59, 130, 246, 0.7)") : "rgba(107, 114, 128, 0.7)"}
+                    fill={getMagnitudeColor(dayData.avgMag)}
                     className="hover:opacity-80 transition-opacity"
                   />
                   {dayData.count > 0 && (
@@ -254,13 +267,19 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData }) {
           </g>
         </svg>
       </div>
-       <div className="text-xs text-slate-400 mt-1">
-            Color Key:
-            <span className="inline-block w-3 h-3 bg-red-500 bg-opacity-70 ml-2 mr-1"></span> Avg M4.5+
-            <span className="inline-block w-3 h-3 bg-amber-500 bg-opacity-70 ml-2 mr-1"></span> Avg M2.5-4.4
-            <span className="inline-block w-3 h-3 bg-blue-500 bg-opacity-70 ml-2 mr-1"></span> Avg M&lt;2.5
-            <span className="inline-block w-3 h-3 bg-gray-500 bg-opacity-70 ml-2 mr-1"></span> No Mag Avg
+       <div className="text-xs text-slate-500 mt-2 leading-tight">
+        <span className="font-semibold">Avg. Magnitude Color Key:</span>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(0.5) }}></span> &lt;1.0</span>
+            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(1.5) }}></span> 1.0-2.4</span>
+            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(3.0) }}></span> 2.5-3.9</span>
+            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(4.5) }}></span> 4.0-4.9</span>
+            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(5.5) }}></span> 5.0-5.9</span>
+            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(6.5) }}></span> 6.0-6.9</span>
+            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(7.5) }}></span> 7.0+</span>
+            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(null) }}></span> N/A</span>
         </div>
+    </div>
     </div>
   );
 }
