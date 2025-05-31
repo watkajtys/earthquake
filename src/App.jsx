@@ -1371,31 +1371,52 @@ function App() {
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 
-    const handleSeoDataForDetailPage = useCallback((data) => {
-      if (data) {
-        const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
-        // Construct a more specific title if possible
-        let seoTitle = data.title || 'Earthquake Event Details';
-        if (data.mag && data.place) {
-            seoTitle = `M ${parseFloat(data.mag).toFixed(1)} - ${data.place} | Seismic Monitor`;
-        } else if (data.title) {
-            seoTitle = `${data.title} | Seismic Monitor`;
-        }
+const handleSeoDataForDetailPage = useCallback((data) => {
+  if (data) {
+    const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
 
-        setDetailPageSeoData({
-          title: seoTitle,
-          description: `Detailed information for earthquake: ${data.title}. Magnitude: ${data.mag || 'N/A'}, Location: ${data.place || 'N/A'}, Time: ${data.time ? new Date(data.time).toISOString() : 'N/A'}. Updated: ${data.updated ? new Date(data.updated).toISOString() : 'N/A'}. Depth: ${data.depth ? data.depth.toFixed(1) + ' km' : 'N/A'}.`,
-          imageUrl: data.shakemapIntensityImageUrl,
-          pageUrl: pageUrl,
-          type: 'article', // Individual earthquake pages are like articles
-          publishedTime: data.time ? new Date(data.time).toISOString() : undefined,
-          modifiedTime: data.updated ? new Date(data.updated).toISOString() : undefined,
-          keywords: `earthquake, M ${data.mag}, ${data.place}, seismic event, earthquake details, magnitude, depth`
-        });
-      } else {
-        setDetailPageSeoData(null); // Clear SEO data if no data is provided (e.g., on modal close)
-      }
-    }, []);
+    let magForDisplay = 'N/A';
+    let magForKeyword = '';
+    if (data.mag !== null && data.mag !== undefined && !isNaN(parseFloat(data.mag))) {
+        const parsedMag = parseFloat(data.mag);
+        magForDisplay = parsedMag.toFixed(1);
+        magForKeyword = `M ${magForDisplay}`;
+    } else if (data.mag) { // If data.mag is a non-empty string that's not a number
+        magForKeyword = data.mag; // Use the original string for keywords if it exists
+    }
+
+
+    let depthForDisplay = 'N/A';
+    if (data.depth !== null && data.depth !== undefined && !isNaN(parseFloat(data.depth))) {
+        depthForDisplay = parseFloat(data.depth).toFixed(1) + ' km';
+    }
+
+    let seoTitle = data.title || 'Earthquake Event Details'; // Default
+    if (magForDisplay !== 'N/A' && data.place) {
+        seoTitle = `M ${magForDisplay} - ${data.place} | Seismic Monitor`;
+    } else if (data.title) {
+        seoTitle = `${data.title} | Seismic Monitor`;
+    } else if (data.place) { // Fallback if only place is available
+        seoTitle = `${data.place} | Seismic Monitor`;
+    }
+
+
+    const placeKeyword = data.place || '';
+
+    setDetailPageSeoData({
+      title: seoTitle,
+      description: `Detailed information for earthquake: ${data.title || 'Event'}. Magnitude: ${magForDisplay}, Location: ${data.place || 'N/A'}, Time: ${data.time ? new Date(data.time).toISOString() : 'N/A'}. Updated: ${data.updated ? new Date(data.updated).toISOString() : 'N/A'}. Depth: ${depthForDisplay}.`,
+      imageUrl: data.shakemapIntensityImageUrl,
+      pageUrl: pageUrl,
+      type: 'article',
+      publishedTime: data.time ? new Date(data.time).toISOString() : undefined,
+      modifiedTime: data.updated ? new Date(data.updated).toISOString() : undefined,
+      keywords: `earthquake, ${magForKeyword}${magForKeyword && placeKeyword ? ', ' : ''}${placeKeyword}, seismic event, earthquake details, magnitude, depth`.replace(/, ,/g, ',').replace(/,$/, '') // Clean up potential empty keyword parts
+    });
+  } else {
+    setDetailPageSeoData(null);
+  }
+}, []);
 
     // --- Full Screen Loader ---
     if (showFullScreenLoader) {
