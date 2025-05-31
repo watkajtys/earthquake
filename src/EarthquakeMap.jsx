@@ -53,6 +53,21 @@ const createEpicenterIcon = (magnitude) => {
 };
 
 /**
+ * Creates a custom Leaflet DivIcon for a nearby earthquake.
+ * @param {number} magnitude - The earthquake magnitude to determine the icon color.
+ * @returns {L.DivIcon} A Leaflet DivIcon instance.
+ */
+const createNearbyQuakeIcon = (magnitude) => {
+  const fillColor = getMagnitudeColor(magnitude);
+  return new L.DivIcon({
+    html: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="3" fill="${fillColor}" /></svg>`,
+    className: 'custom-nearby-quake-icon',
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  });
+};
+
+/**
  * Determines the style for tectonic plate boundary lines on the map.
  * The styling is based on the `Boundary_Type` property of the GeoJSON feature,
  * similar to how it's done in the `InteractiveGlobeView` component.
@@ -91,9 +106,10 @@ const getTectonicPlateStyle = (feature) => {
  * @param {number} props.magnitude - The magnitude of the earthquake.
  * @param {string} props.title - The title of the earthquake event.
  * @param {string} [props.shakeMapUrl] - Optional URL to the ShakeMap details page for the earthquake.
+ * @param {Array} [props.nearbyQuakes=[]] - Optional array of nearby earthquake objects.
  * @returns {JSX.Element} The rendered EarthquakeMap component.
  */
-const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl }) => {
+const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nearbyQuakes = [] }) => {
   const position = [latitude, longitude];
 
   const mapStyle = {
@@ -120,6 +136,19 @@ const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl }) =
           )}
         </Popup>
       </Marker>
+      {nearbyQuakes.map((quake, index) => (
+        <Marker
+          key={index}
+          position={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
+          icon={createNearbyQuakeIcon(quake.properties.mag)}
+        >
+          <Popup>
+            Magnitude: {quake.properties.mag}
+            <br />
+            {quake.properties.title}
+          </Popup>
+        </Marker>
+      ))}
       <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
     </MapContainer>
   );

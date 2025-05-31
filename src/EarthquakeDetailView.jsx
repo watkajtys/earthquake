@@ -537,6 +537,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                                     magnitude={properties.mag}
                                     title={properties.title}
                                     shakeMapUrl={shakemapIntensityImageUrl}
+                                    nearbyQuakes={broaderEarthquakeData}
                                 />
                             </div>
                         </div>
