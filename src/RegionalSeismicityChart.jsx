@@ -151,7 +151,7 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
     <div className="p-3 rounded-md">
       <h3 className="text-md font-semibold text-blue-700 mb-1">Regional Activity Prior to Event</h3>
       <p className="text-xs text-slate-500 mb-2">
-        Using regional data from the last ~{dataSourceTimespanDays || 'N/A'} days, searching within {REGIONAL_RADIUS_KM}km.
+        Using regional data from the last ~{dataSourceTimespanDays || 30} days, searching within {REGIONAL_RADIUS_KM}km.
         Chart displays activity in the {displayWindowDays} days prior to this M{currentEarthquake.properties.mag?.toFixed(1)} event.
       </p>
       <div ref={chartContainerRef} className="w-full overflow-hidden">
