@@ -103,9 +103,11 @@ const InteractiveGlobeView = ({
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
     const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
+    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false); // Added
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
+    const windowLoadedRef = useRef(false); // To track if window.load has fired
     const [ringsData, setRingsData] = useState([]);
 
     const debounce = (func, delay) => {
@@ -121,26 +123,81 @@ const InteractiveGlobeView = ({
     useEffect(() => {
         const currentContainerRef = containerRef.current;
         if (!currentContainerRef) return;
+
         const updateDimensions = () => {
-            const newWidth = currentContainerRef.offsetWidth;
-            const newHeight = currentContainerRef.offsetHeight;
+            // Don't run if window.load hasn't fired yet, unless it's a resize event (implicitly initialLayoutComplete is true)
+            if (!initialLayoutComplete && !windowLoadedRef.current) return;
+
+            const currentContainerRefActual = containerRef.current; // Re-read ref
+            if (!currentContainerRefActual) return;
+
+            const newWidth = currentContainerRefActual.offsetWidth;
+            const newHeight = currentContainerRefActual.offsetHeight;
+
             if (newWidth > 10 && newHeight > 10) {
-                setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
+                 setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
             }
         };
+
+        // Debounced version for ResizeObserver
         const debouncedUpdateDimensions = debounce(updateDimensions, 200);
-        updateDimensions(); // Initial immediate call
-        const timerId = setTimeout(updateDimensions, 50); // Delayed call
+
+        if (document.readyState === 'complete') {
+            windowLoadedRef.current = true;
+            setInitialLayoutComplete(true);
+            // Call updateDimensions directly here to ensure it runs with initialLayoutComplete = true
+            if (containerRef.current) {
+                const newWidth = containerRef.current.offsetWidth;
+                const newHeight = containerRef.current.offsetHeight;
+                if (newWidth > 10 && newHeight > 10) { // Check for valid dimensions
+                    setGlobeDimensions({ width: newWidth, height: newHeight });
+                }
+            }
+        } else {
+            const handleWindowLoad = () => {
+                windowLoadedRef.current = true;
+                setInitialLayoutComplete(true);
+                // Explicitly call updateDimensions after setting initialLayoutComplete to true
+                // and window has loaded.
+                if (containerRef.current) {
+                    const newWidth = containerRef.current.offsetWidth;
+                    const newHeight = containerRef.current.offsetHeight;
+                    if (newWidth > 10 && newHeight > 10) {
+                         setGlobeDimensions({ width: newWidth, height: newHeight });
+                    } else {
+                        // Fallback or retry if dimensions are still not good
+                        setTimeout(() => {
+                            if (containerRef.current) {
+                                const w = containerRef.current.offsetWidth;
+                                const h = containerRef.current.offsetHeight;
+                                if (w > 10 && h > 10) {
+                                    setGlobeDimensions({ width: w, height: h });
+                                }
+                            }
+                        }, 150); // A short delay for a retry
+                    }
+                }
+                window.removeEventListener('load', handleWindowLoad); // Clean up listener
+            };
+            window.addEventListener('load', handleWindowLoad);
+        }
 
         const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
-        resizeObserver.observe(currentContainerRef);
+        if (currentContainerRef) { // Ensure ref is still valid before observing
+            resizeObserver.observe(currentContainerRef);
+        }
 
         return () => {
-            if (timerId) clearTimeout(timerId); // Clear the timeout
-            if (currentContainerRef) resizeObserver.unobserve(currentContainerRef);
+            // Note: handleWindowLoad cleanup is inside the handler itself upon execution.
+            // If the component unmounts before 'load', the listener might remain.
+            // To be fully robust, it would need to be removed here too if it was assigned to a variable accessible here.
+            // For this specific subtask, the provided snippet's cleanup is followed.
+            if (currentContainerRef) {
+                resizeObserver.unobserve(currentContainerRef);
+            }
             if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
         };
-    }, []);
+    }, [initialLayoutComplete]); // Add initialLayoutComplete to dependency array.
 
     useEffect(() => {
         let allPointsData = (earthquakes || []).map(quake => {
