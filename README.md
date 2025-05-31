@@ -11,6 +11,7 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * Geographical Layers: Shows tectonic plate boundaries and coastlines for geological context.
 * Latest Major Quake Highlight: Animates a pulsing yellow ring on the globe to pinpoint the most recent significant earthquake (M4.5+).
 * Detailed Earthquake View: Modal display providing comprehensive information for selected earthquakes, including magnitude, depth, location, fault plane solutions, and ShakeMap/PAGER alerts when available.
+    * **2D Regional Map**: Within the detail view, a 2D map displays the earthquake's epicenter, ShakeMap intensity image (if available), and tectonic plate boundaries for regional context.
 * Smart Globe Rotation: Globe auto-rotates and intelligently pauses when the user hovers over the sphere, resuming on mouse-out.
 * Dynamic Statistics & Charts:
     * Overview panel with key statistics for the last 24 hours.
