@@ -9,6 +9,7 @@ import PreviousNotableQuakeFeature from './PreviousNotableQuakeFeature'; // Impo
 import InfoSnippet from './InfoSnippet';
 import coastlineData from './ne_110m_coastline.json'; // Direct import
 import tectonicPlatesData from './TectonicPlateBoundaries.json';
+import volcanoesData from './volcanoes.geojson';
 import GlobalLastMajorQuakeTimer                                    from "./GlobalLastMajorQuakeTimer.jsx";
 import BottomNav                                                    from "./BottomNav.jsx"; // Direct import
 import ClusterSummaryItem from './ClusterSummaryItem'; // Add this line
@@ -720,6 +721,8 @@ function App() {
     // const [activeSidebarView, setActiveSidebarView] = useState('overview_panel'); // Replaced by useSearchParams
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeClusters, setActiveClusters] = useState([]);
+    const [volcanoes, setVolcanoes] = useState(volcanoesData.features || []);
+    const [showVolcanoes, setShowVolcanoes] = useState(false);
     const activeSidebarView = searchParams.get('sidebarActiveView') || 'overview_panel';
 
     const setActiveSidebarView = (view) => {
@@ -1474,18 +1477,20 @@ function App() {
                                 <div className="lg:block h-full w-full">
                                     <InteractiveGlobeView
                                         earthquakes={globeEarthquakes}
-                                    onQuakeClick={handleQuakeClick}
-                                    getMagnitudeColorFunc={getMagnitudeColor}
-                                    allowUserDragRotation={true}
-                                    enableAutoRotation={true}
-                                    globeAutoRotateSpeed={0.1}
-                                    coastlineGeoJson={coastlineData}
-                                    tectonicPlatesGeoJson={tectonicPlatesData}
-                                    highlightedQuakeId={lastMajorQuake?.id}
-                                    latestMajorQuakeForRing={lastMajorQuake}
-                                    previousMajorQuake={previousMajorQuake}
-                                    activeClusters={activeClusters} // <-- New prop
-                                />
+                                        onQuakeClick={handleQuakeClick}
+                                        getMagnitudeColorFunc={getMagnitudeColor}
+                                        allowUserDragRotation={true}
+                                        enableAutoRotation={true}
+                                        globeAutoRotateSpeed={0.1}
+                                        coastlineGeoJson={coastlineData}
+                                        tectonicPlatesGeoJson={tectonicPlatesData}
+                                        highlightedQuakeId={lastMajorQuake?.id}
+                                        latestMajorQuakeForRing={lastMajorQuake}
+                                        previousMajorQuake={previousMajorQuake}
+                                        activeClusters={activeClusters} // <-- New prop
+                                        volcanoes={volcanoes}
+                                        showVolcanoes={showVolcanoes}
+                                    />
                                 <div className="absolute top-2 left-2 z-10 space-y-2">
                                     <NotableQuakeFeature
                                         dynamicFeaturedQuake={lastMajorQuake}
@@ -1713,9 +1718,14 @@ function App() {
                         } />
                         <Route
                             path="/quake/:detailUrlParam"
-                            element={<EarthquakeDetailModal broaderEarthquakeData={
-                                (allEarthquakes && allEarthquakes.length > 0 && earthquakesLast30Days && earthquakesLast30Days.length > 0) ? earthquakesLast30Days : earthquakesLast7Days
-                            } />}
+                            element={<EarthquakeDetailModal
+                                broaderEarthquakeData={
+                                    (allEarthquakes && allEarthquakes.length > 0 && earthquakesLast30Days && earthquakesLast30Days.length > 0) ? earthquakesLast30Days : earthquakesLast7Days
+                                }
+                                // dataSourceTimespanDays is not explicitly passed here, EarthquakeDetailView calculates it or uses a default
+                                volcanoes={volcanoes}
+                                showVolcanoes={showVolcanoes}
+                            />}
                         />
                         <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper overviewClusters={overviewClusters} formatDate={formatDate} getMagnitudeColorStyle={getMagnitudeColorStyle} onIndividualQuakeSelect={handleQuakeClick} />} />
                     </Routes>
@@ -1823,6 +1833,17 @@ function App() {
                                     Most earthquakes occur along the edges of tectonic plates... {/* Truncated for brevity */}
                                 </p>
                             </div>
+                            <div className="mt-3 p-2 bg-slate-700 rounded-lg border border-slate-600 shadow-md">
+                                <h3 className="text-md font-semibold mb-2 text-indigo-300">Map Layers</h3>
+                                <button
+                                    onClick={() => setShowVolcanoes(!showVolcanoes)}
+                                    className={`w-full px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                                        showVolcanoes ? 'bg-red-500 hover:bg-red-400' : 'bg-teal-600 hover:bg-teal-500'
+                                    } text-white`}
+                                >
+                                    {showVolcanoes ? 'Hide Volcanoes' : 'Show Volcanoes'}
+                                </button>
+                            </div>
                         </> )}
                         {activeSidebarView === 'learn_more' && ( <div className="p-2 bg-slate-700 rounded-md"> <h3 className="text-md font-semibold text-indigo-400 mb-2">Learn About Earthquakes</h3> <InfoSnippet topic="magnitude" /> <InfoSnippet topic="depth" /> <InfoSnippet topic="intensity" /> <InfoSnippet topic="alerts" /> <InfoSnippet topic="strike"/> <InfoSnippet topic="dip"/> <InfoSnippet topic="rake"/> <InfoSnippet topic="stressAxes"/> <InfoSnippet topic="beachball"/> <InfoSnippet topic="stationsUsed"/> <InfoSnippet topic="azimuthalGap"/> <InfoSnippet topic="rmsError"/> </div> )}
 
@@ -1897,7 +1918,7 @@ function App() {
  * manages the modal's open/close state based on navigation.
  * @returns {JSX.Element} The rendered EarthquakeDetailView component configured as a modal.
  */
-const EarthquakeDetailModal = ({ broaderEarthquakeData, dataSourceTimespanDays }) => { // Add dataSourceTimespanDays
+const EarthquakeDetailModal = ({ broaderEarthquakeData, dataSourceTimespanDays, volcanoes, showVolcanoes }) => {
     const { detailUrlParam } = useParams();
     const navigate = useNavigate();
     const detailUrl = decodeURIComponent(detailUrlParam);
@@ -1913,6 +1934,8 @@ const EarthquakeDetailModal = ({ broaderEarthquakeData, dataSourceTimespanDays }
                 onClose={handleClose}
                 broaderEarthquakeData={broaderEarthquakeData}
                 dataSourceTimespanDays={dataSourceTimespanDays} // Pass it down
+                volcanoes={volcanoes}
+                showVolcanoes={showVolcanoes}
             />;
 };
 

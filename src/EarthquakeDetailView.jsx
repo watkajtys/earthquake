@@ -217,9 +217,11 @@ const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`
  * @param {function(object): void} [props.onDataLoadedForSeo] - Optional callback. Receives an object with key data points (title, place, time, mag, depth, etc.) once details are loaded, intended for SEO updates.
  * @param {Array<object>} props.broaderEarthquakeData - Array of earthquake objects (matching USGS GeoJSON feature structure) for nearby/regional events, used by the RegionalSeismicityChart.
  * @param {number} props.dataSourceTimespanDays - The timespan (e.g., 7 or 30 days) of the `broaderEarthquakeData` source, used by RegionalSeismicityChart for context.
+ * @param {Array<object>} [props.volcanoes=[]] - Array of volcano data objects.
+ * @param {boolean} [props.showVolcanoes=false] - Flag to control volcano visibility on the map.
  * @returns {JSX.Element} The rendered EarthquakeDetailView component.
  */
-function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays }) { // Add dataSourceTimespanDays
+function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, volcanoes = [], showVolcanoes = false }) {
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -537,6 +539,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                                     magnitude={properties.mag}
                                     title={properties.title}
                                     shakeMapUrl={shakemapIntensityImageUrl}
+                                    volcanoes={volcanoes}
+                                    showVolcanoes={showVolcanoes}
                                 />
                             </div>
                         </div>

@@ -91,10 +91,26 @@ const getTectonicPlateStyle = (feature) => {
  * @param {number} props.magnitude - The magnitude of the earthquake.
  * @param {string} props.title - The title of the earthquake event.
  * @param {string} [props.shakeMapUrl] - Optional URL to the ShakeMap details page for the earthquake.
+ * @param {Array<object>} [props.volcanoes=[]] - Array of volcano data objects.
+ * @param {boolean} [props.showVolcanoes=false] - Flag to control volcano visibility on the map.
  * @returns {JSX.Element} The rendered EarthquakeMap component.
  */
-const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl }) => {
+const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, volcanoes = [], showVolcanoes = false }) => {
   const position = [latitude, longitude];
+
+  const createVolcanoIcon = () => {
+    return new L.DivIcon({
+        html: `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 20L12 4L20 20H4Z" fill="#FF5722" stroke="#BF360C" stroke-width="1.5"/>
+                <path d="M10 12C10 11.4477 10.4477 11 11 11H13C13.5523 11 14 11.4477 14 12V20H10V12Z" fill="#D84315"/>
+            </svg>`,
+        className: 'custom-volcano-icon', // For potential custom styling (e.g., remove default Leaflet icon background)
+        iconSize: [24, 24],
+        iconAnchor: [12, 24], // Anchor at the bottom center of the triangle
+        popupAnchor: [0, -24] // Anchor popup slightly above the icon
+    });
+  };
 
   const mapStyle = {
     height: '100%',
@@ -121,6 +137,28 @@ const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl }) =
         </Popup>
       </Marker>
       <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
+      {showVolcanoes && volcanoes && volcanoes.map(volcano => {
+            const lat = volcano.properties?.Latitude;
+            const lon = volcano.properties?.Longitude;
+            if (typeof lat !== 'number' || typeof lon !== 'number') {
+                console.warn("Skipping volcano with invalid coordinates:", volcano.properties?.VolcanoName);
+                return null;
+            }
+            return (
+                <Marker
+                    key={volcano.properties?.VolcanoName || Math.random()} // Use a unique key
+                    position={[lat, lon]}
+                    icon={createVolcanoIcon()}
+                >
+                    <Popup>
+                        <strong>Volcano: {volcano.properties?.VolcanoName || 'N/A'}</strong><br />
+                        Country: {volcano.properties?.Country || 'N/A'}<br />
+                        Type: {volcano.properties?.Type || 'N/A'}<br />
+                        Last Eruption: {volcano.properties?.LastKnownEruption || 'N/A'}
+                    </Popup>
+                </Marker>
+            );
+        })}
     </MapContainer>
   );
 };

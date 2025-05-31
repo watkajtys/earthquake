@@ -1,0 +1,41 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "VolcanoName": "Mount St. Helens",
+        "Country": "USA",
+        "Region": "North America",
+        "Latitude": 46.1914,
+        "Longitude": -122.1956,
+        "Elevation": 2549,
+        "Type": "Stratovolcano",
+        "Status": "Holocene",
+        "LastKnownEruption": "2008 CE"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-122.1956, 46.1914]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "VolcanoName": "Mount Fuji",
+        "Country": "Japan",
+        "Region": "Japan, Taiwan, Marianas",
+        "Latitude": 35.3606,
+        "Longitude": 138.7278,
+        "Elevation": 3776,
+        "Type": "Stratovolcano",
+        "Status": "Holocene",
+        "LastKnownEruption": "1707 CE"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [138.7278, 35.3606]
+      }
+    }
+  ]
+}

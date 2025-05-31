@@ -1,6 +1,7 @@
 // src/InteractiveGlobeView.jsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
+import * as THREE from 'three';
 
 /**
  * Takes a color string (hex or rgba) and returns a new rgba string with reduced opacity.
@@ -95,7 +96,9 @@ const InteractiveGlobeView = ({
                                   defaultFocusAltitude = 2.5,
                                   allowUserDragRotation = true,
                                   enableAutoRotation = true,
-                                  globeAutoRotateSpeed = 0.1
+                                  globeAutoRotateSpeed = 0.1,
+                                  volcanoes, // New prop
+                                  showVolcanoes // New prop
                               }) => {
     const globeRef = useRef();
     const containerRef = useRef(null);
@@ -286,6 +289,97 @@ const InteractiveGlobeView = ({
         setPoints(allPointsData);
     }, [earthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]);
 
+    // Effect for volcano data
+    useEffect(() => {
+        const globe = globeRef.current;
+        if (!globe || !volcanoes) {
+            // If there are no volcanoes or globe is not ready, ensure existing volcano objects are cleared
+            // This assumes objectsData might be used for other things, so we specifically target volcanoes.
+            // A more robust way would be to filter the existing objectsData source if it's shared.
+            // For now, if showVolcanoes is false, this effect will effectively do nothing if it was already empty.
+            // If showVolcanoes becomes false AFTER volcanoes were shown, this needs to remove them.
+            // The current logic below where objectsData is set with filtered volcanoes handles this.
+            return;
+        }
+
+        let volcanoRenderData = [];
+        if (showVolcanoes) {
+            volcanoRenderData = volcanoes.map(volcano => ({
+                lat: volcano.properties.Latitude,
+                lng: volcano.properties.Longitude,
+                // Altitude: scale elevation relative to Earth's radius (approx 6371km) and add a small fixed offset
+                // Elevation is in meters, globe.gl altitude is relative to globe radius (100 units).
+                // So, alt = (Elevation / 6371000) * 100 + fixed_offset
+                // Simplified: (Elevation / 63710) + fixed_offset. Let's use a small multiplier for visibility.
+                alt: ((volcano.properties.Elevation || 0) / 100000) + 0.02, // Scaled elevation + base offset
+                obj: volcano, // Keep original data
+                name: volcano.properties.VolcanoName,
+                isVolcano: true // Custom flag for click handling
+            }));
+        }
+
+        // Combine earthquake points (from state) with volcano points for objectsData
+        // This assumes 'points' state is up-to-date with earthquake data.
+        // We need to be careful if 'points' also contains other types of objects.
+        // For now, let's assume 'points' are primarily earthquakes or can be distinguished.
+
+        // Filter existing points to remove any volcanoes if showVolcanoes is false
+        // Or, if showVolcanoes is true, ensure existing non-volcano points are kept.
+        // This is becoming complex. A better approach:
+        // globe.objectsData([...earthquakePoints, ...volcanoPoints]);
+        // And objectThreeObject differentiates.
+
+        // Let's try to keep earthquake points handling separate and use a dedicated method for volcanoes if possible,
+        // or ensure the objectsData correctly merges/replaces.
+        // The current structure uses globe.pointsData for earthquakes and potentially globe.objectsData for more complex objects.
+        // Let's assume we use objectsData for volcanoes.
+
+        // If not showing volcanoes, we effectively want to pass an empty array for the volcano part of objectsData
+        const currentObjects = globe.objectsData();
+        const nonVolcanoObjects = currentObjects.filter(d => !d.isVolcano);
+
+        globe.objectsData([...nonVolcanoObjects, ...volcanoRenderData])
+            .objectThreeObject(data => {
+                if (data.isVolcano) {
+                    const material = new THREE.MeshPhongMaterial({ color: 'red', emissive: '#220000', shininess: 20, specular: 0x111111 });
+                    const geometry = new THREE.SphereGeometry(0.3, 16, 16); // Volcano marker size
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.userData = { isVolcano: true, volcanoData: data.obj.properties };
+                    return mesh;
+                }
+                // Potentially handle other custom objects here if any were in nonVolcanoObjects
+                // For now, if it's not a volcano, we assume it's handled by other layers or should return null.
+                // This part needs to be robust if objectsData is shared with other things.
+                // If objectsData was *only* for volcanoes, then objectThreeObject would be simpler.
+                return null; // Or return the existing three object if nonVolcanoObjects had them
+            })
+            // IMPORTANT: Merge with existing onObjectClick or onPointClick logic
+            // The current setup has onPointClick for earthquakes (via pointsData).
+            // If volcanoes are added via objectsData, onObjectClick will be for them.
+            // This needs careful merging.
+            .onObjectClick((obj, event, { lat, lng, altitude }) => {
+                if (obj && obj.userData && obj.userData.isVolcano) {
+                    const data = obj.userData.volcanoData;
+                    alert(`Volcano: ${data.VolcanoName}\nCountry: ${data.Country}\nType: ${data.Type}\nLast Eruption: ${data.LastKnownEruption || 'N/A'}`);
+                } else if (onQuakeClick && obj) {
+                    // This part is tricky: 'obj' from onObjectClick might not be the same format
+                    // as 'point' from onPointClick.
+                    // We need to ensure 'obj' passed to onQuakeClick is what it expects.
+                    // Assuming 'obj' from objectsData (if it were an earthquake) would have 'quakeData'
+                    if (obj.quakeData) { // Check if it looks like an earthquake object from objectsData
+                        onQuakeClick(obj.quakeData);
+                    } else if (!obj.isVolcano) { // Fallback if it's not a volcano and doesn't have quakeData (e.g. a generic object)
+                        console.log("Clicked on a non-volcano, non-earthquake object from objectsData:", obj);
+                    }
+                }
+            });
+
+        // Ensure globe updates
+        globe.controls().autoRotate = enableAutoRotation;
+
+    }, [volcanoes, showVolcanoes, globeRef, getMagnitudeColorFunc, onQuakeClick, enableAutoRotation]);
+
+
     useEffect(() => {
         let processedPaths = [];
         if (coastlineGeoJson?.type === "GeometryCollection" && Array.isArray(coastlineGeoJson.geometries)) {
@@ -303,7 +397,22 @@ const InteractiveGlobeView = ({
                 }));
         }
         setPaths(processedPaths);
-    }, [coastlineGeoJson, tectonicPlatesGeoJson]);
+
+        // Add onPathClick handler for tectonic plates
+        if (globeRef.current && processedPaths.length > 0) {
+            globeRef.current.onPathClick(path => {
+                if (path && path.properties && path.properties.Boundary_Type) {
+                    // Check if it's a tectonic plate path, not a coastline
+                    if (path.id && path.id.startsWith('plate-')) {
+                        alert(`Tectonic Boundary Type: ${path.properties.Boundary_Type}`);
+                    }
+                } else if (path && path.id && path.id.startsWith('plate-')) {
+                    alert("Tectonic Boundary: Type information not available.");
+                }
+                // Do not interfere with other click events like globe click or point click.
+            });
+        }
+    }, [coastlineGeoJson, tectonicPlatesGeoJson, globeRef]);
 
     useEffect(() => {
         if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {
@@ -386,8 +495,15 @@ const InteractiveGlobeView = ({
 
 
     const handlePointClick = useCallback((point) => {
-        if (point?.quakeData) onQuakeClick(point.quakeData);
+        // This handles clicks from globe.pointsData (earthquakes)
+        if (point?.quakeData && !point.isVolcano) { // Ensure it's not a volcano handled by onObjectClick
+            onQuakeClick(point.quakeData);
+        }
     }, [onQuakeClick]);
+
+    // The onObjectClick for objectsData (volcanoes) is defined within the volcano useEffect.
+    // We need to ensure that onQuakeClick is also available there if we intend to merge.
+    // For now, they are separate based on pointsData vs objectsData.
 
     // Mouse hover detection (slightly simplified from your original for clarity here)
     // Your existing mouseMoveTimeoutRef logic is fine.
@@ -485,7 +601,7 @@ const InteractiveGlobeView = ({
              setRingsData(newRings);
         }
 
-    }, [latestMajorQuakeForRing, previousMajorQuake, ringsData.length]); // Added previousMajorQuake and ringsData.length to dependency array
+    }, [latestMajorQuakeForRing, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]); // Added previousMajorQuake and ringsData.length to dependency array
 
 
 

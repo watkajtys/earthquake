@@ -101,3 +101,8 @@
   /* animation: pulse 1.5s infinite; */
   /* transform-origin: center; */
 /* } */
+
+.custom-volcano-icon {
+  background: transparent !important;
+  border: none !important;
+}
