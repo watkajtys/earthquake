@@ -1467,7 +1467,7 @@ function App() {
     };
 
     return (
-        <div className="flex flex-col h-screen font-sans bg-slate-900 text-slate-100 antialiased">
+        <div className="flex flex-col h-screen font-sans bg-slate-900 text-slate-100 antialiased lg:pb-0 pb-[var(--bottom-nav-height)]">
             <header className="bg-slate-800 text-white p-2 shadow-lg z-40 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
@@ -1476,7 +1476,7 @@ function App() {
             </header>
 
             {/* This main flex container now has padding-bottom for mobile to avoid overlap with BottomNav */}
-            <div className="flex flex-1 overflow-hidden pb-16 lg:pb-0">
+            <div className="flex flex-1 overflow-hidden">
 
                 {/* MAIN CONTENT AREA - This will now adapt based on activeMobileView */}
                 {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
