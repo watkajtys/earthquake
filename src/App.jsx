@@ -10,6 +10,7 @@ import InfoSnippet from './InfoSnippet';
 import coastlineData from './ne_110m_coastline.json'; // Direct import
 import tectonicPlatesData from './TectonicPlateBoundaries.json';
 import GlobalLastMajorQuakeTimer                                    from "./GlobalLastMajorQuakeTimer.jsx";
+import MobileTimerBanner from './MobileTimerBanner.jsx'; // Import MobileTimerBanner
 import BottomNav                                                    from "./BottomNav.jsx"; // Direct import
 import ClusterSummaryItem from './ClusterSummaryItem'; // Add this line
 import ClusterDetailModal from './ClusterDetailModal';
@@ -1476,7 +1477,7 @@ function App() {
             </header>
 
             {/* This main flex container now has padding-bottom for mobile to avoid overlap with BottomNav */}
-            <div className="flex flex-1 overflow-hidden pb-16 lg:pb-0">
+            <div className="flex flex-1 overflow-hidden pb-36 lg:pb-0">
 
                 {/* MAIN CONTENT AREA - This will now adapt based on activeMobileView */}
                 {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
@@ -1906,6 +1907,11 @@ function App() {
                 </aside>
             </div> {/* End of main flex container (main + aside) */}
 
+            <MobileTimerBanner
+                lastMajorQuake={lastMajorQuake}
+                MAJOR_QUAKE_THRESHOLD={MAJOR_QUAKE_THRESHOLD}
+                formatTimeDuration={formatTimeDuration}
+            />
             <BottomNav />
 
             {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
