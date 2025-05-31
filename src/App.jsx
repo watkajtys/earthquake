@@ -1896,7 +1896,7 @@ function App() {
  * manages the modal's open/close state based on navigation.
  * @returns {JSX.Element} The rendered EarthquakeDetailView component configured as a modal.
  */
-const EarthquakeDetailModal = ({ broaderEarthquakeData }) => { // Add prop
+const EarthquakeDetailModal = ({ broaderEarthquakeData, dataSourceTimespanDays }) => { // Add dataSourceTimespanDays
     const { detailUrlParam } = useParams();
     const navigate = useNavigate();
     const detailUrl = decodeURIComponent(detailUrlParam);
@@ -1910,7 +1910,8 @@ const EarthquakeDetailModal = ({ broaderEarthquakeData }) => { // Add prop
     return <EarthquakeDetailView
                 detailUrl={detailUrl}
                 onClose={handleClose}
-                broaderEarthquakeData={broaderEarthquakeData} // Pass it down
+                broaderEarthquakeData={broaderEarthquakeData}
+                dataSourceTimespanDays={dataSourceTimespanDays} // Pass it down
             />;
 };
 
