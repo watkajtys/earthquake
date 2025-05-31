@@ -152,38 +152,66 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
                 >
                     <svg viewBox="0 0 60 60" width="64" height="64"> {/* Adjusted viewBox and size for rings */}
                         <g transform="translate(30,30)"> {/* Center coordinate system for rings */}
-                            {/* Animated Rings - 3 rings with staggered delays */}
                             {[0, 1, 2].map((i) => (
-                                <circle
-                                    key={i}
-                                    cx="0"
-                                    cy="0"
-                                    r="3" // Initial radius
-                                    stroke={getMagnitudeColor(magnitude)}
-                                    strokeWidth="2" // Changed
-                                    fill="none"
-                                    strokeOpacity="0.9" // Changed (this is the initial value for the SVG element itself)
-                                >
-                                    <animate
-                                        attributeName="r"
-                                        from="3"
-                                        to="25" // Expand to radius
-                                        dur="3s" // Duration of one pulse
-                                        begin={`${i * 1}s`} // Stagger start times
-                                        repeatCount="indefinite"
-                                    />
-                                    <animate
-                                        attributeName="stroke-opacity"
-                                        from="0.9" // Changed to match initial
-                                        to="0"
-                                        dur="3s"
-                                        begin={`${i * 1}s`}
-                                        repeatCount="indefinite"
-                                    />
-                                </circle>
+                                <React.Fragment key={`ring-series-${i}`}>
+                                    {/* Outer "Glow" Ring */}
+                                    <circle
+                                        cx="0"
+                                        cy="0"
+                                        r="3"
+                                        stroke={getMagnitudeColor(magnitude)}
+                                        strokeWidth="5" // Wider for glow effect
+                                        fill="none"
+                                        strokeOpacity="0.5" // Initial opacity for SVG element
+                                    >
+                                        <animate
+                                            attributeName="r"
+                                            from="3"
+                                            to="28" // Slightly larger to encompass core ring's max
+                                            dur="3s"
+                                            begin={`${i * 1}s`}
+                                            repeatCount="indefinite"
+                                        />
+                                        <animate
+                                            attributeName="stroke-opacity"
+                                            from="0.5" // Start fairly transparent for glow
+                                            to="0"
+                                            dur="3s"
+                                            begin={`${i * 1}s`}
+                                            repeatCount="indefinite"
+                                        />
+                                    </circle>
+                                    {/* Inner "Core" Ring */}
+                                    <circle
+                                        cx="0"
+                                        cy="0"
+                                        r="3"
+                                        stroke={getMagnitudeColor(magnitude)} // Same magnitude color
+                                        strokeWidth="2.5" // Thicker than before, but less than glow
+                                        fill="none"
+                                        strokeOpacity="1" // Initial opacity for SVG element (fully opaque)
+                                    >
+                                        <animate
+                                            attributeName="r"
+                                            from="3"
+                                            to="25" // Original expansion radius
+                                            dur="3s"
+                                            begin={`${i * 1}s`}
+                                            repeatCount="indefinite"
+                                        />
+                                        <animate
+                                            attributeName="stroke-opacity"
+                                            from="1" // Start fully opaque
+                                            to="0"
+                                            dur="3s"
+                                            begin={`${i * 1}s`}
+                                            repeatCount="indefinite"
+                                        />
+                                    </circle>
+                                </React.Fragment>
                             ))}
-                            {/* Central Hypocenter Marker - drawn on top */}
-                            <circle cx="0" cy="0" r="3.5" fill="#EF4444" stroke="#1F2937" strokeWidth="1" /> {/* Smaller radius to fit new viewBox scale */}
+                            {/* Central Hypocenter Marker - ensure it's drawn last to be on top */}
+                            <circle cx="0" cy="0" r="3.5" fill="#EF4444" stroke="#1F2937" strokeWidth="1" />
                         </g>
                     </svg>
                 </div>
