@@ -13,6 +13,7 @@ import GlobalLastMajorQuakeTimer                                    from "./Glob
 import BottomNav                                                    from "./BottomNav.jsx"; // Direct import
 import ClusterSummaryItem from './ClusterSummaryItem'; // Add this line
 import ClusterDetailModal from './ClusterDetailModal';
+import { calculateDistance, getMagnitudeColor } from './utils';
 
 // --- Configuration & Helpers ---
 const USGS_API_URL_DAY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
@@ -52,22 +53,6 @@ const ALERT_LEVELS = {
  * @param {number} lat1 Latitude of the first point.
  * @param {number} lon1 Longitude of the first point.
  * @param {number} lat2 Latitude of the second point.
- * @param {number} lon2 Longitude of the second point.
- * @returns {number} Distance in kilometers.
- */
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Radius of the Earth in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
-    return distance;
-}
-
 /**
  * Finds clusters of earthquakes based on proximity and time.
  * @param {Array<object>} earthquakes - Array of earthquake objects. Expected to have `properties.time` and `geometry.coordinates`.
@@ -180,22 +165,9 @@ function App() {
         return parts.join(', ');
     }, []);
 
-    /**
-     * Returns a hex color code based on earthquake magnitude.
-     * @param {number | null | undefined} magnitude - The earthquake magnitude.
-     * @returns {string} A hex color code string.
-     */
-    const getMagnitudeColor = useCallback((magnitude) => {
-        if (magnitude === null || magnitude === undefined) return '#94A3B8';
-        if (magnitude < 1.0) return '#67E8F9';
-        if (magnitude < 2.5) return '#22D3EE';
-        if (magnitude < 4.0) return '#34D399';
-        if (magnitude < 5.0) return '#FACC15';
-        if (magnitude < 6.0) return '#FB923C';
-        if (magnitude < 7.0) return '#F97316';
-        if (magnitude < 8.0) return '#EF4444';
-        return '#B91C1C';
-    }, []);
+    // getMagnitudeColor is now imported from utils.js and used directly where needed,
+    // or passed as a prop if a component needs it but App itself doesn't use it directly in a useCallback here.
+    // The useCallback wrapper for getMagnitudeColor previously here is removed.
 
     /**
      * Returns Tailwind CSS class strings for background and text color based on earthquake magnitude.
