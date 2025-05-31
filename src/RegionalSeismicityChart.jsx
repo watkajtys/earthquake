@@ -2,38 +2,16 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { calculateDistance, getMagnitudeColor } from './utils';
 
-// (Copied from App.jsx - ideally this would be in a shared utils.js)
-// const getMagnitudeColor = (magnitude) => {
-//     if (magnitude === null || magnitude === undefined) return '#94A3B8'; // slate-400
-//     if (magnitude < 1.0) return '#67E8F9'; // cyan-300
-//     if (magnitude < 2.5) return '#22D3EE'; // cyan-400
-//     if (magnitude < 4.0) return '#34D399'; // emerald-400
-//     if (magnitude < 5.0) return '#FACC15'; // yellow-400
-//     if (magnitude < 6.0) return '#FB923C'; // orange-400
-//     if (magnitude < 7.0) return '#F97316'; // orange-500
-//     if (magnitude < 8.0) return '#EF4444'; // red-500
-//     return '#B91C1C'; // red-700
-// };
-
-// --- Helper Functions ---
-// function calculateDistance(lat1, lon1, lat2, lon2) {
-//     const R = 6371;
-//     const dLat = (lat2 - lat1) * Math.PI / 180;
-//     const dLon = (lon2 - lon1) * Math.PI / 180;
-//     const a =
-//         Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-//         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-//         Math.sin(dLon / 2) * Math.sin(dLon / 2);
-//     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-//     return R * c;
-// }
+// Not needed locally anymore as they are imported from utils.js
+// const getMagnitudeColor = (magnitude) => { ... };
+// function calculateDistance(lat1, lon1, lat2, lon2) { ... };
 
 function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dataSourceTimespanDays }) {
   const chartContainerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(380);
 
-  const REGIONAL_RADIUS_KM = 100;
-  const TIME_WINDOW_DAYS = 30;
+  const REGIONAL_RADIUS_KM = 160; // Approx 100 miles radius for nearby events
+  const TIME_WINDOW_DAYS = 30;    // Default look back 30 days for data search
 
   useEffect(() => {
       const chartContainer = chartContainerRef.current;
@@ -110,48 +88,11 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
                  .map(day => ({ ...day, avgMag: day.magnitudes.length > 0 ? (day.magnitudes.reduce((s,m)=>s+m,0) / day.magnitudes.length) : null }));
   }, [regionalEvents, currentEarthquake, displayWindowDays]);
 
-  if (!currentEarthquake) { /* ... placeholder ... */ }
-  const isLoading = !nearbyEarthquakesData;
-  if (isLoading) { /* ... loading spinner ... */ }
-  if (regionalEvents.length === 0 && !isLoading) { /* ... no events message ... */ }
-
-  // SVG Chart Constants & Calculations
-  const svgHeight = 200;
-  const margin = { top: 20, right: 10, bottom: 35, left: 30 };
-  const chartWidth = containerWidth > 0 ? containerWidth - margin.left - margin.right : 0; // Ensure chartWidth is not negative
-  const chartHeight = svgHeight - margin.top - margin.bottom;
-  const maxCount = Math.max(...chartData.map(d => d.count), 0);
-  const barWidth = chartWidth > 0 && chartData.length > 0 ? chartWidth / chartData.length * 0.8 : 0;
-  const barSpacing = chartWidth > 0 && chartData.length > 0 ? chartWidth / chartData.length * 0.2 : 0;
-  const yScale = (value) => chartHeight - (value / Math.max(1, maxCount)) * chartHeight;
-
-  const yAxisTicks = [];
-  if (maxCount > 0) {
-    const numTicks = Math.min(maxCount, 5);
-    const step = Math.ceil(maxCount / numTicks) || 1;
-    for (let i = 0; i <= maxCount; i += step) {
-      if (yAxisTicks.length <= numTicks) yAxisTicks.push(i); else break;
-    }
-    if (!yAxisTicks.includes(maxCount) && yAxisTicks.length <= numTicks) yAxisTicks.push(maxCount);
-    if (yAxisTicks.length === 1 && yAxisTicks[0] === 0 && maxCount > 0) yAxisTicks.push(maxCount);
-    else if (yAxisTicks.length === 0 && maxCount === 0) yAxisTicks.push(0);
-  } else { yAxisTicks.push(0); }
-
-  // X-axis label calculations
-  const approxLabelWidthPx = 40;
-  let numberOfAffordableLabels = chartWidth > 0 ? Math.max(1, Math.floor(chartWidth / approxLabelWidthPx)) : 1;
-  if (chartData.length <= 2) {
-      numberOfAffordableLabels = chartData.length;
-  } else {
-      numberOfAffordableLabels = Math.max(2, numberOfAffordableLabels);
-  }
-  const numLabelsToActuallyShow = Math.min(chartData.length, numberOfAffordableLabels);
-  const labelStep = chartData.length > 0 && numLabelsToActuallyShow > 0 ? Math.ceil(chartData.length / numLabelsToActuallyShow) : 1;
-
   // Conditional returns for no current quake, loading, or no regional events
   if (!currentEarthquake) {
     return <div className="p-3 rounded-md text-center text-sm text-slate-500">Select an earthquake to see regional seismicity.</div>;
   }
+  const isLoading = !nearbyEarthquakesData;
   if (isLoading) {
     return (
       <div className="p-3 rounded-md">
@@ -176,11 +117,41 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
     );
   }
 
+  // SVG Chart Constants & Calculations
+  const svgHeight = 200;
+  const margin = { top: 20, right: 10, bottom: 35, left: 30 };
+  const chartWidth = containerWidth > 0 ? containerWidth - margin.left - margin.right : 0;
+  const chartHeight = svgHeight - margin.top - margin.bottom;
+  const maxCount = Math.max(...chartData.map(d => d.count), 0);
+  const barWidth = chartWidth > 0 && chartData.length > 0 ? chartWidth / chartData.length * 0.8 : 0;
+  const barSpacing = chartWidth > 0 && chartData.length > 0 ? chartWidth / chartData.length * 0.2 : 0;
+  const yScale = (value) => chartHeight - (value / Math.max(1, maxCount)) * chartHeight;
+  const yAxisTicks = [];
+  if (maxCount > 0) {
+    const numTicks = Math.min(maxCount, 5);
+    const step = Math.ceil(maxCount / numTicks) || 1;
+    for (let i = 0; i <= maxCount; i += step) {
+      if (yAxisTicks.length <= numTicks) yAxisTicks.push(i); else break;
+    }
+    if (!yAxisTicks.includes(maxCount) && yAxisTicks.length <= numTicks) yAxisTicks.push(maxCount);
+    if (yAxisTicks.length === 1 && yAxisTicks[0] === 0 && maxCount > 0) yAxisTicks.push(maxCount);
+    else if (yAxisTicks.length === 0 && maxCount === 0) yAxisTicks.push(0);
+  } else { yAxisTicks.push(0); }
+  const approxLabelWidthPx = 40;
+  let numberOfAffordableLabels = chartWidth > 0 ? Math.max(1, Math.floor(chartWidth / approxLabelWidthPx)) : 1;
+  if (chartData.length <= 2) {
+      numberOfAffordableLabels = chartData.length;
+  } else {
+      numberOfAffordableLabels = Math.max(2, numberOfAffordableLabels);
+  }
+  const numLabelsToActuallyShow = Math.min(chartData.length, numberOfAffordableLabels);
+  const labelStep = chartData.length > 0 && numLabelsToActuallyShow > 0 ? Math.ceil(chartData.length / numLabelsToActuallyShow) : 1;
+
   return (
     <div className="p-3 rounded-md">
       <h3 className="text-md font-semibold text-blue-700 mb-1">Regional Activity Prior to Event</h3>
       <p className="text-xs text-slate-500 mb-2">
-        Using regional data from the last ~{dataSourceTimespanDays || 'N/A'} days.
+        Using regional data from the last ~{dataSourceTimespanDays || 'N/A'} days, searching within {REGIONAL_RADIUS_KM}km.
         Chart displays activity in the {displayWindowDays} days prior to this M{currentEarthquake.properties.mag?.toFixed(1)} event.
       </p>
       <div ref={chartContainerRef} className="w-full overflow-hidden">
@@ -197,7 +168,6 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
               const x = index * (barWidth + barSpacing);
               const barH = (dayData.count / Math.max(1,maxCount)) * chartHeight;
               const y = chartHeight - barH;
-
               let isSignificantDay;
               if (numLabelsToActuallyShow === 0 && chartData.length > 0) {
                   isSignificantDay = false;
@@ -211,7 +181,6 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
               if (numLabelsToActuallyShow === 1 && chartData.length > 1) {
                    isSignificantDay = index === Math.floor(chartData.length / 2);
               }
-
               return (
                 <g key={dayData.date.toISOString()}>
                   <title>
