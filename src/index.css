@@ -1,3 +1,7 @@
+:root {
+  --bottom-nav-height: 4rem; /* Equivalent to h-16 in Tailwind CSS */
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
