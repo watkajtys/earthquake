@@ -38,4 +38,37 @@ export const getMagnitudeColor = (magnitude) => {
     return '#B91C1C'; // red-700
 };
 
+/**
+ * Determines the style for tectonic plate boundary lines on the map.
+ * The styling is based on the `Boundary_Type` property of the GeoJSON feature.
+ *
+ * @param {object} feature - The GeoJSON feature object for a tectonic plate boundary.
+ * @param {object} feature.properties - Properties of the feature.
+ * @param {string} [feature.properties.Boundary_Type] - The type of plate boundary (e.g., 'Convergent', 'Divergent', 'Transform').
+ * @param {object} [options] - Optional styling parameters.
+ * @param {number} [options.defaultWeight=1] - Default line weight.
+ * @param {number} [options.defaultOpacity=0.8] - Default line opacity.
+ * @returns {object} A Leaflet path style object (color, weight, opacity).
+ */
+export const getTectonicPlateStyle = (feature, options = {}) => {
+  const { defaultWeight = 1, defaultOpacity = 0.8 } = options;
+  let color = `rgba(255, 165, 0, ${defaultOpacity})`; // Default: Orange
+
+  const type = feature?.properties?.Boundary_Type;
+
+  if (type === 'Convergent') {
+    color = `rgba(220, 20, 60, ${defaultOpacity})`; // Crimson
+  } else if (type === 'Divergent') {
+    color = `rgba(60, 179, 113, ${defaultOpacity})`; // MediumSeaGreen
+  } else if (type === 'Transform') {
+    color = `rgba(70, 130, 180, ${defaultOpacity})`; // SteelBlue
+  }
+
+  return {
+    color: color,
+    weight: defaultWeight,
+    opacity: defaultOpacity, // Opacity is handled by the RGBA color string, but Leaflet also uses this
+  };
+};
+
 // Add other utility functions here as the app grows

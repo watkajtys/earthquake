@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import tectonicPlatesData from './TectonicPlateBoundaries.json';
+import { getTectonicPlateStyle } from './utils'; // Import the utility function
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -27,35 +28,6 @@ const epicenterIcon = new L.DivIcon({
   iconSize: [24, 24], // Size of the icon
   iconAnchor: [12, 12], // Anchor point of the icon (center for this SVG)
 });
-
-/**
- * Determines the style for tectonic plate boundary lines on the map.
- * The styling is based on the `Boundary_Type` property of the GeoJSON feature,
- * similar to how it's done in the `InteractiveGlobeView` component.
- *
- * @param {object} feature - The GeoJSON feature object for a tectonic plate boundary.
- * @param {object} feature.properties - Properties of the feature.
- * @param {string} [feature.properties.Boundary_Type] - The type of plate boundary (e.g., 'Convergent', 'Divergent', 'Transform').
- * @returns {object} A Leaflet path style object (color, weight, opacity).
- */
-const getTectonicPlateStyle = (feature) => {
-  let color = 'rgba(255, 165, 0, 0.8)'; // Default: Orange
-  const type = feature?.properties?.Boundary_Type;
-
-  if (type === 'Convergent') {
-    color = 'rgba(220, 20, 60, 0.8)'; // Crimson
-  } else if (type === 'Divergent') {
-    color = 'rgba(60, 179, 113, 0.8)'; // MediumSeaGreen
-  } else if (type === 'Transform') {
-    color = 'rgba(70, 130, 180, 0.8)'; // SteelBlue
-  }
-
-  return {
-    color: color,
-    weight: 1, // Consistent with InteractiveGlobeView's stroke weight
-    opacity: 0.8, // Opacity is handled by the RGBA color string
-  };
-};
 
 /**
  * `EarthquakeMap` component renders a Leaflet map displaying an earthquake epicenter,

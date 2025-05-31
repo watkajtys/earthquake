@@ -1,5 +1,6 @@
 // src/ClusterDetailModal.jsx
 import React from 'react';
+import MiniMap from './MiniMap'; // Import the MiniMap component
 
 /**
  * A modal component to display detailed information about an earthquake cluster.
@@ -85,7 +86,15 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                     <p><strong>Depth Range:</strong> <span className="text-slate-100">{depthRangeStr}</span></p>
                 </div>
 
+                {/* MiniMap for Cluster Visualization */}
+                <div className="my-4">
+                    {/* Adjusted heading style for consistency */}
+                    <h3 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2">Cluster Location Overview</h3>
+                    <MiniMap clusterQuakes={originalQuakes} />
+                </div>
+
                 {/* Individual Earthquakes List */}
+                {/* Adjusted pt-3 to pt-2 as the map section itself has my-4 which includes margin */}
                 <h3 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2 border-t border-slate-700">
                     Earthquakes in this Cluster
                 </h3>

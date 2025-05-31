@@ -4,6 +4,7 @@ import RegionalSeismicityChart from './RegionalSeismicityChart';
 import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
+import MiniMap from './MiniMap'; // Import the MiniMap component
 
 // Helper Functions
 /**
@@ -529,14 +530,25 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                     {/* Earthquake Map Section - Restructured as a standard panel */}
                     {geometry && geometry.coordinates && isValidNumber(geometry.coordinates[1]) && isValidNumber(geometry.coordinates[0]) && (
                         <div className={`${exhibitPanelClass} border-sky-500`}>
-                            <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
-                            <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
+                            <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Event Location & Antipode</h2>
+                            <div className="h-[300px] md:h-[400px] lg:h-[350px] rounded-md overflow-hidden relative mt-2">
                                 <EarthquakeMap
                                     latitude={geometry.coordinates[1]}
                                     longitude={geometry.coordinates[0]}
                                     title={properties.title}
                                     shakeMapUrl={shakemapIntensityImageUrl}
                                 />
+                            </div>
+                            <div className="mt-4">
+                                <h3 className="text-md font-semibold text-sky-700 mb-1.5 text-center">Antipodal View</h3>
+                                <MiniMap
+                                    centerLat={-geometry.coordinates[1]}
+                                    centerLng={(geometry.coordinates[0] + 180) % 360 - 180} // Basic antipodal calculation
+                                    zoomLevel={1}
+                                    antipodalMarkerCoordinates={{ lat: -geometry.coordinates[1], lng: (geometry.coordinates[0] + 180) % 360 - 180 }}
+                                    mainQuakeCoordinates={{ lat: geometry.coordinates[1], lng: geometry.coordinates[0] }}
+                                />
+                                <p className={captionClass}>Map showing the point on Earth directly opposite (antipode - blue marker) to the earthquake's epicenter (red marker, if shown).</p>
                             </div>
                         </div>
                     )}
@@ -665,6 +677,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                                         }
                                     </div>
                                     <div className={`${diagramContainerClass} bg-indigo-50`} style={{minHeight: '280px'}}>
+                                        {/* InteractiveFaultDiagram will return null if selectedFaultPlane.strike is not a valid number */}
                                         <InteractiveFaultDiagram planeData={selectedFaultPlane} planeKey={selectedFaultPlaneKey} />
                                     </div>
                                     {/* Display Strike, Dip, Rake only if they are valid numbers */}
