@@ -223,11 +223,19 @@ const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`
  * @param {number} props.dataSourceTimespanDays - The timespan (e.g., 7 or 30 days) of the `broaderEarthquakeData` source, used by RegionalSeismicityChart for context.
  * @returns {JSX.Element} The rendered EarthquakeDetailView component.
  */
-function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays }) { // Add dataSourceTimespanDays
+function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) { // Add dataSourceTimespanDays
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [selectedFaultPlaneKey, setSelectedFaultPlaneKey] = useState('np1');
+
+    useEffect(() => {
+        // Check if monthly data has not been attempted to load yet and is not currently loading
+        if (hasAttemptedMonthlyLoad === false && isLoadingMonthly === false && typeof handleLoadMonthlyData === 'function') {
+            console.log('EarthquakeDetailView: Triggering monthly data load.');
+            handleLoadMonthlyData();
+        }
+    }, [detailUrl, hasAttemptedMonthlyLoad, isLoadingMonthly, handleLoadMonthlyData]); // Dependencies for the effect
 
     useEffect(() => {
         if (!detailUrl) return;
