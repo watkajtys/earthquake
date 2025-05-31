@@ -522,19 +522,17 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // A
                         </tbody></table>
                     </div>
 
-                    {/* Earthquake Map Section - Moved here */}
+                    {/* Earthquake Map Section - Restructured as a standard panel */}
                     {geometry && geometry.coordinates && isValidNumber(geometry.coordinates[1]) && isValidNumber(geometry.coordinates[0]) && (
-                        <div className="p-0 md:p-0 -mx-3 md:-mx-5 my-5"> {/* Adjusted padding and margin for placement */}
-                            <div className={`${exhibitPanelClass} border-cyan-500 h-[300px] md:h-[400px] lg:h-[500px]`}>
-                                <h2 className={`${exhibitTitleClass} text-cyan-800 border-cyan-200`}>Earthquake Location Map</h2>
-                                <div className="w-full h-[calc(100%-40px)] mt-2 rounded overflow-hidden"> {/* Adjust height based on title height */}
-                                    <EarthquakeMap
-                                        latitude={geometry.coordinates[1]}
-                                        longitude={geometry.coordinates[0]}
-                                        title={properties.title}
-                                        shakeMapUrl={shakemapIntensityImageUrl}
-                                    />
-                                </div>
+                        <div className={`${exhibitPanelClass} border-sky-500`}> {/* Using sky-500 border for map panel */}
+                            <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
+                            <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2"> {/* Adjusted height slightly, ensure mt-2 if title is present */}
+                                <EarthquakeMap
+                                    latitude={geometry.coordinates[1]}
+                                    longitude={geometry.coordinates[0]}
+                                    title={properties.title}
+                                    shakeMapUrl={shakemapIntensityImageUrl}
+                                />
                             </div>
                         </div>
                     )}
