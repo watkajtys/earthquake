@@ -1,6 +1,6 @@
 // src/App.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom'; // Link and useLocation removed
 import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
 import EarthquakeDetailView from './EarthquakeDetailView';
 import InteractiveGlobeView from './InteractiveGlobeView';
@@ -21,7 +21,6 @@ const USGS_API_URL_WEEK = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/sum
 const USGS_API_URL_MONTH = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson';
 const CLUSTER_MAX_DISTANCE_KM = 100; // Max distance for quakes to be in the same cluster
 const CLUSTER_MIN_QUAKES = 3; // Min number of quakes to form a cluster
-const CLUSTER_TIME_WINDOW_HOURS = 48; // Time window in hours to consider for clustering
 const MAJOR_QUAKE_THRESHOLD = 4.5;
 const FEELABLE_QUAKE_THRESHOLD = 2.5;
 const FELT_REPORTS_THRESHOLD = 0;
@@ -715,7 +714,7 @@ function App() {
             const data = await response.json();
             const sanitizedFeatures = (data.features || []).filter(f => f.properties?.type === 'earthquake').map(f => ({ ...f, properties: { ...f.properties, mag: (f.properties.mag === null || typeof f.properties.mag === 'number') ? f.properties.mag : null, detail: f.properties.detail || f.properties.url }, geometry: f.geometry || {type: "Point", coordinates: [null, null, null]} }));
             return {features: sanitizedFeatures, metadata: data.metadata};
-        } catch (e) { console.error(`Workspace error from ${url}:`, e); throw e; }
+        } catch (e) { throw e; } // Console.error fully removed, throw e remains
     }, []);
 
     const latestFeelableQuakesSnippet = useMemo(() => {
@@ -1055,7 +1054,7 @@ function App() {
             } else {
                  // Handle case where monthlyResult.features might be null or undefined
                 if (!isMounted) return;
-                console.error("Monthly data features are missing in the response:", monthlyResult);
+                // console.error("Monthly data features are missing in the response:", monthlyResult); // Removed
                 setMonthlyError("Monthly data is currently unavailable or incomplete.");
                 setAllEarthquakes([]); // Ensure allEarthquakes is also cleared
                 // Already initialized to [] above, but being explicit here for clarity
@@ -1066,7 +1065,7 @@ function App() {
             }
         } catch (e) {
             if (!isMounted) return;
-            console.error("Failed to fetch monthly data:", e);
+            // console.error("Failed to fetch monthly data:", e); // Removed
             setMonthlyError(`Monthly Data Error: ${e.message}`);
             setAllEarthquakes([]);
             // Already initialized to [] above
@@ -1254,7 +1253,7 @@ function App() {
 
             alert(message);
             // Optionally, you could also log to console for more detailed inspection
-            console.log("Cluster clicked:", quake);
+            // console.log("Cluster clicked:", quake); // Removed
 
         } else {
             // Existing logic for individual earthquake clicks
@@ -1262,7 +1261,7 @@ function App() {
             if (detailUrl) {
                 navigate(`/quake/${encodeURIComponent(detailUrl)}`);
             } else {
-                console.warn("No detail URL for individual earthquake:", quake?.id, quake);
+                // console.warn("No detail URL for individual earthquake:", quake?.id, quake); // Removed
                 // Fallback alert if no detail URL for a non-cluster point
                 alert(`Earthquake: M ${quake?.properties?.mag?.toFixed(1)} - ${quake?.properties?.place || 'Unknown location'}. No further details link available.`);
             }

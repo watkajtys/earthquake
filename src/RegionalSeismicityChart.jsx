@@ -2,10 +2,17 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { calculateDistance, getMagnitudeColor } from './utils';
 
-// Not needed locally anymore as they are imported from utils.js
-// const getMagnitudeColor = (magnitude) => { ... };
-// function calculateDistance(lat1, lon1, lat2, lon2) { ... };
+// Local definitions of getMagnitudeColor and calculateDistance were here and are now removed.
 
+/**
+ * Displays a chart of seismic activity in the region surrounding a selected earthquake.
+ * The chart's X-axis dynamically adjusts to the time span of recent regional events.
+ * @param {object} props - Component props.
+ * @param {object} props.currentEarthquake - The main earthquake event object (USGS GeoJSON feature).
+ * @param {Array<object>} props.nearbyEarthquakesData - Array of earthquake objects for regional context.
+ * @param {number} props.dataSourceTimespanDays - Indicates the time span of `nearbyEarthquakesData` (e.g., 7 or 30 days).
+ * @returns {JSX.Element} The rendered RegionalSeismicityChart component.
+ */
 function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dataSourceTimespanDays }) {
   const chartContainerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(380);
@@ -39,6 +46,7 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
     });
   }, [currentEarthquake, nearbyEarthquakesData, REGIONAL_RADIUS_KM, TIME_WINDOW_DAYS]);
 
+  // Calculate the number of days to display on the X-axis based on actual event concentration.
   const displayWindowDays = useMemo(() => {
     let calculatedDisplayDays = TIME_WINDOW_DAYS;
     if (regionalEvents.length > 0 && currentEarthquake?.properties?.time) {
@@ -137,6 +145,8 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
     if (yAxisTicks.length === 1 && yAxisTicks[0] === 0 && maxCount > 0) yAxisTicks.push(maxCount);
     else if (yAxisTicks.length === 0 && maxCount === 0) yAxisTicks.push(0);
   } else { yAxisTicks.push(0); }
+
+  // Determine which X-axis date labels to show to prevent crowding
   const approxLabelWidthPx = 40;
   let numberOfAffordableLabels = chartWidth > 0 ? Math.max(1, Math.floor(chartWidth / approxLabelWidthPx)) : 1;
   if (chartData.length <= 2) {
