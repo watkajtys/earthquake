@@ -72,3 +72,32 @@
   min-width: 5px;
   min-height: 5px;
 }
+
+/* Styles for the custom pulsing epicenter marker */
+.custom-pulsing-icon .leaflet-div-icon {
+  background: none !important; /* Remove Leaflet's default background */
+  border: none !important; /* Remove Leaflet's default border */
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+}
+
+/* Apply animation to the SVG within the custom icon if not directly styled on SVG element */
+/* .custom-pulsing-icon svg { */
+  /* The animation is already applied inline in the SVG HTML for simplicity, */
+  /* but could be applied here if preferred: */
+  /* animation: pulse 1.5s infinite; */
+  /* transform-origin: center; */
+/* } */

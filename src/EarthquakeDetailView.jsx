@@ -1,27 +1,54 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
+import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 
 // Helper Functions
+/**
+ * Formats a timestamp into a full date and long time string.
+ * @param {number | string | undefined} timestamp - The Unix timestamp in milliseconds or a date string.
+ * @returns {string} The formatted date and time string, or 'N/A' if the timestamp is invalid.
+ */
 const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A'; // Remains for direct use if needed, but conditional rendering should prevent this.
     return new Date(timestamp).toLocaleString([], { dateStyle: 'full', timeStyle: 'long' });
 };
 
+/**
+ * Checks if a value can be parsed as a valid number.
+ * @param {any} num - The value to check.
+ * @returns {boolean} True if the value is a valid number, false otherwise.
+ */
 const isValidNumber = (num) => {
     const parsedNum = parseFloat(num);
     return typeof parsedNum === 'number' && !isNaN(parsedNum);
 };
 
+/**
+ * Checks if a value is a non-empty string.
+ * @param {any} str - The value to check.
+ * @returns {boolean} True if the value is a non-empty string, false otherwise.
+ */
 const isValidString = (str) => {
     return typeof str === 'string' && str.trim() !== '';
 };
 
+/**
+ * Checks if a value is not null or undefined.
+ * @param {any} value - The value to check.
+ * @returns {boolean} True if the value is present, false otherwise.
+ */
 const isValuePresent = (value) => {
     return value !== null && value !== undefined;
 };
 
-// formatNumber and formatLargeNumber will now primarily be used AFTER a check with isValidNumber
+/**
+ * Formats a number to a specified precision.
+ * Relies on `isValidNumber` being called beforehand for robustness, but includes an internal check.
+ * @param {number | string} num - The number or string to format.
+ * @param {number} [precision=1] - The number of decimal places.
+ * @returns {string} The formatted number as a string, or 'N/A' if invalid.
+ */
 const formatNumber = (num, precision = 1) => {
     // The initial check in the original function is good, but we rely on isValidNumber before calling.
     // However, keeping it robust is fine.
@@ -30,6 +57,12 @@ const formatNumber = (num, precision = 1) => {
     return number.toFixed(precision);
 };
 
+/**
+ * Formats a large number into a human-readable string with suffixes (e.g., thousand, million).
+ * Uses `isValidNumber` for pre-validation.
+ * @param {number | string} num - The number or string to format.
+ * @returns {string} The formatted large number string, or 'N/A' if invalid.
+ */
 const formatLargeNumber = (num) => {
     if (!isValidNumber(num)) return 'N/A'; // Use isValidNumber
     if (num === 0) return '0';
@@ -46,7 +79,16 @@ const formatLargeNumber = (num) => {
     return value + suffix;
 };
 
-
+/**
+ * Determines the SVG paths for a beachball diagram and the fault type based on rake and dip.
+ * @param {number | string} rake - The rake angle.
+ * @param {number | string} [dip=45] - The dip angle (can be used for more refined patterns later).
+ * @returns {{shadedPaths: Array<string>, faultType: string, nodalPlanes: Array<object>}}
+ * An object containing:
+ *  - `shadedPaths`: Array of SVG path strings for the shaded areas of the beachball.
+ *  - `faultType`: String indicating the classified fault type (e.g., 'STRIKE_SLIP', 'NORMAL', 'REVERSE').
+ *  - `nodalPlanes`: Array of objects describing the nodal planes (lines or paths for SVG).
+ */
 const getBeachballPathsAndType = (rake, dip = 45) => {
     let faultType = 'UNKNOWN';
     const r = parseFloat(rake);
@@ -143,9 +185,36 @@ const getBeachballPathsAndType = (rake, dip = 45) => {
     return { shadedPaths, faultType, nodalPlanes };
 };
 
+/**
+ * A skeleton loader component for text.
+ * @param {object} props - The component's props.
+ * @param {string} [props.width='w-3/4'] - Tailwind CSS class for width.
+ * @param {string} [props.height='h-4'] - Tailwind CSS class for height.
+ * @param {string} [props.className=''] - Additional Tailwind CSS classes.
+ * @returns {JSX.Element} The rendered SkeletonText component.
+ */
 const SkeletonText = ({ width = 'w-3/4', height = 'h-4', className = '' }) => <div className={`bg-gray-300 rounded ${width} ${height} animate-pulse mb-2 ${className}`}></div>;
+
+/**
+ * A skeleton loader component for a block of content.
+ * @param {object} props - The component's props.
+ * @param {string} [props.height='h-24'] - Tailwind CSS class for height.
+ * @param {string} [props.className=''] - Additional Tailwind CSS classes.
+ * @returns {JSX.Element} The rendered SkeletonBlock component.
+ */
 const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`bg-gray-300 rounded ${height} animate-pulse ${className}`}></div>;
 
+/**
+ * A React component that displays detailed information about a specific earthquake event.
+ * It fetches data from a provided URL, parses it, and presents it in a structured,
+ * user-friendly modal view with various informational panels and diagrams.
+ *
+ * @param {object} props - The component's props.
+ * @param {string} props.detailUrl - The URL to fetch detailed earthquake data from.
+ * @param {function} props.onClose - Callback function to close the detail view.
+ * @param {function} [props.onDataLoadedForSeo] - Optional callback that receives key data points once details are loaded, for SEO purposes.
+ * @returns {JSX.Element} The rendered EarthquakeDetailView component.
+ */
 function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // Added onDataLoadedForSeo
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -248,7 +317,19 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // A
     // energyJoules will be NaN if scalarMomentValue is NaN.
     const energyJoules = scalarMomentValue;
 
-
+    /**
+     * An internal React component that renders an interactive fault diagram.
+     * It visualizes the fault plane (strike, dip, rake) with conceptual blocks and slip arrows.
+     * The diagram rotates based on the fault's strike angle.
+     *
+     * @param {object} props - The component's props.
+     * @param {object} props.planeData - Object containing strike, dip, and rake for the fault plane.
+     * @param {number} props.planeData.strike - The strike angle of the fault plane.
+     * @param {number} props.planeData.dip - The dip angle of the fault plane.
+     * @param {number} props.planeData.rake - The rake angle of the fault plane.
+     * @param {string} props.planeKey - Identifier for the fault plane (e.g., 'np1' or 'np2').
+     * @returns {JSX.Element | null} The rendered InteractiveFaultDiagram SVG, or null if essential data is missing.
+     */
     const InteractiveFaultDiagram = ({ planeData, planeKey }) => {
         // Guard against rendering if essential data is NaN (strike is key for rotation)
         if (!planeData || !isValidNumber(planeData.strike)) {
@@ -374,7 +455,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // A
     const pagerAlertValue = losspagerProductProps?.alertlevel ?? properties?.alert;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-40 p-2 sm:p-4 pt-10 md:pt-16 overflow-y-auto" onClick={onClose}>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-50 p-2 sm:p-4 pt-10 md:pt-16 overflow-y-auto" onClick={onClose}>
             <div className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800" onClick={(e) => e.stopPropagation()}>
                 <button onClick={onClose} className="absolute top-1 right-1 md:top-3 md:right-3 text-gray-300 bg-gray-700 bg-opacity-50 rounded-full w-8 h-8 flex items-center justify-center hover:bg-opacity-75 hover:text-white text-2xl font-light z-50" aria-label="Close detail view">&times;</button>
 
@@ -440,6 +521,21 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // A
                         )}
                         </tbody></table>
                     </div>
+
+                    {/* Earthquake Map Section - Restructured as a standard panel */}
+                    {geometry && geometry.coordinates && isValidNumber(geometry.coordinates[1]) && isValidNumber(geometry.coordinates[0]) && (
+                        <div className={`${exhibitPanelClass} border-sky-500`}>
+                            <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
+                            <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
+                                <EarthquakeMap
+                                    latitude={geometry.coordinates[1]}
+                                    longitude={geometry.coordinates[0]}
+                                    title={properties.title}
+                                    shakeMapUrl={shakemapIntensityImageUrl}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {/* --- Energy Unleashed Panel --- */}
                     {isValidNumber(energyJoules) && ( // energyJoules can be 0
