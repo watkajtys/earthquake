@@ -31,7 +31,7 @@ const EarthquakeMap = ({ latitude, longitude, title, shakeMapUrl }) => {
   const mapStyle = {
     height: '100%', // Changed from 100vh to 100%
     width: '100%',
-    filter: 'grayscale(100%) brightness(90%) contrast(120%)',
+    // filter: 'grayscale(100%) brightness(90%) contrast(120%)', // Grayscale filter removed
   };
 
   // Function to determine tectonic plate style, similar to InteractiveGlobeView
