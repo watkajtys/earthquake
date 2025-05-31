@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import tectonicPlatesData from './TectonicPlateBoundaries.json';
+import { getMagnitudeColor } from './utils'; // Import getMagnitudeColor
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -16,17 +17,24 @@ L.Icon.Default.mergeOptions({
  * Custom Leaflet DivIcon for displaying the earthquake epicenter.
  * Features a pulsing animation for better visibility.
  * The animation (`pulse`) is defined in global CSS (e.g., App.css).
+ * @param {number} magnitude - The earthquake magnitude to determine the icon color.
+ * @returns {L.DivIcon} A Leaflet DivIcon instance.
  */
-const epicenterIcon = new L.DivIcon({
-  html: `
-    <svg width="24" height="24" viewBox="0 0 24 24" style="transform-origin: center; animation: pulse 1.5s infinite;">
-      <circle cx="12" cy="12" r="8" fill="#ff0000" stroke="#fff" stroke-width="2"/>
-      <circle cx="12" cy="12" r="4" fill="#ffae00"/>
-    </svg>`,
-  className: 'custom-pulsing-icon', // Used to override default Leaflet icon background/border
-  iconSize: [24, 24], // Size of the icon
-  iconAnchor: [12, 12], // Anchor point of the icon (center for this SVG)
-});
+const createEpicenterIcon = (magnitude) => {
+  const fillColor = getMagnitudeColor(magnitude);
+  const innerColor = '#FFFFFF'; // Inner circle color set to white
+
+  return new L.DivIcon({
+    html: `
+      <svg width="24" height="24" viewBox="0 0 24 24" style="transform-origin: center; animation: pulse 1.5s infinite;">
+        <circle cx="12" cy="12" r="8" fill="${fillColor}" stroke="#fff" stroke-width="2"/>
+        <circle cx="12" cy="12" r="4" fill="${innerColor}"/>
+      </svg>`,
+    className: 'custom-pulsing-icon', // Used to override default Leaflet icon background/border
+    iconSize: [24, 24], // Size of the icon
+    iconAnchor: [12, 12], // Anchor point of the icon (center for this SVG)
+  });
+};
 
 /**
  * Determines the style for tectonic plate boundary lines on the map.
@@ -64,11 +72,12 @@ const getTectonicPlateStyle = (feature) => {
  * @param {object} props - The component's props.
  * @param {number} props.latitude - The latitude of the earthquake epicenter.
  * @param {number} props.longitude - The longitude of the earthquake epicenter.
+ * @param {number} props.magnitude - The magnitude of the earthquake.
  * @param {string} props.title - The title of the earthquake event.
  * @param {string} [props.shakeMapUrl] - Optional URL to the ShakeMap details page for the earthquake.
  * @returns {JSX.Element} The rendered EarthquakeMap component.
  */
-const EarthquakeMap = ({ latitude, longitude, title, shakeMapUrl }) => {
+const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl }) => {
   const position = [latitude, longitude];
 
   const mapStyle = {
@@ -82,9 +91,11 @@ const EarthquakeMap = ({ latitude, longitude, title, shakeMapUrl }) => {
         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
       />
-      <Marker position={position} icon={epicenterIcon}>
+      <Marker position={position} icon={createEpicenterIcon(magnitude)}>
         <Popup>
           <strong>{title}</strong>
+          <br />
+          Magnitude: {magnitude}
           <br />
           {shakeMapUrl && (
             <a href={shakeMapUrl} target="_blank" rel="noopener noreferrer">
