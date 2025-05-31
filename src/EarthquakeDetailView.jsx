@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
+import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 
 // Helper Functions
 /**
@@ -909,6 +910,23 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // A
                         </div>
                     )}
                 </div>
+
+                {/* Earthquake Map Section */}
+                {geometry && geometry.coordinates && isValidNumber(geometry.coordinates[1]) && isValidNumber(geometry.coordinates[0]) && (
+                    <div className="p-3 md:p-5">
+                        <div className={`${exhibitPanelClass} border-cyan-500 h-[300px] md:h-[400px] lg:h-[500px]`}>
+                            <h2 className={`${exhibitTitleClass} text-cyan-800 border-cyan-200`}>Earthquake Location Map</h2>
+                            <div className="w-full h-[calc(100%-40px)] mt-2 rounded overflow-hidden"> {/* Adjust height based on title height */}
+                                <EarthquakeMap
+                                    latitude={geometry.coordinates[1]}
+                                    longitude={geometry.coordinates[0]}
+                                    title={properties.title}
+                                    shakeMapUrl={shakemapIntensityImageUrl}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
