@@ -1,5 +1,6 @@
 // src/SimplifiedDepthProfile.jsx
 import React from 'react';
+import { getMagnitudeColor } from './utils';
 
 function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
   // ... (existing initial checks for earthquakeDepth) ...
@@ -141,15 +142,49 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
                 }}
             >
                 <div
-                    className="absolute left-1/2 w-4 h-4 transform -translate-x-1/2" // Y-translate to sit ON the line end
+                    className="absolute left-1/2 w-16 h-16 transform -translate-x-1/2" // Increased size to accommodate rings
                     style={{
                         bottom: '0px',
-                        transform: 'translate(-50%, 50%)' // Center marker on the line end point
+                        transform: 'translate(-50%, 50%)', // Center the larger SVG area
+                        // overflow: 'visible' // If rings go outside the H-16 W-16 box; SVG usually clips by default
                     }}
-                    title={`Hypocenter at ${depth?.toFixed(1)} km`}
+                    title={`Hypocenter at ${depth?.toFixed(1)} km. Magnitude: ${magnitude?.toFixed(1)}`}
                 >
-                    <svg viewBox="0 0 24 24" width="16" height="16">
-                        <circle cx="12" cy="12" r="8" fill="#EF4444" stroke="#1F2937" strokeWidth="1.5" />
+                    <svg viewBox="0 0 60 60" width="64" height="64"> {/* Adjusted viewBox and size for rings */}
+                        <g transform="translate(30,30)"> {/* Center coordinate system for rings */}
+                            {/* Animated Rings - 3 rings with staggered delays */}
+                            {[0, 1, 2].map((i) => (
+                                <circle
+                                    key={i}
+                                    cx="0"
+                                    cy="0"
+                                    r="3" // Initial radius
+                                    stroke={getMagnitudeColor(magnitude)}
+                                    strokeWidth="1.5"
+                                    fill="none"
+                                    strokeOpacity="0.7"
+                                >
+                                    <animate
+                                        attributeName="r"
+                                        from="3"
+                                        to="25" // Expand to radius
+                                        dur="3s" // Duration of one pulse
+                                        begin={`${i * 1}s`} // Stagger start times
+                                        repeatCount="indefinite"
+                                    />
+                                    <animate
+                                        attributeName="stroke-opacity"
+                                        from="0.7"
+                                        to="0"
+                                        dur="3s"
+                                        begin={`${i * 1}s`}
+                                        repeatCount="indefinite"
+                                    />
+                                </circle>
+                            ))}
+                            {/* Central Hypocenter Marker - drawn on top */}
+                            <circle cx="0" cy="0" r="3.5" fill="#EF4444" stroke="#1F2937" strokeWidth="1" /> {/* Smaller radius to fit new viewBox scale */}
+                        </g>
                     </svg>
                 </div>
             </div>
