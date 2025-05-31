@@ -96,7 +96,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 <h3 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2 border-t border-slate-700">
                     Earthquakes in this Cluster
                 </h3>
-                <div className="flex-grow overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
+                <div className="flex-grow space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
                     {sortedQuakes.length > 0 ? (
                         sortedQuakes.map(quake => (
                             <div
