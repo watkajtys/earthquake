@@ -1,7 +1,21 @@
 // src/GlobalLastMajorQuakeTimer.jsx
 import React, { useState, useEffect } from 'react';
 
-// Assuming MAJOR_QUAKE_THRESHOLD and formatTimeDuration are passed or defined here
+/**
+ * A React component that displays a timer showing the time since the last major global earthquake.
+ * It updates every second. If no major quake is found, it displays a message indicating an extended period without one.
+ *
+ * @param {object} props - The component's props.
+ * @param {object | null} props.lastMajorQuake - The last major earthquake object. Can be null if no such quake is found.
+ * @param {object} [props.lastMajorQuake.properties] - Properties of the last major earthquake. Required if lastMajorQuake is not null.
+ * @param {number} props.lastMajorQuake.properties.time - Timestamp of the last major quake in milliseconds.
+ * @param {string} [props.lastMajorQuake.properties.place] - Location of the last major quake.
+ * @param {number} [props.lastMajorQuake.properties.mag] - Magnitude of the last major quake.
+ * @param {number} props.MAJOR_QUAKE_THRESHOLD - The magnitude threshold defined as a major quake.
+ * @param {function} props.formatTimeDuration - Function to format a duration in milliseconds to a human-readable string (e.g., "1 day, 2 hr, 30 min").
+ * @param {React.ElementType} props.SkeletonText - A skeleton loader component for text, used during initial state or loading.
+ * @returns {JSX.Element} The rendered GlobalLastMajorQuakeTimer component.
+ */
 const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, MAJOR_QUAKE_THRESHOLD, formatTimeDuration, SkeletonText }) => {
     const [timeSinceFormatted, setTimeSinceFormatted] = useState(<SkeletonText width="w-1/2 mx-auto" height="h-8" className="bg-slate-600"/>);
 

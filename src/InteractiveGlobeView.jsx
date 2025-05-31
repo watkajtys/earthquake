@@ -2,6 +2,82 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
 
+/**
+ * Takes a color string (hex or rgba) and returns a new rgba string with reduced opacity.
+ * @param {string} colorString - The input color string (e.g., "#RRGGBB", "rgba(r,g,b,a)").
+ * @param {number} opacityFactor - The factor by which to multiply the current opacity (e.g., 0.7 for 70% of original).
+ * @returns {string} A new rgba color string with the adjusted opacity, or a fallback color if parsing fails.
+ */
+const makeColorDuller = (colorString, opacityFactor) => {
+    const fallbackColor = 'rgba(128,128,128,0.5)';
+    let r, g, b, currentAlpha = 1.0;
+
+    if (typeof colorString !== 'string') {
+        return fallbackColor;
+    }
+
+    try {
+        if (colorString.startsWith('#')) {
+            let hex = colorString.slice(1);
+            if (hex.length === 3) {
+                hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+            }
+            if (hex.length === 6) {
+                r = parseInt(hex.substring(0, 2), 16);
+                g = parseInt(hex.substring(2, 4), 16);
+                b = parseInt(hex.substring(4, 6), 16);
+                currentAlpha = 1.0; // Hex implies full opacity initially
+            } else {
+                return fallbackColor; // Invalid hex length
+            }
+        } else if (colorString.startsWith('rgba(') && colorString.endsWith(')')) {
+            const parts = colorString.substring(5, colorString.length - 1).split(',');
+            if (parts.length === 4) {
+                r = parseInt(parts[0].trim(), 10);
+                g = parseInt(parts[1].trim(), 10);
+                b = parseInt(parts[2].trim(), 10);
+                currentAlpha = parseFloat(parts[3].trim());
+            } else {
+                return fallbackColor; // Invalid rgba format
+            }
+        } else {
+            return fallbackColor; // Not a recognized format
+        }
+
+        if (isNaN(r) || isNaN(g) || isNaN(b) || isNaN(currentAlpha)) {
+            return fallbackColor; // Parsing resulted in NaN
+        }
+
+        const newAlpha = Math.max(0, Math.min(1, currentAlpha * opacityFactor));
+        return `rgba(${r},${g},${b},${newAlpha.toFixed(3)})`;
+
+    } catch (error) {
+        console.error("Error processing color in makeColorDuller:", colorString, error);
+        return fallbackColor; // Catch-all for any unexpected errors during parsing/processing
+    }
+};
+
+/**
+ * A React component that renders an interactive 3D globe displaying earthquake data,
+ * coastlines, and tectonic plate boundaries. It uses 'react-globe.gl'.
+ * @param {object} props - The component's props.
+ * @param {Array<object>} props.earthquakes - An array of earthquake data objects to plot on the globe.
+ * @param {function(object):void} props.onQuakeClick - Callback function triggered when an earthquake point is clicked. Receives the quake data object.
+ * @param {function(number):string} props.getMagnitudeColorFunc - Function that returns a color string based on earthquake magnitude.
+ * @param {object} [props.coastlineGeoJson] - GeoJSON data for rendering coastlines.
+ * @param {object} [props.tectonicPlatesGeoJson] - GeoJSON data for rendering tectonic plate boundaries.
+ * @param {string} [props.highlightedQuakeId] - The ID of an earthquake to be visually highlighted on the globe.
+ * @param {object} [props.latestMajorQuakeForRing] - Data for the latest major earthquake, used to display a visual ring indicator.
+ * @param {object} [props.previousMajorQuake] - Data for the previously recorded major earthquake, used to display a visual ring indicator.
+ * @param {string} [props.atmosphereColor="rgba(100,100,255,0.3)"] - Color of the globe's atmosphere.
+ * @param {number} [props.defaultFocusLat=20] - Initial latitude for the globe's camera focus.
+ * @param {number} [props.defaultFocusLng=0] - Initial longitude for the globe's camera focus.
+ * @param {number} [props.defaultFocusAltitude=2.5] - Initial altitude (zoom level) for the globe's camera focus.
+ * @param {boolean} [props.allowUserDragRotation=true] - Whether to allow users to manually rotate the globe.
+ * @param {boolean} [props.enableAutoRotation=true] - Whether the globe should auto-rotate.
+ * @param {number} [props.globeAutoRotateSpeed=0.1] - Speed of the auto-rotation.
+ * @returns {JSX.Element} The rendered InteractiveGlobeView component.
+ */
 const InteractiveGlobeView = ({
                                   earthquakes,
                                   onQuakeClick,
@@ -11,6 +87,7 @@ const InteractiveGlobeView = ({
                                   highlightedQuakeId,
                                   latestMajorQuakeForRing,
                                   previousMajorQuake, // Added new prop
+                                  activeClusters = [], // <-- New prop with default
                                   atmosphereColor = "rgba(100,100,255,0.3)",
                                   defaultFocusLat = 20,
                                   defaultFocusLng = 0,
@@ -71,7 +148,7 @@ const InteractiveGlobeView = ({
 
             if (isHighlighted) {
                 pointRadius = Math.max(0.6, (magValue / 7) + 0.4);
-                pointColor = '#FFFF00'; // Yellow for latest significant
+                pointColor = getMagnitudeColorFunc(magValue);
                 pointAltitude = 0.03;
                 pointLabel = `LATEST SIGNIFICANT: M${quake.properties.mag?.toFixed(1)} - ${quake.properties.place}`;
                 pointType = 'highlighted_significant_quake';
@@ -106,7 +183,7 @@ const InteractiveGlobeView = ({
                     return {
                         ...p,
                         radius: Math.max(0.55, (prevMagValue / 7) + 0.35), // Slightly smaller than latest highlighted
-                        color: '#B0BEC5', // Distinct grey
+                        color: getMagnitudeColorFunc(prevMagValue),
                         altitude: 0.025, // Slightly different altitude
                         label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
                         type: 'previous_major_quake'
@@ -123,7 +200,7 @@ const InteractiveGlobeView = ({
                         lng: previousMajorQuake.geometry.coordinates[0],
                         altitude: 0.025,
                         radius: Math.max(0.55, (prevMagValue / 7) + 0.35),
-                        color: '#B0BEC5', // Distinct grey
+                        color: getMagnitudeColorFunc(prevMagValue),
                         label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
                         quakeData: previousMajorQuake,
                         type: 'previous_major_quake'
@@ -131,8 +208,82 @@ const InteractiveGlobeView = ({
                 }
             }
         }
+
+        // --- NEW: Process activeClusters ---
+        // if (activeClusters && activeClusters.length > 0) {
+        //     activeClusters.forEach((cluster, index) => {
+        //         if (cluster.length === 0) return;
+
+        //         let sumLat = 0, sumLng = 0, maxMag = 0;
+        //         let quakesInClusterDetails = [];
+
+        //         cluster.forEach(quake => {
+        //             sumLat += quake.geometry.coordinates[1];
+        //             sumLng += quake.geometry.coordinates[0];
+        //             if (quake.properties.mag > maxMag) {
+        //                 maxMag = quake.properties.mag;
+        //             }
+        //             quakesInClusterDetails.push({
+        //                 id: quake.id,
+        //                 mag: quake.properties.mag,
+        //                 place: quake.properties.place,
+        //                 time: quake.properties.time
+        //             });
+        //         });
+
+        //         const centroidLat = sumLat / cluster.length;
+        //         const centroidLng = sumLng / cluster.length;
+
+        //         allPointsData.push({
+        //             lat: centroidLat,
+        //             lng: centroidLng,
+        //             altitude: 0.02, // Slightly elevated to distinguish, if needed
+        //             radius: 0.5 + (cluster.length / 10), // Radius based on cluster size, adjust as needed
+        //             color: 'rgba(255, 255, 0, 0.75)', // Bright yellow for clusters, with some transparency
+        //             label: `Cluster: ${cluster.length} quakes (Max Mag: ${maxMag.toFixed(1)})`,
+        //             type: 'cluster_center',
+        //             // Store the original cluster data for potential interaction
+        //             clusterData: {
+        //                 id: `cluster_${index}_${Date.now()}`, // Create a unique ID for the cluster point
+        //                 quakes: quakesInClusterDetails,
+        //                 centroidLat,
+        //                 centroidLng,
+        //                 numQuakes: cluster.length,
+        //                 maxMag
+        //             },
+        //             // To make it clickable and identifiable by onQuakeClick,
+        //             // we can mock a minimal 'quakeData' structure for clusters.
+        //             // App.jsx's onQuakeClick expects properties.detail or properties.url.
+        //             // We'll need to handle 'cluster_center' type clicks differently there, or adapt this.
+        //             // For now, this structure helps avoid errors in existing onPointClick if it tries to access quakeData.properties.detail
+        //             quakeData: {
+        //                 id: `cluster_vis_${index}_${Date.now()}`, // Unique ID for this visual point
+        //                 properties: {
+        //                     place: `Cluster of ${cluster.length} earthquakes`,
+        //                     mag: maxMag,
+        //                     // No 'detail' or 'url' for clusters in the same way as individual quakes
+        //                 },
+        //                 geometry: {
+        //                     type: "Point",
+        //                     coordinates: [centroidLng, centroidLat, 0] // Mock geometry
+        //                 },
+        //                 isCluster: true, // Custom flag
+        //                 clusterDetails: { // Pass actual detailed quake list
+        //                     quakes: cluster.map(q => ({ // Map to avoid passing huge objects if not needed directly by globe label
+        //                         id: q.id,
+        //                         mag: q.properties.mag,
+        //                         place: q.properties.place,
+        //                         time: q.properties.time,
+        //                         detail: q.properties.detail || q.properties.url // Keep detail for individual quakes within cluster
+        //                     }))
+        //                 }
+        //             }
+        //         });
+        //     });
+        // }
+        // --- END NEW ---
         setPoints(allPointsData);
-    }, [earthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake]);
+    }, [earthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]);
 
     useEffect(() => {
         let processedPaths = [];
@@ -297,7 +448,7 @@ const InteractiveGlobeView = ({
                 lat: coords[1],
                 lng: coords[0],
                 altitude: 0.02,
-                color: () => 'rgba(255, 255, 0, 0.8)', // Bright Yellow for latest
+                color: () => getMagnitudeColorFunc(mag),
                 maxR: Math.max(6, mag * 2.2),
                 propagationSpeed: Math.max(2, mag * 0.5),
                 repeatPeriod: 1800,
@@ -316,12 +467,13 @@ const InteractiveGlobeView = ({
         ) {
             const coords = previousMajorQuake.geometry.coordinates;
             const mag = parseFloat(previousMajorQuake.properties.mag);
+            const baseColor = getMagnitudeColorFunc(mag);
             newRings.push({
                 id: `major_quake_ring_prev_${previousMajorQuake.id}_${previousMajorQuake.properties.time}_${Date.now()}`,
                 lat: coords[1],
                 lng: coords[0],
                 altitude: 0.018, // Slightly different altitude
-                color: () => 'rgba(180, 180, 180, 0.6)', // Greyish for previous
+                color: () => makeColorDuller(baseColor, 0.7),
                 maxR: Math.max(5, mag * 2.0),
                 propagationSpeed: Math.max(1.8, mag * 0.45),
                 repeatPeriod: 1900, // Slightly different period
