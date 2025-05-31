@@ -34,13 +34,19 @@ vi.mock('react-leaflet', async () => {
     TileLayer: ({ url, attribution }) => (
       <div data-testid="tile-layer" data-url={url} data-attribution={attribution}></div>
     ),
-    Marker: ({ position, icon, children }) => ( // Added icon prop
-      <div data-testid="marker" data-position={position ? JSON.stringify(position) : undefined} data-icon-classname={icon?.options?.className}>
+    Marker: ({ position, icon, children }) => (
+      <div
+        data-testid="marker"
+        data-position={position ? JSON.stringify(position) : undefined}
+        data-icon-classname={icon?.options?.className}
+        data-icon-html={icon?.options?.html} // For checking SVG content
+        data-icon-size={icon?.options?.iconSize ? JSON.stringify(icon.options.iconSize) : undefined} // For checking iconSize
+      >
         {children}
       </div>
     ),
     Popup: ({ children }) => <div data-testid="popup">{children}</div>,
-    GeoJSON: ({ data, style }) => { // Modified to store the style function
+    GeoJSON: ({ data, style }) => {
       const styleFunctionString = style ? style.toString() : '';
       return (
         <div
@@ -185,4 +191,85 @@ describe('EarthquakeMap Component', () => {
   //   // const imageOverlay = screen.queryByTestId('image-overlay');
   //   // expect(imageOverlay).not.toBeInTheDocument();
   // });
+});
+
+// Tests for Nearby Quakes Functionality
+describe('EarthquakeMap Component - Nearby Quakes', () => {
+  const baseProps = {
+    latitude: 34.0522,
+    longitude: -118.2437,
+    magnitude: 5.5, // Main quake magnitude
+    title: 'Main Test Earthquake',
+    shakeMapUrl: 'https://example.com/shakemap.jpg',
+  };
+
+  const nearbyQuakesData = [
+    {
+      geometry: { coordinates: [-119.0, 35.0, 10] }, // lon, lat, depth
+      properties: { mag: 3.5, title: "Nearby Quake 1" }
+    },
+    {
+      geometry: { coordinates: [-117.5, 33.5, 5] },
+      properties: { mag: 2.8, title: "Nearby Quake 2" }
+    }
+  ];
+
+  it('renders markers for each nearby quake', () => {
+    render(<EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />);
+    const markers = screen.getAllByTestId('marker');
+    // Expect 1 marker for the main earthquake + number of nearby quakes
+    expect(markers.length).toBe(1 + nearbyQuakesData.length);
+  });
+
+  it('renders nearby quake markers with the correct custom icon class and size', () => {
+    render(<EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />);
+    const markers = screen.getAllByTestId('marker');
+
+    const nearbyMarkers = markers.filter(marker => marker.getAttribute('data-icon-classname') === 'custom-nearby-quake-icon');
+    expect(nearbyMarkers.length).toBe(nearbyQuakesData.length);
+
+    nearbyMarkers.forEach(marker => {
+      expect(marker).toHaveAttribute('data-icon-size', JSON.stringify([12, 12]));
+    });
+  });
+
+  it('nearby quake icons use getMagnitudeColor for fill and do not have pulsing animation', () => {
+    render(<EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />);
+    const markers = screen.getAllByTestId('marker');
+    const nearbyMarkers = markers.filter(marker => marker.getAttribute('data-icon-classname') === 'custom-nearby-quake-icon');
+
+    nearbyMarkers.forEach(marker => {
+      const iconHtml = marker.getAttribute('data-icon-html');
+      expect(iconHtml).toBeDefined();
+      // Check for fill attribute presence (actual color depends on getMagnitudeColor)
+      expect(iconHtml).toContain('fill="');
+      // Check that it's the simple circle SVG and NOT the pulsing one
+      expect(iconHtml).toContain('<circle cx="6" cy="6" r="3"');
+      expect(iconHtml).not.toContain('<animate'); // No animation elements
+    });
+  });
+
+  it('renders popups for nearby quakes with correct magnitude and title', () => {
+    render(<EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />);
+    // Query all popups. There will be one for the main quake and one for each nearby quake.
+    const popups = screen.getAllByTestId('popup');
+
+    // Filter out the main quake's popup to test nearby quakes specifically.
+    // This assumes the main quake's title is unique enough.
+    const nearbyPopups = popups.filter(popup => !within(popup).queryByText(baseProps.title));
+    expect(nearbyPopups.length).toBe(nearbyQuakesData.length);
+
+    nearbyQuakesData.forEach((quake, index) => {
+      // Find the popup corresponding to the current nearby quake.
+      // This is a bit indirect because we can't directly link marker to popup in the mock easily.
+      // We rely on the order or unique content.
+      const popupForQuake = nearbyPopups.find(p =>
+        within(p).getByText(`Magnitude: ${quake.properties.mag}`) &&
+        within(p).getByText(quake.properties.title)
+      );
+      expect(popupForQuake).toBeInTheDocument();
+      expect(within(popupForQuake).getByText(`Magnitude: ${quake.properties.mag}`)).toBeInTheDocument();
+      expect(within(popupForQuake).getByText(quake.properties.title)).toBeInTheDocument();
+    });
+  });
 });
