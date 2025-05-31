@@ -379,7 +379,7 @@ function App() {
         const currentStats = calculateStats(currentPeriodData);
         const previousStats = previousPeriodData ? calculateStats(previousPeriodData) : null;
         const getTrendDisplay = (currentValue, previousValue) => {
-            if (!previousValue || previousValue === 'N/A' || currentValue === 'N/A' || ["Summary (Last Hour)"].includes(title)) return null;
+            if (!previousValue || previousValue === 'N/A' || currentValue === 'N/A') return null;
             const currentNum = parseFloat(currentValue); const previousNum = parseFloat(previousValue);
             if (isNaN(currentNum) || isNaN(previousNum)) return null;
             const diff = currentNum - previousNum;
@@ -705,6 +705,7 @@ function App() {
     const [highestRecentAlert, setHighestRecentAlert] = useState(null);
     const [activeAlertTriggeringQuakes, setActiveAlertTriggeringQuakes] = useState([]);
     const [earthquakesLastHour, setEarthquakesLastHour] = useState([]);
+    const [earthquakesPriorHour, setEarthquakesPriorHour] = useState([]);
     const [earthquakesLast24Hours, setEarthquakesLast24Hours] = useState([]);
     const [earthquakesLast72Hours, setEarthquakesLast72Hours] = useState([]);
     const [earthquakesLast7Days, setEarthquakesLast7Days] = useState([]);
@@ -841,16 +842,18 @@ function App() {
     const previousDataForCurrentFeed = useMemo(() => {
         // Only provide previous period data for simple time-based feeds for now
         switch (activeFeedPeriod) {
+            case 'last_hour': // Add this case
+                return earthquakesPriorHour; // Return prior hour data
             case 'last_24_hours':
                 return prev24HourData;
             case 'last_7_days':
                 return prev7DayData;
             case 'last_14_days':
                 return prev14DayData;
-            default: // For last_hour, last_30_days, feelable, significant - omit trends in their specific card for now
+            default: // For last_30_days, feelable, significant - omit trends in their specific card for now
                 return null;
         }
-    }, [activeFeedPeriod, prev24HourData, prev7DayData, prev14DayData]);
+    }, [activeFeedPeriod, earthquakesPriorHour, prev24HourData, prev7DayData, prev14DayData]); // Add earthquakesPriorHour to dependency array
 
     // --- Effect Hooks ---
     useEffect(() => {
@@ -859,7 +862,7 @@ function App() {
             if (!isMounted) return;
             setLoadingMessageIndex(0); setCurrentLoadingMessages(INITIAL_LOADING_MESSAGES);
             setIsLoadingDaily(true); setIsLoadingWeekly(true); // setError(null) will be handled later by the new logic
-            setEarthquakesLastHour([]); setEarthquakesLast24Hours([]); setEarthquakesLast72Hours([]); setEarthquakesLast7Days([]);
+            setEarthquakesLastHour([]); setEarthquakesPriorHour([]); setEarthquakesLast24Hours([]); setEarthquakesLast72Hours([]); setEarthquakesLast7Days([]);
             setPrev24HourData([]); // Initialize to empty array
             setGlobeEarthquakes([]); setActiveAlertTriggeringQuakes([]);
 
@@ -879,6 +882,7 @@ function App() {
                 if (dailyRes?.features) {
                     if (isMounted) setLoadingMessageIndex(1);
                     const dD = dailyRes.features; setEarthquakesLastHour(filterByTime(dD, 1));
+                    setEarthquakesPriorHour(filterByTime(dD, 2, 1));
                     const l24 = filterByTime(dD, 24); setEarthquakesLast24Hours(l24);
 
                     setHasRecentTsunamiWarning(l24.some(q => q.properties.tsunami === 1));
@@ -901,6 +905,7 @@ function App() {
                     dailyErrorMsg = "Daily data features are missing."; // Handle case where features might be missing
                     if (isMounted) {
                         setEarthquakesLastHour([]);
+                        setEarthquakesPriorHour([]);
                         setEarthquakesLast24Hours([]);
                         setActiveAlertTriggeringQuakes([]);
                     }
@@ -910,6 +915,7 @@ function App() {
                 dailyErrorMsg = e.message;
                 if (isMounted) {
                     setEarthquakesLastHour([]);
+                    setEarthquakesPriorHour([]);
                     setEarthquakesLast24Hours([]);
                     setActiveAlertTriggeringQuakes([]);
                 }
@@ -1850,7 +1856,7 @@ function App() {
 
                         {/* ... (rest of your desktop sidebar logic for details_1hr, details_24hr, etc. This part of your code was already handling these views) ... */}
                         {activeSidebarView === 'details_1hr' && !isLoadingDaily && earthquakesLastHour && ( <div className="space-y-3">
-                            <SummaryStatisticsCard title="Summary (Last Hour)" currentPeriodData={earthquakesLastHour} isLoading={isLoadingDaily}/>
+                            <SummaryStatisticsCard title="Summary (Last Hour)" currentPeriodData={earthquakesLastHour} previousPeriodData={earthquakesPriorHour} isLoading={isLoadingDaily}/>
                             <PaginatedEarthquakeTable title="Earthquakes (Last Hour)" earthquakes={earthquakesLastHour} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} itemsPerPage={10} periodName="last hour"/>
                             <RegionalDistributionList earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily}/>
                             <MagnitudeDepthScatterSVGChart earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily} />
