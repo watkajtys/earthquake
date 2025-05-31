@@ -1144,7 +1144,25 @@ function App() {
 
     // --- UI Calculations & Memos ---
     const showFullScreenLoader = useMemo(() => (isLoadingDaily || isLoadingWeekly) && isInitialAppLoad.current, [isLoadingDaily, isLoadingWeekly]);
-    const headerTimeDisplay = useMemo(() => { if (isInitialAppLoad.current && (isLoadingDaily || isLoadingWeekly) && !dataFetchTime) return "Connecting to Seismic Network..."; if (!dataFetchTime) return "Awaiting Initial Data..."; const timeSinceFetch = appCurrentTime - dataFetchTime; return `Live Data (7-day): ${timeSinceFetch < 30000 ? 'just now' : formatTimeAgo(timeSinceFetch)} | USGS Feed Updated: ${lastUpdated || 'N/A'}`; }, [isLoadingDaily, isLoadingWeekly, dataFetchTime, appCurrentTime, lastUpdated, isInitialAppLoad, formatTimeAgo]);
+    const headerTimeDisplay = useMemo(() => {
+        if (isInitialAppLoad.current && (isLoadingDaily || isLoadingWeekly) && !dataFetchTime) {
+            return {
+                liveDataStatus: "Connecting to Seismic Network...",
+                usgsFeedUpdateTime: ""
+            };
+        }
+        if (!dataFetchTime) {
+            return {
+                liveDataStatus: "Awaiting Initial Data...",
+                usgsFeedUpdateTime: ""
+            };
+        }
+        const timeSinceFetch = appCurrentTime - dataFetchTime;
+        return {
+            liveDataStatus: `Live Data (7-day): ${timeSinceFetch < 30000 ? 'just now' : formatTimeAgo(timeSinceFetch)}`,
+            usgsFeedUpdateTime: `USGS Feed Updated: ${lastUpdated || 'N/A'}`
+        };
+    }, [isLoadingDaily, isLoadingWeekly, dataFetchTime, appCurrentTime, lastUpdated, isInitialAppLoad, formatTimeAgo]);
     const currentAlertConfig = useMemo(() => { if (highestRecentAlert && ALERT_LEVELS[highestRecentAlert.toUpperCase()]) { return ALERT_LEVELS[highestRecentAlert.toUpperCase()]; } return null; }, [highestRecentAlert]);
 
     const keyStatsForGlobe = useMemo(() => {
@@ -1471,7 +1489,12 @@ function App() {
             <header className="bg-slate-800 text-white p-2 shadow-lg z-40 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
-                    <p className="text-xs sm:text-sm text-slate-400 mt-0.5 sm:mt-0">{headerTimeDisplay}</p>
+                    <div className="flex flex-col items-end text-xs sm:text-sm text-slate-400 mt-0.5 sm:mt-0">
+                        <span>{headerTimeDisplay.liveDataStatus}</span>
+                        {headerTimeDisplay.usgsFeedUpdateTime && (
+                            <span className="text-[10px] text-slate-500">{headerTimeDisplay.usgsFeedUpdateTime}</span>
+                        )}
+                    </div>
                 </div>
             </header>
 
