@@ -720,7 +720,9 @@ function App() {
     // const [activeSidebarView, setActiveSidebarView] = useState('overview_panel'); // Replaced by useSearchParams
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeClusters, setActiveClusters] = useState([]);
-    const [latestQuakeLongitude, setLatestQuakeLongitude] = useState(null);
+    // const [latestQuakeLongitude, setLatestQuakeLongitude] = useState(null); // Removed
+    const [globeFocusLat, setGlobeFocusLat] = useState(20); // Default latitude
+    const [globeFocusLng, setGlobeFocusLng] = useState(0);  // Default longitude
     const activeSidebarView = searchParams.get('sidebarActiveView') || 'overview_panel';
 
     const setActiveSidebarView = (view) => {
@@ -929,15 +931,8 @@ function App() {
                     const sortedForGlobe = [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
                     setGlobeEarthquakes(sortedForGlobe.slice(0, 900));
 
-                    // Find the latest earthquake from last72HoursData to set initial longitude
-                    if (last72HoursData && last72HoursData.length > 0) {
-                        const latestEarthquake = last72HoursData.reduce((latest, current) => {
-                            return (current.properties.time > latest.properties.time) ? current : latest;
-                        });
-                        if (latestEarthquake && latestEarthquake.geometry && latestEarthquake.geometry.coordinates && latestEarthquake.geometry.coordinates.length > 0) {
-                            setLatestQuakeLongitude(latestEarthquake.geometry.coordinates[0]);
-                        }
-                    }
+                    // Old logic for latestQuakeLongitude removed.
+                    // Globe focus will be handled by a new useEffect hook listening to lastMajorQuake.
 
                     weeklyMajorsList = weeklyData.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
                     const latestWeeklyMajor = weeklyMajorsList.length > 0 ? weeklyMajorsList[0] : null;
@@ -1131,6 +1126,23 @@ function App() {
             setActiveClusters([]); // Clear clusters if no source data
         }
     }, [earthquakesLast72Hours]); // Dependency: run when earthquakesLast72Hours changes.
+
+    // Effect to update globe focus coordinates when lastMajorQuake changes
+    useEffect(() => {
+        if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.geometry.coordinates && lastMajorQuake.geometry.coordinates.length >= 2) {
+            const lat = lastMajorQuake.geometry.coordinates[1];
+            const lng = lastMajorQuake.geometry.coordinates[0];
+            if (typeof lat === 'number' && !isNaN(lat) && typeof lng === 'number' && !isNaN(lng)) {
+                setGlobeFocusLat(lat);
+                setGlobeFocusLng(lng);
+            }
+        }
+        // If lastMajorQuake is null, we could reset to defaults here, e.g.:
+        // else {
+        //   setGlobeFocusLat(20); // Default latitude
+        //   setGlobeFocusLng(0);  // Default longitude
+        // }
+    }, [lastMajorQuake]);
 
     // --- UI Calculations & Memos ---
     const showFullScreenLoader = useMemo(() => (isLoadingDaily || isLoadingWeekly) && isInitialAppLoad.current, [isLoadingDaily, isLoadingWeekly]);
@@ -1485,7 +1497,9 @@ function App() {
                                 <div className="lg:block h-full w-full">
                                     <InteractiveGlobeView
                                         earthquakes={globeEarthquakes}
-                                    initialLongitude={latestQuakeLongitude}
+                                    // initialLongitude={latestQuakeLongitude} // Removed
+                                    defaultFocusLat={globeFocusLat} // New prop
+                                    defaultFocusLng={globeFocusLng} // New prop
                                     onQuakeClick={handleQuakeClick}
                                     getMagnitudeColorFunc={getMagnitudeColor}
                                     allowUserDragRotation={true}
