@@ -1,5 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import RegionalSeismicityChart from './RegionalSeismicityChart';
+import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 
@@ -213,9 +215,11 @@ const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`
  * @param {string} props.detailUrl - The URL to fetch detailed earthquake data from.
  * @param {function} props.onClose - Callback function to close the detail view.
  * @param {function} [props.onDataLoadedForSeo] - Optional callback that receives key data points once details are loaded, for SEO purposes.
+ * @param {object} props.broaderEarthquakeData - Data for nearby earthquakes for regional seismicity chart.
+ * @param {number} props.dataSourceTimespanDays - The timespan of the source data (e.g., 7 or 30 days).
  * @returns {JSX.Element} The rendered EarthquakeDetailView component.
  */
-function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // Added onDataLoadedForSeo
+function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays }) { // Add dataSourceTimespanDays
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -553,6 +557,27 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo }) { // A
                             {energyJoules > 0 && <p className={captionClass}>Comparisons are for scale.</p>}
                         </div>
                     )}
+
+                    {/* --- Regional Seismicity Chart Panel --- */}
+                    {detailData && ( /* Ensure detailData (currentEarthquake) is loaded */
+                        <div className={`${exhibitPanelClass} border-cyan-500`}>
+                            <RegionalSeismicityChart
+                                currentEarthquake={detailData}
+                                nearbyEarthquakesData={broaderEarthquakeData}
+                                dataSourceTimespanDays={dataSourceTimespanDays} // Pass it
+                            />
+                        </div>
+                    )}
+
+    {/* --- Simplified Depth Profile Panel --- */}
+    {detailData?.geometry?.coordinates?.[2] !== undefined && detailData?.properties?.mag !== undefined && (
+      <div className={`${exhibitPanelClass} border-amber-500`}>
+        <SimplifiedDepthProfile
+          earthquakeDepth={detailData.geometry.coordinates[2]}
+          magnitude={detailData.properties.mag}
+        />
+      </div>
+    )}
 
                     {/* --- Understanding Seismic Waves Panel (Static content) --- */}
                     <div className={`${exhibitPanelClass} border-fuchsia-500`}>
