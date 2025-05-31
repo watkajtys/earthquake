@@ -65,9 +65,9 @@ const makeColorDuller = (colorString, opacityFactor) => {
  * @param {boolean} [props.allowUserDragRotation=true] - Whether to allow users to manually rotate the globe.
  * @param {string} [props.atmosphereColor="rgba(100,100,255,0.3)"] - Color of the globe's atmosphere.
  * @param {object} [props.coastlineGeoJson] - GeoJSON data for rendering coastlines.
- * @param {number} [props.defaultFocusAltitude=2.5] - Initial altitude (zoom level) for the globe's camera focus.
- * @param {number} [props.defaultFocusLat=20] - Initial latitude for the globe's camera focus.
- * @param {number} [props.defaultFocusLng=0] - Initial longitude for the globe's camera focus.
+ * @param {number} [props.defaultFocusAltitude=2.5] - Target altitude (zoom level) for the globe's camera focus. Can be updated dynamically.
+ * @param {number} [props.defaultFocusLat=20] - Target latitude for the globe's camera focus. Can be updated dynamically.
+ * @param {number} [props.defaultFocusLng=0] - Target longitude for the globe's camera focus. Can be updated dynamically.
  * @param {Array<object>} props.earthquakes - An array of earthquake data objects to plot on the globe.
  * @param {boolean} [props.enableAutoRotation=true] - Whether the globe should auto-rotate.
  * @param {function(number):string} props.getMagnitudeColorFunc - Function that returns a color string based on earthquake magnitude.
@@ -92,6 +92,7 @@ const InteractiveGlobeView = ({
                                   atmosphereColor = "rgba(100,100,255,0.3)",
                                   defaultFocusLat = 20,
                                   defaultFocusLng = 0,
+                                  // initialLongitude = null, // Removed prop
                                   defaultFocusAltitude = 2.5,
                                   allowUserDragRotation = true,
                                   enableAutoRotation = true,
@@ -307,7 +308,10 @@ const InteractiveGlobeView = ({
 
     useEffect(() => {
         if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {
-            globeRef.current.pointOfView({ lat: defaultFocusLat, lng: defaultFocusLng, altitude: defaultFocusAltitude }, 0);
+            const targetLatitude = (typeof defaultFocusLat === 'number' && !isNaN(defaultFocusLat)) ? defaultFocusLat : 20;
+            const targetLongitude = (typeof defaultFocusLng === 'number' && !isNaN(defaultFocusLng)) ? defaultFocusLng : 0;
+            // Assuming defaultFocusAltitude is generally reliable or has a suitable default in its definition
+            globeRef.current.pointOfView({ lat: targetLatitude, lng: targetLongitude, altitude: defaultFocusAltitude }, 0);
         }
     }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions]);
 
