@@ -1708,7 +1708,12 @@ function App() {
                                 </div>
                             </>
                         } />
-                        <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModal />} />
+                        <Route
+                            path="/quake/:detailUrlParam"
+                            element={<EarthquakeDetailModal broaderEarthquakeData={
+                                (allEarthquakes && allEarthquakes.length > 0 && earthquakesLast30Days && earthquakesLast30Days.length > 0) ? earthquakesLast30Days : earthquakesLast7Days
+                            } />}
+                        />
                     </Routes>
                 </main>
 
@@ -1891,16 +1896,22 @@ function App() {
  * manages the modal's open/close state based on navigation.
  * @returns {JSX.Element} The rendered EarthquakeDetailView component configured as a modal.
  */
-const EarthquakeDetailModal = () => {
+const EarthquakeDetailModal = ({ broaderEarthquakeData }) => { // Add prop
     const { detailUrlParam } = useParams();
     const navigate = useNavigate();
     const detailUrl = decodeURIComponent(detailUrlParam);
 
     const handleClose = () => {
-        navigate(-1); // Go back to the previous page
+        navigate(-1);
     };
 
-    return <EarthquakeDetailView detailUrl={detailUrl} onClose={handleClose} />;
+    // Prepare a callback for SEO data if needed, or handle directly in App.jsx
+    // For now, just passing broaderEarthquakeData
+    return <EarthquakeDetailView
+                detailUrl={detailUrl}
+                onClose={handleClose}
+                broaderEarthquakeData={broaderEarthquakeData} // Pass it down
+            />;
 };
 
 export default App;
