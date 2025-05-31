@@ -1526,17 +1526,17 @@ function App() {
                                     <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-[220px] backdrop-blur-sm border border-slate-700">
                                         <h3 className="text-[10px] sm:text-xs font-semibold mb-0.5 sm:mb-1 text-indigo-300 uppercase">Live Statistics</h3>
                                         <p className="text-[10px] sm:text-xs">Last Hour: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.lastHourCount}</span></p>
+                                        <GlobalLastMajorQuakeTimer
+                                            lastMajorQuake={lastMajorQuake}
+                                            MAJOR_QUAKE_THRESHOLD={MAJOR_QUAKE_THRESHOLD}
+                                            formatTimeDuration={formatTimeDuration}
+                                            SkeletonText={SkeletonText}
+                                        />
                                         <p className="text-[10px] sm:text-xs">24h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count24h}</span></p>
                                         <p className="text-[10px] sm:text-xs">72h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count72h}</span></p>
                                         <p className="text-[10px] sm:text-xs">24h Strongest: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.strongest24h}</span></p>
                                     </div>
                                 </div>
-                                <GlobalLastMajorQuakeTimer
-                                    lastMajorQuake={lastMajorQuake}
-                                    MAJOR_QUAKE_THRESHOLD={MAJOR_QUAKE_THRESHOLD}
-                                    formatTimeDuration={formatTimeDuration}
-                                    SkeletonText={SkeletonText}
-                                />
                                 </div>
                             </>
                         } />
