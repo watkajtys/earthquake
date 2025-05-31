@@ -364,7 +364,7 @@ function App() {
                 {lastMajorQuake ? timeAgoFormatted : <SkeletonText width="w-1/2 mx-auto" height="h-10"/>}
             </p>
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Since the last significant (M<span style={{fontWeight: 'bold'}}>{majorQuakeThreshold.toFixed(1)}</span>+) earthquake.</p>
-            {lastMajorQuake ? (<p className="text-sm text-slate-300 mt-1 mb-3">M<span style={{ color: magColor, fontWeight: 'bold' }}>{mag || '...'}</span> - {location || 'Details Pending...'}<a href="#" onClick={(e) => { e.preventDefault(); handleQuakeClick(lastMajorQuake); }} className="text-indigo-400 hover:text-indigo-300 ml-2 text-xs">(details)</a></p>) : (<SkeletonText width="w-full mx-auto mt-1 mb-3" height="h-5"/>)}
+            {lastMajorQuake ? (<p className="text-sm text-slate-300 mt-1 mb-3">M<span style={{ color: magColor, fontWeight: 'bold' }}>{mag || '...'}</span> - {location || 'Details Pending...'}<a href={lastMajorQuake.properties.url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 ml-2 text-xs">(details)</a></p>) : (<SkeletonText width="w-full mx-auto mt-1 mb-3" height="h-5"/>)}
             <hr className="my-3 border-slate-600"/>
             {isLoadingMonthly && !prevIntervalFmt && lastMajorQuake ? (
                                 <><SkeletonText width="w-1/4 mx-auto"/> <div className="h-8 bg-slate-600 rounded w-1/3 mx-auto my-2"></div> <SkeletonText width="w-1/3 mx-auto"/> <SkeletonText width="w-full mx-auto mt-1 mb-1" height="h-4"/> </>
@@ -1183,9 +1183,9 @@ function App() {
     }, [earthquakesLast7Days]);
 
     // --- ADDED: Memo for most active region for the overview panel ---
-    const mostActiveRegionOverview = useMemo(() => {
+    const topActiveRegionsOverview = useMemo(() => {
         if (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0) {
-            return { name: "N/A", count: 0, color: "#9CA3AF" };
+            return [];
         }
         const counts = REGIONS.map(r => ({ ...r, count: 0 }));
         earthquakesLast24Hours.forEach(q => {
@@ -1194,7 +1194,7 @@ function App() {
             if (regionCounter) regionCounter.count++;
         });
         const sortedRegions = counts.filter(r => r.count > 0).sort((a, b) => b.count - a.count);
-        return sortedRegions.length > 0 ? sortedRegions[0] : { name: "No activity in defined regions", count: 0, color: "#9CA3AF" };
+        return sortedRegions.slice(0,2);
     }, [earthquakesLast24Hours, REGIONS, getRegionForEarthquake]);
 
     const overviewClusters = useMemo(() => {
@@ -1665,12 +1665,18 @@ function App() {
                                     {isLoadingDaily && !earthquakesLast24Hours ? (
                                         <SkeletonText width="w-full" height="h-5" className="bg-slate-600"/>
                                     ) : (
-                                        <p className="text-slate-300">
-                                            <span className="font-semibold" style={{color: mostActiveRegionOverview.color || '#9CA3AF'}}>
-                                                {mostActiveRegionOverview.name}
-                                            </span>
-                                            {mostActiveRegionOverview.count > 0 ? ` - ${mostActiveRegionOverview.count} events` : ' (No significant regional activity)'}
-                                        </p>
+                                        topActiveRegionsOverview.length > 0 ? (
+                                            topActiveRegionsOverview.map((region, index) => (
+                                                <p key={region.name} className={`text-slate-300 ${index > 0 ? 'mt-0.5' : ''}`}>
+                                                    <span className="font-semibold" style={{color: region.color || '#9CA3AF'}}>
+                                                        {index + 1}. {region.name}
+                                                        </span>
+                                                        {region.count > 0 ? ` - ${region.count} events` : ''}
+                                                    </p>
+                                            ))
+                                    ) : (
+                                        <p className="text-slate-400 text-xs">(No significant regional activity in the last 24 hours)</p>
+                                    )
                                     )}
                                 </div>
                                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
@@ -1774,12 +1780,18 @@ function App() {
                                 {isLoadingDaily && !earthquakesLast24Hours ? (
                                     <SkeletonText width="w-full" height="h-5" className="bg-slate-600"/>
                                 ) : (
-                                    <p className="text-slate-300">
-                                        <span className="font-semibold" style={{color: mostActiveRegionOverview.color || '#9CA3AF'}}>
-                                            {mostActiveRegionOverview.name}
-                                        </span>
-                                        {mostActiveRegionOverview.count > 0 ? ` - ${mostActiveRegionOverview.count} events` : ' (No significant regional activity)'}
-                                    </p>
+                                    topActiveRegionsOverview.length > 0 ? (
+                                                                topActiveRegionsOverview.map((region, index) => (
+                                                                    <p key={region.name} className={`text-slate-300 ${index > 0 ? 'mt-0.5' : ''}`}>
+                                                                            <span className="font-semibold" style={{color: region.color || '#9CA3AF'}}>
+                                                                            {index + 1}. {region.name}
+                                                                            </span>
+                                                                        {region.count > 0 ? ` - ${region.count} events` : ''}
+                                                                    </p>
+                                                                ))
+                                                            ) : (
+                                                                <p className="text-slate-400 text-xs">(No significant regional activity in the last 24 hours)</p>
+                                                            )
                                 )}
                             </div>
 
