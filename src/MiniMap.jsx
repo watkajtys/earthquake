@@ -76,34 +76,60 @@ const MiniMap = ({
       }
 
       if (clusterQuakes && clusterQuakes.length > 0) {
-        const points = clusterQuakes.map(quake => {
-          const [lon, lat] = quake.geometry.coordinates;
-          return L.latLng(lat, lon);
-        });
+        // Filter out quakes with invalid coordinate data and prepare data for markers
+        const validQuakeData = clusterQuakes.reduce((acc, quake) => {
+          if (
+            quake &&
+            quake.geometry &&
+            Array.isArray(quake.geometry.coordinates) &&
+            quake.geometry.coordinates.length >= 2 &&
+            typeof quake.geometry.coordinates[0] === 'number' && !isNaN(quake.geometry.coordinates[0]) && // lon
+            typeof quake.geometry.coordinates[1] === 'number' && !isNaN(quake.geometry.coordinates[1])    // lat
+          ) {
+            const [lon, lat] = quake.geometry.coordinates;
+            acc.push({
+              latLng: L.latLng(lat, lon),
+              properties: quake.properties,
+              id: quake.id
+            });
+          } else {
+            // NODE_ENV check might not work as expected in all Vite builds without explicit define config.
+            // A simple console.warn is usually fine for library-like components.
+            console.warn('[MiniMap] Skipping quake with invalid coordinate data:', quake);
+          }
+          return acc;
+        }, []);
 
-        if (points.length > 0) {
-          const bounds = L.latLngBounds(points);
-          mapInstance.fitBounds(bounds.pad(0.15)); // 15% padding
+        if (validQuakeData.length > 0) {
+          const leafletPoints = validQuakeData.map(data => data.latLng);
 
-          // Create a new feature group for cluster markers
+          if (leafletPoints.length === 1) {
+            mapInstance.setView(leafletPoints[0], zoomLevel);
+          } else {
+            const bounds = L.latLngBounds(leafletPoints);
+            mapInstance.fitBounds(bounds.pad(0.15));
+          }
+
           clusterMarkersLayerRef.current = L.featureGroup();
 
-          points.forEach((point, index) => {
-            const quake = clusterQuakes[index];
-            L.circleMarker(point, {
+          validQuakeData.forEach(data => {
+            L.circleMarker(data.latLng, {
               radius: 4,
-              fillColor: "#ff7800", // A distinct orange color for cluster points
+              fillColor: "#ff7800",
               color: "#000",
               weight: 0.5,
               opacity: 1,
               fillOpacity: 0.8
-            }).bindTooltip(`M ${quake.properties.mag?.toFixed(1) || 'N/A'} - ${quake.properties.place || 'Unknown'}`)
+            }).bindTooltip(`M ${data.properties?.mag?.toFixed(1) || 'N/A'} - ${data.properties?.place || 'Unknown'}`)
               .addTo(clusterMarkersLayerRef.current);
           });
           clusterMarkersLayerRef.current.addTo(mapInstance);
+        } else {
+          // If all quakes were invalid, validQuakeData would be empty
+          mapInstance.setView(position, zoomLevel); // Fallback to default view
         }
       } else {
-        // Fallback to default center/zoom if no cluster or single point mode
+        // Fallback to default center/zoom if no cluster or clusterQuakes is empty array
         mapInstance.setView(position, zoomLevel);
       }
     }
