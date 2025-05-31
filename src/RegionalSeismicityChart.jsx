@@ -1,5 +1,5 @@
 // src/RegionalSeismicityChart.jsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 
 // (Copied from App.jsx - ideally this would be in a shared utils.js)
 const getMagnitudeColor = (magnitude) => {
@@ -42,8 +42,35 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
  * surrounding the selected earthquake.
  */
 function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dataSourceTimespanDays }) {
+  const chartContainerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(380); // Default width, will be updated
+
   const REGIONAL_RADIUS_KM = 100; // 100 km radius for nearby events
   const TIME_WINDOW_DAYS = 30; // Default look back 30 days for data search
+
+  useEffect(() => {
+      const chartContainer = chartContainerRef.current;
+      if (!chartContainer) return;
+
+      const resizeObserver = new ResizeObserver(entries => {
+          if (entries && entries.length > 0 && entries[0].contentRect) {
+              setContainerWidth(entries[0].contentRect.width);
+          }
+      });
+
+      resizeObserver.observe(chartContainer);
+
+      // Initial set, in case ResizeObserver fires after initial render with default
+      // or if component mounts and unmounts quickly.
+      setContainerWidth(chartContainer.clientWidth);
+
+
+      return () => {
+          if (chartContainer) {
+              resizeObserver.unobserve(chartContainer);
+          }
+      };
+  }, []); // Empty dependency array to run once on mount and clean up on unmount
 
   const regionalEvents = useMemo(() => {
     if (!currentEarthquake || !nearbyEarthquakesData || nearbyEarthquakesData.length === 0) {
@@ -167,9 +194,9 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
   }
 
   const svgHeight = 200;
-  const svgWidth = 380;
-  const margin = { top: 20, right: 10, bottom: 35, left: 30 };
-  const chartWidth = svgWidth - margin.left - margin.right;
+  // const svgWidth = 380; // Will be removed / Already removed by previous overwrite
+  const margin = { top: 20, right: 10, bottom: 35, left: 30 }; // Keep right margin small for full width feel
+  const chartWidth = containerWidth - margin.left - margin.right;
   const chartHeight = svgHeight - margin.top - margin.bottom;
   const maxCount = Math.max(...chartData.map(d => d.count), 0);
   const barWidth = chartWidth / Math.max(1, chartData.length) * 0.8;
@@ -197,8 +224,8 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
         Using regional data from the last ~{dataSourceTimespanDays || 'N/A'} days.
         Chart displays activity in the {displayWindowDays} days prior to this M{currentEarthquake.properties.mag?.toFixed(1)} event.
       </p>
-      <div className="w-full overflow-x-auto">
-        <svg width={svgWidth} height={svgHeight} className="font-sans">
+      <div ref={chartContainerRef} className="w-full overflow-hidden"> {/* Add ref, changed overflow-x-auto to overflow-hidden */}
+        <svg width="100%" height={svgHeight} viewBox={`0 0 ${containerWidth} ${svgHeight}`} className="font-sans"> {/* Use containerWidth for viewBox, width="100%" */}
           <g transform={`translate(${margin.left},${margin.top})`}>
             {yAxisTicks.map(tick => (
               <g key={`y-tick-${tick}`} className="text-gray-400">
