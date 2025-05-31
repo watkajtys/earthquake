@@ -15,6 +15,7 @@ import ClusterSummaryItem from './ClusterSummaryItem'; // Add this line
 import ClusterDetailModal from './ClusterDetailModal';
 import ClusterDetailModalWrapper from './ClusterDetailModalWrapper.jsx';
 import { calculateDistance, getMagnitudeColor } from './utils';
+import PullToRefresh from 'react-simple-pull-to-refresh';
 
 // --- Configuration & Helpers ---
 const USGS_API_URL_DAY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
@@ -745,6 +746,148 @@ function App() {
         } catch (e) { console.error(`Workspace error from ${url}:`, e); throw e; }
     }, []);
 
+    const orchestrateInitialDataLoad = useCallback(async () => {
+        // This function is now defined outside useEffect and memoized with useCallback
+        // let isMounted = true; // isMounted is typically handled by useEffect cleanup, not needed directly in a callback like this if the callback itself doesn't manage async operations that need cancellation on unmount. The useEffect calling this will handle its own mounting status.
+        setLoadingMessageIndex(0); setCurrentLoadingMessages(INITIAL_LOADING_MESSAGES);
+        setIsLoadingDaily(true); setIsLoadingWeekly(true);
+        setEarthquakesLastHour([]); setEarthquakesLast24Hours([]); setEarthquakesLast72Hours([]); setEarthquakesLast7Days([]);
+        setPrev24HourData([]);
+        setGlobeEarthquakes([]); setActiveAlertTriggeringQuakes([]);
+
+        const nowForFiltering = Date.now();
+        const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0) => data ? data.filter(q => q.properties.time >= (nowForFiltering - hoursAgoStart * 36e5) && q.properties.time < (nowForFiltering - hoursAgoEnd * 36e5)) : [];
+
+        let dailyMajor = null;
+        // let currentLocalLastMajorQuake = null; // This was used to pass value between scopes, direct state update is better
+        // setLastMajorQuake(prev => { currentLocalLastMajorQuake = prev; return prev; }); // Avoid this pattern if possible
+
+        let dailyErrorMsg = null;
+        let weeklyErrorMsg = null;
+
+        try {
+            setLoadingMessageIndex(0);
+            const dailyRes = await fetchDataCb(USGS_API_URL_DAY);
+            if (dailyRes?.features) {
+                setLoadingMessageIndex(1);
+                const dD = dailyRes.features; setEarthquakesLastHour(filterByTime(dD, 1));
+                const l24 = filterByTime(dD, 24); setEarthquakesLast24Hours(l24);
+
+                setHasRecentTsunamiWarning(l24.some(q => q.properties.tsunami === 1));
+                const alertsIn24hr = l24.map(q => q.properties.alert).filter(a => a && a !== 'green' && ALERT_LEVELS[a.toUpperCase()]);
+                const currentHighestAlertValue = alertsIn24hr.length > 0 ? alertsIn24hr.sort((a,b) => ({ 'red':0, 'orange':1, 'yellow':2 }[a] - { 'red':0, 'orange':1, 'yellow':2 }[b]))[0] : null;
+                setHighestRecentAlert(currentHighestAlertValue);
+                if (currentHighestAlertValue && ALERT_LEVELS[currentHighestAlertValue.toUpperCase()]) setActiveAlertTriggeringQuakes(l24.filter(q => q.properties.alert === currentHighestAlertValue)); else setActiveAlertTriggeringQuakes([]);
+
+                const majD = dD.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
+                dailyMajor = majD.length > 0 ? majD[0] : null;
+                if (dailyMajor) {
+                    setLastMajorQuake(prev => (!prev || dailyMajor.properties.time > prev.properties.time) ? dailyMajor : prev);
+                }
+                setDataFetchTime(nowForFiltering); setLastUpdated(new Date(dailyRes.metadata?.generated || nowForFiltering).toLocaleString());
+            } else {
+                dailyErrorMsg = "Daily data features are missing.";
+                setEarthquakesLastHour([]);
+                setEarthquakesLast24Hours([]);
+                setActiveAlertTriggeringQuakes([]);
+            }
+        } catch (e) {
+            dailyErrorMsg = e.message;
+            setEarthquakesLastHour([]);
+            setEarthquakesLast24Hours([]);
+            setActiveAlertTriggeringQuakes([]);
+        }
+        finally { setIsLoadingDaily(false); }
+
+        let weeklyMajorsList = [];
+        try {
+            setLoadingMessageIndex(2);
+            const weeklyResult = await fetchDataCb(USGS_API_URL_WEEK);
+            if (weeklyResult?.features) {
+                setLoadingMessageIndex(3);
+                const weeklyData = weeklyResult.features;
+                const last72HoursData = filterByTime(weeklyData, 72);
+                setEarthquakesLast72Hours(last72HoursData);
+                setPrev24HourData(filterByTime(weeklyData, 48, 24));
+                const last7DaysData = filterByTime(weeklyData, 7 * 24);
+                setEarthquakesLast7Days(last7DaysData);
+                const sortedForGlobe = [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
+                setGlobeEarthquakes(sortedForGlobe.slice(0, 900));
+
+                weeklyMajorsList = weeklyData.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
+                const latestWeeklyMajor = weeklyMajorsList.length > 0 ? weeklyMajorsList[0] : null;
+                if (latestWeeklyMajor) {
+                    setLastMajorQuake(prev => (!prev || latestWeeklyMajor.properties.time > prev.properties.time) ? latestWeeklyMajor : prev);
+                }
+
+                let consolidatedMajors = [];
+                if (dailyMajor) consolidatedMajors.push(dailyMajor);
+                consolidatedMajors = [...consolidatedMajors, ...weeklyMajorsList]
+                    .sort((a,b) => b.properties.time - a.properties.time)
+                    .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id));
+
+                const newLastMajorQuake = consolidatedMajors.length > 0 ? consolidatedMajors[0] : null;
+                const newPreviousMajorQuake = consolidatedMajors.length > 1 ? consolidatedMajors[1] : null;
+
+                setLastMajorQuake(prev => {
+                    if (newLastMajorQuake && (!prev || newLastMajorQuake.properties.time > prev.properties.time)) {
+                        return newLastMajorQuake;
+                    }
+                    return prev || newLastMajorQuake; // Ensure it doesn't become null if prev existed
+                });
+                setPreviousMajorQuake(newPreviousMajorQuake);
+
+                if (newLastMajorQuake && newPreviousMajorQuake) {
+                    setTimeBetweenPreviousMajorQuakes(newLastMajorQuake.properties.time - newPreviousMajorQuake.properties.time);
+                } else {
+                    setTimeBetweenPreviousMajorQuakes(null);
+                }
+            } else {
+                weeklyErrorMsg = "Weekly data features are missing.";
+                setEarthquakesLast72Hours([]);
+                setEarthquakesLast7Days([]);
+                setPrev24HourData([]);
+                setGlobeEarthquakes([]);
+            }
+        } catch (e) {
+            weeklyErrorMsg = e.message;
+            setEarthquakesLast72Hours([]);
+            setEarthquakesLast7Days([]);
+            setPrev24HourData([]);
+            setGlobeEarthquakes([]);
+        }
+        finally {
+            setIsLoadingWeekly(false);
+            if (dailyErrorMsg && weeklyErrorMsg) {
+                setError("Failed to fetch critical earthquake data from primary sources. Some features may be unavailable. Please check your connection or try again later.");
+            } else if (dailyErrorMsg) {
+                setError(`Daily data error: ${dailyErrorMsg}. Display may be incomplete.`);
+            } else if (weeklyErrorMsg) {
+                setError(`Weekly data error: ${weeklyErrorMsg}. Some historical data might be missing.`);
+            } else {
+                setError(null);
+            }
+            // isInitialAppLoad.current logic needs to be managed by the calling useEffect or another state
+            // For pull-to-refresh, we don't want to trigger the "initial app load" specific logic like setTimeout for appRenderTrigger
+        }
+    }, [
+        fetchDataCb, setLoadingMessageIndex, setCurrentLoadingMessages, INITIAL_LOADING_MESSAGES,
+        setIsLoadingDaily, setIsLoadingWeekly, setEarthquakesLastHour, setEarthquakesLast24Hours,
+        setEarthquakesLast72Hours, setEarthquakesLast7Days, setPrev24HourData, setGlobeEarthquakes,
+        setActiveAlertTriggeringQuakes, setHasRecentTsunamiWarning, ALERT_LEVELS, MAJOR_QUAKE_THRESHOLD,
+        setLastMajorQuake, setDataFetchTime, setLastUpdated, setPreviousMajorQuake,
+        setTimeBetweenPreviousMajorQuakes, setError, isInitialAppLoad // Added isInitialAppLoad here
+        // filterByTime is defined inside, so not needed as dependency.
+        // dailyMajor, weeklyMajorsList are local variables, not dependencies.
+    ]);
+
+    const handleRefresh = useCallback(async () => {
+        // Ensure orchestrateInitialDataLoad is the memoized version
+        // and that it's included in the dependency array of handleRefresh.
+        await orchestrateInitialDataLoad();
+      }, [orchestrateInitialDataLoad]);
+
+
     const latestFeelableQuakesSnippet = useMemo(() => {
         if (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0) {
             return [];
@@ -855,164 +998,23 @@ function App() {
     // --- Effect Hooks ---
     useEffect(() => {
         let isMounted = true;
-        const orchestrateInitialDataLoad = async () => {
-            if (!isMounted) return;
-            setLoadingMessageIndex(0); setCurrentLoadingMessages(INITIAL_LOADING_MESSAGES);
-            setIsLoadingDaily(true); setIsLoadingWeekly(true); // setError(null) will be handled later by the new logic
-            setEarthquakesLastHour([]); setEarthquakesLast24Hours([]); setEarthquakesLast72Hours([]); setEarthquakesLast7Days([]);
-            setPrev24HourData([]); // Initialize to empty array
-            setGlobeEarthquakes([]); setActiveAlertTriggeringQuakes([]);
-
-            const nowForFiltering = Date.now();
-            const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0) => data ? data.filter(q => q.properties.time >= (nowForFiltering - hoursAgoStart * 36e5) && q.properties.time < (nowForFiltering - hoursAgoEnd * 36e5)) : [];
-
-            let dailyMajor = null;
-            let currentLocalLastMajorQuake = null;
-            setLastMajorQuake(prev => { currentLocalLastMajorQuake = prev; return prev; });
-
-            let dailyErrorMsg = null;
-            let weeklyErrorMsg = null;
-
-            try {
-                if (isMounted) setLoadingMessageIndex(0);
-                const dailyRes = await fetchDataCb(USGS_API_URL_DAY); if (!isMounted) return;
-                if (dailyRes?.features) {
-                    if (isMounted) setLoadingMessageIndex(1);
-                    const dD = dailyRes.features; setEarthquakesLastHour(filterByTime(dD, 1));
-                    const l24 = filterByTime(dD, 24); setEarthquakesLast24Hours(l24);
-
-                    setHasRecentTsunamiWarning(l24.some(q => q.properties.tsunami === 1));
-                    const alertsIn24hr = l24.map(q => q.properties.alert).filter(a => a && a !== 'green' && ALERT_LEVELS[a.toUpperCase()]);
-                    const currentHighestAlertValue = alertsIn24hr.length > 0 ? alertsIn24hr.sort((a,b) => ({ 'red':0, 'orange':1, 'yellow':2 }[a] - { 'red':0, 'orange':1, 'yellow':2 }[b]))[0] : null;
-                    setHighestRecentAlert(currentHighestAlertValue);
-                    if (currentHighestAlertValue && ALERT_LEVELS[currentHighestAlertValue.toUpperCase()]) setActiveAlertTriggeringQuakes(l24.filter(q => q.properties.alert === currentHighestAlertValue)); else setActiveAlertTriggeringQuakes([]);
-
-                    const majD = dD.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
-                    dailyMajor = majD.length > 0 ? majD[0] : null;
-                    if (dailyMajor) {
-                        setLastMajorQuake(prev => {
-                            const newQuake = (!prev || dailyMajor.properties.time > prev.properties.time) ? dailyMajor : prev;
-                            currentLocalLastMajorQuake = newQuake;
-                            return newQuake;
-                        });
-                    }
-                    setDataFetchTime(nowForFiltering); setLastUpdated(new Date(dailyRes.metadata?.generated || nowForFiltering).toLocaleString());
-                } else {
-                    dailyErrorMsg = "Daily data features are missing."; // Handle case where features might be missing
+        // Initial data load and subsequent interval loading
+        // Call orchestrateInitialDataLoad and then handle the isInitialAppLoad.current logic
+        const initialLoad = async () => {
+            await orchestrateInitialDataLoad();
+            if (isMounted && isInitialAppLoad.current) {
+                isInitialAppLoad.current = false;
+                setTimeout(() => {
                     if (isMounted) {
-                        setEarthquakesLastHour([]);
-                        setEarthquakesLast24Hours([]);
-                        setActiveAlertTriggeringQuakes([]);
+                        setAppRenderTrigger(prev => prev + 1);
                     }
-                }
-            } catch (e) {
-                if (!isMounted) return;
-                dailyErrorMsg = e.message;
-                if (isMounted) {
-                    setEarthquakesLastHour([]);
-                    setEarthquakesLast24Hours([]);
-                    setActiveAlertTriggeringQuakes([]);
-                }
-            }
-            finally { if (isMounted) setIsLoadingDaily(false); }
-
-            let weeklyMajorsList = [];
-            try {
-                if (isMounted) setLoadingMessageIndex(2);
-                const weeklyResult = await fetchDataCb(USGS_API_URL_WEEK); if (!isMounted) return;
-                if (weeklyResult?.features) {
-                    if (isMounted) setLoadingMessageIndex(3);
-                    const weeklyData = weeklyResult.features;
-                    const last72HoursData = filterByTime(weeklyData, 72);
-                    setEarthquakesLast72Hours(last72HoursData);
-                    setPrev24HourData(filterByTime(weeklyData, 48, 24)); // This should use [] on error
-                    const last7DaysData = filterByTime(weeklyData, 7 * 24);
-                    setEarthquakesLast7Days(last7DaysData);
-                    const sortedForGlobe = [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-                    setGlobeEarthquakes(sortedForGlobe.slice(0, 900));
-
-                    // Old logic for latestQuakeLongitude removed.
-                    // Globe focus will be handled by a new useEffect hook listening to lastMajorQuake.
-
-                    weeklyMajorsList = weeklyData.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
-                    const latestWeeklyMajor = weeklyMajorsList.length > 0 ? weeklyMajorsList[0] : null;
-                    if (latestWeeklyMajor) {
-                        setLastMajorQuake(prev => {
-                            const newQuake = (!prev || latestWeeklyMajor.properties.time > prev.properties.time) ? latestWeeklyMajor : prev;
-                            currentLocalLastMajorQuake = newQuake;
-                            return newQuake;
-                        });
-                    }
-
-                    let consolidatedMajors = [];
-                    if (dailyMajor) consolidatedMajors.push(dailyMajor);
-                    consolidatedMajors = [...consolidatedMajors, ...weeklyMajorsList]
-                        .sort((a,b) => b.properties.time - a.properties.time)
-                        .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id));
-
-                    const newLastMajorQuake = consolidatedMajors.length > 0 ? consolidatedMajors[0] : null;
-                    const newPreviousMajorQuake = consolidatedMajors.length > 1 ? consolidatedMajors[1] : null;
-
-                    setLastMajorQuake(prev => {
-                        if (newLastMajorQuake && (!prev || newLastMajorQuake.properties.time > prev.properties.time)) {
-                            return newLastMajorQuake;
-                        }
-                        return prev || newLastMajorQuake;
-                    });
-                    setPreviousMajorQuake(newPreviousMajorQuake);
-
-                    if (newLastMajorQuake && newPreviousMajorQuake) {
-                        setTimeBetweenPreviousMajorQuakes(newLastMajorQuake.properties.time - newPreviousMajorQuake.properties.time);
-                    } else {
-                        setTimeBetweenPreviousMajorQuakes(null);
-                    }
-                } else {
-                    weeklyErrorMsg = "Weekly data features are missing."; // Handle case where features might be missing
-                    if (isMounted) {
-                        setEarthquakesLast72Hours([]);
-                        setEarthquakesLast7Days([]);
-                        setPrev24HourData([]); 
-                        setGlobeEarthquakes([]);
-                    }
-                }
-            } catch (e) {
-                if (!isMounted) return;
-                weeklyErrorMsg = e.message;
-                if (isMounted) {
-                    setEarthquakesLast72Hours([]);
-                    setEarthquakesLast7Days([]);
-                    setPrev24HourData([]); 
-                    setGlobeEarthquakes([]);
-                }
-            }
-            finally {
-                if (isMounted) {
-                    setIsLoadingWeekly(false);
-
-                    if (dailyErrorMsg && weeklyErrorMsg) {
-                        setError("Failed to fetch critical earthquake data from primary sources. Some features may be unavailable. Please check your connection or try again later.");
-                    } else if (dailyErrorMsg) {
-                        setError(`Daily data error: ${dailyErrorMsg}. Display may be incomplete.`);
-                    } else if (weeklyErrorMsg) {
-                        setError(`Weekly data error: ${weeklyErrorMsg}. Some historical data might be missing.`);
-                    } else {
-                        setError(null); // Clear any previous error if both fetches were successful
-                    }
-                    if (isInitialAppLoad.current) {
-                        isInitialAppLoad.current = false;
-                        setTimeout(() => {
-                            if (isMounted) {
-                                setAppRenderTrigger(prev => prev + 1);
-                            }
-                        }, 100);
-                    }
-                }
+                }, 100);
             }
         };
-        orchestrateInitialDataLoad();
+        initialLoad();
         const intervalId = setInterval(orchestrateInitialDataLoad, REFRESH_INTERVAL_MS);
         return () => { isMounted = false; clearInterval(intervalId); };
-    }, [fetchDataCb]); // Removed getRegionForEarthquake, getMagnitudeColor from dependencies as they are stable
+    }, [orchestrateInitialDataLoad]); // Now depends on the memoized orchestrateInitialDataLoad
 
     const handleLoadMonthlyData = useCallback(async () => {
         let isMounted = true; setHasAttemptedMonthlyLoad(true); setIsLoadingMonthly(true); setMonthlyError(null);
@@ -1471,7 +1473,7 @@ function App() {
             <header className="bg-slate-800 text-white p-2 shadow-lg z-40 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
-                    <p className="text-xs sm:text-sm text-slate-400 mt-0.5 sm:mt-0">{headerTimeDisplay}</p>
+                    <p className="text-xs text-slate-500 mt-1 mb-1 sm:mb-0">{headerTimeDisplay}</p>
                 </div>
             </header>
 
@@ -1482,6 +1484,7 @@ function App() {
                 {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
                 {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
                 <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto">
+                    <PullToRefresh onRefresh={handleRefresh}>
                     <Routes>
                         <Route path="/" element={
                             <>
@@ -1741,6 +1744,7 @@ function App() {
                         />
                         <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper overviewClusters={overviewClusters} formatDate={formatDate} getMagnitudeColorStyle={getMagnitudeColorStyle} onIndividualQuakeSelect={handleQuakeClick} />} />
                     </Routes>
+                    </PullToRefresh>
                 </main>
 
                 {/* DESKTOP SIDEBAR (hidden on small screens, flex on large) */}
