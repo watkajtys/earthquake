@@ -135,8 +135,8 @@ const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`
  * @param {string} props.detailUrl - The URL to fetch detailed earthquake data from.
  * @param {function} props.onClose - Callback function to close the detail view.
  * @param {function} [props.onDataLoadedForSeo] - Optional callback for SEO data.
- * @param {Array<object>} props.broaderEarthquakeData - Data for nearby earthquakes for regional seismicity chart.
- * @param {number} props.dataSourceTimespanDays - Indicates time span of `broaderEarthquakeData` (7 or 30 days).
+ * @param {Array<object>} props.broaderEarthquakeData - Array of earthquake objects for regional context, used by RegionalSeismicityChart.
+ * @param {number} props.dataSourceTimespanDays - Indicates time span of `broaderEarthquakeData` (7 or 30 days), passed to RegionalSeismicityChart.
  * @returns {JSX.Element} The rendered EarthquakeDetailView component.
  */
 function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays }) {
@@ -175,7 +175,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
         };
         fetchDetail();
         return () => { isMounted = false; };
-    }, [detailUrl]); // Reverted: onDataLoadedForSeo removed from dependency array
+    }, [detailUrl]);
 
     const properties = useMemo(() => detailData?.properties, [detailData]);
     const geometry = useMemo(() => detailData?.geometry, [detailData]);
@@ -441,5 +441,3 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
 }
 
 export default EarthquakeDetailView;
-
-[end of src/EarthquakeDetailView.jsx]
