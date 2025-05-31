@@ -40,18 +40,37 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
   if (originalQuakes.length === 1) {
     const singleQuake = originalQuakes[0];
     mapCenter = [singleQuake.geometry.coordinates[1], singleQuake.geometry.coordinates[0]];
-    initialZoom = 6; // Zoom level for a single quake
+    initialZoom = 8; // Zoom level for a single quake
   } else {
     // Calculate map center for multiple quakes (average lat/lng)
     const latitudes = originalQuakes.map(quake => quake.geometry.coordinates[1]);
     const longitudes = originalQuakes.map(quake => quake.geometry.coordinates[0]);
     const avgLat = latitudes.reduce((sum, lat) => sum + lat, 0) / latitudes.length;
     const avgLng = longitudes.reduce((sum, lng) => sum + lng, 0) / longitudes.length;
-    mapCenter = [avgLat, avgLng];
-    initialZoom = 2; // Fallback zoom, fitBounds will adjust this
+    mapCenter = [avgLat, avgLng]; // This center is fine for concentrated points too.
+
+    // Calculate bounds to check for very concentrated clusters
+    const bounds = L.latLngBounds(
+      originalQuakes.map(quake => [
+        quake.geometry.coordinates[1],
+        quake.geometry.coordinates[0],
+      ])
+    );
+
+    if (
+      bounds.getSouthWest().equals(bounds.getNorthEast()) ||
+      (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.01 &&
+       Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.01)
+    ) {
+      initialZoom = 10; // Higher zoom for very concentrated clusters
+    } else {
+      initialZoom = 2; // Fallback zoom, fitBounds will adjust this for spread out clusters
+    }
   }
 
   useEffect(() => {
+    // Only call fitBounds if the cluster is not extremely concentrated,
+    // as initialZoom would have already handled it.
     if (mapRef.current && originalQuakes.length > 1) {
       const bounds = L.latLngBounds(
         originalQuakes.map(quake => [
@@ -59,9 +78,17 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
           quake.geometry.coordinates[0],
         ])
       );
-      mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+      // Check concentration again, or rely on initialZoom setting.
+      // To avoid calling fitBounds unnecessarily for already zoomed concentrated clusters:
+      if (
+        !(bounds.getSouthWest().equals(bounds.getNorthEast()) ||
+        (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.01 &&
+         Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.01))
+      ) {
+        mapRef.current.fitBounds(bounds, { padding: [5, 5] });
+      }
     }
-    // For a single quake, the view is already set by mapCenter and initialZoom on MapContainer
+    // For a single quake or very concentrated cluster, the view is already set by mapCenter and initialZoom
   }, [originalQuakes, mapRef]); // mapRef dependency itself doesn't change, but its .current property does.
                                  // originalQuakes is the primary data dependency.
 
