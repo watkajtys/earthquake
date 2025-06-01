@@ -76,6 +76,7 @@ function ClusterDetailModalWrapper({ overviewClusters, formatDate, getMagnitudeC
             getMagnitudeColorStyle={getMagnitudeColorStyle}
             onIndividualQuakeSelect={onIndividualQuakeSelect} // Pass this down
         />
+        </>
     );
 }
 

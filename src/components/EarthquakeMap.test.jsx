@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom'; // Import MemoryRouter
 import EarthquakeMap from './EarthquakeMap';
 import { describe, it, expect, vi } from 'vitest';
 import L from 'leaflet';
@@ -82,7 +83,7 @@ describe('EarthquakeMap Component', () => {
     render(<EarthquakeMap {...defaultProps} />);
     const mapContainer = screen.getByTestId('map-container');
     expect(mapContainer).toHaveAttribute('data-center', JSON.stringify([defaultProps.latitude, defaultProps.longitude]));
-    expect(mapContainer).toHaveAttribute('data-zoom', '5'); // Default zoom
+    expect(mapContainer).toHaveAttribute('data-zoom', '8'); // Default zoom
   });
 
   it('applies correct styles to the map container (no grayscale)', () => {
@@ -129,11 +130,11 @@ describe('EarthquakeMap Component', () => {
     expect(shakeMapLink).not.toBeInTheDocument();
   });
 
-  it('renders the TileLayer with CARTO light theme', () => {
+  it('renders the TileLayer with ESRI World Imagery theme', () => {
     render(<EarthquakeMap {...defaultProps} />);
     const tileLayer = screen.getByTestId('tile-layer');
     expect(tileLayer).toBeInTheDocument();
-    expect(tileLayer).toHaveAttribute('data-url', 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png');
+    expect(tileLayer).toHaveAttribute('data-url', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
   });
 
   it('applies correct styles to GeoJSON layer based on Boundary_Type', () => {
@@ -215,26 +216,38 @@ describe('EarthquakeMap Component - Nearby Quakes', () => {
   ];
 
   it('renders markers for each nearby quake', () => {
-    render(<EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />);
+    render(
+      <MemoryRouter>
+        <EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />
+      </MemoryRouter>
+    );
     const markers = screen.getAllByTestId('marker');
     // Expect 1 marker for the main earthquake + number of nearby quakes
     expect(markers.length).toBe(1 + nearbyQuakesData.length);
   });
 
   it('renders nearby quake markers with the correct custom icon class and size', () => {
-    render(<EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />);
+    render(
+      <MemoryRouter>
+        <EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />
+      </MemoryRouter>
+    );
     const markers = screen.getAllByTestId('marker');
 
     const nearbyMarkers = markers.filter(marker => marker.getAttribute('data-icon-classname') === 'custom-nearby-quake-icon');
     expect(nearbyMarkers.length).toBe(nearbyQuakesData.length);
 
     nearbyMarkers.forEach(marker => {
-      expect(marker).toHaveAttribute('data-icon-size', JSON.stringify([12, 12]));
+      expect(marker).toHaveAttribute('data-icon-size', JSON.stringify([18, 18]));
     });
   });
 
   it('nearby quake icons use getMagnitudeColor for fill and do not have pulsing animation', () => {
-    render(<EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />);
+    render(
+      <MemoryRouter>
+        <EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />
+      </MemoryRouter>
+    );
     const markers = screen.getAllByTestId('marker');
     const nearbyMarkers = markers.filter(marker => marker.getAttribute('data-icon-classname') === 'custom-nearby-quake-icon');
 
@@ -244,13 +257,17 @@ describe('EarthquakeMap Component - Nearby Quakes', () => {
       // Check for fill attribute presence (actual color depends on getMagnitudeColor)
       expect(iconHtml).toContain('fill="');
       // Check that it's the simple circle SVG and NOT the pulsing one
-      expect(iconHtml).toContain('<circle cx="6" cy="6" r="3"');
+      expect(iconHtml).toContain('<circle cx="9" cy="9" r="5"');
       expect(iconHtml).not.toContain('<animate'); // No animation elements
     });
   });
 
   it('renders popups for nearby quakes with correct magnitude and title', () => {
-    render(<EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />);
+    render(
+      <MemoryRouter>
+        <EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} />
+      </MemoryRouter>
+    );
     // Query all popups. There will be one for the main quake and one for each nearby quake.
     const popups = screen.getAllByTestId('popup');
 
