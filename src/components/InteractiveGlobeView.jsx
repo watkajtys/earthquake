@@ -1,7 +1,7 @@
 // src/InteractiveGlobeView.jsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
-import { EARTH_LAYERS_DATA, EARTH_AVG_RADIUS_KM } from '../../constants/appConstants.js';
+import { EARTH_LAYERS_DATA, EARTH_AVG_RADIUS_KM } from '../constants/appConstants.js';
 import { SphereGeometry, MeshBasicMaterial, Mesh, Group, Color, BufferGeometry, LineBasicMaterial, Line, Vector3 } from 'three';
 
 /**
