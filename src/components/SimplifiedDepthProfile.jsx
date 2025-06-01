@@ -1,6 +1,6 @@
 // src/SimplifiedDepthProfile.jsx
 import React from 'react';
-import { getMagnitudeColor } from './utils';
+import { getMagnitudeColor } from '../utils/utils.js';
 
 function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
   // ... (existing initial checks for earthquakeDepth) ...
