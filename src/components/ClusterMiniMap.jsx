@@ -82,16 +82,16 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
       (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.001 && // Refined threshold
        Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.001)  // Refined threshold
     ) {
-      initialZoom = 13; // Increased zoom for pinpoint clusters
+      initialZoom = 10; // Increased zoom for pinpoint clusters
     } else {
-      initialZoom = 8; // Fallback zoom, fitBounds will adjust this for spread out clusters
+      initialZoom = 7; // Fallback zoom, fitBounds will adjust this for spread out clusters
     }
   }
 
   useEffect(() => {
     // Call fitBounds only if originalQuakes.length > 1 AND initialZoom was NOT set to 13 (pinpoint)
-    // or 10 (single quake). The initialZoom for spread out clusters is 2.
-    if (mapRef.current && originalQuakes.length > 1 && initialZoom === 8) {
+    // or 10 (single quake). The initialZoom for spread out clusters is 7.
+    if (mapRef.current && originalQuakes.length > 1 && initialZoom === 7) {
       const bounds = L.latLngBounds(
         originalQuakes.map(quake => [
           quake.geometry.coordinates[1],

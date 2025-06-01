@@ -118,7 +118,7 @@ const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nea
   };
 
   return (
-    <MapContainer center={position} zoom={5} style={mapStyle}>
+    <MapContainer center={position} zoom={8} style={mapStyle}>
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
