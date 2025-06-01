@@ -1,6 +1,6 @@
 // src/RegionalSeismicityChart.jsx
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { calculateDistance, getMagnitudeColor } from './utils';
+import { calculateDistance, getMagnitudeColor } from '../utils/utils.js';
 
 // Not needed locally anymore as they are imported from utils.js
 // const getMagnitudeColor = (magnitude) => { ... };
@@ -27,13 +27,42 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
   }, []);
 
   const regionalEvents = useMemo(() => {
-    if (!currentEarthquake || !nearbyEarthquakesData || nearbyEarthquakesData.length === 0) return [];
-    const { geometry: { coordinates: [currentLon, currentLat] = [] } = {}, properties: { time: currentTime } = {} } = currentEarthquake;
-    if (currentLat === undefined || currentLon === undefined || currentTime === undefined) return [];
+    if (
+        !currentEarthquake ||
+        !currentEarthquake.properties || // Ensure properties object exists
+        typeof currentEarthquake.properties.time !== 'number' ||
+        !currentEarthquake.geometry ||
+        !currentEarthquake.geometry.coordinates ||
+        currentEarthquake.geometry.coordinates.length < 2 ||
+        typeof currentEarthquake.geometry.coordinates[0] !== 'number' ||
+        typeof currentEarthquake.geometry.coordinates[1] !== 'number' ||
+        !nearbyEarthquakesData ||
+        nearbyEarthquakesData.length === 0
+    ) {
+        return [];
+    }
+    // Now we know properties and geometry.coordinates exist and are valid
+    const currentLon = currentEarthquake.geometry.coordinates[0];
+    const currentLat = currentEarthquake.geometry.coordinates[1];
+    const currentTime = currentEarthquake.properties.time;
+
     const startTimeWindow = currentTime - (TIME_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     return nearbyEarthquakesData.filter(quake => {
-      const { geometry: { coordinates: [qLon, qLat] = [] } = {}, properties: { time: qTime } = {}, id: qId } = quake;
-      if (qLat === undefined || qLon === undefined || qTime === undefined || qId === currentEarthquake.id) return false;
+      // Robustness checks for each quake object in the array
+      if (!quake || !quake.properties || typeof quake.properties.time !== 'number' || !quake.id) {
+        return false;
+      }
+      if (!quake.geometry || !quake.geometry.coordinates || quake.geometry.coordinates.length < 2 ||
+          typeof quake.geometry.coordinates[0] !== 'number' || typeof quake.geometry.coordinates[1] !== 'number') {
+        return false;
+      }
+
+      const qLon = quake.geometry.coordinates[0];
+      const qLat = quake.geometry.coordinates[1];
+      const qTime = quake.properties.time;
+      const qId = quake.id;
+
+      if (qId === currentEarthquake.id) return false; // currentEarthquake is already validated
       if (qTime >= currentTime || qTime < startTimeWindow) return false;
       return calculateDistance(currentLat, currentLon, qLat, qLon) <= REGIONAL_RADIUS_KM;
     });

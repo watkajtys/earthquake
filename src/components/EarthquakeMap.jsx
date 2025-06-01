@@ -2,8 +2,8 @@ import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import tectonicPlatesData from './TectonicPlateBoundaries.json';
-import { getMagnitudeColor } from './utils'; // Import getMagnitudeColor
+import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Corrected path
+import { getMagnitudeColor } from '../utils/utils.js'; // Corrected path
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
