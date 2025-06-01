@@ -922,7 +922,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                     {momentTensorProductProps && (isValidNumber(np1Data.strike) || isValidNumber(np2Data.strike) || isValidNumber(pAxis.azimuth) || isValidNumber(tAxis.azimuth)) && (
                         <div className={`${exhibitPanelClass} border-teal-500`}>
                             <h2 className={`${exhibitTitleClass} text-teal-800 border-teal-200`}>"Beach Ball" Diagram</h2>
-                            <div className={`${diagramContainerClass} bg-sky-50`} style={{ minHeight: '220px' }}>
+                            <div data-testid="beachball-svg-container" className={`${diagramContainerClass} bg-sky-50`} style={{ minHeight: '220px' }}>
                                 <svg width="150" height="150" viewBox="0 0 120 120">
                                     {(() => {
                                         const selectedPlane = selectedFaultPlaneKey === 'np1' ? np1Data : np2Data;
