@@ -2,6 +2,15 @@
 import React from 'react';
 import { getMagnitudeColor } from '../utils/utils.js';
 
+/**
+ * Displays a simplified, illustrative vertical profile of Earth's layers
+ * to visualize the depth of an earthquake's hypocenter.
+ * Includes a pulsating marker at the event's depth and indicates the geological layer.
+ *
+ * @param {number} earthquakeDepth - The depth of the earthquake hypocenter in kilometers.
+ * @param {number} magnitude - The magnitude of the earthquake, used for styling the hypocenter marker.
+ * @returns {JSX.Element} The simplified depth profile visualization or a message if depth is unavailable.
+ */
 function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
   // ... (existing initial checks for earthquakeDepth) ...
   if (earthquakeDepth === null || earthquakeDepth === undefined || isNaN(parseFloat(earthquakeDepth))) {
