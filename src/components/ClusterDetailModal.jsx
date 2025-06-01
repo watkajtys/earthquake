@@ -60,7 +60,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
             onClick={onClose} // Close on backdrop click
         >
             <div
-                className="bg-slate-800 p-4 sm:p-6 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700"
+                className="bg-slate-800 p-4 sm:p-6 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700"
                 onClick={e => e.stopPropagation()} // Prevent backdrop click from triggering inside modal
             >
                 {/* Header */}
@@ -96,7 +96,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 <h3 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2 border-t border-slate-700">
                     Earthquakes in this Cluster
                 </h3>
-                <div className="flex-grow overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
+                <div className="flex-grow space-y-2 pr-1">
                     {sortedQuakes.length > 0 ? (
                         sortedQuakes.map(quake => (
                             <div
