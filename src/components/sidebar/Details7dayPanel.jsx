@@ -1,5 +1,5 @@
 // src/components/sidebar/Details7dayPanel.jsx
-import React, { Suspense } from 'react';
+import React, { Suspense, lazy } from 'react'; // Added lazy
 import { useNavigate } from 'react-router-dom';
 import { useEarthquakeDataState } from '../../context/EarthquakeDataContext';
 import {

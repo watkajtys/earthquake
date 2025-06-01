@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 // PropTypes removed as props are now primarily from context
 import { useParams, useNavigate } from 'react-router-dom';
-import { useEarthquakeDataState } from '../../context/EarthquakeDataContext.jsx';
+import { useEarthquakeDataState } from '../context/EarthquakeDataContext.jsx'; // Corrected path
 import EarthquakeDetailView from './EarthquakeDetailView';
 import SeoMetadata from './SeoMetadata';
 

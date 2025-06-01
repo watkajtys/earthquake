@@ -33,19 +33,21 @@ vi.mock('react-router-dom', async () => {
 // END MOCKS
 
 import EarthquakeDetailModalComponent from './EarthquakeDetailModalComponent';
+import { EarthquakeDataProvider } from '../context/EarthquakeDataContext.jsx'; // Corrected path
 // These imports get the mocked versions because vi.mock is hoisted.
 import EarthquakeDetailView from './EarthquakeDetailView';
 import SeoMetadata from './SeoMetadata';
 
 
 describe('EarthquakeDetailModalComponent', () => {
-  const defaultMockProps = {
-    broaderEarthquakeData: [],
-    dataSourceTimespanDays: 7,
-    handleLoadMonthlyData: vi.fn(),
-    hasAttemptedMonthlyLoad: false,
-    isLoadingMonthly: false,
-  };
+  // defaultMockProps are no longer needed as data comes from context
+  // const defaultMockProps = {
+  //   broaderEarthquakeData: [],
+  //   dataSourceTimespanDays: 7,
+  //   handleLoadMonthlyData: vi.fn(),
+  //   hasAttemptedMonthlyLoad: false,
+  //   isLoadingMonthly: false,
+  // };
 
   beforeEach(() => {
     // Clear mock call history
@@ -60,19 +62,23 @@ describe('EarthquakeDetailModalComponent', () => {
     mockOnCloseCallback = undefined;
   });
 
-  const renderComponent = (props = defaultMockProps) => {
+  const renderComponent = () => { // Removed props argument
     return render(
-      <MemoryRouter initialEntries={['/quake/test-detail-url']}>
-        <Routes>
-          <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModalComponent {...props} />} />
-        </Routes>
-      </MemoryRouter>
+      <EarthquakeDataProvider> {/* Wrap with provider */}
+        <MemoryRouter initialEntries={['/quake/test-detail-url']}>
+          <Routes>
+            <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModalComponent />} />
+          </Routes>
+        </MemoryRouter>
+      </EarthquakeDataProvider>
     );
   };
 
   test('renders without crashing and SeoMetadata initially receives null eventJsonLd', () => {
-    renderComponent();
+    renderComponent(); // No props passed
     expect(EarthquakeDetailView).toHaveBeenCalled();
+    // SeoMetadata might be called multiple times due to initial render and then effect.
+    // We just need to ensure it's called.
     expect(SeoMetadata).toHaveBeenCalled();
 
     // Check initial call to SeoMetadata (before onDataLoadedForSeo is called)

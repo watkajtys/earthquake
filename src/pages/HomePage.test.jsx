@@ -4,6 +4,7 @@ import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, describe, it } from 'vitest';
 import App from './HomePage'; // Assuming HomePage is the default export from App.jsx or HomePage.jsx
+import { EarthquakeDataProvider } from '../context/EarthquakeDataContext.jsx'; // Import the provider
 
 // Mock IntersectionObserver
 class IntersectionObserver {
@@ -36,9 +37,11 @@ describe('HomePage Accessibility', () => {
     };
 
     const { container } = render(
-      <MemoryRouter initialEntries={['/']}>
-        <App />
-      </MemoryRouter>
+      <EarthquakeDataProvider> {/* Wrap with provider */}
+        <MemoryRouter initialEntries={['/']}>
+          <App /> {/* Assuming App here is actually HomePage */}
+        </MemoryRouter>
+      </EarthquakeDataProvider>
     );
 
     // Wait for initial data loading to settle, if possible, or use a timeout.

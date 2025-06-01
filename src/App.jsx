@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
-import BottomNav from '../components/BottomNav.jsx';
+import BottomNav from './components/BottomNav.jsx'; // Corrected path
 import './App.css';
 import { EarthquakeDataProvider, useEarthquakeDataState } from './context/EarthquakeDataContext.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx'; // Import ErrorBoundary

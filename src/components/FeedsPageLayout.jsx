@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useEarthquakeDataState } from '../../context/EarthquakeDataContext';
+import { useEarthquakeDataState } from '../context/EarthquakeDataContext.jsx'; // Corrected path
 import SeoMetadata from './SeoMetadata';
 import PaginatedEarthquakeTable from './PaginatedEarthquakeTable';
 import SummaryStatisticsCard from './SummaryStatisticsCard';
-import { getMagnitudeColorStyle, calculateStats as calculateStatsUtil } from '../../utils/utils.js';
-import { FEELABLE_QUAKE_THRESHOLD, MAJOR_QUAKE_THRESHOLD } from '../../constants/appConstants';
+import { getMagnitudeColorStyle, calculateStats as calculateStatsUtil } from '../utils/utils.js';
+import { FEELABLE_QUAKE_THRESHOLD, MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants.js'; // Corrected path
 // Skeleton components could be used here if needed for more granular loading states
 // import SkeletonText from './SkeletonText';
 // import SkeletonBlock from './SkeletonBlock';

@@ -1,5 +1,5 @@
 // src/components/DesktopSidebar.jsx
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, Suspense, lazy } from 'react'; // Added lazy
 import { useEarthquakeDataState } from '../context/EarthquakeDataContext.jsx';
 
 // Lazy load panel components for better initial load performance

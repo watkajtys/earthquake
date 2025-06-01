@@ -48,7 +48,7 @@ import {
     FELT_REPORTS_THRESHOLD,
     SIGNIFICANCE_THRESHOLD,
     TOP_N_CLUSTERS_OVERVIEW,
-    // REGIONS is now sourced from context or utils
+    REGIONS as AppRegions, // Re-enable this import for topActiveRegionsOverview
     FEELABLE_QUAKE_THRESHOLD,
     MAJOR_QUAKE_THRESHOLD,
     ALERT_LEVELS,
@@ -92,23 +92,17 @@ function HomePage() {
     const contextState = useEarthquakeDataState();
     const {
         isLoadingDaily, isLoadingWeekly, isLoadingInitialData, error,
-        earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days,
+        earthquakesLastHour, earthquakesPriorHour, // Added earthquakesPriorHour
+        earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days,
         prev24HourData, globeEarthquakes, hasRecentTsunamiWarning, highestRecentAlert,
         activeAlertTriggeringQuakes, lastMajorQuake, previousMajorQuake, timeBetweenPreviousMajorQuakes,
         isInitialAppLoad, isLoadingMonthly, hasAttemptedMonthlyLoad, monthlyError, allEarthquakes,
-        earthquakesLast14Days, earthquakesLast30Days, // Made available from context
-        prev7DayDataForMonthly, prev14DayDataForMonthly, // Made available from context
+        earthquakesLast14Days, earthquakesLast30Days,
+        prev7DayDataForMonthly, prev14DayDataForMonthly,
         loadMonthlyData,
-        // Utilities from context (use directly or pass to children)
         formatTimeAgo: formatTimeAgoFromContext,
-        formatDate: formatDateFromContext, // Note: context provides one, utils provides one. Decide which to use or ensure consistency.
+        formatDate: formatDateFromContext,
         formatTimeDuration: formatTimeDurationFromContext,
-        // The following are not in context by default, so use utils versions
-        // getMagnitudeColor, // From utils
-        // getMagnitudeColorStyle, // From utils
-        // calculateStats, // From utils
-        // getRegionForEarthquake, // From utils
-        // REGIONS // From utils (via AppRegions import)
     } = contextState;
 
     // Use utility functions directly, or from context if provided
@@ -189,13 +183,13 @@ function HomePage() {
 
     const previousDataForCurrentFeed = useMemo(() => {
         switch (activeFeedPeriod) {
-            case 'last_hour': return earthquakesPriorHour;
-            case 'last_24_hours': return prev24HourData; // from useEarthquakeData
-            case 'last_7_days': return prev7DayData;     // from useMonthlyEarthquakeData
-            case 'last_14_days': return prev14DayData;   // from useMonthlyEarthquakeData
+            case 'last_hour': return earthquakesPriorHour; // Now destructured
+            case 'last_24_hours': return prev24HourData;
+            case 'last_7_days': return prev7DayDataForMonthly; // Use context name
+            case 'last_14_days': return prev14DayDataForMonthly; // Use context name
             default: return null;
         }
-    }, [activeFeedPeriod, earthquakesPriorHour, prev24HourData, prev7DayData, prev14DayData]);
+    }, [activeFeedPeriod, earthquakesPriorHour, prev24HourData, prev7DayDataForMonthly, prev14DayDataForMonthly]);
 
     // loadMonthlyData is now from context.
 

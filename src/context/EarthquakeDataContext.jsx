@@ -2,7 +2,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import useEarthquakeData from '../hooks/useEarthquakeData';
 import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData';
-import { HEADER_TIME_UPDATE_INTERVAL_MS } from '../constants/appConstants'; // Assuming this constant is needed for header time
+import { HEADER_TIME_UPDATE_INTERVAL_MS } from '../constants/appConstants';
+import { formatTimeAgo as formatTimeAgoUtil } from '../utils/utils.js'; // Import from utils
 
 const EarthquakeDataContext = createContext();
 
@@ -37,20 +38,7 @@ const fetchDataCb = async (url) => {
     }
 };
 
-// Helper for formatting time (moved from HomePage.jsx or a new shared util)
-const formatTimeAgo = (milliseconds) => {
-    if (milliseconds === null || milliseconds < 0) return 'N/A';
-    if (milliseconds < 30000) return 'just now';
-    const seconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
-    if (hours > 0) return `${hours} hr${hours > 1 ? 's' : ''} ago`;
-    if (minutes > 0) return `${minutes} min${minutes > 1 ? 's' : ''} ago`;
-    return `${seconds} sec${seconds !== 1 ? 's' : ''} ago`;
-};
-
+// formatTimeAgo is now imported from utils.js
 
 export const EarthquakeDataProvider = ({ children }) => {
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now());
@@ -103,8 +91,9 @@ export const EarthquakeDataProvider = ({ children }) => {
             return awaitingMsg;
         }
         const timeSinceFetch = appCurrentTime - dailyHookData.dataFetchTime;
-        return `Live Data (7-day): ${timeSinceFetch < 30000 ? 'just now' : formatTimeAgo(timeSinceFetch)} | USGS Feed Updated: ${dailyHookData.lastUpdated || 'N/A'}`;
-    }, [dailyHookData.isInitialAppLoad, dailyHookData.isLoadingDaily, dailyHookData.isLoadingWeekly, dailyHookData.dataFetchTime, appCurrentTime, dailyHookData.lastUpdated]);
+        // Use the imported formatTimeAgoUtil here
+        return `Live Data (7-day): ${timeSinceFetch < 5000 ? 'just now' : formatTimeAgoUtil(timeSinceFetch)} | USGS Feed Updated: ${dailyHookData.lastUpdated || 'N/A'}`;
+    }, [dailyHookData.isInitialAppLoad, dailyHookData.isLoadingDaily, dailyHookData.isLoadingWeekly, dailyHookData.dataFetchTime, appCurrentTime, dailyHookData.lastUpdated, formatTimeAgoUtil]); // Added formatTimeAgoUtil to dependencies
 
     const contextValue = {
         ...dailyHookData, // Spread all values from useEarthquakeData
@@ -125,8 +114,8 @@ export const EarthquakeDataProvider = ({ children }) => {
         appCurrentTime,
         headerTimeDisplay,
         // Utilities that might be needed by components consuming the context
-        fetchDataCb: useCallback(fetchDataCb, []), // Memoize if passed down
-        formatTimeAgo: useCallback(formatTimeAgo, []), // Memoize
+        fetchDataCb: useCallback(fetchDataCb, []),
+        formatTimeAgo: useCallback(formatTimeAgoUtil, []), // Provide the imported util
     };
 
     return (

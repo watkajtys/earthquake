@@ -1,7 +1,7 @@
 // src/components/ClusterDetailModalWrapper.jsx
 import React, { useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useEarthquakeDataState } from '../../context/EarthquakeDataContext.jsx';
+import { useEarthquakeDataState } from '../context/EarthquakeDataContext.jsx'; // Corrected path
 import ClusterDetailModal from './ClusterDetailModal';
 import SeoMetadata from './SeoMetadata';
 import {
@@ -10,8 +10,8 @@ import {
     getMagnitudeColorStyle as getMagnitudeColorStyleUtil,
     formatTimeAgo as formatTimeAgoUtil,
     formatTimeDuration as formatTimeDurationUtil
-} from '../../utils/utils.js';
-import { CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES, TOP_N_CLUSTERS_OVERVIEW } from '../../constants/appConstants';
+} from '../utils/utils.js';
+import { CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES, TOP_N_CLUSTERS_OVERVIEW } from '../constants/appConstants.js'; // Corrected path
 
 
 // This function re-processes raw clusters into a format similar to the old `overviewClusters`
