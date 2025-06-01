@@ -27,7 +27,7 @@ const ChartLoadingFallback = ({ message = "Loading data..." }) => (
     <div className="p-4 text-center text-slate-400">{message}</div>
 );
 
-const OverviewPanel = () => {
+const OverviewPanel = ({ topActiveRegionsOverview, overviewClusters }) => { // Accept props
     const navigate = useNavigate();
     const {
         currentAlertConfig,
@@ -42,12 +42,10 @@ const OverviewPanel = () => {
         prev24HourData,
         isLoadingDaily,
         isLoadingWeekly,
-        overviewClusters,
-        topActiveRegionsOverview,
+        // overviewClusters, // Now from props
+        // topActiveRegionsOverview, // Now from props
         activeAlertTriggeringQuakes,
-        earthquakesLast7Days, // For recent significant quakes
-        // Callbacks for click, assuming they are passed if needed or defined if simple enough
-        // For now, using navigate directly or placeholder for complex interactions
+        earthquakesLast7Days,
     } = useEarthquakeDataState();
 
     // Event handlers - these might be passed from DesktopSidebar or HomePage if they involve complex state there

@@ -16,7 +16,7 @@ const ChartLoadingFallback = ({ message = "Loading panel..." }) => (
     <div className="p-4 text-center text-slate-400">{message}</div>
 );
 
-const DesktopSidebar = () => {
+const DesktopSidebar = ({ topActiveRegionsOverview, overviewClusters /* other props from HomePage if any */ }) => {
     const [activeSidebarView, setActiveSidebarView] = useState('overview_panel');
     // Removed useSearchParams here, view state is internal to DesktopSidebar
     // If URL sync is desired, it should be passed as a prop from HomePage or handled via a dedicated routing solution for sidebar state
@@ -33,7 +33,7 @@ const DesktopSidebar = () => {
     let panelContent = null;
     switch (activeSidebarView) {
         case 'overview_panel':
-            panelContent = <OverviewPanel />;
+            panelContent = <OverviewPanel topActiveRegionsOverview={topActiveRegionsOverview} overviewClusters={overviewClusters} />;
             break;
         case 'details_1hr':
             panelContent = <Details1hrPanel />;

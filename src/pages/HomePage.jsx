@@ -105,10 +105,10 @@ function HomePage() {
         formatTimeDuration: formatTimeDurationFromContext,
     } = contextState;
 
-    // Use utility functions directly, or from context if provided
-    const formatDate = formatDateFromContext || formatDateUtil;
-    const formatTimeAgo = formatTimeAgoFromContext || ((ms) => new Date(ms).toLocaleTimeString()); // Basic fallback for formatTimeAgo if not in context
-    const formatTimeDuration = formatTimeDurationFromContext || formatTimeDurationUtil;
+    // Use utility functions directly from context
+    const formatDate = formatDateFromContext;
+    const formatTimeAgo = formatTimeAgoFromContext;
+    const formatTimeDuration = formatTimeDurationFromContext;
     // getMagnitudeColor is already imported from utils
     // getMagnitudeColorStyle is already imported from utils
     // calculateStats is already imported from utils as calculateStatsUtil
@@ -493,7 +493,14 @@ function HomePage() {
                 </div>
 
                 {/* DESKTOP SIDEBAR - Replaced with DesktopSidebar component */}
-                <DesktopSidebar />
+                <DesktopSidebar
+                    topActiveRegionsOverview={topActiveRegionsOverview}
+                    overviewClusters={overviewClusters}
+                    // Pass any other data HomePage calculates that sidebar panels might need directly
+                    // For e.g. if specific click handlers defined in HomePage are needed by panels:
+                    // handleQuakeClick={handleQuakeClick}
+                    // handleClusterSummaryClick={handleClusterSummaryClick}
+                />
             </div>
         </>
     );
