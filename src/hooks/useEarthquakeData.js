@@ -277,11 +277,11 @@ const useEarthquakeData = (fetchDataCb) => {
         highestRecentAlert,
         activeAlertTriggeringQuakes,
         lastMajorQuake,
-        setLastMajorQuake, // Expose setters if HomePage needs to modify them based on other data (e.g. monthly)
+        // setLastMajorQuake, // Removed: To be managed by EarthquakeDataContext
         previousMajorQuake,
-        setPreviousMajorQuake,
+        // setPreviousMajorQuake, // Removed: To be managed by EarthquakeDataContext
         timeBetweenPreviousMajorQuakes,
-        setTimeBetweenPreviousMajorQuakes,
+        // setTimeBetweenPreviousMajorQuakes, // Removed: To be managed by EarthquakeDataContext
         currentLoadingMessage,
         isInitialAppLoad: isInitialAppLoadRef.current
     };

@@ -1,46 +1,73 @@
 // src/pages/OverviewPage.jsx
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useEarthquakeDataState } from '../context/EarthquakeDataContext.jsx';
 import SeoMetadata from '../components/SeoMetadata';
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
-import RegionalDistributionList from '../components/RegionalDistributionList';
+// RegionalDistributionList is not directly used in the provided JSX for Overview, but could be added.
 import InfoSnippet from '../components/InfoSnippet';
-import ClusterSummaryItem from '../components/ClusterSummaryItem'; // Assuming this is used here
-// Import any other components specific to the previous inline overview content if needed
+import ClusterSummaryItem from '../components/ClusterSummaryItem';
 
-// Props that would have been passed to the inline JSX in HomePage.jsx for the /overview route
-// These will need to be passed from HomePage.jsx when rendering this component
-const OverviewPage = ({
-    currentAlertConfig,
-    ALERT_LEVELS, // Constant, but might be passed if structure demands
-    hasRecentTsunamiWarning,
-    lastMajorQuake,
+// Import utilities and constants
+import {
     getMagnitudeColor,
     formatDate,
-    handleQuakeClick, // Callback
-    latestFeelableQuakesSnippet,
     formatTimeAgo,
-    // BottomNav related click might be handled by NavLink if this page is simple
-    isLoadingInitialData, // For TimeSinceLastMajorQuakeBanner
-    isLoadingMonthly, // For TimeSinceLastMajorQuakeBanner
-    hasAttemptedMonthlyLoad, // For TimeSinceLastMajorQuakeBanner
-    timeBetweenPreviousMajorQuakes, // For TimeSinceLastMajorQuakeBanner
-    previousMajorQuake, // For TimeSinceLastMajorQuakeBanner
-    formatTimeDuration, // For TimeSinceLastMajorQuakeBanner
-    getRegionForEarthquake, // For TimeSinceLastMajorQuakeBanner & RegionalDistributionList
-    earthquakesLast24Hours, // For SummaryStatisticsCard & RegionalDistributionList
-    prev24HourData, // For SummaryStatisticsCard
-    isLoadingDaily, // For SummaryStatisticsCard & RegionalDistributionList
-    isLoadingWeekly, // For SummaryStatisticsCard (if earthquakesLast24Hours can be from weekly)
-    calculateStats, // For SummaryStatisticsCard
-    overviewClusters, // For ClusterSummaryItem list
-    handleClusterSummaryClick, // For ClusterSummaryItem list
-    topActiveRegionsOverview, // For active region display
-    REGIONS, // For active region display color (if not handled by topActiveRegionsOverview structure)
-    navigate, // For "Learn More" button, if not using Link
-}) => {
-    // This component will replicate the JSX structure previously under the /overview Route in HomePage.jsx
-    // For brevity, I'm showing a simplified structure. The actual content should be moved from HomePage.jsx
+    formatTimeDuration,
+    getRegionForEarthquake,
+    calculateStats
+} from '../utils/utils.js';
+import { ALERT_LEVELS, REGIONS as AppRegions, FEELABLE_QUAKE_THRESHOLD as AppFeelableThresholdConstant } from '../constants/appConstants.js';
+
+
+const OverviewPage = () => {
+    const navigate = useNavigate();
+    const {
+        currentAlertConfig, // Assuming this is shaped by context based on highestRecentAlert
+        hasRecentTsunamiWarning,
+        lastMajorQuake,
+        isLoadingInitialData,
+        isLoadingMonthly,
+        hasAttemptedMonthlyLoad,
+        timeBetweenPreviousMajorQuakes,
+        previousMajorQuake,
+        earthquakesLast24Hours,
+        prev24HourData,
+        isLoadingDaily,
+        isLoadingWeekly,
+        overviewClusters,
+        topActiveRegionsOverview,
+        earthquakesLast7Days,
+        FEELABLE_QUAKE_THRESHOLD: FEELABLE_QUAKE_THRESHOLD_FROM_CONTEXT, // from context
+    } = useEarthquakeDataState();
+
+    // Use the constant directly, or fallback to context if you prefer that pattern
+    const FEELABLE_QUAKE_THRESHOLD = AppFeelableThresholdConstant || FEELABLE_QUAKE_THRESHOLD_FROM_CONTEXT || 2.5;
+
+
+    // TODO: Define handleQuakeClick and handleClusterSummaryClick.
+    // For now, using placeholder functions. These would typically navigate.
+    const handleQuakeClick = (quake) => {
+        console.log("Quake clicked in OverviewPage:", quake);
+        if (quake?.properties?.detail || quake?.properties?.url) {
+             navigate(`/quake/${encodeURIComponent(quake.properties.detail || quake.properties.url)}`);
+        }
+    };
+    const handleClusterSummaryClick = (cluster) => {
+        console.log("Cluster clicked in OverviewPage:", cluster);
+        navigate(`/cluster/${cluster.id}`);
+    };
+
+    // Derive latestFeelableQuakesSnippet from earthquakesLast7Days (or earthquakesLast24Hours as fallback)
+    const latestFeelableQuakesSnippet = React.useMemo(() => {
+        const sourceData = earthquakesLast7Days || earthquakesLast24Hours || [];
+        return sourceData
+            .filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD )
+            .sort((a, b) => b.properties.time - a.properties.time)
+            .slice(0, 3);
+    }, [earthquakesLast7Days, earthquakesLast24Hours, FEELABLE_QUAKE_THRESHOLD]);
+
     return (
         <>
             <SeoMetadata
@@ -57,11 +84,10 @@ const OverviewPage = ({
                     Overview
                 </h2>
 
-                {/* Example of how one of the components would be used with passed props */}
-                {currentAlertConfig && (
-                    <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}>
+                {currentAlertConfig && ALERT_LEVELS[currentAlertConfig.text?.toUpperCase()] && (
+                    <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass}`}>
                         <p className="font-bold text-sm mb-1">Active USGS Alert: {currentAlertConfig.text}</p>
-                        <p className="text-xs">{currentAlertConfig.description}</p>
+                        <p className="text-xs">{ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.description}</p>
                     </div>
                 )}
 
@@ -72,7 +98,6 @@ const OverviewPage = ({
                     </div>
                 )}
 
-                {/* Last Major Quake section */}
                 {lastMajorQuake && (
                     <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md">
                         <h3 className="text-sm font-semibold text-indigo-300 mb-1">Latest Significant Event</h3>
@@ -82,7 +107,7 @@ const OverviewPage = ({
                         <p className="text-sm text-slate-300 truncate" title={lastMajorQuake.properties.place}>
                             {lastMajorQuake.properties.place || "Location details pending..."}
                         </p>
-                        <p className="text-xs text-slate-300"> {/* Changed from text-slate-400 */}
+                        <p className="text-xs text-slate-300">
                            {formatDate(lastMajorQuake.properties.time)}
                             {lastMajorQuake.geometry?.coordinates?.[2] !== undefined && `, Depth: ${lastMajorQuake.geometry.coordinates[2].toFixed(1)} km`}
                         </p>
@@ -114,7 +139,7 @@ const OverviewPage = ({
                                             <span className="font-semibold" style={{ color: getMagnitudeColor(quake.properties.mag) }}>
                                             M {quake.properties.mag?.toFixed(1)}
                                         </span>
-                                        <span className="text-slate-300"> {/* Changed from text-slate-400 */}
+                                        <span className="text-slate-300">
                                                 {formatTimeAgo(Date.now() - quake.properties.time)}
                                             </span>
                                         </div>
@@ -140,17 +165,17 @@ const OverviewPage = ({
                     previousMajorQuake={previousMajorQuake}
                     isLoadingInitial={isLoadingInitialData}
                     isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad}
-                    formatTimeDuration={formatTimeDuration}
-                    getRegionForEarthquake={getRegionForEarthquake}
-                    handleQuakeClick={handleQuakeClick}
-                    getMagnitudeColor={getMagnitudeColor}
+                    formatTimeDuration={formatTimeDuration} // from utils
+                    getRegionForEarthquake={getRegionForEarthquake} // from utils
+                    handleQuakeClick={handleQuakeClick} // local
+                    getMagnitudeColor={getMagnitudeColor} // from utils
                 />
                 <SummaryStatisticsCard
                     title="Global Statistics (Last 24 Hours)"
                     currentPeriodData={earthquakesLast24Hours}
                     previousPeriodData={prev24HourData}
-                    isLoading={isLoadingDaily || (isLoadingWeekly && !earthquakesLast24Hours)}
-                    calculateStats={calculateStats}
+                    isLoading={isLoadingDaily || (isLoadingWeekly && (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0))}
+                    calculateStats={calculateStats} // from utils
                 />
 
                 {/* Active Earthquake Clusters Section */}
@@ -160,16 +185,16 @@ const OverviewPage = ({
                     </h3>
                     {overviewClusters && overviewClusters.length > 0 ? (
                         <ul className="space-y-2">
-                            {overviewClusters.map(cluster => (
+                            {overviewClusters && overviewClusters.map(cluster => ( // overviewClusters from context
                                 <ClusterSummaryItem
                                     clusterData={cluster}
                                     key={cluster.id}
-                                    onClusterSelect={handleClusterSummaryClick}
+                                    onClusterSelect={handleClusterSummaryClick} // local
                                 />
                             ))}
                         </ul>
                     ) : (
-                        <p className="text-xs text-slate-300 text-center py-2"> {/* Changed from text-slate-400 */}
+                        <p className="text-xs text-slate-300 text-center py-2">
                             No significant active clusters detected currently.
                         </p>
                     )}
@@ -178,12 +203,14 @@ const OverviewPage = ({
                 {/* Most Active Region */}
                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
                     <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
-                    {isLoadingDaily && !earthquakesLast24Hours ? (
+                    {(isLoadingDaily && (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0)) ? (
                         <p>Loading...</p>
                     ) : (
-                        topActiveRegionsOverview && topActiveRegionsOverview.length > 0 ? (
+                        topActiveRegionsOverview && topActiveRegionsOverview.length > 0 ? ( // topActiveRegionsOverview from context
                             topActiveRegionsOverview.map((region, index) => {
-                                const regionColor = REGIONS.find(r => r.name === region.name)?.color || '#9CA3AF';
+                                // REGIONS is now AppRegions imported from constants
+                                const regionDetails = AppRegions.find(r => r.name === region.name);
+                                const regionColor = regionDetails?.color || '#9CA3AF';
                                 return (
                                     <p key={region.name} className={`text-slate-300 ${index > 0 ? 'mt-0.5' : ''}`}>
                                         <span className="font-semibold" style={{color: regionColor}}>

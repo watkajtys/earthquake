@@ -17,13 +17,21 @@ const LearnPage = () => {
                 locale="en_US"
                 type="website"
             />
-            <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
-                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+            {/* Adjusted main div for better desktop layout and to remove lg:hidden */}
+            <div className="p-3 md:p-4 space-y-4 text-slate-200 lg:max-w-4xl lg:mx-auto">
+                <h1 className="text-xl md:text-2xl font-bold text-indigo-400 sticky top-0 lg:static bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 lg:mx-0 lg:px-0 border-b border-slate-700 lg:border-b-0 mb-4">
                     Learn About Earthquakes
-                </h2>
-                <InfoSnippet topic="magnitude" />
-                <InfoSnippet topic="depth" />
-                <InfoSnippet topic="intensity" />
+                </h1>
+
+                <section className="space-y-3"> {/* Added section for better grouping */}
+                    <h2 className="text-lg md:text-xl font-semibold text-indigo-300 mb-2 border-b border-slate-700 pb-1">Key Seismic Concepts</h2>
+                    <InfoSnippet topic="magnitude" />
+                    <InfoSnippet topic="depth" />
+                    <InfoSnippet topic="intensity" />
+                </section>
+
+                <section className="space-y-3"> {/* Added section */}
+                    <h2 className="text-lg md:text-xl font-semibold text-indigo-300 mb-2 border-b border-slate-700 pb-1">Understanding Earthquake Details</h2>
                 <InfoSnippet topic="alerts" />
                 <InfoSnippet topic="strike"/>
                 <InfoSnippet topic="dip"/>
@@ -33,7 +41,15 @@ const LearnPage = () => {
                 <InfoSnippet topic="stationsUsed"/>
                 <InfoSnippet topic="azimuthalGap"/>
                 <InfoSnippet topic="rmsError"/>
-                {/* ... other content from /learn route ... */}
+                </section>
+
+                {/* Add more sections or detailed explanations as needed */}
+                 <section className="space-y-3">
+                    <h2 className="text-lg md:text-xl font-semibold text-indigo-300 mb-2 border-b border-slate-700 pb-1">Further Topics</h2>
+                    <p className="text-sm text-slate-300">
+                        This section can be expanded with more information on earthquake preparedness, historical earthquakes, or advanced seismology topics.
+                    </p>
+                </section>
             </div>
         </>
     );

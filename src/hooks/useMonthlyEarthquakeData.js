@@ -30,10 +30,10 @@ import { USGS_API_URL_MONTH, MAJOR_QUAKE_THRESHOLD } from '../constants/appConst
  */
 const useMonthlyEarthquakeData = (
     fetchDataCb,
-    currentLastMajorQuake, // from useEarthquakeData
-    setLastMajorQuake,     // from useEarthquakeData via HomePage
-    setPreviousMajorQuake, // from useEarthquakeData via HomePage
-    setTimeBetweenPreviousMajorQuakes // from useEarthquakeData via HomePage
+    globalLastMajorQuakeFromContext,     // Renamed: from EarthquakeDataContext
+    setGlobalLastMajorQuake,             // Renamed: from EarthquakeDataContext
+    setGlobalPreviousMajorQuake,         // Renamed: from EarthquakeDataContext
+    setGlobalTimeBetweenMajorQuakes      // Renamed: from EarthquakeDataContext
 ) => {
     const [isLoadingMonthly, setIsLoadingMonthly] = useState(false);
     const [hasAttemptedMonthlyLoad, setHasAttemptedMonthlyLoad] = useState(false);
@@ -84,8 +84,8 @@ const useMonthlyEarthquakeData = (
                     .sort((a, b) => b.properties.time - a.properties.time);
 
                 let consolidatedMajors = [...majorQuakesMonthly];
-                if (currentLastMajorQuake && !consolidatedMajors.find(q => q.id === currentLastMajorQuake.id)) {
-                    consolidatedMajors.push(currentLastMajorQuake);
+                if (globalLastMajorQuakeFromContext && !consolidatedMajors.find(q => q.id === globalLastMajorQuakeFromContext.id)) {
+                    consolidatedMajors.push(globalLastMajorQuakeFromContext);
                 }
 
                 consolidatedMajors = consolidatedMajors
@@ -95,14 +95,14 @@ const useMonthlyEarthquakeData = (
                 const finalLastMajorQuake = consolidatedMajors.length > 0 ? consolidatedMajors[0] : null;
                 const finalPreviousMajorQuake = consolidatedMajors.length > 1 ? consolidatedMajors[1] : null;
 
-                // Update states via setters passed from HomePage (originating from useEarthquakeData)
-                setLastMajorQuake(finalLastMajorQuake);
-                setPreviousMajorQuake(finalPreviousMajorQuake);
+                // Update states via setters passed from EarthquakeDataContext
+                setGlobalLastMajorQuake(finalLastMajorQuake);
+                setGlobalPreviousMajorQuake(finalPreviousMajorQuake);
 
                 if (finalLastMajorQuake && finalPreviousMajorQuake) {
-                    setTimeBetweenPreviousMajorQuakes(finalLastMajorQuake.properties.time - finalPreviousMajorQuake.properties.time);
+                    setGlobalTimeBetweenMajorQuakes(finalLastMajorQuake.properties.time - finalPreviousMajorQuake.properties.time);
                 } else {
-                    setTimeBetweenPreviousMajorQuakes(null);
+                    setGlobalTimeBetweenMajorQuakes(null);
                 }
 
             } else {
@@ -115,7 +115,7 @@ const useMonthlyEarthquakeData = (
         } finally {
             setIsLoadingMonthly(false);
         }
-    }, [fetchDataCb, currentLastMajorQuake, setLastMajorQuake, setPreviousMajorQuake, setTimeBetweenPreviousMajorQuakes]);
+    }, [fetchDataCb, globalLastMajorQuakeFromContext, setGlobalLastMajorQuake, setGlobalPreviousMajorQuake, setGlobalTimeBetweenMajorQuakes]);
 
     return {
         isLoadingMonthly,

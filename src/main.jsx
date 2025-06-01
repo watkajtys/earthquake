@@ -4,16 +4,13 @@
  * wrapping it with `BrowserRouter` for routing capabilities and
  * `StrictMode` for development-time checks.
  */
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
-import './index.css'
-import App from './pages/HomePage.jsx' // Updated import path
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import './index.css'; // Global styles
+import App from './App.jsx'; // New App component
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <App />
   </StrictMode>,
-)
+);
