@@ -801,6 +801,7 @@ function App() {
                                 <GlobalLastMajorQuakeTimer
                                     lastMajorQuake={lastMajorQuake}
                                     formatTimeDuration={formatTimeDuration}
+                                    handleTimerClick={handleQuakeClick} // <--- ADD THIS LINE
                                     // SkeletonText is now imported by GlobalLastMajorQuakeTimer
                                 />
                                 </div>
