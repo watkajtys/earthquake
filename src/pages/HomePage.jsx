@@ -49,10 +49,11 @@ import {
     INITIAL_LOADING_MESSAGES // Used by useEarthquakeData for initial load messages
 } from '../constants/appConstants';
 
+import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper'; // PERMANENT: Eager load
 // Lazy load route components
 const FeedsPageLayoutComponent = lazy(() => import('../components/FeedsPageLayout'));
 const EarthquakeDetailModalComponent = lazy(() => import('../components/EarthquakeDetailModalComponent'));
-const ClusterDetailModalWrapper = lazy(() => import('../components/ClusterDetailModalWrapper'));
+// const ClusterDetailModalWrapper = lazy(() => import('../components/ClusterDetailModalWrapper')); // PERMANENT: Changed to eager load
 const OverviewPage = lazy(() => import('./OverviewPage'));
 const LearnPage = lazy(() => import('./LearnPage'));
 
