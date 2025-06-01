@@ -40,7 +40,7 @@ function App() {
             <BrowserRouter>
                 <div className="flex flex-col h-[100svh] font-sans bg-slate-900 text-slate-100 antialiased">
                     <AppHeader /> {/* Use new Header component */}
-                    <main className="flex flex-1 overflow-hidden pb-16 lg:pb-0"> {/* Ensure main takes up space */}
+                    <main className="flex flex-1 overflow-y-auto pb-16 lg:pb-0"> {/* Ensure main takes up space */}
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <Routes>
                                 <Route path="/" element={<ErrorBoundary><HomePage /></ErrorBoundary>} />
