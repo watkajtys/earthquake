@@ -26,30 +26,30 @@ const createEpicenterIcon = (magnitude) => {
 
   const rings = Array(3).fill(0).map((_, i) => `
     <circle
-      cx="0" cy="0" r="3"
+      cx="0" cy="0" r="5"
       stroke="${fillColor}" stroke-width="4" fill="none" stroke-opacity="0.6">
-      <animate attributeName="r" from="3" to="20" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
+      <animate attributeName="r" from="5" to="30" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
       <animate attributeName="stroke-opacity" from="0.6" to="0" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
     </circle>
     <circle
-      cx="0" cy="0" r="3"
+      cx="0" cy="0" r="5"
       stroke="${fillColor}" stroke-width="2" fill="none" stroke-opacity="1">
-      <animate attributeName="r" from="3" to="17" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
+      <animate attributeName="r" from="5" to="25" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
       <animate attributeName="stroke-opacity" from="1" to="0" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
     </circle>
   `).join('');
 
   return new L.DivIcon({
     html: `
-      <svg width="48" height="48" viewBox="0 0 60 60">
-        <g transform="translate(30,30)">
+      <svg width="60" height="60" viewBox="0 0 72 72">
+        <g transform="translate(36,36)">
           ${rings}
-          <circle cx="0" cy="0" r="4" fill="${fillColor}" stroke="#FFFFFF" stroke-width="1.5"/>
+          <circle cx="0" cy="0" r="6" fill="${fillColor}" stroke="#FFFFFF" stroke-width="1.5"/>
         </g>
       </svg>`,
     className: 'custom-pulsing-icon', // Used to override default Leaflet icon background/border
-    iconSize: [48, 48], // Size of the icon
-    iconAnchor: [24, 24], // Anchor point of the icon (center for this SVG)
+    iconSize: [60, 60], // Size of the icon
+    iconAnchor: [30, 30], // Anchor point of the icon (center for this SVG)
   });
 };
 
@@ -108,9 +108,10 @@ const getTectonicPlateStyle = (feature) => {
  * @param {string} props.title - The title of the earthquake event.
  * @param {string} [props.shakeMapUrl] - Optional URL to the ShakeMap details page for the earthquake.
  * @param {Array} [props.nearbyQuakes=[]] - Optional array of nearby earthquake objects.
+ * @param {string} [props.mainQuakeDetailUrl] - Optional URL for the main quake's internal detail view.
  * @returns {JSX.Element} The rendered EarthquakeMap component.
  */
-const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nearbyQuakes = [] }) => {
+const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nearbyQuakes = [], mainQuakeDetailUrl }) => {
   const position = [latitude, longitude];
 
   const mapStyle = {
@@ -129,11 +130,21 @@ const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nea
           <strong>{title}</strong>
           <br />
           Magnitude: {magnitude}
-          <br />
-          {shakeMapUrl && (
-            <a href={shakeMapUrl} target="_blank" rel="noopener noreferrer">
-              ShakeMap Details
-            </a>
+          {mainQuakeDetailUrl && (
+            <>
+              <br />
+              <Link to={`/quake/${encodeURIComponent(mainQuakeDetailUrl)}`} className="text-blue-500 hover:underline">
+                View Details
+              </Link>
+            </>
+          )}
+          {!mainQuakeDetailUrl && shakeMapUrl && ( // Fallback to ShakeMap if no detail URL provided
+            <>
+              <br />
+              <a href={shakeMapUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                ShakeMap Details (External)
+              </a>
+            </>
           )}
         </Popup>
       </Marker>
