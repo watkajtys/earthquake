@@ -91,7 +91,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
   useEffect(() => {
     // Call fitBounds only if originalQuakes.length > 1 AND initialZoom was NOT set to 13 (pinpoint)
     // or 10 (single quake). The initialZoom for spread out clusters is 2.
-    if (mapRef.current && originalQuakes.length > 1 && initialZoom === 2) {
+    if (mapRef.current && originalQuakes.length > 1 && initialZoom === 8) {
       const bounds = L.latLngBounds(
         originalQuakes.map(quake => [
           quake.geometry.coordinates[1],
