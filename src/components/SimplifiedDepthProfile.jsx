@@ -106,7 +106,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
     <div className="p-3 rounded-md"> {/* Removed bg-gray-50 etc. from previous step */}
       <h3 className="text-md font-semibold text-gray-700 mb-1">Simplified Depth Profile</h3>
       <p className="text-xs text-slate-600 mb-3">
-        Illustrative depth of M<strong>{magnitude?.toFixed(1)}</strong> event at <strong>{depth?.toFixed(1)} km</strong>
+        Illustrative depth of M<strong>{typeof magnitude === 'number' ? magnitude.toFixed(1) : 'N/A'}</strong> event at <strong>{depth?.toFixed(1)} km</strong>
         (approx. within {hypocenterLayerName}).
       </p>
 
@@ -157,7 +157,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
                         transform: 'translate(-50%, 50%)', // Center the larger SVG area
                         // overflow: 'visible' // If rings go outside the H-16 W-16 box; SVG usually clips by default
                     }}
-                    title={`Hypocenter at ${depth?.toFixed(1)} km. Magnitude: ${magnitude?.toFixed(1)}`}
+                    title={`Hypocenter at ${depth?.toFixed(1)} km. Magnitude: ${typeof magnitude === 'number' ? magnitude.toFixed(1) : 'N/A'}`}
                 >
                     <svg viewBox="0 0 60 60" width="64" height="64"> {/* Adjusted viewBox and size for rings */}
                         <g transform="translate(30,30)"> {/* Center coordinate system for rings */}
