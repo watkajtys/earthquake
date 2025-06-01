@@ -119,11 +119,11 @@ const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', 
       '@context': 'https://schema.org',
       '@type': 'WebSite',
       name: 'Global Seismic Activity Monitor',
-      url: pageUrl || 'https://your-earthquake-monitor.com', // Use pageUrl if available, otherwise placeholder
+      url: pageUrl || 'https://earthquakeslive.com', // Use pageUrl if available, otherwise placeholder
       description: description,
       // potentialAction: { // Uncomment and adjust if search functionality is available
       //   '@type': 'SearchAction',
-      //   target: `https://your-earthquake-monitor.com/search?q={search_term_string}`,
+      //   target: `https://earthquakeslive.com/search?q={search_term_string}`,
       //   'query-input': 'required name=search_term_string',
       // },
     };
