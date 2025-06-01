@@ -12,12 +12,14 @@ import PropTypes from 'prop-types'; // Optional: for prop type validation
  * @param {string} [props.imageUrl] - URL of an image for `og:image` and `twitter:image`.
  * @param {string} [props.pageUrl] - The canonical URL of the page for `og:url` and `twitter:url`. Defaults to `window.location.href`.
  * @param {string} [props.type="website"] - The Open Graph type (e.g., "website", "article").
+ * @param {string} [props.locale="en_US"] - The locale for `og:locale`.
+ * @param {string} [props.canonicalUrl] - The canonical URL for `<link rel="canonical">`.
  * @param {string} [props.publishedTime] - Publication time for articles (ISO 8601 format), used for `article:published_time`.
  * @param {string} [props.modifiedTime] - Modification time for articles (ISO 8601 format), used for `article:modified_time`.
  * @param {string} [props.keywords] - Comma-separated keywords for the `keywords` meta tag.
  * @returns {null} This component does not render any DOM elements.
  */
-const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', publishedTime, modifiedTime, keywords }) => {
+const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', locale = 'en_US', canonicalUrl, publishedTime, modifiedTime, keywords }) => {
   useEffect(() => {
     document.title = title;
 
@@ -53,6 +55,7 @@ const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', 
     setMetaTag('property', 'og:description', description);
     setMetaTag('property', 'og:type', type);
     setMetaTag('property', 'og:url', pageUrl || window.location.href);
+    setMetaTag('property', 'og:locale', locale);
 
     if (imageUrl) {
       setMetaTag('property', 'og:image', imageUrl);
@@ -92,7 +95,58 @@ const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', 
     // If a general cleanup is desired for some tags when no specific SEO component is active, that could be added.
     // For now, let's assume tags are managed by each view having its own SeoMetadata component.
 
-  }, [title, description, imageUrl, pageUrl, type, publishedTime, modifiedTime, keywords]);
+    // Manage Canonical URL
+    let canonicalLink = document.head.querySelector('link[rel="canonical"]');
+    if (canonicalUrl) {
+      if (!canonicalLink) {
+        canonicalLink = document.createElement('link');
+        canonicalLink.setAttribute('rel', 'canonical');
+        document.head.appendChild(canonicalLink);
+      }
+      canonicalLink.setAttribute('href', canonicalUrl);
+    } else if (canonicalLink) {
+      document.head.removeChild(canonicalLink);
+    }
+
+    // Manage JSON-LD Structured Data
+    let jsonLdScript = document.head.querySelector('script[type="application/ld+json"]');
+    if (!jsonLdScript) {
+      jsonLdScript = document.createElement('script');
+      jsonLdScript.setAttribute('type', 'application/ld+json');
+      document.head.appendChild(jsonLdScript);
+    }
+    const structuredData = {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: 'Global Seismic Activity Monitor',
+      url: pageUrl || 'https://your-earthquake-monitor.com', // Use pageUrl if available, otherwise placeholder
+      description: description,
+      // potentialAction: { // Uncomment and adjust if search functionality is available
+      //   '@type': 'SearchAction',
+      //   target: `https://your-earthquake-monitor.com/search?q={search_term_string}`,
+      //   'query-input': 'required name=search_term_string',
+      // },
+    };
+    jsonLdScript.textContent = JSON.stringify(structuredData, null, 2);
+
+
+    // Cleanup function
+    return () => {
+      // Optional: remove canonical link if component unmounts and no new one is set
+      // if (canonicalUrl && !document.head.querySelector('link[rel="canonical"]')) {
+      //   const linkToRemove = document.head.querySelector(`link[rel="canonical"][href="${canonicalUrl}"]`);
+      //   if (linkToRemove) document.head.removeChild(linkToRemove);
+      // }
+      // Optional: remove JSON-LD if component unmounts and no new one is set
+      // const scriptToRemove = document.head.querySelector('script[type="application/ld+json"]');
+      // if (scriptToRemove && scriptToRemove.textContent === JSON.stringify(structuredData, null, 2)) {
+      //    document.head.removeChild(scriptToRemove);
+      // }
+      // Note: Meta tags are generally overwritten by the next component or persist if none.
+      // Title is reset by some frameworks on route change, or could be explicitly managed.
+    };
+
+  }, [title, description, imageUrl, pageUrl, type, locale, canonicalUrl, publishedTime, modifiedTime, keywords]);
 
   return null; // This component does not render anything to the DOM itself
 };
@@ -104,6 +158,8 @@ SeoMetadata.propTypes = {
   imageUrl: PropTypes.string,
   pageUrl: PropTypes.string,
   type: PropTypes.oneOf(['website', 'article']),
+  locale: PropTypes.string,
+  canonicalUrl: PropTypes.string,
   publishedTime: PropTypes.string,
   modifiedTime: PropTypes.string,
   keywords: PropTypes.string,

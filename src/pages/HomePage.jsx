@@ -665,10 +665,13 @@ function App() {
         }
 
         const title = feedTitle ? `${feedTitle} | Seismic Monitor` : 'Earthquake Feeds | Seismic Monitor';
-        const description = `Explore earthquake data for ${periodDescription}. View lists, statistics, and details of seismic events.`;
-        const keywords = `earthquake feed, live seismic data, earthquake list, ${periodKeywords}, seismic monitor`;
+        const description = `Explore earthquake data for ${periodDescription}. View lists, statistics, and details of seismic events. Updated with the latest USGS data.`;
+        const keywords = `earthquake feed, live seismic data, earthquake list, ${periodKeywords}, seismic monitor, USGS earthquake data`;
+        // Ensure activePeriod is a string and doesn't contain characters that would break a URL query parameter.
+        const safeActivePeriod = String(activePeriod).replace(/[^a-zA-Z0-9_.-]/g, '');
+        const canonicalUrl = `https://your-earthquake-monitor.com/feeds?activeFeedPeriod=${safeActivePeriod}`;
 
-        return { title, description, keywords };
+        return { title, description, keywords, pageUrl: canonicalUrl, canonicalUrl, locale: "en_US" };
     };
 
     // const handleCloseDetail = useCallback(() => setSelectedDetailUrl(null), []); // Removed
@@ -715,10 +718,12 @@ function App() {
                         <Route path="/" element={
                             <>
                                 <SeoMetadata
-                                    title="Global Seismic Activity Monitor | Real-time Earthquake Data"
-                                    description="Track live earthquakes around the world with our interactive globe. Get real-time data, view significant quake details, and explore seismic activity trends."
-                                    keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology"
-                                    imageUrl="/vite.svg"
+                                    title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
+                                    description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
+                                    keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
+                                    pageUrl="https://your-earthquake-monitor.com/"
+                                    canonicalUrl="https://your-earthquake-monitor.com/"
+                                    locale="en_US"
                                     type="website"
                                 />
                                 <div className="lg:block h-full w-full">
@@ -770,10 +775,12 @@ function App() {
                         <Route path="/overview" element={
                             <>
                                 <SeoMetadata
-                                    title="Earthquake Overview | Latest Seismic Summary"
-                                    description="Get a summary of the latest global earthquake activity, including significant events, regional distributions, and key statistics."
-                                    keywords="earthquake summary, seismic overview, recent earthquakes, earthquake statistics"
-                                    imageUrl="/vite.svg"
+                                    title="Earthquake Overview | Latest Global Seismic Summary & Statistics"
+                                    description="Get a comprehensive summary of the latest global earthquake activity, including significant events, regional distributions, key statistics, and active seismic alerts."
+                                    keywords="earthquake summary, seismic overview, recent earthquakes, earthquake statistics, significant earthquakes, seismic alerts, regional earthquake activity"
+                                    pageUrl="https://your-earthquake-monitor.com/overview"
+                                    canonicalUrl="https://your-earthquake-monitor.com/overview"
+                                    locale="en_US"
                                     type="website"
                                 />
                                 <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
@@ -945,10 +952,12 @@ function App() {
                         <Route path="/learn" element={
                             <>
                                 <SeoMetadata
-                                    title="Learn About Earthquakes | Seismic Science Explained"
-                                    description="Understand earthquake science, including magnitude, depth, fault types, seismic waves, and how earthquake data is interpreted."
-                                    keywords="earthquake science, seismology basics, magnitude, fault types, seismic waves, earthquake education"
-                                    imageUrl="/vite.svg"
+                                    title="Learn About Earthquakes | Seismic Science & Terminology Explained"
+                                    description="Understand earthquake science: magnitude, depth, fault types, seismic waves, PAGER alerts, and how to interpret earthquake data. Your guide to seismology."
+                                    keywords="earthquake science, seismology basics, earthquake magnitude, earthquake depth, fault types, seismic waves, PAGER alerts, earthquake education, seismology terms"
+                                    pageUrl="https://your-earthquake-monitor.com/learn"
+                                    canonicalUrl="https://your-earthquake-monitor.com/learn"
+                                    locale="en_US"
                                     type="website"
                                 />
                                 <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
