@@ -20,7 +20,7 @@ function hideAllButCurrent(){
             });
         }
     });
-
+    
     //only current page (if it exists) should be opened
     var file = window.location.pathname.split("/").pop().replace(/\.html/, '');
     document.querySelectorAll("nav > ul > li > a").forEach(function(parent) {
