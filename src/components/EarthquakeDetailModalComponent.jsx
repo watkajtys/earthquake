@@ -21,6 +21,7 @@ const EarthquakeDetailModalComponent = ({ broaderEarthquakeData, dataSourceTimes
     const navigate = useNavigate();
     const detailUrl = decodeURIComponent(detailUrlParam);
     const [seoData, setSeoData] = useState(null);
+    const [eventJsonLdData, setEventJsonLdData] = useState(null);
 
     const handleClose = () => {
         navigate(-1); // Go back to the previous page
@@ -37,17 +38,63 @@ const EarthquakeDetailModalComponent = ({ broaderEarthquakeData, dataSourceTimes
     let pageTitle = "Loading Earthquake Details...";
     let pageDescription = "Fetching detailed information for the selected seismic event.";
     let keywords = "earthquake details, seismic event, seismology";
-    let publishedTimeIso = null;
-    let modifiedTimeIso = null;
-    let imageUrl = null;
+    // imageUrl is already defined or null from seoData later
+    // let publishedTimeIso = null; // these will be derived from seoData
+    // let modifiedTimeIso = null;
+
+    // Effect to construct Event JSON-LD
+    useEffect(() => {
+        if (seoData) {
+            const eventData = {
+                '@context': 'https://schema.org',
+                '@type': 'Event',
+                name: seoData.title || `Earthquake: ${seoData.place || 'Unknown Location'}`,
+                description: `Magnitude ${seoData.mag || 'N/A'} earthquake reported ${seoData.place ? `near ${seoData.place}` : 'at an unknown location'}. Occurred on ${seoData.time ? new Date(seoData.time).toUTCString() : 'unknown date'}.`,
+                startDate: seoData.time ? new Date(seoData.time).toISOString() : null,
+                // endDate can be same as startDate for instantaneous events like earthquakes
+                endDate: seoData.time ? new Date(seoData.time).toISOString() : null,
+                location: {
+                    '@type': 'Place',
+                    name: seoData.place || 'Near the epicenter',
+                },
+                organizer: {
+                    '@type': 'Organization',
+                    name: 'Global Seismic Activity Monitor (via USGS)',
+                },
+            };
+
+            // Add GeoCoordinates if latitude, longitude, and depth are available
+            if (seoData.latitude != null && seoData.longitude != null) {
+                eventData.location.geo = {
+                    '@type': 'GeoCoordinates',
+                    latitude: seoData.latitude,
+                    longitude: seoData.longitude,
+                };
+                // Add elevation (depth) if available. Using positive value as depth.
+                // Schema.org's elevation is distance from sea level.
+                // If depth is distance *below* sea level, it should ideally be negative.
+                // For now, using the direct depth value.
+                if (seoData.depth != null) {
+                    eventData.location.geo.elevation = seoData.depth;
+                }
+            }
+
+            // If there's a specific event page URL (canonicalUrl)
+            if (canonicalUrl) {
+                eventData.url = canonicalUrl;
+            }
+
+            setEventJsonLdData(eventData);
+        } else {
+            setEventJsonLdData(null);
+        }
+    }, [seoData, detailUrlParam, canonicalUrl]); // detailUrlParam and canonicalUrl ensure it updates if the route changes
+
 
     if (seoData) {
         pageTitle = seoData.title ? `${seoData.title} | Earthquake Details` : "Earthquake Details | Seismic Monitor";
         pageDescription = `Detailed information for earthquake: ${seoData.place || 'Unknown Location'}. Magnitude ${seoData.mag || 'N/A'}, Depth ${seoData.depth?.toFixed(1) || 'N/A'} km. Occurred on ${new Date(seoData.time).toUTCString()}.`;
-        keywords = `earthquake, ${seoData.place}, M ${seoData.mag}, seismology, earthquake details, ${new Date(seoData.time).getFullYear()}`;
-        if (seoData.time) publishedTimeIso = new Date(seoData.time).toISOString();
-        if (seoData.updated) modifiedTimeIso = new Date(seoData.updated).toISOString();
-        imageUrl = seoData.shakemapIntensityImageUrl || null;
+        keywords = `earthquake, ${seoData.place || 'location'}, M ${seoData.mag || 'magnitude'}, seismology, earthquake details, ${seoData.time ? new Date(seoData.time).getFullYear() : 'year'}`;
     }
 
 
@@ -61,9 +108,10 @@ const EarthquakeDetailModalComponent = ({ broaderEarthquakeData, dataSourceTimes
                 canonicalUrl={canonicalUrl}
                 locale="en_US"
                 type="article"
-                publishedTime={publishedTimeIso}
-                modifiedTime={modifiedTimeIso}
-                imageUrl={imageUrl}
+                publishedTime={seoData?.time ? new Date(seoData.time).toISOString() : null}
+                modifiedTime={seoData?.updated ? new Date(seoData.updated).toISOString() : null}
+                imageUrl={seoData?.shakemapIntensityImageUrl || null}
+                eventJsonLd={eventJsonLdData}
             />
             <EarthquakeDetailView
                 detailUrl={detailUrl}
