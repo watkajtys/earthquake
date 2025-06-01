@@ -107,9 +107,10 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
 // --- App Component ---
 /**
  * The main application component for the Global Seismic Activity Monitor.
- * It fetches, processes, and displays earthquake data using various views and components.
- * Manages application state including earthquake data, loading states, user selections, and UI display modes.
- * Provides routing for different sections of the application like overview, feeds, learning materials, and earthquake details.
+ * It orchestrates data fetching via custom hooks (`useEarthquakeData`, `useMonthlyEarthquakeData`),
+ * manages overall application state (UI states, feed selections, earthquake data, loading states),
+ * handles routing for different application views using `react-router-dom`, and serves as the
+ * primary layout component that assembles various UI pieces.
  * @returns {JSX.Element} The rendered App component.
  */
 function App() {
@@ -130,8 +131,9 @@ function App() {
 
     /**
      * Formats a duration in milliseconds into a human-readable "time ago" string.
+     * Handles durations from "just now" up to days.
      * @param {number | null} milliseconds - The duration in milliseconds.
-     * @returns {string} The formatted time ago string (e.g., "5 min ago", "just now") or 'N/A' if input is invalid.
+     * @returns {string} The formatted time ago string (e.g., "5 min ago", "1 day ago", "just now") or 'N/A' if input is invalid or negative.
      */
     const formatTimeAgo = useCallback((milliseconds) => {
         if (milliseconds === null || milliseconds < 0) return 'N/A';
@@ -203,18 +205,22 @@ function App() {
     const getRegionForEarthquake = useCallback((quake) => {
         const lon = quake.geometry?.coordinates?.[0];
         const lat = quake.geometry?.coordinates?.[1];
-        if (lon === null || lat === null || lon === undefined || lat === undefined) return REGIONS[REGIONS.length - 1];
-        for (let i = 0; i < REGIONS.length - 1; i++) {
+        if (lon === null || lat === null || lon === undefined || lat === undefined) return REGIONS[REGIONS.length - 1]; // Default to 'Other / Oceanic'
+        for (let i = 0; i < REGIONS.length - 1; i++) { // Exclude the last 'Other / Oceanic' region from specific checks
             const region = REGIONS[i];
             if (lat >= region.latMin && lat <= region.latMax && lon >= region.lonMin && lon <= region.lonMax) return region;
         }
-        return REGIONS[REGIONS.length - 1];
+        return REGIONS[REGIONS.length - 1]; // Default to 'Other / Oceanic' if no specific region matches
     }, [REGIONS]);
 
     /**
-     * Calculates various statistics from a list of earthquake objects.
-     * @param {Array<object>} earthquakes - An array of earthquake feature objects.
-     * @returns {object} An object containing calculated statistics (totalEarthquakes, averageMagnitude, etc.).
+     * Calculates various statistics from an array of earthquake objects.
+     * Statistics include total count, average/strongest magnitude, count of feelable/significant quakes,
+     * average/deepest depth, average significance score, and highest PAGER alert level.
+     * @param {Array<object>} earthquakes - An array of earthquake GeoJSON feature objects.
+     *   Each object is expected to have `properties` (with `mag`, `sig`, `alert`) and `geometry.coordinates` (with depth at index 2).
+     * @returns {object} An object containing calculated statistics. Returns base statistics with 'N/A' or 0 if input is empty or invalid.
+     *   Example: `{ totalEarthquakes: 10, averageMagnitude: "2.5", strongestMagnitude: "4.0", ... }`
      */
     const calculateStats = useCallback((earthquakes) => {
         const baseStats = { totalEarthquakes: 0, averageMagnitude: 'N/A', strongestMagnitude: 'N/A', significantEarthquakes: 0, feelableEarthquakes: 0, averageDepth: 'N/A', deepestEarthquake: 'N/A', averageSignificance: 'N/A', highestAlertLevel: null };
