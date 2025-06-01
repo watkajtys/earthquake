@@ -782,12 +782,14 @@ function App() {
                                             onNotableQuakeSelect={handleNotableQuakeSelect}
                                             getMagnitudeColorFunc={getMagnitudeColor}
                                         />
-                                        <PreviousNotableQuakeFeature
-                                            previousMajorQuake={previousMajorQuake} // from useEarthquakeData
-                                            isLoadingPreviousQuake={isLoadingInitialData} // from useEarthquakeData
-                                            onNotableQuakeSelect={handleNotableQuakeSelect}
-                                            getMagnitudeColorFunc={getMagnitudeColor}
-                                        />
+                                        <div className="hidden md:block">
+                                            <PreviousNotableQuakeFeature
+                                                previousMajorQuake={previousMajorQuake} // from useEarthquakeData
+                                                isLoadingPreviousQuake={isLoadingInitialData} // from useEarthquakeData
+                                                onNotableQuakeSelect={handleNotableQuakeSelect}
+                                                getMagnitudeColorFunc={getMagnitudeColor}
+                                            />
+                                        </div>
                                         <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-[220px] backdrop-blur-sm border border-slate-700">
                                         <h3 className="text-[10px] sm:text-xs font-semibold mb-0.5 sm:mb-1 text-indigo-300 uppercase">Live Statistics</h3>
                                         <p className="text-[10px] sm:text-xs">Last Hour: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.lastHourCount}</span></p>
