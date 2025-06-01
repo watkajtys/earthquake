@@ -1,8 +1,8 @@
 // src/pages/HomePage.jsx
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import SeoMetadata from '../components/SeoMetadata';
-import EarthquakeDetailView from '../components/EarthquakeDetailView';
+// EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
 import InteractiveGlobeView from '../components/InteractiveGlobeView';
 import NotableQuakeFeature from '../components/NotableQuakeFeature';
 import PreviousNotableQuakeFeature from '../components/PreviousNotableQuakeFeature';
@@ -13,7 +13,7 @@ import GlobalLastMajorQuakeTimer from "../components/GlobalLastMajorQuakeTimer.j
 import BottomNav from "../components/BottomNav.jsx";
 import ClusterSummaryItem from '../components/ClusterSummaryItem';
 import ClusterDetailModal from '../components/ClusterDetailModal'; // This is for the cluster map point, not the route component
-import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx';
+// import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx'; // Removed static import, will use lazy loaded
 import { calculateDistance, getMagnitudeColor } from '../utils/utils.js';
 
 // Import newly created components
@@ -23,13 +23,13 @@ import SkeletonListItem from '../components/SkeletonListItem';
 import SkeletonTableRow from '../components/SkeletonTableRow';
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
-import RegionalDistributionList from '../components/RegionalDistributionList';
-import MagnitudeDistributionSVGChart from '../components/MagnitudeDistributionSVGChart';
-import EarthquakeTimelineSVGChart from '../components/EarthquakeTimelineSVGChart';
-import MagnitudeDepthScatterSVGChart from '../components/MagnitudeDepthScatterSVGChart';
-import PaginatedEarthquakeTable from '../components/PaginatedEarthquakeTable';
-import FeedsPageLayoutComponent from '../components/FeedsPageLayout'; // Renamed import
-import EarthquakeDetailModalComponent from '../components/EarthquakeDetailModalComponent';
+// RegionalDistributionList will be lazy loaded
+// MagnitudeDistributionSVGChart will be lazy loaded
+// EarthquakeTimelineSVGChart will be lazy loaded
+// MagnitudeDepthScatterSVGChart will be lazy loaded
+// PaginatedEarthquakeTable will be lazy loaded
+// FeedsPageLayoutComponent will be lazy loaded
+// EarthquakeDetailModalComponent will be lazy loaded
 import useEarthquakeData from '../hooks/useEarthquakeData';
 import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Import the new monthly hook
 import {
@@ -49,6 +49,19 @@ import {
     INITIAL_LOADING_MESSAGES // Used by useEarthquakeData for initial load messages
 } from '../constants/appConstants';
 
+// Lazy load route components
+const FeedsPageLayoutComponent = lazy(() => import('../components/FeedsPageLayout'));
+const EarthquakeDetailModalComponent = lazy(() => import('../components/EarthquakeDetailModalComponent'));
+const ClusterDetailModalWrapper = lazy(() => import('../components/ClusterDetailModalWrapper'));
+const OverviewPage = lazy(() => import('./OverviewPage'));
+const LearnPage = lazy(() => import('./LearnPage'));
+
+// Lazy load other heavy/conditional components for the sidebar
+const RegionalDistributionList = lazy(() => import('../components/RegionalDistributionList'));
+const MagnitudeDistributionSVGChart = lazy(() => import('../components/MagnitudeDistributionSVGChart'));
+const EarthquakeTimelineSVGChart = lazy(() => import('../components/EarthquakeTimelineSVGChart'));
+const MagnitudeDepthScatterSVGChart = lazy(() => import('../components/MagnitudeDepthScatterSVGChart'));
+const PaginatedEarthquakeTable = lazy(() => import('../components/PaginatedEarthquakeTable'));
 
 /**
  * Calculates the distance between two geographical coordinates using the Haversine formula.
@@ -444,6 +457,24 @@ function App() {
     // showFullScreenLoader now uses isLoadingInitialData from the hook
     const showFullScreenLoader = useMemo(() => isLoadingInitialData, [isLoadingInitialData]);
 
+    // Fallback UI for Suspense
+    const RouteLoadingFallback = () => (
+        <div className="flex items-center justify-center h-screen w-full bg-slate-900"> {/* Ensure it covers the area */}
+            <div className="text-center">
+                <svg className="animate-spin h-10 w-10 text-indigo-400 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-xl font-semibold text-indigo-300">Loading Page...</p>
+                <p className="text-sm text-slate-400">Please wait a moment.</p>
+            </div>
+        </div>
+    );
+
+    const ChartLoadingFallback = ({ message = "Loading data..." }) => (
+        <div className="p-4 text-center text-slate-400">{message}</div>
+    );
+
     // headerTimeDisplay now uses isInitialAppLoad (value) from the hook
     const headerTimeDisplay = useMemo(() => {
         if (isInitialAppLoad && (isLoadingDaily || isLoadingWeekly) && !dataFetchTime) return "Connecting to Seismic Network...";
@@ -714,10 +745,11 @@ function App() {
                 {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
                 {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
                 <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto">
-                    <Routes>
-                        <Route path="/" element={
-                            <>
-                                <SeoMetadata
+                    <Suspense fallback={<RouteLoadingFallback />}>
+                        <Routes>
+                            <Route path="/" element={
+                                <>
+                                    <SeoMetadata
                                     title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
                                     description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
                                     keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
@@ -773,160 +805,34 @@ function App() {
                             </>
                         } />
                         <Route path="/overview" element={
-                            <>
-                                <SeoMetadata
-                                    title="Earthquake Overview | Latest Global Seismic Summary & Statistics"
-                                    description="Get a comprehensive summary of the latest global earthquake activity, including significant events, regional distributions, key statistics, and active seismic alerts."
-                                    keywords="earthquake summary, seismic overview, recent earthquakes, earthquake statistics, significant earthquakes, seismic alerts, regional earthquake activity"
-                                    pageUrl="https://earthquakeslive.com/overview"
-                                    canonicalUrl="https://earthquakeslive.com/overview"
-                                    locale="en_US"
-                                    type="website"
-                                />
-                                <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
-                                    <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                        Overview
-                                    </h2>
-                                {currentAlertConfig && (
-                                    <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}>
-                                        <p className="font-bold text-sm mb-1">Active USGS Alert: {currentAlertConfig.text}</p>
-                                        <p className="text-xs">{currentAlertConfig.description}</p>
-                                    </div>
-                                )}
-                                {hasRecentTsunamiWarning && !currentAlertConfig && (
-                                    <div className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs" role="alert">
-                                        <p className="font-bold mb-1">Tsunami Information</p>
-                                        <p className="text-xs">Recent quakes may indicate tsunami activity. Please check official channels for alerts.</p>
-                                    </div>
-                                )}
-                                {lastMajorQuake && (
-                                    <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md">
-                                        <h3 className="text-sm font-semibold text-indigo-300 mb-1">Latest Significant Event</h3>
-                                        <p className="text-lg font-bold" style={{ color: getMagnitudeColor(lastMajorQuake.properties.mag) }}>
-                                            M {lastMajorQuake.properties.mag?.toFixed(1)}
-                                        </p>
-                                        <p className="text-sm text-slate-300 truncate" title={lastMajorQuake.properties.place}>
-                                            {lastMajorQuake.properties.place || "Location details pending..."}
-                                        </p>
-                                        <p className="text-xs text-slate-400">
-                                           {formatDate(lastMajorQuake.properties.time)}
-                                            {lastMajorQuake.geometry?.coordinates?.[2] !== undefined && `, Depth: ${lastMajorQuake.geometry.coordinates[2].toFixed(1)} km`}
-                                        </p>
-                                        <button
-                                            onClick={() => handleQuakeClick(lastMajorQuake)}
-                                            className="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
-                                        >
-                                            View Details
-                                        </button>
-                                   </div>
-                                )}
-                                {latestFeelableQuakesSnippet.length > 0 && (
-                                    <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md">
-                                        <h3 className="text-sm font-semibold text-indigo-300 mb-2">Latest Activity</h3>
-                                        <ul className="space-y-2">
-                                            {latestFeelableQuakesSnippet.map(quake => (
-                                                <li
-                                                    key={`snippet-${quake.id}`}
-                                                    className="text-xs border-b border-slate-600 pb-1 last:border-b-0 last:pb-0 p-2 rounded hover:bg-slate-600 cursor-pointer transition-colors"
-                                                    onClick={() => handleQuakeClick(quake)}
-                                                >
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="font-semibold" style={{ color: getMagnitudeColor(quake.properties.mag) }}>
-                                                            M {quake.properties.mag?.toFixed(1)}
-                                                        </span>
-                                                        <span className="text-slate-400">
-                                                            {formatTimeAgo(Date.now() - quake.properties.time)}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-slate-300 truncate text-[11px]" title={quake.properties.place}>
-                                                        {quake.properties.place || "Location details pending..."}
-                                                    </p>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        {/* Intentionally not changing this button's onClick for now, as it's tied to BottomNav */}
-                                        <button
-                                            onClick={() => {/* This will be handled by NavLink in BottomNav */}}
-                                            className="mt-3 w-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
-                                        >
-                                            View All Recent Activity
-                                        </button>
-                                    </div>
-                                )}
-                                <TimeSinceLastMajorQuakeBanner
-                                    lastMajorQuake={lastMajorQuake}
-                                    timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
-                                    previousMajorQuake={previousMajorQuake}
-                                    isLoadingInitial={isLoadingInitialData}
-                                    isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad}
-                                    // majorQuakeThreshold is imported by TimeSinceLastMajorQuakeBanner
-                                    formatTimeDuration={formatTimeDuration}
-                                    getRegionForEarthquake={getRegionForEarthquake}
-                                    handleQuakeClick={handleQuakeClick}
-                                    getMagnitudeColor={getMagnitudeColor}
-                                />
-                                <SummaryStatisticsCard
-                                    title="Global Statistics (Last 24 Hours)"
-                                    currentPeriodData={earthquakesLast24Hours}
-                                    previousPeriodData={prev24HourData}
-                                    isLoading={isLoadingDaily || (isLoadingWeekly && !earthquakesLast24Hours)}
-                                    calculateStats={calculateStats}
-                                    // FEELABLE_QUAKE_THRESHOLD is imported by SummaryStatisticsCard
-                                />
-
-                                {/* Active Earthquake Clusters Section - Mobile */}
-                                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
-                                    <h3 className="text-md font-semibold mb-2 text-indigo-300">
-                                        Active Earthquake Clusters
-                                    </h3>
-                                    {overviewClusters && overviewClusters.length > 0 ? (
-                                        <ul className="space-y-2">
-                                            {overviewClusters.map(cluster => (
-                                                <ClusterSummaryItem
-                                                    clusterData={cluster}
-                                                    key={cluster.id}
-                                                    onClusterSelect={handleClusterSummaryClick} // <-- Add this prop
-                                                />
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <p className="text-xs text-slate-400 text-center py-2">
-                                            No significant active clusters detected currently.
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
-                                    <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
-                                    {isLoadingDaily && !earthquakesLast24Hours ? (
-                                        <SkeletonText width="w-full" height="h-5" className="bg-slate-600"/>
-                                    ) : (
-                                        topActiveRegionsOverview.length > 0 ? (
-                                            topActiveRegionsOverview.map((region, index) => (
-                                                <p key={region.name} className={`text-slate-300 ${index > 0 ? 'mt-0.5' : ''}`}>
-                                                    <span className="font-semibold" style={{color: region.color || '#9CA3AF'}}>
-                                                        {index + 1}. {region.name}
-                                                        </span>
-                                                        {region.count > 0 ? ` - ${region.count} events` : ''}
-                                                    </p>
-                                            ))
-                                    ) : (
-                                        <p className="text-slate-400 text-xs">(No significant regional activity in the last 24 hours)</p>
-                                    )
-                                    )}
-                                </div>
-                                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
-                                    <h3 className="text-md font-semibold mb-1 text-indigo-400">Quick Fact</h3>
-                                    <InfoSnippet topic="magnitude" />
-                                    <button
-                                        onClick={() => navigate('/learn')} // Updated to use navigate
-                                        className="mt-2 w-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
-                                    >
-                                        Learn More About Earthquakes
-                                    </button>
-                                </div>
-                                </div>
-                            </>
+                            <OverviewPage
+                                currentAlertConfig={currentAlertConfig}
+                                ALERT_LEVELS={ALERT_LEVELS} // Make sure ALERT_LEVELS is defined in HomePage or passed if imported in OverviewPage
+                                hasRecentTsunamiWarning={hasRecentTsunamiWarning}
+                                lastMajorQuake={lastMajorQuake}
+                                getMagnitudeColor={getMagnitudeColor}
+                                formatDate={formatDate}
+                                handleQuakeClick={handleQuakeClick}
+                                latestFeelableQuakesSnippet={latestFeelableQuakesSnippet}
+                                formatTimeAgo={formatTimeAgo}
+                                isLoadingInitialData={isLoadingInitialData}
+                                isLoadingMonthly={isLoadingMonthly}
+                                hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
+                                timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
+                                previousMajorQuake={previousMajorQuake}
+                                formatTimeDuration={formatTimeDuration}
+                                getRegionForEarthquake={getRegionForEarthquake} // Ensure this is the one from HomePage scope
+                                earthquakesLast24Hours={earthquakesLast24Hours}
+                                prev24HourData={prev24HourData}
+                                isLoadingDaily={isLoadingDaily}
+                                isLoadingWeekly={isLoadingWeekly}
+                                calculateStats={calculateStats}
+                                overviewClusters={overviewClusters} // This is the memoized one from HomePage
+                                handleClusterSummaryClick={handleClusterSummaryClick} // This is the callback from HomePage
+                                topActiveRegionsOverview={topActiveRegionsOverview} // This is the memoized one from HomePage
+                                REGIONS={REGIONS} // This is the memoized REGIONS constant from HomePage
+                                navigate={navigate} // Pass navigate from HomePage
+                            />
                         } />
                         <Route path="/feeds" element={
                             <FeedsPageLayoutComponent
@@ -949,47 +855,26 @@ function App() {
                                 formatDate={formatDate}
                             />
                         } />
-                        <Route path="/learn" element={
-                            <>
-                                <SeoMetadata
-                                    title="Learn About Earthquakes | Seismic Science & Terminology Explained"
-                                    description="Understand earthquake science: magnitude, depth, fault types, seismic waves, PAGER alerts, and how to interpret earthquake data. Your guide to seismology."
-                                    keywords="earthquake science, seismology basics, earthquake magnitude, earthquake depth, fault types, seismic waves, PAGER alerts, earthquake education, seismology terms"
-                                    pageUrl="https://earthquakeslive.com/learn"
-                                    canonicalUrl="https://earthquakeslive.com/learn"
-                                    locale="en_US"
-                                    type="website"
-                                />
-                                <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
-                                    <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
-                                        Learn About Earthquakes
-                                    </h2>
-                                <InfoSnippet topic="magnitude" />
-                                <InfoSnippet topic="depth" />
-                                <InfoSnippet topic="intensity" />
-                                <InfoSnippet topic="alerts" />
-                                <InfoSnippet topic="strike"/>
-                                <InfoSnippet topic="dip"/>
-                                <InfoSnippet topic="rake"/>
-                                <InfoSnippet topic="stressAxes"/>
-                                <InfoSnippet topic="beachball"/>
-                                <InfoSnippet topic="stationsUsed"/>
-                                <InfoSnippet topic="azimuthalGap"/>
-                                <InfoSnippet topic="rmsError"/>
-                                </div>
-                            </>
-                        } />
+                        <Route path="/learn" element={<LearnPage />} />
                         <Route
                             path="/quake/:detailUrlParam"
                             element={<EarthquakeDetailModalComponent
                                 broaderEarthquakeData={ (allEarthquakes && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days }
-                                handleLoadMonthlyData={loadMonthlyData} // Pass new function
-                                hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad} // from useMonthlyEarthquakeData
-                                isLoadingMonthly={isLoadingMonthly} // from useMonthlyEarthquakeData
+                                handleLoadMonthlyData={loadMonthlyData}
+                                hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
+                                isLoadingMonthly={isLoadingMonthly}
                             />}
                         />
-                        <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper overviewClusters={overviewClusters} formatDate={formatDate} getMagnitudeColorStyle={getMagnitudeColorStyle} onIndividualQuakeSelect={handleQuakeClick} />} />
+                        <Route path="/cluster/:clusterId" element={
+                            <ClusterDetailModalWrapper
+                                overviewClusters={overviewClusters} // Pass the memoized overviewClusters
+                                formatDate={formatDate}
+                                getMagnitudeColorStyle={getMagnitudeColorStyle} // Pass this if ClusterDetailModalWrapper needs it
+                                onIndividualQuakeSelect={handleQuakeClick} // Pass if selecting individual quake from cluster modal
+                            />}
+                        />
                     </Routes>
+                </Suspense>
                 </main>
 
                 {/* DESKTOP SIDEBAR (hidden on small screens, flex on large) */}
@@ -1008,7 +893,7 @@ function App() {
                         {error && !showFullScreenLoader && (<div className="bg-red-700 bg-opacity-40 border border-red-600 text-red-200 px-3 py-2 rounded-md text-xs" role="alert"><strong className="font-bold">Data Error:</strong> {error} Some data might be unavailable.</div>)}
                         {activeSidebarView === 'overview_panel' && (
                             <>
-                            {currentAlertConfig && ( <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}> <p className="font-bold text-sm">Active USGS Alert: {currentAlertConfig.text}</p> <p>{currentAlertConfig.description}</p> {activeAlertTriggeringQuakes.length > 0 && (<PaginatedEarthquakeTable title={`Alert Triggering Quakes (${currentAlertConfig.text})`} earthquakes={activeAlertTriggeringQuakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={3} periodName="alerting" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} SkeletonText={SkeletonText} SkeletonTableRow={SkeletonTableRow} /> )} </div> )}
+                            {currentAlertConfig && ( <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}> <p className="font-bold text-sm">Active USGS Alert: {currentAlertConfig.text}</p> <p>{currentAlertConfig.description}</p> {activeAlertTriggeringQuakes.length > 0 && (<Suspense fallback={<ChartLoadingFallback message="Loading alert quakes table..." />}><PaginatedEarthquakeTable title={`Alert Triggering Quakes (${currentAlertConfig.text})`} earthquakes={activeAlertTriggeringQuakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={3} periodName="alerting" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} SkeletonText={SkeletonText} SkeletonTableRow={SkeletonTableRow} /></Suspense> )} </div> )}
                             {hasRecentTsunamiWarning && !currentAlertConfig && (<div className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs" role="alert"><p className="font-bold">Tsunami Info</p><p>Recent quakes indicate potential tsunami activity. Check official channels.</p></div>)}
                             <TimeSinceLastMajorQuakeBanner
                                 lastMajorQuake={lastMajorQuake}
@@ -1073,19 +958,21 @@ function App() {
                                 </div>
 
                             {recentSignificantQuakesForOverview.length > 0 && (
-                                <PaginatedEarthquakeTable
-                                    title={`Recent Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)`}
-                                    earthquakes={recentSignificantQuakesForOverview}
-                                    isLoading={isLoadingWeekly && !earthquakesLast7Days}
-                                    onQuakeClick={handleQuakeClick}
-                                    itemsPerPage={10}
-                                    defaultSortKey="time"
-                                    initialSortDirection="descending"
-                                    periodName="last 7 days"
-                                    getMagnitudeColorStyle={getMagnitudeColorStyle}
-                                    formatTimeAgo={formatTimeAgo}
-                                    formatDate={formatDate}
-                                />
+                                <Suspense fallback={<ChartLoadingFallback message="Loading significant quakes table..." />}>
+                                    <PaginatedEarthquakeTable
+                                        title={`Recent Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)`}
+                                        earthquakes={recentSignificantQuakesForOverview}
+                                        isLoading={isLoadingWeekly && !earthquakesLast7Days}
+                                        onQuakeClick={handleQuakeClick}
+                                        itemsPerPage={10}
+                                        defaultSortKey="time"
+                                        initialSortDirection="descending"
+                                        periodName="last 7 days"
+                                        getMagnitudeColorStyle={getMagnitudeColorStyle}
+                                        formatTimeAgo={formatTimeAgo}
+                                        formatDate={formatDate}
+                                    />
+                                </Suspense>
                             )}
                             {isLoadingWeekly && recentSignificantQuakesForOverview.length === 0 && !earthquakesLast7Days &&
                                 <div className="bg-slate-700 p-3 rounded-lg mt-4 border border-slate-600 shadow-md">
@@ -1109,22 +996,22 @@ function App() {
                         {/* ... (rest of your desktop sidebar logic for details_1hr, details_24hr, etc. This part of your code was already handling these views) ... */}
                         {activeSidebarView === 'details_1hr' && !isLoadingDaily && earthquakesLastHour && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last Hour)" currentPeriodData={earthquakesLastHour} previousPeriodData={earthquakesPriorHour} isLoading={isLoadingDaily} calculateStats={calculateStats} />
-                            <PaginatedEarthquakeTable title="Earthquakes (Last Hour)" earthquakes={earthquakesLastHour} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} itemsPerPage={10} periodName="last hour" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} />
-                            <RegionalDistributionList earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily} getRegionForEarthquake={getRegionForEarthquake} />
-                            <MagnitudeDepthScatterSVGChart earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily} getMagnitudeColor={getMagnitudeColor} />
+                            <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Earthquakes (Last Hour)" earthquakes={earthquakesLastHour} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} itemsPerPage={10} periodName="last hour" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} /></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback message="Loading list..." />}><RegionalDistributionList earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily} getRegionForEarthquake={getRegionForEarthquake} /></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDepthScatterSVGChart earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily} getMagnitudeColor={getMagnitudeColor} /></Suspense>
                         </div> )}
                         {activeSidebarView === 'details_24hr' && !isLoadingWeekly && earthquakesLast24Hours && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last 24 Hours)" currentPeriodData={earthquakesLast24Hours} previousPeriodData={prev24HourData} isLoading={isLoadingWeekly || (isLoadingDaily && !prev24HourData) } calculateStats={calculateStats} />
-                            <PaginatedEarthquakeTable title="Earthquakes (Last 24 Hours)" earthquakes={earthquakesLast24Hours} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} periodName="last 24 hours" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} />
-                            <RegionalDistributionList earthquakes={earthquakesLast24Hours} titleSuffix="(Last 24 Hours)" isLoading={isLoadingDaily} getRegionForEarthquake={getRegionForEarthquake} />
-                            <MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast24Hours} titleSuffix="(Last 24 Hours)" isLoading={isLoadingDaily} getMagnitudeColor={getMagnitudeColor} />
+                            <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Earthquakes (Last 24 Hours)" earthquakes={earthquakesLast24Hours} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} periodName="last 24 hours" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} /></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback message="Loading list..." />}><RegionalDistributionList earthquakes={earthquakesLast24Hours} titleSuffix="(Last 24 Hours)" isLoading={isLoadingDaily} getRegionForEarthquake={getRegionForEarthquake} /></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast24Hours} titleSuffix="(Last 24 Hours)" isLoading={isLoadingDaily} getMagnitudeColor={getMagnitudeColor} /></Suspense>
                         </div> )}
                         {activeSidebarView === 'details_7day' && !isLoadingWeekly && earthquakesLast7Days && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last 7 Days)" currentPeriodData={earthquakesLast7Days} previousPeriodData={prev7DayData} isLoading={isLoadingWeekly || (isLoadingMonthly && hasAttemptedMonthlyLoad && !prev7DayData) } calculateStats={calculateStats} />
-                            <PaginatedEarthquakeTable title="Earthquakes (Last 7 Days)" earthquakes={earthquakesLast7Days} isLoading={isLoadingWeekly} onQuakeClick={handleQuakeClick} periodName="last 7 days" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} />
-                            <RegionalDistributionList earthquakes={earthquakesLast7Days} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} getRegionForEarthquake={getRegionForEarthquake} />
-                            <EarthquakeTimelineSVGChart earthquakes={earthquakesLast7Days} days={7} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} />
-                            <MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast7Days} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} getMagnitudeColor={getMagnitudeColor} />
+                            <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Earthquakes (Last 7 Days)" earthquakes={earthquakesLast7Days} isLoading={isLoadingWeekly} onQuakeClick={handleQuakeClick} periodName="last 7 days" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} /></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback message="Loading list..." />}><RegionalDistributionList earthquakes={earthquakesLast7Days} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} getRegionForEarthquake={getRegionForEarthquake} /></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback />}><EarthquakeTimelineSVGChart earthquakes={earthquakesLast7Days} days={7} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} /></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast7Days} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} getMagnitudeColor={getMagnitudeColor} /></Suspense>
                         </div> )}
 
                         {activeSidebarView !== 'overview_panel' && activeSidebarView !== 'learn_more' && !hasAttemptedMonthlyLoad && ( <div className="text-center py-3 mt-3 border-t border-slate-700"> <button onClick={loadMonthlyData} disabled={isLoadingMonthly} className="w-full bg-teal-600 hover:bg-teal-500 p-2.5 rounded-md text-white font-semibold transition-colors text-xs shadow-md disabled:opacity-60"> {isLoadingMonthly ? 'Loading Historical Data...' : 'Load Full 14 & 30-Day Analysis'} </button> </div> )}
@@ -1133,21 +1020,21 @@ function App() {
 
                         {activeSidebarView === 'details_14day' && hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length > 0 && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last 14 Days)" currentPeriodData={earthquakesLast14Days} previousPeriodData={prev14DayData} isLoading={isLoadingMonthly} calculateStats={calculateStats} />
-                            <EarthquakeTimelineSVGChart earthquakes={earthquakesLast14Days} days={14} titleSuffix="(Last 14 Days)" isLoading={isLoadingMonthly}/>
-                            <MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast14Days} titleSuffix="(Last 14 Days)" isLoading={isLoadingMonthly} getMagnitudeColor={getMagnitudeColor} />
-                            <PaginatedEarthquakeTable title="All Earthquakes (Last 14 Days)" earthquakes={earthquakesLast14Days} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={10} defaultSortKey="time" initialSortDirection="descending" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/>
+                            <Suspense fallback={<ChartLoadingFallback />}><EarthquakeTimelineSVGChart earthquakes={earthquakesLast14Days} days={14} titleSuffix="(Last 14 Days)" isLoading={isLoadingMonthly}/></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast14Days} titleSuffix="(Last 14 Days)" isLoading={isLoadingMonthly} getMagnitudeColor={getMagnitudeColor} /></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="All Earthquakes (Last 14 Days)" earthquakes={earthquakesLast14Days} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={10} defaultSortKey="time" initialSortDirection="descending" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
                         </div> )}
                         {activeSidebarView === 'details_30day' && hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length > 0 && ( <div className="space-y-3">
                             <SummaryStatisticsCard title="Summary (Last 30 Days)" currentPeriodData={earthquakesLast30Days} isLoading={isLoadingMonthly} calculateStats={calculateStats} />
                             <div className="grid grid-cols-1 gap-3">
-                                <PaginatedEarthquakeTable title="Top 10 Strongest (30d)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={10} defaultSortKey="mag" initialSortDirection="descending" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/>
-                                <PaginatedEarthquakeTable title="Most Widely Felt (30d)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={5} defaultSortKey="felt" initialSortDirection="descending" filterPredicate={q => q.properties.felt !== null && typeof q.properties.felt === 'number' && q.properties.felt > FELT_REPORTS_THRESHOLD} getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/>
-                                <PaginatedEarthquakeTable title="Most Significant (30d)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={5} defaultSortKey="sig" initialSortDirection="descending" filterPredicate={q => q.properties.sig !== null && typeof q.properties.sig === 'number' && q.properties.sig > SIGNIFICANCE_THRESHOLD} getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/>
+                                <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Top 10 Strongest (30d)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={10} defaultSortKey="mag" initialSortDirection="descending" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
+                                <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Most Widely Felt (30d)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={5} defaultSortKey="felt" initialSortDirection="descending" filterPredicate={q => q.properties.felt !== null && typeof q.properties.felt === 'number' && q.properties.felt > FELT_REPORTS_THRESHOLD} getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
+                                <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Most Significant (30d)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={5} defaultSortKey="sig" initialSortDirection="descending" filterPredicate={q => q.properties.sig !== null && typeof q.properties.sig === 'number' && q.properties.sig > SIGNIFICANCE_THRESHOLD} getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
                             </div>
-                            <MagnitudeDistributionSVGChart earthquakes={allEarthquakes} titleSuffix="(Last 30 Days)" isLoading={isLoadingMonthly} getMagnitudeColor={getMagnitudeColor}/>
-                            <MagnitudeDepthScatterSVGChart earthquakes={allEarthquakes} titleSuffix="(Last 30 Days)" isLoading={isLoadingMonthly} getMagnitudeColor={getMagnitudeColor}/>
-                            <RegionalDistributionList earthquakes={allEarthquakes} titleSuffix="(Last 30 Days)" isLoading={isLoadingMonthly} getRegionForEarthquake={getRegionForEarthquake}/>
-                            <PaginatedEarthquakeTable title="All Earthquakes (Last 30 Days)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={15} defaultSortKey="time" initialSortDirection="descending" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/>
+                            <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDistributionSVGChart earthquakes={allEarthquakes} titleSuffix="(Last 30 Days)" isLoading={isLoadingMonthly} getMagnitudeColor={getMagnitudeColor}/></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDepthScatterSVGChart earthquakes={allEarthquakes} titleSuffix="(Last 30 Days)" isLoading={isLoadingMonthly} getMagnitudeColor={getMagnitudeColor}/></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback message="Loading list..." />}><RegionalDistributionList earthquakes={allEarthquakes} titleSuffix="(Last 30 Days)" isLoading={isLoadingMonthly} getRegionForEarthquake={getRegionForEarthquake}/></Suspense>
+                            <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="All Earthquakes (Last 30 Days)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={15} defaultSortKey="time" initialSortDirection="descending" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
                         </div> )}
 
                         {(isLoadingDaily || isLoadingWeekly || (hasAttemptedMonthlyLoad && isLoadingMonthly)) && !showFullScreenLoader && // Use hook's isLoadingDaily/Weekly
