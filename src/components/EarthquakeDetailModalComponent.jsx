@@ -75,6 +75,7 @@ const EarthquakeDetailModalComponent = ({ broaderEarthquakeData, dataSourceTimes
             hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
             isLoadingMonthly={isLoadingMonthly}
         />
+        </>
     );
 };
 
