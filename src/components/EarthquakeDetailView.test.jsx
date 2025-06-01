@@ -24,13 +24,13 @@ vi.mock('./EarthquakeMap', () => ({
 // This allows us to directly control the distance returned for each quake
 // and simplifies testing the filtering logic without complex coordinate calculations.
 // Corrected path and ensure calculateDistance is directly mocked.
-vi.mock('../utils/utils.js', async () => {
-  const actualUtils = await vi.importActual('../utils/utils.js');
-  return {
-    ...actualUtils, // Import and retain other utils like getMagnitudeColor
-    calculateDistance: vi.fn(), // Mock calculateDistance specifically
-  };
-});
+vi.mock('../utils/utils.js', () => ({
+    calculateDistance: vi.fn(),
+    getMagnitudeColor: vi.fn((mag) => '#FFFFFF'), // Provide a simple mock implementation
+    // Add other functions from utils.js if they are directly called by EarthquakeDetailView
+    // or its direct children other than SimplifiedDepthProfile, though for this test,
+    // only what's needed to prevent crashes in children is essential.
+}));
 
 // Import the mocked function after setting up the mock
 import { calculateDistance as calculateDistanceMock } from '../utils/utils.js';
