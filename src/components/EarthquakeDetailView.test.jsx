@@ -3,6 +3,8 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import EarthquakeDetailView from './EarthquakeDetailView'; // Component to test
 import { vi } from 'vitest'; // Using Vitest's mocking utilities
 
+import { axe } from 'jest-axe'; // Import axe
+
 // Define REGIONAL_RADIUS_KM locally for test consistency
 const REGIONAL_RADIUS_KM = 804.672; // 500 miles
 
@@ -454,5 +456,134 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     expect(svgElement).toBeInTheDocument();
     // Corrected Assertion: Expect 0 paths when rake is null/invalid and leads to empty shadedPaths
     expect(svgElement.querySelectorAll('path').length).toBe(0);
+  });
+});
+
+describe('EarthquakeDetailView Accessibility', () => {
+  const mockDetailUrl = 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=testquake-axe&format=geojson';
+  const mockOnClose = vi.fn();
+  const mockDetailData = {
+    id: 'testquake-axe',
+    properties: {
+      title: 'M 7.0 - Axe Test Region',
+      mag: 7.0,
+      place: 'Axe Test Place',
+      time: Date.now(),
+      updated: Date.now(),
+      tsunami: 0,
+      status: 'reviewed',
+      felt: 5,
+      mmi: 3.0,
+      alert: 'green',
+      magType: 'mww',
+      url: 'http://example.com/axe',
+      products: {
+        shakemap: [{ contents: { 'download/intensity.jpg': { url: 'http://example.com/shakemap.jpg' } } }],
+        'moment-tensor': [{ properties: { 'scalar-moment': "1.0e+19", 'nodal-plane-1-strike': "10", 'nodal-plane-1-dip': "30", 'nodal-plane-1-rake': "90" } }],
+        origin: [{ properties: { 'num-stations-used': "100", 'azimuthal-gap': "45", 'minimum-distance': "0.5", 'standard-error': "0.7" } }]
+      }
+    },
+    geometry: { coordinates: [-120, 37, 10] } // lon, lat, depth
+  };
+
+  let fetchSpy;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(global, 'fetch');
+    mockOnClose.mockClear();
+
+    // Mock IntersectionObserver for components like SimplifiedDepthProfile if they use it
+    const MockIntersectionObserver = vi.fn();
+    MockIntersectionObserver.prototype.observe = vi.fn();
+    MockIntersectionObserver.prototype.unobserve = vi.fn();
+    MockIntersectionObserver.prototype.disconnect = vi.fn();
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+
+    // Mock matchMedia
+     window.matchMedia = window.matchMedia || function() {
+      return {
+          matches: false,
+          addListener: function() {},
+          removeListener: function() {}
+      };
+    };
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('should have no axe violations when displaying data', async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => JSON.parse(JSON.stringify(mockDetailData)), // Deep clone
+    });
+
+    const { container } = render(
+      <EarthquakeDetailView
+        detailUrl={mockDetailUrl}
+        onClose={mockOnClose}
+        onDataLoadedForSeo={vi.fn()}
+        broaderEarthquakeData={[]}
+        dataSourceTimespanDays={7}
+        handleLoadMonthlyData={vi.fn()}
+        hasAttemptedMonthlyLoad={false}
+        isLoadingMonthly={false}
+      />
+    );
+
+    // Wait for the content to be loaded and displayed
+    await waitFor(() => {
+      // Check for a more specific element if title is duplicated.
+      // For example, the one with the ID used for aria-labelledby.
+      expect(screen.getByText((content, element) => element.id === 'earthquake-detail-title' && content.startsWith('M 7.0 - Axe Test Region'))).toBeInTheDocument();
+    });
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('should have no axe violations in loading state', async () => {
+    fetchSpy.mockReturnValueOnce(new Promise(() => {})); // Simulate pending promise
+
+    const { container } = render(
+      <EarthquakeDetailView
+        detailUrl={mockDetailUrl}
+        onClose={mockOnClose}
+        onDataLoadedForSeo={vi.fn()}
+        broaderEarthquakeData={[]}
+        dataSourceTimespanDays={7}
+        handleLoadMonthlyData={vi.fn()} // Added missing mock prop
+        hasAttemptedMonthlyLoad={false} // Added missing mock prop
+        isLoadingMonthly={false}       // Added missing mock prop
+      />
+    );
+
+    // Check while loading skeleton is present
+    expect(container.querySelector('.animate-pulse')).not.toBeNull();
+    const results = await axe(container); // axe should be available globally via setupTests.js
+    expect(results).toHaveNoViolations();
+  });
+
+  it('should have no axe violations in error state', async () => {
+    fetchSpy.mockRejectedValueOnce(new Error('Failed to fetch details for axe test'));
+
+    const { container } = render(
+      <EarthquakeDetailView
+        detailUrl={mockDetailUrl}
+        onClose={mockOnClose}
+        onDataLoadedForSeo={vi.fn()} // Added missing mock prop
+        broaderEarthquakeData={[]}
+        dataSourceTimespanDays={7}
+        handleLoadMonthlyData={vi.fn()} // Added missing mock prop
+        hasAttemptedMonthlyLoad={false} // Added missing mock prop
+        isLoadingMonthly={false}      // Added missing mock prop
+      />
+    );
+
+    await screen.findByText(/Error Loading Details/i);
+    const results = await axe(container); // axe should be available globally via setupTests.js
+    expect(results).toHaveNoViolations();
   });
 });

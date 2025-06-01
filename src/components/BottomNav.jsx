@@ -27,12 +27,12 @@ const BottomNav = () => { // Removed activeMobileView and setActiveMobileView pr
                     className={({ isActive }) =>
                         `flex flex-col items-center justify-center text-xs p-2 rounded-md h-full w-full
                         ${isActive
-                            ? 'text-indigo-400' // Active tab color
+                            ? 'text-indigo-300' // Active tab color - Improved contrast
                             : 'text-slate-400 hover:text-indigo-300' // Inactive tab color
                         }`
                     }
                 >
-                    <div className="text-xl mb-0.5">{tab.icon}</div>
+                    <div className="text-xl mb-0.5" aria-hidden="true">{tab.icon}</div>
                     <span>{tab.name}</span>
                 </NavLink>
             ))}

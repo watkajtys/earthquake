@@ -477,8 +477,14 @@ function App() {
 
     // headerTimeDisplay now uses isInitialAppLoad (value) from the hook
     const headerTimeDisplay = useMemo(() => {
-        if (isInitialAppLoad && (isLoadingDaily || isLoadingWeekly) && !dataFetchTime) return "Connecting to Seismic Network...";
-        if (!dataFetchTime) return "Awaiting Initial Data...";
+        const connectingMsg = "Connecting to Seismic Network...";
+        const awaitingMsg = "Awaiting Initial Data...";
+        if (isInitialAppLoad && (isLoadingDaily || isLoadingWeekly) && !dataFetchTime) {
+            return <span role="status" aria-live="polite">{connectingMsg}</span>;
+        }
+        if (!dataFetchTime) {
+            return <span role="status" aria-live="polite">{awaitingMsg}</span>;
+        }
         const timeSinceFetch = appCurrentTime - dataFetchTime;
         return `Live Data (7-day): ${timeSinceFetch < 30000 ? 'just now' : formatTimeAgo(timeSinceFetch)} | USGS Feed Updated: ${lastUpdated || 'N/A'}`;
     }, [isLoadingDaily, isLoadingWeekly, dataFetchTime, appCurrentTime, lastUpdated, isInitialAppLoad, formatTimeAgo]);
@@ -724,7 +730,19 @@ function App() {
 
     // --- Full Screen Loader ---
     if (showFullScreenLoader) { // Uses isLoadingInitialData from hook
-        return ( <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white antialiased"> <svg className="animate-spin h-12 w-12 text-indigo-400 mb-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"> <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle> <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> </svg> <p className="text-2xl font-light text-indigo-300 mb-3">{currentLoadingMessage}</p> <div className="w-1/3 h-1 bg-indigo-700 rounded-full overflow-hidden mt-2"> <div className="h-full bg-indigo-400 animate-pulse-short" style={{ animationDuration: `${LOADING_MESSAGE_INTERVAL_MS * INITIAL_LOADING_MESSAGES.length / 1000}s`}}></div> </div> <style>{`@keyframes pulseShort{0%{width:0%}100%{width:100%}}.animate-pulse-short{animation:pulseShort linear infinite}`}</style> <p className="text-xs text-slate-500 mt-10">Seismic Data Visualization</p> </div> );
+        return (
+            <div
+                className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white antialiased"
+                role="status"
+                aria-live="polite"
+            >
+                <svg className="animate-spin h-12 w-12 text-indigo-400 mb-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"> <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle> <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> </svg>
+                <p className="text-2xl font-light text-indigo-300 mb-3">{currentLoadingMessage}</p>
+                <div className="w-1/3 h-1 bg-indigo-700 rounded-full overflow-hidden mt-2"> <div className="h-full bg-indigo-400 animate-pulse-short" style={{ animationDuration: `${LOADING_MESSAGE_INTERVAL_MS * INITIAL_LOADING_MESSAGES.length / 1000}s`}}></div> </div>
+                <style>{`@keyframes pulseShort{0%{width:0%}100%{width:100%}}.animate-pulse-short{animation:pulseShort linear infinite}`}</style>
+                <p className="text-xs text-slate-500 mt-10">Seismic Data Visualization</p>
+            </div>
+        );
     }
 
     // --- Main Render ---
@@ -893,11 +911,40 @@ function App() {
                         <button onClick={() => changeSidebarView('learn_more')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
                     </div>
                     <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800" key={activeSidebarView}>
-                        {error && !showFullScreenLoader && (<div className="bg-red-700 bg-opacity-40 border border-red-600 text-red-200 px-3 py-2 rounded-md text-xs" role="alert"><strong className="font-bold">Data Error:</strong> {error} Some data might be unavailable.</div>)}
+                        {error && !showFullScreenLoader && (
+                            <div
+                                className="bg-red-700 bg-opacity-40 border border-red-600 text-red-200 px-3 py-2 rounded-md text-xs"
+                                role="alert"
+                                aria-live="assertive"
+                            >
+                                <strong className="font-bold">Data Error:</strong> {error} Some data might be unavailable.
+                            </div>
+                        )}
                         {activeSidebarView === 'overview_panel' && (
                             <>
-                            {currentAlertConfig && ( <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}> <p className="font-bold text-sm">Active USGS Alert: {currentAlertConfig.text}</p> <p>{currentAlertConfig.description}</p> {activeAlertTriggeringQuakes.length > 0 && (<Suspense fallback={<ChartLoadingFallback message="Loading alert quakes table..." />}><PaginatedEarthquakeTable title={`Alert Triggering Quakes (${currentAlertConfig.text})`} earthquakes={activeAlertTriggeringQuakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={3} periodName="alerting" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} SkeletonText={SkeletonText} SkeletonTableRow={SkeletonTableRow} /></Suspense> )} </div> )}
-                            {hasRecentTsunamiWarning && !currentAlertConfig && (<div className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs" role="alert"><p className="font-bold">Tsunami Info</p><p>Recent quakes indicate potential tsunami activity. Check official channels.</p></div>)}
+                            {currentAlertConfig && (
+                                <div
+                                    className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}
+                                    role="region"
+                                    aria-live="polite"
+                                    aria-labelledby="usgs-alert-title"
+                                >
+                                    <p id="usgs-alert-title" className="font-bold text-sm">Active USGS Alert: {currentAlertConfig.text}</p>
+                                    <p>{currentAlertConfig.description}</p>
+                                    {activeAlertTriggeringQuakes.length > 0 && (<Suspense fallback={<ChartLoadingFallback message="Loading alert quakes table..." />}><PaginatedEarthquakeTable title={`Alert Triggering Quakes (${currentAlertConfig.text})`} earthquakes={activeAlertTriggeringQuakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={3} periodName="alerting" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} SkeletonText={SkeletonText} SkeletonTableRow={SkeletonTableRow} /></Suspense> )}
+                                </div>
+                            )}
+                            {hasRecentTsunamiWarning && !currentAlertConfig && (
+                                <div
+                                    className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs"
+                                    role="region"
+                                    aria-live="polite"
+                                    aria-labelledby="tsunami-warning-title"
+                                >
+                                    <p id="tsunami-warning-title" className="font-bold">Tsunami Info</p>
+                                    <p>Recent quakes indicate potential tsunami activity. Check official channels.</p>
+                                </div>
+                            )}
                             <TimeSinceLastMajorQuakeBanner
                                 lastMajorQuake={lastMajorQuake}
                                 previousMajorQuake={previousMajorQuake}
@@ -1048,9 +1095,9 @@ function App() {
                         {hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length === 0 && (activeSidebarView === 'details_14day' || activeSidebarView === 'details_30day') &&( <p className="text-slate-400 text-center py-4 text-sm">No 14/30 day earthquake data found or loaded.</p> )}
                         {!initialDataLoaded && !isLoadingDaily && !isLoadingWeekly && (activeSidebarView === 'details_1hr' || activeSidebarView === 'details_24hr' || activeSidebarView === 'details_7day' ) && ( <div className="text-center py-10"><p className="text-sm text-slate-500">No data available for this period.</p></div> )}
                     </div> {/* End of desktop sidebar scrollable content */}
-                    <div className="p-1.5 text-center border-t border-slate-700 mt-auto">
+                    <footer className="p-1.5 text-center border-t border-slate-700 mt-auto">
                         <p className="text-[10px] text-slate-500">&copy; {new Date().getFullYear()} Built By Vibes | Data: USGS</p>
-                    </div>
+                    </footer>
                 </aside>
             </div> {/* End of main flex container (main + aside) */}
 

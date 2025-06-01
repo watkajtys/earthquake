@@ -82,7 +82,7 @@ const OverviewPage = ({
                         <p className="text-sm text-slate-300 truncate" title={lastMajorQuake.properties.place}>
                             {lastMajorQuake.properties.place || "Location details pending..."}
                         </p>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-300"> {/* Changed from text-slate-400 */}
                            {formatDate(lastMajorQuake.properties.time)}
                             {lastMajorQuake.geometry?.coordinates?.[2] !== undefined && `, Depth: ${lastMajorQuake.geometry.coordinates[2].toFixed(1)} km`}
                         </p>
@@ -103,20 +103,25 @@ const OverviewPage = ({
                             {latestFeelableQuakesSnippet.map(quake => (
                                 <li
                                     key={`snippet-${quake.id}`}
-                                    className="text-xs border-b border-slate-600 pb-1 last:border-b-0 last:pb-0 p-2 rounded hover:bg-slate-600 cursor-pointer transition-colors"
-                                    onClick={() => handleQuakeClick(quake)}
+                                    className="text-xs border-b border-slate-600 last:border-b-0 rounded"
                                 >
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-semibold" style={{ color: getMagnitudeColor(quake.properties.mag) }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuakeClick(quake)}
+                                        className="w-full text-left p-2 hover:bg-slate-600 focus:bg-slate-500 transition-colors rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                    >
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-semibold" style={{ color: getMagnitudeColor(quake.properties.mag) }}>
                                             M {quake.properties.mag?.toFixed(1)}
                                         </span>
-                                        <span className="text-slate-400">
-                                            {formatTimeAgo(Date.now() - quake.properties.time)}
-                                        </span>
-                                    </div>
-                                    <p className="text-slate-300 truncate text-[11px]" title={quake.properties.place}>
-                                        {quake.properties.place || "Location details pending..."}
-                                    </p>
+                                        <span className="text-slate-300"> {/* Changed from text-slate-400 */}
+                                                {formatTimeAgo(Date.now() - quake.properties.time)}
+                                            </span>
+                                        </div>
+                                        <p className="text-slate-300 truncate text-[11px]" title={quake.properties.place}>
+                                            {quake.properties.place || "Location details pending..."}
+                                        </p>
+                                    </button>
                                 </li>
                             ))}
                         </ul>
@@ -164,7 +169,7 @@ const OverviewPage = ({
                             ))}
                         </ul>
                     ) : (
-                        <p className="text-xs text-slate-400 text-center py-2">
+                        <p className="text-xs text-slate-300 text-center py-2"> {/* Changed from text-slate-400 */}
                             No significant active clusters detected currently.
                         </p>
                     )}
@@ -174,20 +179,23 @@ const OverviewPage = ({
                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
                     <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
                     {isLoadingDaily && !earthquakesLast24Hours ? (
-                        <p>Loading...</p> // Replace with SkeletonText if available and desired
+                        <p>Loading...</p>
                     ) : (
                         topActiveRegionsOverview && topActiveRegionsOverview.length > 0 ? (
-                            topActiveRegionsOverview.map((region, index) => (
-                                <p key={region.name} className={`text-slate-300 ${index > 0 ? 'mt-0.5' : ''}`}>
-                                    <span className="font-semibold" style={{color: REGIONS.find(r => r.name === region.name)?.color || '#9CA3AF'}}>
-                                        {index + 1}. {region.name}
+                            topActiveRegionsOverview.map((region, index) => {
+                                const regionColor = REGIONS.find(r => r.name === region.name)?.color || '#9CA3AF';
+                                return (
+                                    <p key={region.name} className={`text-slate-300 ${index > 0 ? 'mt-0.5' : ''}`}>
+                                        <span className="font-semibold" style={{color: regionColor}}>
+                                            {index + 1}. {region.name}
                                         </span>
                                         {region.count > 0 ? ` - ${region.count} events` : ''}
                                     </p>
-                            ))
-                    ) : (
-                        <p className="text-slate-400 text-xs">(No significant regional activity in the last 24 hours)</p>
-                    )
+                                );
+                            })
+                        ) : (
+                            <p className="text-slate-300 text-xs">(No significant regional activity in the last 24 hours)</p>
+                        )
                     )}
                 </div>
 
