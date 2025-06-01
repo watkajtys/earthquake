@@ -88,6 +88,21 @@ To run this project locally:
 
 ## Project Structure
 
+The `src/` directory contains the core source code for the application, organized as follows:
+
+-   **`assets/`**: Static assets like images, JSON data files (e.g., tectonic plate boundaries, coastline data), and other resources.
+-   **`components/`**: Reusable React components that make up the user interface. Each component is typically in its own `.jsx` file.
+-   **`constants/`**: Contains constant values used throughout the application, such as API endpoints, thresholds, or configuration settings (e.g., `appConstants.js`).
+-   **`features/`**: Might contain modules or components related to specific application features. (Note: This directory was present in the `ls` output but empty, so its purpose is inferred. If it's unused, it could be omitted or its intended purpose clarified).
+-   **`hooks/`**: Custom React hooks that encapsulate reusable stateful logic (e.g., `useEarthquakeData.js`).
+-   **`pages/`**: Top-level React components that represent different "pages" or views of the application (e.g., `HomePage.jsx`).
+-   **`utils/`**: Utility functions that provide helper functionalities used across different parts of the application (e.g., date formatting, calculations in `utils.js`).
+-   **`App.jsx`**: The root application component.
+-   **`main.jsx`**: The main entry point for the React application.
+-   **`index.css`**: Global styles for the application.
+
+This structure helps in organizing the codebase logically, making it easier to navigate and maintain. JSDoc comments are used throughout these files to provide detailed documentation for components, functions, and hooks.
+
 ## Technical Documentation
 
 JSDoc comments have been added throughout the `.jsx` files in the `src` directory. These comments provide explanations for components, functions, props, and data structures to facilitate understanding and maintenance of the codebase.
@@ -156,26 +171,3 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
     jsdoc src -r -d docs/jsdoc --template node_modules/docdash --readme README.md
     ```
     This will generate the documentation in the `docs/jsdoc/` directory. Open the `index.html` file in that directory to view the documentation.
-
-### Main Components Overview
-
-The `src/` directory contains the core components of the application:
-
--   `main.jsx`: The main entry point for the React application. It initializes the `App` component and sets up routing.
--   `App.jsx`: The root application component. It manages global state, data fetching for earthquake feeds, routing logic, and the overall layout of the application, including the globe view and sidebars. It also defines several key sub-components for displaying statistics and data tables.
--   `InteractiveGlobeView.jsx`: Renders the interactive 3D globe using `react-globe.gl`. It's responsible for plotting earthquake points, coastlines, tectonic plates, and visual rings for significant quakes.
--   `EarthquakeMap.jsx`: Renders a 2D Leaflet map used within the `EarthquakeDetailView` to show a regional view of an earthquake's epicenter, ShakeMap, and tectonic plate boundaries.
--   `EarthquakeDetailView.jsx`: A modal component that displays comprehensive information about a selected earthquake, including its properties, related products (like ShakeMap or PAGER), the `EarthquakeMap`, and explanatory diagrams.
--   `ClusterDetailModal.jsx`: Displays detailed information about a cluster of earthquakes, including a list of individual seismic events within the cluster and a `ClusterMiniMap`.
--   `ClusterDetailModalWrapper.jsx`: A wrapper component that handles the presentation of the `ClusterDetailModal` based on routing parameters.
--   `ClusterMiniMap.jsx`: Renders a small 2D Leaflet map specifically designed to show the geographic spread of an earthquake cluster.
--   `ClusterSummaryItem.jsx`: A UI component used to display a summary of an earthquake cluster, typically in a list format, allowing users to select a cluster for more details.
--   `BottomNav.jsx`: Provides the primary navigation interface for mobile users, allowing access to different sections like the Globe, Overview, Feeds, and Learn.
--   `GlobalLastMajorQuakeTimer.jsx`: Displays a live timer counting up from the last globally significant earthquake, shown prominently on the globe view.
--   `InfoSnippet.jsx`: A reusable UI component that displays toggleable information blurbs. Used in various parts of the application to provide contextual explanations about earthquake science and data.
--   `NotableQuakeFeature.jsx`: Displays a feature card for the most recent significant earthquake or cycles through a list of historical notable quakes.
--   `PreviousNotableQuakeFeature.jsx`: Similar to `NotableQuakeFeature`, but specifically displays the second most recent significant earthquake.
--   `RegionalSeismicityChart.jsx`: A component likely responsible for rendering charts related to regional earthquake activity (e.g., magnitude distribution, frequency over time for a specific region). *(Self-correction: Based on the plan, I will verify the exact functionality of this component and its JSDocs in a later step. This is an inferred description.)*
--   `SeoMetadata.jsx`: A utility component that dynamically updates HTML meta tags (title, description, Open Graph, Twitter cards) for SEO purposes based on the current view or content.
--   `SimplifiedDepthProfile.jsx`: A component likely used to visualize a simplified cross-section or profile illustrating the depth of an earthquake. *(Self-correction: Based on the plan, I will verify the exact functionality of this component and its JSDocs in a later step. This is an inferred description.)*
--   `utils.js`: Contains utility functions used throughout the application, such as for calculating distances, formatting dates, and determining colors based on magnitude. (Note: This is a `.js` file, not a `.jsx` component, but crucial for understanding the project structure).

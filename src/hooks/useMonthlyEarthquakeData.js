@@ -1,6 +1,33 @@
 import { useState, useCallback } from 'react';
 import { USGS_API_URL_MONTH, MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 
+/**
+ * Custom hook for managing the fetching, processing, and state of monthly earthquake data from USGS.
+ * It also coordinates with the primary major quake state (from `useEarthquakeData`) to ensure the
+ * globally most recent major quakes are correctly identified when monthly data provides newer or more comprehensive information.
+ *
+ * @param {function} fetchDataCb - Callback function responsible for fetching data from a given URL.
+ *   This function should accept a URL string and return a Promise that resolves with the fetched data
+ *   or an object containing an error message.
+ * @param {object | null} currentLastMajorQuake - The current `lastMajorQuake` object from the `useEarthquakeData` hook.
+ *   Used for comparison and consolidation with major quakes found in the monthly data.
+ * @param {function} setLastMajorQuake - Setter function (from `useEarthquakeData` via `HomePage`) to update the application's
+ *   primary `lastMajorQuake` state if a more recent or relevant major quake is found in the monthly data.
+ * @param {function} setPreviousMajorQuake - Setter function (from `useEarthquakeData` via `HomePage`) to update the
+ *   application's primary `previousMajorQuake` state.
+ * @param {function} setTimeBetweenPreviousMajorQuakes - Setter function (from `useEarthquakeData` via `HomePage`)
+ *   to update the time difference between the primary major quakes.
+ * @returns {object} An object containing states and functions related to monthly earthquake data:
+ * @property {boolean} isLoadingMonthly - True if the monthly earthquake data is currently being fetched and processed.
+ * @property {boolean} hasAttemptedMonthlyLoad - True if the `loadMonthlyData` function has been called at least once.
+ * @property {string | null} monthlyError - Error message string if the monthly data fetch operation fails, otherwise null.
+ * @property {Array<object>} allEarthquakes - Array of all earthquake objects fetched from the monthly feed.
+ * @property {Array<object>} earthquakesLast14Days - Array of earthquake objects from the monthly feed that occurred in the last 14 days.
+ * @property {Array<object>} earthquakesLast30Days - Array of earthquake objects from the monthly feed that occurred in the last 30 days.
+ * @property {Array<object>} prev7DayData - Array of earthquake objects from the monthly feed that occurred between 7 and 14 days ago.
+ * @property {Array<object>} prev14DayData - Array of earthquake objects from the monthly feed that occurred between 14 and 28 days ago.
+ * @property {function} loadMonthlyData - An asynchronous function that, when called, triggers the fetch and processing of the monthly earthquake data.
+ */
 const useMonthlyEarthquakeData = (
     fetchDataCb,
     currentLastMajorQuake, // from useEarthquakeData
