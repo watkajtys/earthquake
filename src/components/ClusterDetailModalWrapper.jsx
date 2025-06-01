@@ -19,9 +19,10 @@ function ClusterDetailModalWrapper({ displayedClusterId, overviewClusters, forma
     // Immediately check if overviewClusters is a valid array
     if (!Array.isArray(overviewClusters)) {
         console.error("ClusterDetailModalWrapper: overviewClusters prop is not an array. Received:", overviewClusters);
-        const { clusterId: originalUrlClusterIdForError } = useParams(); // For SEO in error case
+        const { clusterId: originalUrlClusterIdParam } = useParams(); // For SEO in error case
+        const originalUrlClusterId = originalUrlClusterIdParam || 'id_not_in_url';
         const navigate = useNavigate(); // For the button
-        const canonicalUrlOnError = `https://earthquakeslive.com/cluster/${originalUrlClusterIdForError || 'data_error'}`;
+        const canonicalUrlOnError = `https://earthquakeslive.com/cluster/${originalUrlClusterId}`; // Use defaulted ID
 
         return (
             <>
@@ -48,7 +49,8 @@ function ClusterDetailModalWrapper({ displayedClusterId, overviewClusters, forma
         );
     }
 
-    const { clusterId: originalUrlClusterId } = useParams(); // For SEO and canonical URL
+    const { clusterId: originalUrlClusterIdParam } = useParams(); // For SEO and canonical URL
+    const originalUrlClusterId = originalUrlClusterIdParam || 'id_not_in_url'; // Defaulting
     const navigate = useNavigate();
 
     // Find the cluster data from overviewClusters using the displayedClusterId prop
@@ -59,12 +61,12 @@ function ClusterDetailModalWrapper({ displayedClusterId, overviewClusters, forma
     };
 
     // Canonical URL should always reflect the URL the user initially visited or shared
-    const canonicalUrl = `https://earthquakeslive.com/cluster/${originalUrlClusterId || displayedClusterId || 'unknown'}`;
+    const canonicalUrl = `https://earthquakeslive.com/cluster/${originalUrlClusterId}`; // Use defaulted ID, fallback to displayedClusterId or 'unknown' can be considered if original is truly not primary
 
     if (!cluster) {
         // Even if cluster is not found, set a basic SEO for the error page
         // Use originalUrlClusterId for consistency in the "Not Found" scenario's canonical URL
-        const notFoundCanonicalUrl = `https://earthquakeslive.com/cluster/${originalUrlClusterId || 'not_found'}`;
+        const notFoundCanonicalUrl = `https://earthquakeslive.com/cluster/${originalUrlClusterId}`; // Use defaulted ID
         return (
             <>
                 <SeoMetadata
@@ -95,7 +97,7 @@ function ClusterDetailModalWrapper({ displayedClusterId, overviewClusters, forma
     const keywords = `earthquake cluster, ${cluster.locationName}, seismic activity, ${cluster.quakeCount} earthquakes, M ${cluster.maxMagnitude?.toFixed(1)}, earthquake swarm`;
 
     // Construct pageUrl for SeoMetadata using originalUrlClusterId if available, falling back to displayedClusterId
-    const pageUrlForMeta = `https://earthquakeslive.com/cluster/${originalUrlClusterId || displayedClusterId}`;
+    const pageUrlForMeta = `https://earthquakeslive.com/cluster/${originalUrlClusterId}`; // Use defaulted ID
 
     return (
         <>
@@ -104,7 +106,7 @@ function ClusterDetailModalWrapper({ displayedClusterId, overviewClusters, forma
                 description={pageDescription}
                 keywords={keywords}
                 pageUrl={pageUrlForMeta}
-                canonicalUrl={canonicalUrl} // canonicalUrl already uses originalUrlClusterId or fallback
+                canonicalUrl={canonicalUrl}
                 locale="en_US"
                 type="website" // Or "Event" if more appropriate, but website is safe
             />
