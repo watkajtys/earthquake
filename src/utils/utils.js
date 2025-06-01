@@ -39,3 +39,56 @@ export const getMagnitudeColor = (magnitude) => {
 };
 
 // Add other utility functions here as the app grows
+
+/**
+ * Formats a Unix timestamp into a human-readable "time ago" string.
+ * @param {number} timestamp - The Unix timestamp in milliseconds.
+ * @returns {string} A human-readable string representing the time difference.
+ */
+export function formatTimeAgo(timestamp) {
+  if (timestamp === null || timestamp === undefined || typeof timestamp !== 'number' || isNaN(timestamp)) {
+    return "Invalid date";
+  }
+
+  const now = new Date().getTime();
+  const seconds = Math.round((now - timestamp) / 1000);
+
+  if (seconds < 5) {
+    return "just now";
+  }
+
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.round(seconds / 3600);
+  const days = Math.round(seconds / 86400);
+  const weeks = Math.round(seconds / 604800);
+  const months = Math.round(seconds / 2629800); // Average month length
+  const years = Math.round(seconds / 31557600); // Average year length (considering leap years)
+
+  if (seconds < 60) {
+    return `${seconds} seconds ago`;
+  } else if (minutes === 1) {
+    return "1 minute ago";
+  } else if (minutes < 60) {
+    return `${minutes} minutes ago`;
+  } else if (hours === 1) {
+    return "1 hour ago";
+  } else if (hours < 24) {
+    return `${hours} hours ago`;
+  } else if (days === 1) {
+    return "1 day ago";
+  } else if (days < 7) {
+    return `${days} days ago`;
+  } else if (weeks === 1) {
+    return "1 week ago";
+  } else if (weeks < 4.348) { // Average weeks in a month
+    return `${weeks} weeks ago`;
+  } else if (months === 1) {
+    return "1 month ago";
+  } else if (months < 12) {
+    return `${months} months ago`;
+  } else if (years === 1) {
+    return "1 year ago";
+  } else {
+    return `${years} years ago`;
+  }
+}
