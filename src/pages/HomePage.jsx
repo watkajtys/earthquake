@@ -787,6 +787,7 @@ function App() {
                                             isLoadingPreviousQuake={isLoadingInitialData} // from useEarthquakeData
                                             onNotableQuakeSelect={handleNotableQuakeSelect}
                                             getMagnitudeColorFunc={getMagnitudeColor}
+                                            className="hidden md:block"
                                         />
                                         <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-[220px] backdrop-blur-sm border border-slate-700">
                                         <h3 className="text-[10px] sm:text-xs font-semibold mb-0.5 sm:mb-1 text-indigo-300 uppercase">Live Statistics</h3>
