@@ -1,6 +1,8 @@
 // src/InteractiveGlobeView.jsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
+import { EARTH_LAYERS_DATA, EARTH_AVG_RADIUS_KM } from '../../constants/appConstants.js';
+import { SphereGeometry, MeshBasicMaterial, Mesh, Group, Color, BufferGeometry, LineBasicMaterial, Line, Vector3 } from 'three';
 
 /**
  * Takes a color string (hex or rgba) and returns a new rgba string with reduced opacity.
@@ -96,7 +98,9 @@ const InteractiveGlobeView = ({
                                   defaultFocusAltitude = 2.5,
                                   allowUserDragRotation = true,
                                   enableAutoRotation = true,
-                                  globeAutoRotateSpeed = 0.1
+                                  globeAutoRotateSpeed = 0.1,
+                                  showEarthLayers = false, // New prop for Earth layers
+                                  onEarthLayerClick = () => {} // New prop for layer click callback
                               }) => {
     const globeRef = useRef();
     const containerRef = useRef(null);
@@ -109,6 +113,180 @@ const InteractiveGlobeView = ({
     const mouseMoveTimeoutRef = useRef(null);
     const windowLoadedRef = useRef(false); // To track if window.load has fired
     const [ringsData, setRingsData] = useState([]);
+    const [earthLayersObject, setEarthLayersObject] = useState(null); // State for Earth layers Three.js group
+    const [depthVisualsObject, setDepthVisualsObject] = useState(null); // State for depth visualization objects
+    const [combinedCustomObjects, setCombinedCustomObjects] = useState(null); // State for combined 3D objects
+
+    // Effect to create/update Earth layer meshes
+    useEffect(() => {
+        if (!globeRef.current || !globeRef.current.scene) {
+            // Globe not ready yet, or already unmounted
+            if (earthLayersObject) setEarthLayersObject(null); // Clear if exists
+            return;
+        }
+
+        const scene = globeRef.current.scene();
+        const globeInternalRadius = 100; // Standard react-globe.gl radius
+
+        // Attempt to find the main globe mesh to adjust its opacity
+        const globeMesh = scene.children.find(
+            (child) => child.type === 'Mesh' && child.geometry && child.geometry.type === 'SphereGeometry' && child.material && child.material.type === 'MeshPhongMaterial'
+        );
+
+        if (showEarthLayers) {
+            const layersGroup = new Group();
+            layersGroup.name = "EarthLayersCustomGroup";
+
+            // Iterate from Mantle down to Inner Core (visualized from outside in)
+            const layersToRender = [...EARTH_LAYERS_DATA].reverse().filter(l => l.name !== 'Crust');
+
+            layersToRender.forEach(layerData => {
+                const layerOuterRadius = (EARTH_AVG_RADIUS_KM - layerData.minDepthKm) / EARTH_AVG_RADIUS_KM * globeInternalRadius;
+                if (layerOuterRadius <= 0) return;
+
+                const geometry = new SphereGeometry(layerOuterRadius, 64, 64);
+                const threeColor = new Color();
+                let opacity = 0.7; // Default opacity for layers
+
+                try {
+                    const colorStr = layerData.color || 'rgba(128,128,128,0.5)';
+                    if (colorStr.startsWith('rgba')) {
+                        const parts = colorStr.substring(5, colorStr.length - 1).split(',');
+                        if (parts.length === 4) opacity = parseFloat(parts[3].trim());
+                    }
+                    threeColor.setStyle(colorStr);
+                } catch (e) {
+                    console.error("Error parsing color for layer:", layerData.name, e);
+                    threeColor.setRGB(0.5, 0.5, 0.5); // Fallback gray
+                }
+
+                const material = new MeshBasicMaterial({
+                    color: threeColor,
+                    transparent: true,
+                    opacity: opacity,
+                    // depthWrite: false, // Consider if z-fighting or ordering issues appear with multiple transparent layers
+                    // side: THREE.FrontSide, // Default
+                });
+
+                const mesh = new Mesh(geometry, material);
+                mesh.name = layerData.name;
+                layersGroup.add(mesh);
+            });
+            setEarthLayersObject(layersGroup);
+
+            // Make main globe mesh (crust) semi-transparent
+            if (globeMesh) {
+                globeMesh.material.transparent = true;
+                globeMesh.material.opacity = 0.3; // Semi-transparent crust
+                globeMesh.material.needsUpdate = true;
+            } else {
+                console.warn("InteractiveGlobeView: Could not find main globe mesh to adjust opacity for Earth layers.");
+            }
+
+        } else {
+            setEarthLayersObject(null); // Remove custom layers
+            // Restore main globe mesh opacity
+            if (globeMesh) {
+                // Assuming original state is opaque. If it could be transparent for other reasons, this needs more complex state management.
+                globeMesh.material.transparent = false; // Or manage original transparency state
+                globeMesh.material.opacity = 1.0;
+                globeMesh.material.needsUpdate = true;
+            }
+        }
+    }, [showEarthLayers, globeRef, globeDimensions, earthLayersObject]); // Added earthLayersObject to dependencies for the cleanup part
+
+    // Effect to create/update depth visualization objects
+    useEffect(() => {
+        if (!globeRef.current || !globeRef.current.scene) {
+            if (depthVisualsObject) setDepthVisualsObject(null);
+            return;
+        }
+
+        if (showEarthLayers && latestMajorQuakeForRing && latestMajorQuakeForRing.geometry &&
+            latestMajorQuakeForRing.geometry.coordinates && latestMajorQuakeForRing.geometry.coordinates.length >= 3) {
+
+            const globeInternalRadius = 100;
+            const lat = latestMajorQuakeForRing.geometry.coordinates[1];
+            const lng = latestMajorQuakeForRing.geometry.coordinates[0];
+            let quakeDepthKm = latestMajorQuakeForRing.geometry.coordinates[2];
+
+            // Ensure depth is positive
+            quakeDepthKm = Math.abs(quakeDepthKm);
+
+            if (typeof lat !== 'number' || typeof lng !== 'number' || typeof quakeDepthKm !== 'number' ||
+                isNaN(lat) || isNaN(lng) || isNaN(quakeDepthKm)) {
+                if (depthVisualsObject) setDepthVisualsObject(null); // Clear if invalid data
+                return;
+            }
+
+            const depthVisualsGroup = new Group();
+            depthVisualsGroup.name = "DepthVisualsGroup";
+
+            // Calculate hypocenter position (Y-up for Three.js)
+            const latRad = lat * Math.PI / 180;
+            const lonRad = lng * Math.PI / 180;
+            const radiusAtDepth = Math.max(0, globeInternalRadius - (quakeDepthKm / EARTH_AVG_RADIUS_KM * globeInternalRadius));
+
+            const x = radiusAtDepth * Math.cos(latRad) * Math.sin(lonRad);
+            const y = radiusAtDepth * Math.sin(latRad);
+            const z = radiusAtDepth * Math.cos(latRad) * Math.cos(lonRad);
+
+            // Hypocenter marker
+            const markerGeometry = new SphereGeometry(1, 16, 16); // Small sphere, radius 1 unit
+            const markerMaterial = new MeshBasicMaterial({ color: 0xff00ff, wireframe: false }); // Bright magenta
+            const hypocenterMarker = new Mesh(markerGeometry, markerMaterial);
+            hypocenterMarker.position.set(x, y, z);
+            hypocenterMarker.name = "HypocenterMarker";
+            depthVisualsGroup.add(hypocenterMarker);
+
+            // Surface point for the line
+            const xS = globeInternalRadius * Math.cos(latRad) * Math.sin(lonRad);
+            const yS = globeInternalRadius * Math.sin(latRad);
+            const zS = globeInternalRadius * Math.cos(latRad) * Math.cos(lonRad);
+
+            // Depth line
+            const points = [];
+            points.push(new Vector3(xS, yS, zS)); // Surface point
+            points.push(new Vector3(x, y, z));   // Hypocenter point
+            const lineGeometry = new BufferGeometry().setFromPoints(points);
+            const lineMaterial = new LineBasicMaterial({ color: 0x00ff00 }); // Bright lime green
+            const depthLine = new Line(lineGeometry, lineMaterial);
+            depthLine.name = "DepthLine";
+            depthVisualsGroup.add(depthLine);
+
+            setDepthVisualsObject(depthVisualsGroup);
+
+        } else {
+            setDepthVisualsObject(null);
+        }
+    }, [showEarthLayers, latestMajorQuakeForRing, globeRef, globeDimensions, depthVisualsObject]); // Added depthVisualsObject for its own cleanup
+
+    // Effect to combine custom 3D objects
+    useEffect(() => {
+        const combinedGroup = new Group();
+        combinedGroup.name = "CombinedCustomRoot";
+        if (earthLayersObject) {
+            combinedGroup.add(earthLayersObject);
+        }
+        if (depthVisualsObject) {
+            combinedGroup.add(depthVisualsObject);
+        }
+        // Only update if there's actually something to show or if it was previously populated
+        if (combinedGroup.children.length > 0 || combinedCustomObjects?.children.length > 0) {
+             setCombinedCustomObjects(combinedGroup);
+        }
+    }, [earthLayersObject, depthVisualsObject, combinedCustomObjects?.children.length]); // Added combinedCustomObjects dependency per potential lint warning
+
+
+    const handleCustomObjectClick = useCallback((obj) => { // Removed unused 'event' parameter
+        const clickedObj = obj.object || obj; // Accommodate if obj is intersection or direct mesh
+        if (clickedObj && clickedObj.name && EARTH_LAYERS_DATA.some(layer => layer.name === clickedObj.name)) {
+            const layerData = EARTH_LAYERS_DATA.find(layer => layer.name === clickedObj.name);
+            if (layerData && onEarthLayerClick) {
+                onEarthLayerClick(layerData);
+            }
+        }
+    }, [onEarthLayerClick]); // EARTH_LAYERS_DATA is from module scope
 
     const debounce = (func, delay) => {
         let timeout;
@@ -546,14 +724,13 @@ const InteractiveGlobeView = ({
              setRingsData(newRings);
         }
 
-    }, [latestMajorQuakeForRing, previousMajorQuake, ringsData.length]); // Added previousMajorQuake and ringsData.length to dependency array
+    }, [latestMajorQuakeForRing, previousMajorQuake, ringsData.length, getMagnitudeColorFunc]); // Added previousMajorQuake, ringsData.length and getMagnitudeColorFunc
 
 
 
     if (globeDimensions.width === null || globeDimensions.height === null) {
         return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe...</div>;
     }
-
 
     return (
         <div
@@ -572,8 +749,12 @@ const InteractiveGlobeView = ({
                     bumpImageUrl={null}
                     backgroundImageUrl={null}
                     backgroundColor="rgba(0,0,0,0)"
-                    atmosphereColor={atmosphereColor}
+                    atmosphereColor={showEarthLayers ? "rgba(100,100,255,0.05)" : atmosphereColor} // Use original prop for default
                     atmosphereAltitude={0.15}
+
+                    customThreeObject={combinedCustomObjects}
+                    customThreeObjectUpdateType="replace"
+                    onCustomThreeObjectClick={handleCustomObjectClick}
 
                     pointsData={points}
                     pointLat="lat" pointLng="lng" pointAltitude="altitude"

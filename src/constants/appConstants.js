@@ -95,3 +95,46 @@ export const REGIONS = [
     { name: "New Zealand & S. Pacific", latMin: -55, latMax: -10, lonMin: 160, lonMax: -150, color: "#C4B5FD" },
     { name: "Other / Oceanic", latMin: -90, latMax: 90, lonMin: -180, lonMax: 180, color: "#9CA3AF" }
 ];
+
+export const EARTH_LAYERS_DATA = [
+  {
+    name: "Inner Core",
+    description: "The Earth's innermost part, primarily a solid ball of iron-nickel alloy. Temperature is extremely high, similar to the Sun's surface.",
+    // Approx. radius: 1221 km. For visualization, this will be the smallest sphere.
+    // Max depth: 6371 km from surface.
+    minDepthKm: 5150,
+    maxDepthKm: 6371,
+    color: "rgba(255, 255, 150, 0.8)", // Light Yellow
+    textureUrl: null // Placeholder for potential future texture
+  },
+  {
+    name: "Outer Core",
+    description: "A fluid layer composed of iron and nickel that lies above Earth's solid inner core and below its mantle. Convection in the outer core is thought to generate Earth's magnetic field.",
+    // Approx. thickness: 2259 km. Extends from inner core radius to 3480 km from center.
+    minDepthKm: 2890,
+    maxDepthKm: 5150,
+    color: "rgba(255, 165, 0, 0.7)", // Orange
+    textureUrl: null
+  },
+  {
+    name: "Mantle",
+    description: "The largest layer of the Earth, making up about 84% of Earth's volume. It's predominantly solid but behaves as a very viscous fluid on geological timescales. Divided into upper and lower mantle.",
+    // Approx. thickness: 2855 km. Extends from outer core to crust.
+    minDepthKm: 35, // Average crust thickness
+    maxDepthKm: 2890,
+    color: "rgba(255, 69, 0, 0.6)", // Red-Orange
+    textureUrl: null
+  },
+  {
+    name: "Crust",
+    description: "The Earth's outermost solid shell, the thinnest layer. It's where we live and where earthquakes occur. Varies in thickness (oceanic vs. continental).",
+    // Approx. thickness: 5-70 km. For visualization, this will be the thinnest outer layer.
+    minDepthKm: 0,
+    maxDepthKm: 35, // Average for visualization
+    color: "rgba(139, 69, 19, 0.5)", // Brown (SaddleBrown)
+    textureUrl: null
+  }
+];
+
+// Also, it would be useful to have the Earth's average radius
+export const EARTH_AVG_RADIUS_KM = 6371;

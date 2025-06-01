@@ -261,6 +261,8 @@ function App() {
     const [globeFocusLng, setGlobeFocusLng] = useState(0); // UI state for globe
     const [focusedNotableQuake, setFocusedNotableQuake] = useState(null); // UI state for map interaction
     const [activeClusters, setActiveClusters] = useState([]); // Derived from earthquake data
+    const [showEarthLayers, setShowEarthLayers] = useState(false); // Added for Earth layers toggle
+    const [selectedLayerInfo, setSelectedLayerInfo] = useState(null); // Added for Earth layer info display
 
     // setActiveSidebarView is now the main function to change view and URL param
     const changeSidebarView = (view) => {
@@ -452,6 +454,12 @@ function App() {
         //   setGlobeFocusLng(0);  // Default longitude
         // }
     }, [lastMajorQuake]);
+
+    const toggleEarthLayers = () => setShowEarthLayers(prev => !prev); // Added for Earth layers toggle
+
+    const handleEarthLayerSelect = useCallback((layerData) => { // Added for Earth layer click
+        setSelectedLayerInfo(layerData);
+    }, []);
 
     // --- UI Calculations & Memos ---
     // showFullScreenLoader now uses isLoadingInitialData from the hook
@@ -774,6 +782,8 @@ function App() {
                                         latestMajorQuakeForRing={lastMajorQuake} // from useEarthquakeData
                                         previousMajorQuake={previousMajorQuake} // from useEarthquakeData
                                         activeClusters={activeClusters}
+                                        showEarthLayers={showEarthLayers} // Prop added for Earth layers
+                                        onEarthLayerClick={handleEarthLayerSelect} // Prop added for Earth layer click
                                     />
                                     <div className="absolute top-2 left-2 z-10 space-y-2">
                                         <NotableQuakeFeature
@@ -992,6 +1002,15 @@ function App() {
                                     Most earthquakes occur along the edges of tectonic plates... {/* Truncated for brevity */}
                                 </p>
                             </div>
+                            <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
+                              <h3 className="text-md font-semibold mb-2 text-indigo-400">Globe Display Options</h3>
+                              <button
+                                onClick={toggleEarthLayers}
+                                className="w-full px-3 py-2 text-sm font-medium rounded-md text-white bg-sky-600 hover:bg-sky-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-sky-500 transition-colors"
+                              >
+                                {showEarthLayers ? "Hide Earth's Layers" : "Show Earth's Layers"}
+                              </button>
+                            </div>
                         </> )}
                         {activeSidebarView === 'learn_more' && ( <div className="p-2 bg-slate-700 rounded-md"> <h3 className="text-md font-semibold text-indigo-400 mb-2">Learn About Earthquakes</h3> <InfoSnippet topic="magnitude" /> <InfoSnippet topic="depth" /> <InfoSnippet topic="intensity" /> <InfoSnippet topic="alerts" /> <InfoSnippet topic="strike"/> <InfoSnippet topic="dip"/> <InfoSnippet topic="rake"/> <InfoSnippet topic="stressAxes"/> <InfoSnippet topic="beachball"/> <InfoSnippet topic="stationsUsed"/> <InfoSnippet topic="azimuthalGap"/> <InfoSnippet topic="rmsError"/> </div> )}
 
@@ -1055,6 +1074,30 @@ function App() {
 
             <BottomNav />
 
+            {/* Earth Layer Information Modal */}
+            {selectedLayerInfo && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 p-6 rounded-lg shadow-xl max-w-md w-full border border-slate-700">
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-xl font-semibold text-indigo-400">{selectedLayerInfo.name}</h3>
+                            <button
+                                onClick={() => setSelectedLayerInfo(null)}
+                                className="text-slate-400 hover:text-slate-200 text-2xl"
+                                aria-label="Close layer details"
+                            >
+                                &times;
+                            </button>
+                        </div>
+                        <p className="text-sm text-slate-300 whitespace-pre-wrap">{selectedLayerInfo.description}</p>
+                        <button
+                            onClick={() => setSelectedLayerInfo(null)}
+                            className="mt-4 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-md text-sm transition-colors"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
             {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
         </div>
     );
