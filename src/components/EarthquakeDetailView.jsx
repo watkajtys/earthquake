@@ -573,6 +573,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                                     title={properties.title}
                                     shakeMapUrl={shakemapIntensityImageUrl}
                                     nearbyQuakes={regionalQuakes}
+                                    mainQuakeDetailUrl={detailUrl}
                                 />
                             </div>
                         </div>
