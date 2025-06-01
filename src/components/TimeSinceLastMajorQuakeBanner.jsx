@@ -73,9 +73,25 @@ const TimeSinceLastMajorQuakeBanner = React.memo(({
 
     return (<div className="bg-slate-700 p-4 rounded-lg border border-slate-600 text-center text-slate-200">
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">IT HAS BEEN:</p>
-        <p className="text-2xl md:text-3xl font-bold text-indigo-400 tracking-tight mb-2 min-h-[36px] md:min-h-[44px] flex items-center justify-center">
+<div
+    className="text-2xl md:text-3xl font-bold text-indigo-400 tracking-tight mb-2 min-h-[36px] md:min-h-[44px] flex items-center justify-center cursor-pointer hover:underline"
+    onClick={() => {
+        if (lastMajorQuake && handleQuakeClick) {
+            handleQuakeClick(lastMajorQuake);
+        }
+    }}
+    role="button" // For accessibility
+    tabIndex={0} // For accessibility
+    onKeyDown={(e) => { // For accessibility (Enter/Space key press)
+        if (e.key === 'Enter' || e.key === ' ') {
+            if (lastMajorQuake && handleQuakeClick) {
+                handleQuakeClick(lastMajorQuake);
+            }
+        }
+    }}
+>
             {lastMajorQuake ? timeAgoFormatted : <SkeletonText width="w-1/2 mx-auto" height="h-10"/>}
-        </p>
+</div>
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Since the last significant (M<span style={{fontWeight: 'bold'}}>{MAJOR_QUAKE_THRESHOLD.toFixed(1)}</span>+) earthquake.</p>
         {lastMajorQuake ? (<p className="text-sm text-slate-300 mt-1 mb-3">M<span style={{ color: magColor, fontWeight: 'bold' }}>{mag || '...'}</span> - {location || 'Details Pending...'}<a href={lastMajorQuake.properties.url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 ml-2 text-xs">(details)</a></p>) : (<SkeletonText width="w-full mx-auto mt-1 mb-3" height="h-5"/>)}
         <hr className="my-3 border-slate-600"/>
