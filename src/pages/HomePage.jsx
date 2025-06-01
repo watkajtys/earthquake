@@ -887,11 +887,12 @@ function App() {
                             />}
                         />
                         <Route path="/cluster/:clusterId" element={
-                            <ClusterDetailModalWrapper
-                                overviewClusters={overviewClusters} // Pass the memoized overviewClusters
+                            <ClusterDetailLoader
+                                isLoadingInitialData={isLoadingInitialData}
+                                overviewClusters={overviewClusters}
                                 formatDate={formatDate}
-                                getMagnitudeColorStyle={getMagnitudeColorStyle} // Pass this if ClusterDetailModalWrapper needs it
-                                onIndividualQuakeSelect={handleQuakeClick} // Pass if selecting individual quake from cluster modal
+                                getMagnitudeColorStyle={getMagnitudeColorStyle}
+                                onIndividualQuakeSelect={handleQuakeClick}
                             />}
                         />
                     </Routes>
@@ -1109,5 +1110,70 @@ function App() {
 }
 
 // Removed definition of EarthquakeDetailModal as it's now imported.
+
+// --- ClusterDetailLoader Component ---
+/**
+ * A component that handles deferred loading for the ClusterDetailModalWrapper.
+ * It shows a loading indicator while initial data is being fetched, and then
+ * renders the ClusterDetailModalWrapper once data is available.
+ */
+const ClusterDetailLoader = ({
+    isLoadingInitialData,
+    overviewClusters,
+    // The rest of the props are captured by ...propsToPass
+    ...propsToPass
+}) => {
+    const { clusterId: sharedClusterIdFromUrl } = useParams();
+
+    if (isLoadingInitialData) {
+        return (
+            <div className="flex items-center justify-center h-full w-full bg-slate-900 bg-opacity-50"> {/* Modal-like backdrop */}
+                <div className="text-center p-8">
+                    <svg className="animate-spin h-8 w-8 text-indigo-300 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-lg font-semibold text-indigo-200">Loading Cluster Details...</p>
+                    <p className="text-xs text-slate-400">Fetching associated earthquake data.</p>
+                </div>
+            </div>
+        );
+    }
+
+    let idForLookup = sharedClusterIdFromUrl;
+
+    if (overviewClusters && overviewClusters.length > 0 && sharedClusterIdFromUrl) {
+        const parts = sharedClusterIdFromUrl.match(/^overview_cluster_(.+)_(\d+)$/);
+        if (parts && parts.length === 3) {
+            const targetStrongestQuakeId = parts[1];
+            // const targetQuakeCount = parseInt(parts[2], 10); // Not strictly used for matching yet
+
+            for (const currentCluster of overviewClusters) {
+                if (currentCluster && currentCluster.id) {
+                    const currentClusterParts = currentCluster.id.match(/^overview_cluster_(.+)_(\d+)$/);
+                    if (currentClusterParts && currentClusterParts.length === 3) {
+                        const actualStrongestQuakeId = currentClusterParts[1];
+                        if (actualStrongestQuakeId === targetStrongestQuakeId) {
+                            idForLookup = currentCluster.id; // Use the ID of the currently formed cluster
+                            break; // Found a match by strongest quake ID
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Pass down all original props using ...propsToPass,
+    // plus the specifically determined overviewClusters and displayedClusterId.
+    // Key is important for React to re-render/remount if the specific cluster ID changes.
+    return (
+        <ClusterDetailModalWrapper
+            {...propsToPass}
+            overviewClusters={overviewClusters}
+            displayedClusterId={idForLookup}
+            key={idForLookup}
+        />
+    );
+};
 
 export default App;
