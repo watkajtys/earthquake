@@ -1,5 +1,6 @@
 import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
+import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Corrected path
@@ -60,10 +61,10 @@ const createEpicenterIcon = (magnitude) => {
 const createNearbyQuakeIcon = (magnitude) => {
   const fillColor = getMagnitudeColor(magnitude);
   return new L.DivIcon({
-    html: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="3" fill="${fillColor}" /></svg>`,
+    html: `<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="5" fill="${fillColor}" /></svg>`,
     className: 'custom-nearby-quake-icon',
-    iconSize: [12, 12],
-    iconAnchor: [6, 6],
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
   });
 };
 
@@ -146,6 +147,10 @@ const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nea
             Magnitude: {quake.properties.mag}
             <br />
             {quake.properties.title}
+            <br />
+            <Link to={`/quake/${encodeURIComponent(quake.properties.detail)}`} className="text-blue-500 hover:underline">
+              View Details
+            </Link>
           </Popup>
         </Marker>
       ))}
