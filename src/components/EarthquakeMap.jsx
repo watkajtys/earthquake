@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Corrected path
-import { getMagnitudeColor } from '../utils/utils.js'; // Corrected path
+import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js'; // Corrected path
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -177,6 +177,8 @@ const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nea
             Magnitude: {quake.properties.mag}
             <br />
             {quake.properties.title}
+            <br />
+            Time: {formatTimeAgo(quake.properties.time)}
             <br />
             <Link to={`/quake/${encodeURIComponent(quake.properties.detail)}`} className="text-blue-500 hover:underline">
               View Details
