@@ -26,7 +26,7 @@ const PaginatedEarthquakeTable = React.memo(({
     periodName, filterPredicate,
     getMagnitudeColorStyle, formatTimeAgo, formatDate
 }) => {
-    const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const tableHeaderBg = "bg-slate-800"; const tableHeaderTextColor = "text-slate-400"; const tableRowHover = "hover:bg-slate-600"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-slate-300 border-slate-500 disabled:opacity-40"; const paginationText = "text-slate-400";
+    const cardBg = "bg-slate-700"; const titleColor = "text-indigo-300"; const tableHeaderBg = "bg-slate-800"; const tableHeaderTextColor = "text-slate-400"; const tableRowHover = "hover:bg-slate-600"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-slate-300 border-slate-500 disabled:opacity-40"; const paginationText = "text-slate-300";
     const [sortConfig, setSortConfig] = useState({key: defaultSortKey, direction: initialSortDirection}); const [currentPage, setCurrentPage] = useState(1);
 
     const processedEarthquakes = useMemo(() => {
@@ -74,6 +74,20 @@ const PaginatedEarthquakeTable = React.memo(({
         setCurrentPage(1);
     };
 
+    const handleSortKeyDown = (event, key) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            requestSort(key);
+            event.preventDefault(); // Prevent scrolling if space is pressed
+        }
+    };
+
+    const handleRowKeyDown = (event, quake) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            onQuakeClick(quake);
+            event.preventDefault(); // Prevent scrolling if space is pressed
+        }
+    };
+
     const getSortIndicator = (key) => (sortConfig.key === key ? (sortConfig.direction === 'ascending' ? ' ▲' : ' ▼') : <span className="text-slate-500"> ◇</span>);
 
     const columns = [
@@ -89,7 +103,12 @@ const PaginatedEarthquakeTable = React.memo(({
                 <h3 className={`text-md font-semibold mb-2 ${titleColor}`}>{title}</h3>
                 <table className="min-w-full divide-y divide-slate-600">
                     <thead className={tableHeaderBg}>
-                    <tr>{columns.map(col => <th key={col.key} className={`px-2 py-1.5 sm:px-3 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider`}><SkeletonText width="w-12" className="bg-slate-600"/></th>)}</tr>
+                    <tr>{columns.map(col => (
+                        <th key={col.key} scope="col" aria-label={col.label} className={`px-2 py-1.5 sm:px-3 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider`}>
+                            <span className="sr-only">{col.label}</span>
+                            <SkeletonText width="w-12" className="bg-slate-600"/>
+                        </th>
+                    ))}</tr>
                     </thead>
                     <tbody className="bg-slate-700 divide-y divide-slate-600">
                     {[...Array(Math.min(itemsPerPage, 3))].map((_, i) => <SkeletonTableRow key={i} cols={columns.length}/>)}
@@ -116,15 +135,31 @@ const PaginatedEarthquakeTable = React.memo(({
                     <thead className={`${tableHeaderBg} sticky top-0 z-10`}>
                     <tr>
                         {columns.map(col => (
-                            <th key={col.key} scope="col" onClick={() => requestSort(col.key)} className={`px-2 py-1.5 sm:px-3 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider cursor-pointer hover:bg-slate-700`}>
-                                {col.label}{getSortIndicator(col.key)}
+                            <th
+                                key={col.key}
+                                scope="col"
+                                onClick={() => requestSort(col.key)}
+                                onKeyDown={(e) => handleSortKeyDown(e, col.key)}
+                                tabIndex="0"
+                                className={`px-2 py-1.5 sm:px-3 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider cursor-pointer hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                                role="columnheader" // Already a th, but explicit for clarity with interaction
+                                aria-sort={sortConfig.key === col.key ? sortConfig.direction : 'none'}
+                            >
+                                {col.label}<span aria-hidden="true">{getSortIndicator(col.key)}</span>
                             </th>
                         ))}
                     </tr>
                     </thead>
                     <tbody className="bg-slate-700 bg-opacity-50 divide-y divide-slate-600">
                     {paginatedEarthquakes.map((quake) => (
-                        <tr key={`pgtbl-${quake.id}`} onClick={() => onQuakeClick(quake)} className={`${getMagnitudeColorStyle(quake.properties.mag)} ${tableRowHover} cursor-pointer transition-colors`}>
+                        <tr
+                            key={`pgtbl-${quake.id}`}
+                            onClick={() => onQuakeClick(quake)}
+                            // onKeyDown removed
+                            // tabIndex removed
+                            // role removed
+                            className={`${getMagnitudeColorStyle(quake.properties.mag)} ${tableRowHover} cursor-pointer transition-colors`} // Removed focus styles here as row itself is not primary focus target
+                        >
                             <td className={columns[0].className}>{quake.properties.mag?.toFixed(1) || "N/A"}</td>
                             <td className={`${columns[1].className} text-slate-200`}>
                                 <a href={quake.properties.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-current hover:text-indigo-300 hover:underline">

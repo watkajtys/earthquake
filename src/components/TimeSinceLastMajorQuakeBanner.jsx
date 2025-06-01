@@ -108,7 +108,7 @@ const TimeSinceLastMajorQuakeBanner = React.memo(({
                                         <p className="text-xs text-slate-400 mt-1">
                                                 (M<span style={{ color: prevMagColor, fontWeight: 'bold' }}>{prevMag || '...'}</span>
                                                 {' - '}{prevLocation || 'Details Pending...'}
-                                            <a href="#" onClick={(e) => { e.preventDefault(); handleQuakeClick(previousMajorQuake); }} className="text-indigo-400 hover:text-indigo-300 ml-2 text-xs">(details)</a>
+                                            <button type="button" onClick={() => handleQuakeClick(previousMajorQuake)} className="text-indigo-400 hover:text-indigo-300 ml-2 text-xs underline focus:outline-none focus:ring-1 focus:ring-indigo-400">(details)</button>
                                             </p>
                                     ) : prevIntervalFmt && <SkeletonText width="w-full mx-auto mt-1" height="h-4" className="bg-slate-600" /> }                </>
                         )}
