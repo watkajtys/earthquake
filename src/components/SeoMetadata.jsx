@@ -17,9 +17,10 @@ import PropTypes from 'prop-types'; // Optional: for prop type validation
  * @param {string} [props.publishedTime] - Publication time for articles (ISO 8601 format), used for `article:published_time`.
  * @param {string} [props.modifiedTime] - Modification time for articles (ISO 8601 format), used for `article:modified_time`.
  * @param {string} [props.keywords] - Comma-separated keywords for the `keywords` meta tag.
+ * @param {object} [props.eventJsonLd] - Optional JSON-LD object for event structured data.
  * @returns {null} This component does not render any DOM elements.
  */
-const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', locale = 'en_US', canonicalUrl, publishedTime, modifiedTime, keywords }) => {
+const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', locale = 'en_US', canonicalUrl, publishedTime, modifiedTime, keywords, eventJsonLd }) => {
   useEffect(() => {
     document.title = title;
 
@@ -109,44 +110,62 @@ const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', 
     }
 
     // Manage JSON-LD Structured Data
-    let jsonLdScript = document.head.querySelector('script[type="application/ld+json"]');
-    if (!jsonLdScript) {
-      jsonLdScript = document.createElement('script');
-      jsonLdScript.setAttribute('type', 'application/ld+json');
-      document.head.appendChild(jsonLdScript);
+
+    // Website JSON-LD
+    let websiteJsonLdScript = document.head.querySelector('script#website-json-ld');
+    if (!websiteJsonLdScript) {
+      websiteJsonLdScript = document.createElement('script');
+      websiteJsonLdScript.setAttribute('type', 'application/ld+json');
+      websiteJsonLdScript.setAttribute('id', 'website-json-ld');
+      document.head.appendChild(websiteJsonLdScript);
     }
-    const structuredData = {
+    const websiteStructuredData = {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
-      name: 'Global Seismic Activity Monitor',
-      url: pageUrl || 'https://earthquakeslive.com', // Use pageUrl if available, otherwise placeholder
-      description: description,
-      // potentialAction: { // Uncomment and adjust if search functionality is available
-      //   '@type': 'SearchAction',
-      //   target: `https://earthquakeslive.com/search?q={search_term_string}`,
-      //   'query-input': 'required name=search_term_string',
-      // },
+       name: 'Global Seismic Activity Monitor', // This can be a static name or dynamically set
+       url: pageUrl || (typeof window !== 'undefined' ? window.location.href : ''),
+       description: description,
+       // potentialAction: { // Uncomment and adjust if search functionality is available
+       //   '@type': 'SearchAction',
+       //   target: `https://earthquakeslive.com/search?q={search_term_string}`,
+       //   'query-input': 'required name=search_term_string',
+       // },
     };
-    jsonLdScript.textContent = JSON.stringify(structuredData, null, 2);
+    websiteJsonLdScript.textContent = JSON.stringify(websiteStructuredData, null, 2);
 
+    // Event JSON-LD
+    const eventScriptId = 'event-json-ld';
+    let eventJsonLdScript = document.head.querySelector(`script#${eventScriptId}`);
+
+    if (eventJsonLd) {
+      if (!eventJsonLdScript) {
+        eventJsonLdScript = document.createElement('script');
+        eventJsonLdScript.setAttribute('type', 'application/ld+json');
+        eventJsonLdScript.setAttribute('id', eventScriptId);
+        document.head.appendChild(eventJsonLdScript);
+      }
+      eventJsonLdScript.textContent = JSON.stringify(eventJsonLd, null, 2);
+    } else {
+      if (eventJsonLdScript) {
+        document.head.removeChild(eventJsonLdScript);
+      }
+    }
 
     // Cleanup function
     return () => {
-      // Optional: remove canonical link if component unmounts and no new one is set
-      // if (canonicalUrl && !document.head.querySelector('link[rel="canonical"]')) {
-      //   const linkToRemove = document.head.querySelector(`link[rel="canonical"][href="${canonicalUrl}"]`);
-      //   if (linkToRemove) document.head.removeChild(linkToRemove);
-      // }
-      // Optional: remove JSON-LD if component unmounts and no new one is set
-      // const scriptToRemove = document.head.querySelector('script[type="application/ld+json"]');
-      // if (scriptToRemove && scriptToRemove.textContent === JSON.stringify(structuredData, null, 2)) {
-      //    document.head.removeChild(scriptToRemove);
-      // }
-      // Note: Meta tags are generally overwritten by the next component or persist if none.
-      // Title is reset by some frameworks on route change, or could be explicitly managed.
+      // Website JSON-LD is generally not removed here as it might be managed globally or persist.
+      // Remove event-specific JSON-LD script if it was added by this instance and eventJsonLd was provided.
+      if (eventJsonLd) {
+        const scriptToRemove = document.head.querySelector(`script#${eventScriptId}`);
+        if (scriptToRemove) {
+          // To be super safe, one could also check if scriptToRemove.textContent matches the eventJsonLd stringified,
+          // but relying on the ID and the fact this effect instance managed it should be sufficient.
+          document.head.removeChild(scriptToRemove);
+        }
+      }
     };
 
-  }, [title, description, imageUrl, pageUrl, type, locale, canonicalUrl, publishedTime, modifiedTime, keywords]);
+  }, [title, description, imageUrl, pageUrl, type, locale, canonicalUrl, publishedTime, modifiedTime, keywords, eventJsonLd]);
 
   return null; // This component does not render anything to the DOM itself
 };
@@ -163,6 +182,7 @@ SeoMetadata.propTypes = {
   publishedTime: PropTypes.string,
   modifiedTime: PropTypes.string,
   keywords: PropTypes.string,
+  eventJsonLd: PropTypes.object,
 };
 
 export default SeoMetadata;

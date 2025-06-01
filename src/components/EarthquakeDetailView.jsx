@@ -265,6 +265,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                             mag: props?.mag,
                             updated: props?.updated,
                             depth: geom?.coordinates?.[2],
+                            latitude: geom?.coordinates?.[1],
+                            longitude: geom?.coordinates?.[0],
                             shakemapIntensityImageUrl: shakemapIntensityImageUrl,
                             // Potentially add other fields if needed by SEO in App.jsx
                         });
