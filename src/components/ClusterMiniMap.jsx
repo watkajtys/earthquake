@@ -6,6 +6,12 @@ import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Corr
 // import { getMagnitudeColor } from './utils';
 
 // Style function for Tectonic Plates
+/**
+ * Determines the style for tectonic plate boundary features on the map.
+ * Color varies based on the boundary type (Convergent, Divergent, Transform).
+ * @param {object} feature - The GeoJSON feature representing a tectonic plate boundary.
+ * @returns {object} Leaflet path style options for the feature.
+ */
 const getTectonicPlateStyle = (feature) => {
   let color = 'rgba(255, 165, 0, 0.8)'; // Default: Orange
   const boundaryType = feature?.properties?.Boundary_Type;

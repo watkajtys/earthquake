@@ -221,6 +221,9 @@ const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`
  * @param {function(object): void} [props.onDataLoadedForSeo] - Optional callback. Receives an object with key data points (title, place, time, mag, depth, etc.) once details are loaded, intended for SEO updates.
  * @param {Array<object>} props.broaderEarthquakeData - Array of earthquake objects (matching USGS GeoJSON feature structure) for nearby/regional events, used by the RegionalSeismicityChart.
  * @param {number} props.dataSourceTimespanDays - The timespan (e.g., 7 or 30 days) of the `broaderEarthquakeData` source, used by RegionalSeismicityChart for context.
+ * @param {function(): void} [props.handleLoadMonthlyData] - Optional callback function to trigger loading of broader monthly data if not already loaded or in progress.
+ * @param {boolean} [props.hasAttemptedMonthlyLoad] - Optional boolean indicating if an attempt to load monthly data has already been made.
+ * @param {boolean} [props.isLoadingMonthly] - Optional boolean indicating if monthly data is currently being loaded.
  * @returns {JSX.Element} The rendered EarthquakeDetailView component.
  */
 function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) { // Add dataSourceTimespanDays

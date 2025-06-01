@@ -6,6 +6,15 @@ import { calculateDistance, getMagnitudeColor } from '../utils/utils.js';
 // const getMagnitudeColor = (magnitude) => { ... };
 // function calculateDistance(lat1, lon1, lat2, lon2) { ... };
 
+/**
+ * Renders a bar chart displaying regional seismic activity prior to a selected earthquake.
+ * It shows the count of earthquakes per day within a defined radius and time window leading up to the main event.
+ *
+ * @param {object} currentEarthquake - The main earthquake object (GeoJSON feature) around which regional activity is analyzed.
+ * @param {object[]} nearbyEarthquakesData - An array of GeoJSON earthquake features representing potentially nearby events. This data is filtered by the component.
+ * @param {number} dataSourceTimespanDays - The number of days of data the `nearbyEarthquakesData` prop typically represents (e.g., 30 for a monthly feed). Used for context in descriptive text.
+ * @returns {JSX.Element} The regional seismicity chart component or a message if data is insufficient.
+ */
 function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dataSourceTimespanDays }) {
   const chartContainerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(380);

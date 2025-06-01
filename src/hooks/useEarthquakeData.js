@@ -9,6 +9,40 @@ import {
     LOADING_MESSAGE_INTERVAL_MS
 } from '../constants/appConstants';
 
+/**
+ * Custom hook to manage the fetching, processing, and state of daily and weekly earthquake data from USGS.
+ * It handles initial data load, periodic refreshing, and derives various data views like recent quakes,
+ * globe data, and statistics for major quakes and alerts.
+ *
+ * @param {function} fetchDataCb - Callback function responsible for fetching data from a given URL.
+ *   This function should accept a URL string and return a Promise that resolves with the fetched data
+ *   or an object containing an error message (e.g., `{ metadata: { errorMessage: 'Fetch failed' } }`).
+ * @returns {object} An object containing various states and data derived from earthquake feeds:
+ * @property {boolean} isLoadingDaily - Loading state for the daily earthquake data feed.
+ * @property {boolean} isLoadingWeekly - Loading state for the weekly earthquake data feed.
+ * @property {boolean} isLoadingInitialData - True if either daily or weekly data is currently loading during the initial app load sequence.
+ * @property {string | null} error - Error message string if any data fetch operation fails, otherwise null.
+ * @property {number | null} dataFetchTime - Timestamp (in milliseconds) of the last successful data fetch operation.
+ * @property {string | null} lastUpdated - Formatted string indicating when the source USGS data was last updated.
+ * @property {Array<object>} earthquakesLastHour - Array of earthquake objects that occurred in the last hour.
+ * @property {Array<object>} earthquakesPriorHour - Array of earthquake objects that occurred in the hour before the last hour.
+ * @property {Array<object>} earthquakesLast24Hours - Array of earthquake objects that occurred in the last 24 hours.
+ * @property {Array<object>} earthquakesLast72Hours - Array of earthquake objects from the weekly feed that occurred in the last 72 hours.
+ * @property {Array<object>} earthquakesLast7Days - Array of earthquake objects from the weekly feed that occurred in the last 7 days.
+ * @property {Array<object>} prev24HourData - Array of earthquake objects from 24-48 hours ago, used for trend comparison.
+ * @property {Array<object>} globeEarthquakes - Processed list of up to 900 earthquakes from the last 72 hours, sorted by magnitude, for globe visualization.
+ * @property {boolean} hasRecentTsunamiWarning - True if any earthquake in the last 24 hours had an associated tsunami warning.
+ * @property {string | null} highestRecentAlert - The highest PAGER alert level (e.g., 'red', 'orange', 'yellow') recorded in the last 24 hours. Null if no alerts or only 'green'.
+ * @property {Array<object>} activeAlertTriggeringQuakes - Array of earthquake objects that triggered the `highestRecentAlert`.
+ * @property {object | null} lastMajorQuake - The most recent earthquake object that meets or exceeds the `MAJOR_QUAKE_THRESHOLD`.
+ * @property {function} setLastMajorQuake - Setter function for `lastMajorQuake` state.
+ * @property {object | null} previousMajorQuake - The earthquake object that was the major quake immediately before the current `lastMajorQuake`.
+ * @property {function} setPreviousMajorQuake - Setter function for `previousMajorQuake` state.
+ * @property {number | null} timeBetweenPreviousMajorQuakes - Time difference in milliseconds between `lastMajorQuake` and `previousMajorQuake`.
+ * @property {function} setTimeBetweenPreviousMajorQuakes - Setter function for `timeBetweenPreviousMajorQuakes` state.
+ * @property {string} currentLoadingMessage - A dynamic message displayed during the initial data loading sequence.
+ * @property {boolean} isInitialAppLoad - True if the hook is currently processing its very first data load cycle upon app startup.
+ */
 const useEarthquakeData = (fetchDataCb) => {
     const [isLoadingDaily, setIsLoadingDaily] = useState(true);
     const [isLoadingWeekly, setIsLoadingWeekly] = useState(true);
