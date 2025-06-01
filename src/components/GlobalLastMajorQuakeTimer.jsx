@@ -15,10 +15,13 @@ import SkeletonText from './SkeletonText';
  * @param {string} [props.lastMajorQuake.properties.place] - Location of the last major quake.
  * @param {number} [props.lastMajorQuake.properties.mag] - Magnitude of the last major quake.
  * @param {function} props.formatTimeDuration - Function to format a duration in milliseconds to a human-readable string (e.g., "1 day, 2 hr, 30 min").
+ * @param {function} [props.handleTimerClick] - Optional function to handle clicks on the timer.
  * @returns {JSX.Element} The rendered GlobalLastMajorQuakeTimer component.
  */
-const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, formatTimeDuration }) => {
+const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, formatTimeDuration, handleTimerClick }) => {
     const [timeSinceFormatted, setTimeSinceFormatted] = useState(<SkeletonText width="w-1/2 mx-auto" height="h-8" className="bg-slate-600"/>);
+
+    const isClickable = handleTimerClick && lastMajorQuake;
 
     useEffect(() => {
         if (!lastMajorQuake?.properties?.time) {
@@ -40,7 +43,22 @@ const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, formatTimeDuration }) => {
     }, [lastMajorQuake, formatTimeDuration]);
 
     return (
-        <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-10 p-2.5 bg-slate-900 bg-opacity-85 text-white rounded-lg shadow-xl text-center backdrop-blur-md border border-slate-700 min-w-[300px] max-w-[90%]">
+        <div
+            className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-10 p-2.5 bg-slate-900 bg-opacity-85 text-white rounded-lg shadow-xl text-center backdrop-blur-md border border-slate-700 min-w-[300px] max-w-[90%]"
+            onClick={() => {
+                if (isClickable) {
+                    handleTimerClick(lastMajorQuake);
+                }
+            }}
+            onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && isClickable) {
+                    handleTimerClick(lastMajorQuake);
+                }
+            }}
+            role={isClickable ? "button" : undefined}
+            tabIndex={isClickable ? 0 : undefined}
+            style={{ cursor: isClickable ? 'pointer' : 'default' }}
+        >
             <p className="text-[10px] sm:text-xs uppercase text-slate-400">Time Since Last Major (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) Quake Globally:</p>
             <div className="text-xl sm:text-2xl font-bold text-orange-400 my-0.5">{timeSinceFormatted}</div>
             {lastMajorQuake && lastMajorQuake.properties && (
@@ -61,6 +79,7 @@ GlobalLastMajorQuakeTimer.propTypes = {
         }),
     }),
     formatTimeDuration: PropTypes.func.isRequired,
+    handleTimerClick: PropTypes.func,
 };
 
 export default GlobalLastMajorQuakeTimer;
