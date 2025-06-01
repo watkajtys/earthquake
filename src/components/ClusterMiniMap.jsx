@@ -84,7 +84,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
     ) {
       initialZoom = 13; // Increased zoom for pinpoint clusters
     } else {
-      initialZoom = 2; // Fallback zoom, fitBounds will adjust this for spread out clusters
+      initialZoom = 8; // Fallback zoom, fitBounds will adjust this for spread out clusters
     }
   }
 
