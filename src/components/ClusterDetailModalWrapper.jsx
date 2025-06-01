@@ -25,7 +25,7 @@ function ClusterDetailModalWrapper({ overviewClusters, formatDate, getMagnitudeC
         navigate(-1); // Go back to the previous page
     };
 
-    const canonicalUrl = `https://your-earthquake-monitor.com/cluster/${clusterId}`;
+    const canonicalUrl = `https://earthquakeslive.com/cluster/${clusterId}`;
 
     if (!cluster) {
         // Even if cluster is not found, set a basic SEO for the error page

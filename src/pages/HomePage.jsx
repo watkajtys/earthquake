@@ -669,7 +669,7 @@ function App() {
         const keywords = `earthquake feed, live seismic data, earthquake list, ${periodKeywords}, seismic monitor, USGS earthquake data`;
         // Ensure activePeriod is a string and doesn't contain characters that would break a URL query parameter.
         const safeActivePeriod = String(activePeriod).replace(/[^a-zA-Z0-9_.-]/g, '');
-        const canonicalUrl = `https://your-earthquake-monitor.com/feeds?activeFeedPeriod=${safeActivePeriod}`;
+        const canonicalUrl = `https://earthquakeslive.com/feeds?activeFeedPeriod=${safeActivePeriod}`;
 
         return { title, description, keywords, pageUrl: canonicalUrl, canonicalUrl, locale: "en_US" };
     };
@@ -721,8 +721,8 @@ function App() {
                                     title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
                                     description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
                                     keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
-                                    pageUrl="https://your-earthquake-monitor.com/"
-                                    canonicalUrl="https://your-earthquake-monitor.com/"
+                                    pageUrl="https://earthquakeslive.com/"
+                                    canonicalUrl="https://earthquakeslive.com/"
                                     locale="en_US"
                                     type="website"
                                 />
@@ -778,8 +778,8 @@ function App() {
                                     title="Earthquake Overview | Latest Global Seismic Summary & Statistics"
                                     description="Get a comprehensive summary of the latest global earthquake activity, including significant events, regional distributions, key statistics, and active seismic alerts."
                                     keywords="earthquake summary, seismic overview, recent earthquakes, earthquake statistics, significant earthquakes, seismic alerts, regional earthquake activity"
-                                    pageUrl="https://your-earthquake-monitor.com/overview"
-                                    canonicalUrl="https://your-earthquake-monitor.com/overview"
+                                    pageUrl="https://earthquakeslive.com/overview"
+                                    canonicalUrl="https://earthquakeslive.com/overview"
                                     locale="en_US"
                                     type="website"
                                 />
@@ -955,8 +955,8 @@ function App() {
                                     title="Learn About Earthquakes | Seismic Science & Terminology Explained"
                                     description="Understand earthquake science: magnitude, depth, fault types, seismic waves, PAGER alerts, and how to interpret earthquake data. Your guide to seismology."
                                     keywords="earthquake science, seismology basics, earthquake magnitude, earthquake depth, fault types, seismic waves, PAGER alerts, earthquake education, seismology terms"
-                                    pageUrl="https://your-earthquake-monitor.com/learn"
-                                    canonicalUrl="https://your-earthquake-monitor.com/learn"
+                                    pageUrl="https://earthquakeslive.com/learn"
+                                    canonicalUrl="https://earthquakeslive.com/learn"
                                     locale="en_US"
                                     type="website"
                                 />

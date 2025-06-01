@@ -31,7 +31,7 @@ const EarthquakeDetailModalComponent = ({ broaderEarthquakeData, dataSourceTimes
     };
 
     // Construct canonical URL for the quake detail page
-    const canonicalUrl = `https://your-earthquake-monitor.com/quake/${detailUrlParam}`;
+    const canonicalUrl = `https://earthquakeslive.com/quake/${detailUrlParam}`;
 
     // Default/loading SEO values
     let pageTitle = "Loading Earthquake Details...";
