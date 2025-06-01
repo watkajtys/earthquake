@@ -106,6 +106,17 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
   }, [originalQuakes, mapRef, initialZoom]); // Added initialZoom to dependency array as its value now determines effect behavior.
                                  // originalQuakes is the primary data dependency.
 
+  useEffect(() => {
+    if (mapRef.current) {
+      const timer = setTimeout(() => {
+        mapRef.current.invalidateSize();
+      }, 300); // Delay to allow modal transition animations to complete
+
+      return () => clearTimeout(timer); // Cleanup timeout on component unmount
+    }
+  }, [mapRef]); // Rerun if mapRef changes (though typically it shouldn't post-mount)
+
+
   return (
     <MapContainer
       center={mapCenter}
