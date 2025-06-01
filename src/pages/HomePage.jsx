@@ -731,7 +731,7 @@ function App() {
 
     return (
         <div className="flex flex-col h-[100svh] font-sans bg-slate-900 text-slate-100 antialiased">
-            <header className="bg-slate-800 text-white p-2 shadow-lg z-40 border-b border-slate-700">
+            <header className="bg-slate-800 text-white pt-4 pb-2 px-2 shadow-lg z-40 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
                     <p className="text-xs sm:text-sm text-slate-400 mt-0.5 sm:mt-0">{headerTimeDisplay}</p>
