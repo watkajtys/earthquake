@@ -1142,25 +1142,32 @@ const ClusterDetailLoader = ({
 
     let idForLookup = sharedClusterIdFromUrl;
 
-    if (overviewClusters && overviewClusters.length > 0 && sharedClusterIdFromUrl) {
-        const parts = sharedClusterIdFromUrl.match(/^overview_cluster_(.+)_(\d+)$/);
-        if (parts && parts.length === 3) {
-            const targetStrongestQuakeId = parts[1];
-            // const targetQuakeCount = parseInt(parts[2], 10); // Not strictly used for matching yet
+    try {
+        if (typeof sharedClusterIdFromUrl === 'string' && overviewClusters && overviewClusters.length > 0) {
+            const parts = sharedClusterIdFromUrl.match(/^overview_cluster_(.+)_(\d+)$/);
+            if (parts && parts.length === 3) {
+                const targetStrongestQuakeId = parts[1];
+                // const targetQuakeCount = parseInt(parts[2], 10); // Not strictly used for matching yet
 
-            for (const currentCluster of overviewClusters) {
-                if (currentCluster && currentCluster.id) {
-                    const currentClusterParts = currentCluster.id.match(/^overview_cluster_(.+)_(\d+)$/);
-                    if (currentClusterParts && currentClusterParts.length === 3) {
-                        const actualStrongestQuakeId = currentClusterParts[1];
-                        if (actualStrongestQuakeId === targetStrongestQuakeId) {
-                            idForLookup = currentCluster.id; // Use the ID of the currently formed cluster
-                            break; // Found a match by strongest quake ID
+                for (const currentCluster of overviewClusters) {
+                    // Guard currentCluster and its id before attempting to parse
+                    if (currentCluster && typeof currentCluster.id === 'string') {
+                        const currentClusterParts = currentCluster.id.match(/^overview_cluster_(.+)_(\d+)$/);
+                        if (currentClusterParts && currentClusterParts.length === 3) {
+                            const actualStrongestQuakeId = currentClusterParts[1];
+                            if (actualStrongestQuakeId === targetStrongestQuakeId) {
+                                idForLookup = currentCluster.id; // Use the ID of the currently formed cluster
+                                break; // Found a match by strongest quake ID
+                            }
                         }
                     }
                 }
             }
         }
+    } catch (error) {
+        console.error("Error during cluster matching logic in ClusterDetailLoader:", error);
+        // Ensure idForLookup defaults to the original shared ID in case of an error during matching
+        idForLookup = sharedClusterIdFromUrl;
     }
 
     // Pass down all original props using ...propsToPass,

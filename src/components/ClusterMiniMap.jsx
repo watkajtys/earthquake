@@ -48,30 +48,36 @@ const getTectonicPlateStyle = (feature) => {
 const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
   const mapRef = useRef(null);
 
-  if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
-    return null;
-  }
+  // Filter for plottable quakes first
+  const plottableQuakes = (cluster?.originalQuakes || []).filter(q =>
+    q.geometry &&
+    Array.isArray(q.geometry.coordinates) &&
+    typeof q.geometry.coordinates[0] === 'number' &&
+    typeof q.geometry.coordinates[1] === 'number'
+  );
 
-  const { originalQuakes } = cluster;
+  if (!plottableQuakes.length) { // If no quakes can be plotted, render a message
+    return <div className="text-center text-slate-500 text-xs py-4">Map data unavailable for this cluster.</div>;
+  }
 
   let mapCenter;
   let initialZoom;
 
-  if (originalQuakes.length === 1) {
-    const singleQuake = originalQuakes[0];
+  if (plottableQuakes.length === 1) {
+    const singleQuake = plottableQuakes[0];
     mapCenter = [singleQuake.geometry.coordinates[1], singleQuake.geometry.coordinates[0]];
     initialZoom = 10; // Zoom level for a single quake
   } else {
     // Calculate map center for multiple quakes (average lat/lng)
-    const latitudes = originalQuakes.map(quake => quake.geometry.coordinates[1]);
-    const longitudes = originalQuakes.map(quake => quake.geometry.coordinates[0]);
+    const latitudes = plottableQuakes.map(quake => quake.geometry.coordinates[1]);
+    const longitudes = plottableQuakes.map(quake => quake.geometry.coordinates[0]);
     const avgLat = latitudes.reduce((sum, lat) => sum + lat, 0) / latitudes.length;
     const avgLng = longitudes.reduce((sum, lng) => sum + lng, 0) / longitudes.length;
-    mapCenter = [avgLat, avgLng]; // This center is fine for concentrated points too.
+    mapCenter = [avgLat, avgLng];
 
     // Calculate bounds to check for very concentrated clusters
     const bounds = L.latLngBounds(
-      originalQuakes.map(quake => [
+      plottableQuakes.map(quake => [
         quake.geometry.coordinates[1],
         quake.geometry.coordinates[0],
       ])
@@ -79,32 +85,27 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
 
     if (
       bounds.getSouthWest().equals(bounds.getNorthEast()) ||
-      (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.001 && // Refined threshold
-       Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.001)  // Refined threshold
+      (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.001 &&
+       Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.001)
     ) {
       initialZoom = 10; // Increased zoom for pinpoint clusters
     } else {
-      initialZoom = 7; // Fallback zoom, fitBounds will adjust this for spread out clusters
+      initialZoom = 7; // Fallback zoom, fitBounds will adjust this
     }
   }
 
   useEffect(() => {
-    // Call fitBounds only if originalQuakes.length > 1 AND initialZoom was NOT set to 13 (pinpoint)
-    // or 10 (single quake). The initialZoom for spread out clusters is 7.
-    if (mapRef.current && originalQuakes.length > 1 && initialZoom === 7) {
+    // Call fitBounds only if plottableQuakes.length > 1 AND initialZoom was NOT set for pinpoint/single.
+    if (mapRef.current && plottableQuakes.length > 1 && initialZoom === 7) {
       const bounds = L.latLngBounds(
-        originalQuakes.map(quake => [
+        plottableQuakes.map(quake => [
           quake.geometry.coordinates[1],
           quake.geometry.coordinates[0],
         ])
       );
-      // The initialZoom check above should be sufficient to prevent re-zooming pinpoint clusters.
       mapRef.current.fitBounds(bounds, { padding: [0, 0] });
     }
-    // For a single quake (initialZoom=10) or pinpoint cluster (initialZoom=13),
-    // the view is already set by mapCenter and initialZoom on MapContainer.
-  }, [originalQuakes, mapRef, initialZoom]); // Added initialZoom to dependency array as its value now determines effect behavior.
-                                 // originalQuakes is the primary data dependency.
+  }, [plottableQuakes, mapRef, initialZoom]); // Use plottableQuakes in dependencies
 
   return (
     <MapContainer
@@ -123,21 +124,21 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
         data={tectonicPlatesData}
         style={getTectonicPlateStyle}
       />
-      {originalQuakes.map((quake) => (
+      {plottableQuakes.map((quake) => (
         <CircleMarker
           key={quake.id}
-          center={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
+          center={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]} // Already validated
           pathOptions={{
-            fillColor: getMagnitudeColor(quake.properties.mag),
+            fillColor: getMagnitudeColor(quake.properties?.mag), // Safe access
             color: '#000', // Border color
             weight: 1,
             opacity: 1,
             fillOpacity: 0.7,
           }}
-          radius={5 + quake.properties.mag / 2} // Radius proportional to magnitude
+          radius={5 + (quake.properties?.mag ?? 0) / 2} // Safe access and default for radius
         >
           <Tooltip>
-            M {quake.properties.mag.toFixed(1)} - {quake.properties.place}
+            M {quake.properties?.mag?.toFixed(1) ?? 'N/A'} - {quake.properties?.place || 'Unknown place'}
           </Tooltip>
         </CircleMarker>
       ))}
