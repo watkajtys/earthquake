@@ -1,5 +1,6 @@
 // src/PreviousNotableQuakeFeature.jsx
 import React, { useState, useEffect } from 'react';
+import { getMagnitudeColor as getMagnitudeColorUtil } from '../utils/utils.js'; // Renamed to avoid conflict
 
 /**
  * A React component that displays a feature card for the second most recent significant earthquake.
@@ -8,14 +9,14 @@ import React, { useState, useEffect } from 'react';
  * @param {object | null} props.previousMajorQuake - The data object for the previously recorded significant earthquake.
  * @param {boolean} props.isLoadingPreviousQuake - Flag indicating if the data for the previous quake is currently loading.
  * @param {function(object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card is clicked. Receives the quake data object.
- * @param {function(number):string} props.getMagnitudeColorFunc - Function that returns a color string based on earthquake magnitude.
+ * @param {function(number):string} [props.getMagnitudeColorFunc] - Optional: Function that returns a color string based on earthquake magnitude.
  * @returns {JSX.Element} The rendered PreviousNotableQuakeFeature component.
  */
 const PreviousNotableQuakeFeature = ({
-                                 previousMajorQuake, // This will be previousMajorQuake from App.jsx
+                                 previousMajorQuake,
                                  isLoadingPreviousQuake,
-                                 onNotableQuakeSelect, // This function should handle clicks
-                                 getMagnitudeColorFunc // Passed from App.jsx for consistent coloring
+                                 onNotableQuakeSelect,
+                                 getMagnitudeColorFunc
                              }) => {
     const [displayQuake, setDisplayQuake] = useState(null);
 
@@ -62,7 +63,8 @@ const PreviousNotableQuakeFeature = ({
         );
     }
 
-    const quakeColor = typeof getMagnitudeColorFunc === 'function' ? getMagnitudeColorFunc(displayQuake.mag) : '#FFFFFF';
+    const colorFunc = getMagnitudeColorFunc || getMagnitudeColorUtil;
+    const quakeColor = displayQuake?.mag !== undefined ? colorFunc(displayQuake.mag) : '#FFFFFF';
 
     return (
         <div className="p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-[220px] backdrop-blur-sm border border-slate-600"> {/* Slightly different border for distinction if desired */}

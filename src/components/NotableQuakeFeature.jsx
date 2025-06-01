@@ -1,5 +1,6 @@
 // src/NotableQuakeFeature.jsx
 import React, { useState, useEffect } from 'react';
+import { getMagnitudeColor as getMagnitudeColorUtil } from '../utils/utils.js'; // Renamed to avoid conflict if prop is also named getMagnitudeColor
 
 /**
  * @const {Array<object>} historicalNotableQuakes
@@ -27,14 +28,14 @@ const historicalNotableQuakes = [
  * @param {object | null} props.dynamicFeaturedQuake - The dynamically fetched latest significant earthquake object.
  * @param {boolean} props.isLoadingDynamicQuake - Flag indicating if the dynamic quake data is currently loading.
  * @param {function(object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card is clicked. Receives the quake data object.
- * @param {function(number):string} props.getMagnitudeColorFunc - Function that returns a color string based on earthquake magnitude.
+ * @param {function(number):string} [props.getMagnitudeColorFunc] - Optional: Function that returns a color string based on earthquake magnitude. If not provided, util is used.
  * @returns {JSX.Element} The rendered NotableQuakeFeature component.
  */
 const NotableQuakeFeature = ({
-                                 dynamicFeaturedQuake, // This will be lastMajorQuake from App.jsx
+                                 dynamicFeaturedQuake,
                                  isLoadingDynamicQuake,
-                                 onNotableQuakeSelect, // This function should handle clicks (e.g., open detail view or fly-to on globe)
-                                 getMagnitudeColorFunc // Passed from App.jsx to get consistent coloring
+                                 onNotableQuakeSelect,
+                                 getMagnitudeColorFunc // Optional prop
                              }) => {
     const [displayQuake, setDisplayQuake] = useState(null);
     const [historicalIndex, setHistoricalIndex] = useState(0);
@@ -63,12 +64,14 @@ const NotableQuakeFeature = ({
         } else if (historicalNotableQuakes.length > 0) {
             // No recent dynamic quake, or it's invalid, so start cycling historical ones
             setIsCyclingHistorical(true);
+            const currentHistorical = historicalNotableQuakes[historicalIndex];
+            const colorFunc = getMagnitudeColorFunc || getMagnitudeColorUtil;
             setDisplayQuake({
-                ...historicalNotableQuakes[historicalIndex],
-                color: getMagnitudeColorFunc(historicalNotableQuakes[historicalIndex].mag)
+                ...currentHistorical,
+                color: colorFunc(currentHistorical.mag)
             });
         } else {
-            setDisplayQuake(null); // No quakes to display
+            setDisplayQuake(null);
             setIsCyclingHistorical(false);
         }
     }, [dynamicFeaturedQuake, isLoadingDynamicQuake, historicalIndex, getMagnitudeColorFunc]);
@@ -104,8 +107,8 @@ const NotableQuakeFeature = ({
         );
     }
 
-    // Ensure getMagnitudeColorFunc is available before calling
-    const quakeColor = typeof getMagnitudeColorFunc === 'function' ? getMagnitudeColorFunc(displayQuake.mag) : '#FFFFFF';
+    const colorFunc = getMagnitudeColorFunc || getMagnitudeColorUtil;
+    const quakeColor = displayQuake?.mag !== undefined ? colorFunc(displayQuake.mag) : '#FFFFFF';
 
     return (
         <div className="p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-[220px] backdrop-blur-sm border border-slate-700">
