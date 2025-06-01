@@ -21,6 +21,60 @@ import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for g
  * @returns {JSX.Element | null} The rendered ClusterDetailModal component or null if no cluster data.
  */
 function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
+    const modalContentRef = React.useRef(null);
+    const closeButtonRef = React.useRef(null);
+
+    // Handle Escape key press & Focus Trapping
+    React.useEffect(() => {
+        const modalElement = modalContentRef.current;
+        if (!modalElement) return;
+
+        const focusableElements = modalElement.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (closeButtonRef.current) {
+            closeButtonRef.current.focus();
+        } else if (firstElement) {
+            firstElement.focus();
+        }
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                onClose();
+                return;
+            }
+            if (event.key === 'Tab') {
+                if (event.shiftKey) { // Shift + Tab
+                    if (document.activeElement === firstElement || document.activeElement === modalElement) {
+                        lastElement.focus();
+                        event.preventDefault();
+                    }
+                } else { // Tab
+                    if (document.activeElement === lastElement) {
+                        firstElement.focus();
+                        event.preventDefault();
+                    }
+                }
+            }
+        };
+
+        modalElement.addEventListener('keydown', handleKeyDown);
+        // Fallback for escape if somehow focus is outside
+        const handleGlobalEscape = (event) => {
+            if (event.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', handleGlobalEscape);
+
+        return () => {
+            modalElement.removeEventListener('keydown', handleKeyDown);
+            document.removeEventListener('keydown', handleGlobalEscape);
+        };
+    }, [onClose]);
+
+
     if (!cluster) {
         return null;
     }
@@ -57,20 +111,26 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
     return (
         <div
             className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-40 p-4 transition-opacity duration-300 ease-in-out"
-            onClick={onClose} // Close on backdrop click
+            // onClick={onClose} // Removed backdrop click to close, rely on Esc key and close button
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cluster-detail-title"
         >
             <div
+                ref={modalContentRef}
+                tabIndex="-1" // Make modal container focusable for trap if no inner elements are
                 className="bg-slate-800 p-4 sm:p-6 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700"
                 onClick={e => e.stopPropagation()} // Prevent backdrop click from triggering inside modal
             >
                 {/* Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-slate-700 mb-4">
-                    <h2 className="text-lg sm:text-xl font-semibold text-indigo-400 truncate pr-2" title={locationName}>
+                    <h2 id="cluster-detail-title" className="text-lg sm:text-xl font-semibold text-indigo-400 truncate pr-2" title={locationName}>
                         Cluster: {locationName || 'Unknown Location'}
                     </h2>
                     <button
+                        ref={closeButtonRef}
                         onClick={onClose}
-                        className="text-slate-400 hover:text-slate-200 transition-colors p-1 rounded-full hover:bg-slate-700"
+                        className="text-slate-400 hover:text-slate-200 transition-colors p-1 rounded-full hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         aria-label="Close modal"
                     >
                         <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -98,12 +158,27 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 </h3>
                 <div className="flex-grow space-y-2 pr-1">
                     {sortedQuakes.length > 0 ? (
-                        sortedQuakes.map(quake => (
+                        sortedQuakes.map(quake => {
+                            const handleQuakeKeyDown = (event, q) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    if (onIndividualQuakeSelect) {
+                                        onIndividualQuakeSelect(q);
+                                    }
+                                    event.preventDefault();
+                                }
+                            };
+                            const quakeTitle = `Click to view details for M ${quake.properties?.mag?.toFixed(1) || 'N/A'} - ${quake.properties?.place || 'Unknown Place'}`;
+                            const originalClassName = `p-2.5 rounded-md border ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : 'bg-slate-700 border-slate-600'} hover:border-slate-500 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400`;
+
+                            return (
                             <div
                                 key={quake.id}
-                                className={`p-2.5 rounded-md border ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : 'bg-slate-700 border-slate-600'} hover:border-slate-500 transition-colors cursor-pointer`} // Added cursor-pointer
-                                onClick={() => onIndividualQuakeSelect && onIndividualQuakeSelect(quake)} // Added onClick
-                                title={`Click to view details for M ${quake.properties?.mag?.toFixed(1)} - ${quake.properties?.place}`} // Added title attribute
+                                className={originalClassName} // Restored original className
+                                onClick={() => onIndividualQuakeSelect && onIndividualQuakeSelect(quake)}
+                                onKeyDown={(e) => handleQuakeKeyDown(e, quake)}
+                                tabIndex="0"
+                                role="button"
+                                title={quakeTitle} // Use pre-constructed title string
                             >
                                 <div className="flex justify-between items-start mb-0.5">
                                     <p className="text-sm font-semibold">
@@ -124,7 +199,8 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                                     </span>
                                 </div>
                             </div>
-                        ))
+                        ); // Restored semicolon for return
+                    }) // Restored closing brace for map callback
                     ) : (
                         <p className="text-slate-400 text-sm text-center py-4">No individual earthquake data available for this cluster.</p>
                     )}

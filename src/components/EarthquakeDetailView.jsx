@@ -231,6 +231,72 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [selectedFaultPlaneKey, setSelectedFaultPlaneKey] = useState('np1');
+    const modalContentRef = React.useRef(null); // Ref for the modal content div
+    const closeButtonRef = React.useRef(null); // Ref for the close button
+
+    // Handle Escape key press for closing the modal & Focus Trapping
+    useEffect(() => {
+        const modalElement = modalContentRef.current;
+        if (!modalElement) return;
+
+        const focusableElements = modalElement.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        // Focus the first focusable element (likely the close button) when modal opens
+        if (closeButtonRef.current) {
+            closeButtonRef.current.focus();
+        } else if (firstElement) {
+            firstElement.focus();
+        }
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                onClose();
+                return; // Return early after closing
+            }
+
+            if (event.key === 'Tab') {
+                if (event.shiftKey) { // Shift + Tab
+                    if (document.activeElement === firstElement || document.activeElement === modalElement) { // also check if modalElement itself is focused (e.g. if no focusable elements initially)
+                        lastElement.focus();
+                        event.preventDefault();
+                    }
+                } else { // Tab
+                    if (document.activeElement === lastElement) {
+                        firstElement.focus();
+                        event.preventDefault();
+                    }
+                }
+            }
+        };
+
+        // Add keydown listener to the modal itself for tab trapping.
+        // Document listener for Escape is kept in case focus is somehow outside the modal initially.
+        modalElement.addEventListener('keydown', handleKeyDown);
+
+        // Cleanup function
+        return () => {
+            modalElement.removeEventListener('keydown', handleKeyDown);
+            // The global escape listener is cleaned up by its own useEffect
+        };
+    }, [onClose]); // Dependencies for focus trapping and escape key
+
+    // Separate useEffect for escape key to ensure it's always available even if modalContentRef isn't ready
+    useEffect(() => {
+        const handleGlobalEscape = (event) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+        document.addEventListener('keydown', handleGlobalEscape);
+        return () => {
+            document.removeEventListener('keydown', handleGlobalEscape);
+        };
+    }, [onClose]);
+
 
     useEffect(() => {
         // Check if monthly data has not been attempted to load yet and is not currently loading
@@ -496,14 +562,30 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     const pagerAlertValue = losspagerProductProps?.alertlevel ?? properties?.alert;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-50 p-2 sm:p-4 pt-10 md:pt-16 overflow-y-auto" onClick={onClose}>
-            <div className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800" onClick={(e) => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-1 right-1 md:top-3 md:right-3 text-gray-300 bg-gray-700 bg-opacity-50 rounded-full w-8 h-8 flex items-center justify-center hover:bg-opacity-75 hover:text-white text-2xl font-light z-50" aria-label="Close detail view">&times;</button>
+        <div
+            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-50 p-2 sm:p-4 pt-10 md:pt-16 overflow-y-auto"
+            onClick={onClose}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="earthquake-detail-title"
+        >
+            <div
+                ref={modalContentRef}
+                className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800"
+                onClick={(e) => e.stopPropagation()}
+                tabIndex="-1" // Make the modal container focusable for the trap if no inner elements are
+            >
+                <button
+                    ref={closeButtonRef} // Assign ref to the close button
+                    onClick={onClose}
+                    className="absolute top-1 right-1 md:top-3 md:right-3 text-gray-300 bg-gray-700 bg-opacity-50 rounded-full w-8 h-8 flex items-center justify-center hover:bg-opacity-75 hover:text-white text-2xl font-light z-50 focus:outline-none focus:ring-2 focus:ring-white"
+                    aria-label="Close detail view"
+                >&times;</button>
 
                 {isValidString(properties.title) && (
                     <header className="text-center p-4 md:p-5 bg-white rounded-t-lg border-b border-gray-300">
                         <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-blue-700">Unpacking the Shakes!</h1>
-                        <p className="text-md text-slate-600 mt-1">{properties.title}</p>
+                        <p id="earthquake-detail-title" className="text-md text-slate-600 mt-1">{properties.title}</p>
                     </header>
                 )}
 
