@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react'; // Added useEffect and useRef
 import { MapContainer, TileLayer, GeoJSON, CircleMarker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
-import tectonicPlatesData from './TectonicPlateBoundaries.json';
+import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Corrected path
 // Assuming getMagnitudeColor will be provided as a prop or imported if generalized
 // import { getMagnitudeColor } from './utils';
 

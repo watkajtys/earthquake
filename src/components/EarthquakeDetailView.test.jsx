@@ -23,13 +23,17 @@ vi.mock('./EarthquakeMap', () => ({
 // Mock calculateDistance from utils.js
 // This allows us to directly control the distance returned for each quake
 // and simplifies testing the filtering logic without complex coordinate calculations.
-vi.mock('./utils', async () => {
-  const actualUtils = await vi.importActual('./utils');
-  return {
-    ...actualUtils, // Import and retain other utils
-    calculateDistance: vi.fn(), // Mock calculateDistance specifically
-  };
-});
+// Corrected path and ensure calculateDistance is directly mocked.
+vi.mock('../utils/utils.js', () => ({
+    calculateDistance: vi.fn(),
+    getMagnitudeColor: vi.fn((mag) => '#FFFFFF'), // Provide a simple mock implementation
+    // Add other functions from utils.js if they are directly called by EarthquakeDetailView
+    // or its direct children other than SimplifiedDepthProfile, though for this test,
+    // only what's needed to prevent crashes in children is essential.
+}));
+
+// Import the mocked function after setting up the mock
+import { calculateDistance as calculateDistanceMock } from '../utils/utils.js';
 
 
 describe('EarthquakeDetailView - Nearby Quakes Filtering', () => {
@@ -68,7 +72,7 @@ describe('EarthquakeDetailView - Nearby Quakes Filtering', () => {
   ];
 
   let fetchSpy;
-  let calculateDistanceMock;
+  // calculateDistanceMock is now imported directly after vi.mock
 
   beforeEach(() => {
     // Spy on global fetch and mock its resolution
@@ -77,16 +81,9 @@ describe('EarthquakeDetailView - Nearby Quakes Filtering', () => {
       json: async () => ({ ...mockDetailData }),
     });
 
-    // Import the mocked calculateDistance from the vi.mock('./utils', ...) setup
-    // This ensures we're getting the vi.fn() instance.
-    // Dynamically import after mocks are set up.
-    vi.importActual('./utils').then(utils => {
-        calculateDistanceMock = utils.calculateDistance;
-    });
-
     // Reset mocks before each test
     mockOnClose.mockClear();
-    if (calculateDistanceMock) calculateDistanceMock.mockClear();
+    calculateDistanceMock.mockClear(); // calculateDistanceMock is now directly available
   });
 
   afterEach(() => {
@@ -95,28 +92,20 @@ describe('EarthquakeDetailView - Nearby Quakes Filtering', () => {
   });
 
   it('correctly filters broaderEarthquakeData and passes regionalQuakes to EarthquakeMap', async () => {
-    // Setup mock return values for calculateDistance
-    // This needs to be done carefully if the mock isn't available immediately.
-    // We will set it up after ensuring calculateDistanceMock is assigned.
-
-    await vi.dynamicImport('./utils').then(utils => {
-        calculateDistanceMock = utils.calculateDistance; // Ensure it's assigned
-        // Define behavior for calculateDistance:
-        // quake1 (nearby1) -> within radius
-        calculateDistanceMock.mockImplementation((lat1, lon1, lat2, lon2) => {
-            // A simple way to identify which quake is which for mocking,
-            // assuming lat/lon are somewhat unique in mockBroaderData.
-            // Main quake: 35.0, -120.0
-            // nearby1: 35.1, -120.1 -> make it close
-            if (lat2 === 35.1 && lon2 === -120.1) return REGIONAL_RADIUS_KM - 50; // within
-            // nearby2: 38.0, -125.0 -> make it far
-            if (lat2 === 38.0 && lon2 === -125.0) return REGIONAL_RADIUS_KM + 100; // outside
-            // nearby5: 34.9, -119.9 -> make it close
-            if (lat2 === 34.9 && lon2 === -119.9) return REGIONAL_RADIUS_KM - 20; // within
-            return REGIONAL_RADIUS_KM + 200; // Default others to be far
-        });
+    // Define behavior for calculateDistance:
+    // quake1 (nearby1) -> within radius
+    calculateDistanceMock.mockImplementation((lat1, lon1, lat2, lon2) => {
+        // A simple way to identify which quake is which for mocking,
+        // assuming lat/lon are somewhat unique in mockBroaderData.
+        // Main quake: 35.0, -120.0
+        // nearby1: 35.1, -120.1 -> make it close
+        if (lat2 === 35.1 && lon2 === -120.1) return REGIONAL_RADIUS_KM - 50; // within
+        // nearby2: 38.0, -125.0 -> make it far
+        if (lat2 === 38.0 && lon2 === -125.0) return REGIONAL_RADIUS_KM + 100; // outside
+        // nearby5: 34.9, -119.9 -> make it close
+        if (lat2 === 34.9 && lon2 === -119.9) return REGIONAL_RADIUS_KM - 20; // within
+        return REGIONAL_RADIUS_KM + 200; // Default others to be far
     });
-
 
     render(
       <EarthquakeDetailView

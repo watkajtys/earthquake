@@ -1,5 +1,8 @@
 // src/GlobalLastMajorQuakeTimer.jsx
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
+import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
+import SkeletonText from './SkeletonText';
 
 /**
  * A React component that displays a timer showing the time since the last major global earthquake.
@@ -11,12 +14,10 @@ import React, { useState, useEffect } from 'react';
  * @param {number} props.lastMajorQuake.properties.time - Timestamp of the last major quake in milliseconds.
  * @param {string} [props.lastMajorQuake.properties.place] - Location of the last major quake.
  * @param {number} [props.lastMajorQuake.properties.mag] - Magnitude of the last major quake.
- * @param {number} props.MAJOR_QUAKE_THRESHOLD - The magnitude threshold defined as a major quake.
  * @param {function} props.formatTimeDuration - Function to format a duration in milliseconds to a human-readable string (e.g., "1 day, 2 hr, 30 min").
- * @param {React.ElementType} props.SkeletonText - A skeleton loader component for text, used during initial state or loading.
  * @returns {JSX.Element} The rendered GlobalLastMajorQuakeTimer component.
  */
-const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, MAJOR_QUAKE_THRESHOLD, formatTimeDuration, SkeletonText }) => {
+const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, formatTimeDuration }) => {
     const [timeSinceFormatted, setTimeSinceFormatted] = useState(<SkeletonText width="w-1/2 mx-auto" height="h-8" className="bg-slate-600"/>);
 
     useEffect(() => {
@@ -36,7 +37,7 @@ const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, MAJOR_QUAKE_THRESHOLD, form
         intervalId = setInterval(updateDisplay, 1000); // Update every second
 
         return () => clearInterval(intervalId); // Cleanup
-    }, [lastMajorQuake, MAJOR_QUAKE_THRESHOLD, formatTimeDuration]);
+    }, [lastMajorQuake, formatTimeDuration]);
 
     return (
         <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-10 p-2.5 bg-slate-900 bg-opacity-85 text-white rounded-lg shadow-xl text-center backdrop-blur-md border border-slate-700 min-w-[300px] max-w-[90%]">
@@ -49,6 +50,17 @@ const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, MAJOR_QUAKE_THRESHOLD, form
             )}
         </div>
     );
+};
+
+GlobalLastMajorQuakeTimer.propTypes = {
+    lastMajorQuake: PropTypes.shape({
+        properties: PropTypes.shape({
+            time: PropTypes.number.isRequired,
+            place: PropTypes.string,
+            mag: PropTypes.number,
+        }),
+    }),
+    formatTimeDuration: PropTypes.func.isRequired,
 };
 
 export default GlobalLastMajorQuakeTimer;
