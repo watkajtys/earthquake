@@ -38,6 +38,8 @@ const OverviewPage = ({
     topActiveRegionsOverview, // For active region display
     REGIONS, // For active region display color (if not handled by topActiveRegionsOverview structure)
     navigate, // For "Learn More" button, if not using Link
+    showEarthLayers = false, // Added prop
+    toggleEarthLayers = () => {}, // Added prop
 }) => {
     // This component will replicate the JSX structure previously under the /overview Route in HomePage.jsx
     // For brevity, I'm showing a simplified structure. The actual content should be moved from HomePage.jsx
@@ -56,6 +58,18 @@ const OverviewPage = ({
                 <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
                     Overview
                 </h2>
+
+                {/* Earth Layers Toggle Section */}
+                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md">
+                    <h3 className="text-sm font-semibold text-indigo-300 mb-2">Globe Display Options</h3>
+                    <button
+                        onClick={toggleEarthLayers}
+                        disabled={typeof toggleEarthLayers !== 'function'} // Disable if prop not passed correctly
+                        className="w-full px-3 py-2 text-sm font-medium rounded-md text-white bg-sky-600 hover:bg-sky-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-700 focus:ring-sky-500 transition-colors disabled:opacity-50"
+                    >
+                        {showEarthLayers ? "Hide Earth's Layers" : "Show Earth's Layers"}
+                    </button>
+                </div>
 
                 {/* Example of how one of the components would be used with passed props */}
                 {currentAlertConfig && (

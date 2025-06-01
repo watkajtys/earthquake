@@ -844,6 +844,8 @@ function App() {
                                 topActiveRegionsOverview={topActiveRegionsOverview} // This is the memoized one from HomePage
                                 REGIONS={REGIONS} // This is the memoized REGIONS constant from HomePage
                                 navigate={navigate} // Pass navigate from HomePage
+                                showEarthLayers={showEarthLayers} // Prop added for Earth layers toggle
+                                toggleEarthLayers={toggleEarthLayers} // Prop added for Earth layers toggle
                             />
                         } />
                         <Route path="/feeds" element={
