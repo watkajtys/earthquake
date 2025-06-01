@@ -318,7 +318,7 @@ function App() {
     } = useEarthquakeData(fetchDataCb);
 
     // The original isInitialAppLoad ref is now managed within the hook and its value exposed.
-    const [appRenderTrigger, setAppRenderTrigger] = useState(0); // Kept for re-renders not tied to data loading
+    // const [appRenderTrigger, setAppRenderTrigger] = useState(0); // Kept for re-renders not tied to data loading -> This was the duplicate
 
     // Initialize the monthly data hook
     const {
