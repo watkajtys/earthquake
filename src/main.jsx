@@ -9,11 +9,14 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './pages/HomePage.jsx' // Updated import path
+import { EarthquakeDataProvider } from './contexts/EarthquakeDataContext.jsx'; // Import the provider
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <EarthquakeDataProvider>
+        <App />
+      </EarthquakeDataProvider>
     </BrowserRouter>
   </StrictMode>,
 )

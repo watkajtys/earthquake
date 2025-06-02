@@ -112,9 +112,9 @@ const NotableQuakeFeature = ({
 
     return (
         <div className="p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-[220px] backdrop-blur-sm border border-slate-700">
-            <h3 className="text-xs font-bold mb-0.5 text-amber-300 uppercase tracking-wide">
+            <h2 className="text-xs font-bold mb-0.5 text-amber-300 uppercase tracking-wide">
                 {displayQuake.source === 'Recent' ? 'Latest Significant Quake' : 'Featured Historical Quake'}
-            </h3>
+            </h2>
             <p className="text-sm font-semibold leading-tight truncate" title={displayQuake.name}>
                 {displayQuake.name} {displayQuake.year ? `(${displayQuake.year})` : ''}
             </p>
