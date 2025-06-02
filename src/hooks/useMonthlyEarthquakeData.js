@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { fetchUsgsData } from '../services/usgsApiService';
 import { USGS_API_URL_MONTH, MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 
 /**
@@ -6,9 +7,6 @@ import { USGS_API_URL_MONTH, MAJOR_QUAKE_THRESHOLD } from '../constants/appConst
  * It also coordinates with the primary major quake state (from `useEarthquakeData`) to ensure the
  * globally most recent major quakes are correctly identified when monthly data provides newer or more comprehensive information.
  *
- * @param {function} fetchDataCb - Callback function responsible for fetching data from a given URL.
- *   This function should accept a URL string and return a Promise that resolves with the fetched data
- *   or an object containing an error message.
  * @param {object | null} currentLastMajorQuake - The current `lastMajorQuake` object from the `useEarthquakeData` hook.
  *   Used for comparison and consolidation with major quakes found in the monthly data.
  * @param {function} setLastMajorQuake - Setter function (from `useEarthquakeData` via `HomePage`) to update the application's
@@ -29,7 +27,6 @@ import { USGS_API_URL_MONTH, MAJOR_QUAKE_THRESHOLD } from '../constants/appConst
  * @property {function} loadMonthlyData - An asynchronous function that, when called, triggers the fetch and processing of the monthly earthquake data.
  */
 const useMonthlyEarthquakeData = (
-    fetchDataCb,
     currentLastMajorQuake, // from useEarthquakeData
     setLastMajorQuake,     // from useEarthquakeData via HomePage
     setPreviousMajorQuake, // from useEarthquakeData via HomePage
@@ -66,8 +63,8 @@ const useMonthlyEarthquakeData = (
         };
 
         try {
-            const monthlyResult = await fetchDataCb(USGS_API_URL_MONTH);
-            if (monthlyResult?.features && monthlyResult.features.length > 0) {
+            const monthlyResult = await fetchUsgsData(USGS_API_URL_MONTH);
+            if (!monthlyResult.error && monthlyResult.features && monthlyResult.features.length > 0) {
                 const monthlyData = monthlyResult.features;
                 setAllEarthquakes(monthlyData);
 
@@ -106,16 +103,16 @@ const useMonthlyEarthquakeData = (
                 }
 
             } else {
-                console.error("Monthly data features are missing or empty in the response:", monthlyResult);
-                setMonthlyError(monthlyResult?.metadata?.errorMessage || "Monthly data is currently unavailable or incomplete.");
+                console.error("Monthly data features are missing or empty in the response or an error occurred:", monthlyResult);
+                setMonthlyError(monthlyResult?.error?.message || "Monthly data is currently unavailable or incomplete.");
             }
-        } catch (e) {
-            console.error("Failed to fetch monthly data:", e);
-            setMonthlyError(`Monthly Data Error: ${e.message}`);
+        } catch (e) { // This catch is for unexpected errors in processing, not fetch errors handled by fetchUsgsData
+            console.error("Failed to process monthly data:", e);
+            setMonthlyError(`Monthly Data Processing Error: ${e.message || "An unexpected error occurred."}`);
         } finally {
             setIsLoadingMonthly(false);
         }
-    }, [fetchDataCb, currentLastMajorQuake, setLastMajorQuake, setPreviousMajorQuake, setTimeBetweenPreviousMajorQuakes]);
+    }, [currentLastMajorQuake, setLastMajorQuake, setPreviousMajorQuake, setTimeBetweenPreviousMajorQuakes]);
 
     return {
         isLoadingMonthly,
