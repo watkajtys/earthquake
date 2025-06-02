@@ -68,9 +68,9 @@ const PreviousNotableQuakeFeature = ({
 
     return (
         <div className="p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-[220px] backdrop-blur-sm border border-slate-600"> {/* Slightly different border for distinction if desired */}
-            <h3 className="text-xs font-bold mb-0.5 text-sky-300 uppercase tracking-wide"> {/* Different title color */}
+            <h2 className="text-xs font-bold mb-0.5 text-sky-300 uppercase tracking-wide"> {/* Different title color */}
                 Previous Significant Quake
-            </h3>
+            </h2>
             <p className="text-sm font-semibold leading-tight truncate" title={displayQuake.name}>
                 {displayQuake.name} {displayQuake.year ? `(${displayQuake.year})` : ''}
             </p>
