@@ -5,14 +5,17 @@ import {
     USGS_API_URL_DAY,
     USGS_API_URL_WEEK,
     REFRESH_INTERVAL_MS,
-    MAJOR_QUAKE_THRESHOLD,
-    ALERT_LEVELS,
+    MAJOR_QUAKE_THRESHOLD, // Needed for createMockEarthquake helper
+    ALERT_LEVELS,          // Needed for createMockEarthquake helper
     INITIAL_LOADING_MESSAGES,
     LOADING_MESSAGE_INTERVAL_MS
 } from '../constants/appConstants';
+import { fetchUsgsData } from '../services/usgsApiService';
 
-// Mock fetchDataCb
-const mockFetchDataCb = vi.fn();
+// Mock the usgsApiService
+vi.mock('../services/usgsApiService', () => ({
+    fetchUsgsData: vi.fn()
+}));
 
 // Mock Date.now()
 const MOCKED_NOW = 1700000000000; // A fixed point in time: November 14, 2023 22:13:20 GMT
@@ -102,7 +105,7 @@ describe('useEarthquakeData', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(MOCKED_NOW));
-        mockFetchDataCb.mockReset();
+        fetchUsgsData.mockReset(); // Use the mocked service function
 
         // Globally disable setInterval for all tests in this suite
         // This will prevent both loading message and refresh intervals.
@@ -121,8 +124,9 @@ describe('useEarthquakeData', () => {
 
     describe('Initial Loading States', () => {
         it('should have isLoadingDaily, isLoadingWeekly, isLoadingInitialData true initially', () => {
-            const neverResolvingFetchCb = vi.fn(() => new Promise(() => {})); // Keep fetches pending
-            const { result } = renderHook(() => useEarthquakeData(neverResolvingFetchCb));
+            // Keep fetches pending
+            fetchUsgsData.mockImplementation(() => new Promise(() => {}));
+            const { result } = renderHook(() => useEarthquakeData());
             expect(result.current.isLoadingDaily).toBe(true);
             expect(result.current.isLoadingWeekly).toBe(true);
             expect(result.current.isLoadingInitialData).toBe(true);
@@ -130,8 +134,8 @@ describe('useEarthquakeData', () => {
         });
 
         it('should show only the initial loading message (as intervals are disabled)', () => {
-            const neverResolvingFetchCb = vi.fn(() => new Promise(() => {}));  // Keep fetches pending
-            const { result } = renderHook(() => useEarthquakeData(neverResolvingFetchCb));
+            fetchUsgsData.mockImplementation(() => new Promise(() => {})); // Keep fetches pending
+            const { result } = renderHook(() => useEarthquakeData());
 
             expect(result.current.currentLoadingMessage).toBe(INITIAL_LOADING_MESSAGES[0]);
 
@@ -148,16 +152,16 @@ describe('useEarthquakeData', () => {
 
     describe('Successful Data Fetch & Processing', () => {
         beforeEach(() => {
-            // This beforeEach sets up the standard ASYNCHRONOUS mock for fetchDataCb for this suite.
-            mockFetchDataCb.mockImplementation(async (url) => {
-                if (url === USGS_API_URL_DAY) return { ...mockDailyResponse };
-                if (url === USGS_API_URL_WEEK) return { ...mockWeeklyResponse };
-                return { features: [], metadata: { generated: MOCKED_NOW } };
+            // This beforeEach sets up the standard ASYNCHRONOUS mock for fetchUsgsData for this suite.
+            fetchUsgsData.mockImplementation(async (url) => {
+                if (url === USGS_API_URL_DAY) return Promise.resolve({ ...mockDailyResponse });
+                if (url === USGS_API_URL_WEEK) return Promise.resolve({ ...mockWeeklyResponse });
+                return Promise.resolve({ features: [], metadata: { generated: MOCKED_NOW } });
             });
         });
 
         it('should set loading states to false and error to null on successful fetch', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
 
             // With setInterval for loading messages mocked (not auto-firing),
             // vi.runAllTimersAsync() should now primarily handle the async fetches and the refresh interval.
@@ -174,8 +178,7 @@ describe('useEarthquakeData', () => {
         });
 
         it('should set dataFetchTime and lastUpdated correctly', async () => {
-            // mockFetchDataCb is set by beforeEach
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); });
 
             expect(result.current.dataFetchTime).toBe(MOCKED_NOW);
@@ -183,7 +186,7 @@ describe('useEarthquakeData', () => {
         });
 
         it('should filter earthquakesLastHour correctly', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); });
 
             expect(result.current.earthquakesLastHour.length).toBe(1);
@@ -191,7 +194,7 @@ describe('useEarthquakeData', () => {
         });
 
         it('should filter earthquakesPriorHour correctly', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); });
 
             expect(result.current.earthquakesPriorHour.length).toBe(1);
@@ -199,7 +202,7 @@ describe('useEarthquakeData', () => {
         });
 
         it('should filter earthquakesLast24Hours correctly', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); });
 
             // day1 (0.5h), day2 (1.5h), day3 (10h), day4 (23h)
@@ -208,7 +211,7 @@ describe('useEarthquakeData', () => {
         });
 
         it('should filter earthquakesLast72Hours (from weekly) correctly', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); });
 
             // week1 (0.8h), week2 (26h), week3 (49h), week4 (70h)
@@ -218,7 +221,7 @@ describe('useEarthquakeData', () => {
         });
 
         it('should filter earthquakesLast7Days (from weekly) correctly', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); });
 
             // week1 (0.8h), week2 (26h), week3 (49h), week4 (70h), week5 (7*24-1 h)
@@ -227,7 +230,7 @@ describe('useEarthquakeData', () => {
         });
 
         it('should filter prev24HourData (24-48h ago from weekly) correctly', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); });
 
             // week2 (26h)
@@ -236,7 +239,7 @@ describe('useEarthquakeData', () => {
         });
 
         it('should process globeEarthquakes correctly (sorted by mag, limited, from last 72h weekly)', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); });
 
             const globeQuakes = result.current.globeEarthquakes;
@@ -249,7 +252,7 @@ describe('useEarthquakeData', () => {
         });
 
         it('should determine hasRecentTsunamiWarning correctly', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); });
             // day2 (1.5h ago) has tsunami = 1
             expect(result.current.hasRecentTsunamiWarning).toBe(true);
@@ -259,18 +262,18 @@ describe('useEarthquakeData', () => {
                 ...mockDailyResponse,
                 features: mockDailyResponse.features.map(f => ({...f, properties: {...f.properties, tsunami: 0}}))
             };
-            mockFetchDataCb.mockImplementation(async (url) => {
-                if (url === USGS_API_URL_DAY) return noTsunamiDaily;
-                if (url === USGS_API_URL_WEEK) return { ...mockWeeklyResponse };
-                return { features: [] };
+            fetchUsgsData.mockImplementation(async (url) => {
+                if (url === USGS_API_URL_DAY) return Promise.resolve(noTsunamiDaily);
+                if (url === USGS_API_URL_WEEK) return Promise.resolve({ ...mockWeeklyResponse });
+                return Promise.resolve({ features: [] });
             });
-            const { result: resultNoTsunami } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result: resultNoTsunami } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); }); // Let this instance load
             expect(resultNoTsunami.current.hasRecentTsunamiWarning).toBe(false);
         });
 
         it('should determine highestRecentAlert and activeAlertTriggeringQuakes correctly', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); });
 
             // day3 (10h ago) is orange, day2 (1.5h ago) is yellow. Orange is higher.
@@ -284,12 +287,12 @@ describe('useEarthquakeData', () => {
                 ...mockDailyResponse,
                 features: mockDailyResponse.features.map(f => ({...f, properties: {...f.properties, alert: 'green'}}))
             };
-             mockFetchDataCb.mockImplementation(async (url) => {
-                if (url === USGS_API_URL_DAY) return greenAlertsDaily;
-                if (url === USGS_API_URL_WEEK) return { ...mockWeeklyResponse };
-                return { features: [] };
+             fetchUsgsData.mockImplementation(async (url) => {
+                if (url === USGS_API_URL_DAY) return Promise.resolve(greenAlertsDaily);
+                if (url === USGS_API_URL_WEEK) return Promise.resolve({ ...mockWeeklyResponse });
+                return Promise.resolve({ features: [] });
             });
-            const { result: resultGreen } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result: resultGreen } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); }); // Let this instance load
             expect(resultGreen.current.highestRecentAlert).toBeNull();
             expect(resultGreen.current.activeAlertTriggeringQuakes.length).toBe(0);
@@ -319,7 +322,7 @@ describe('useEarthquakeData', () => {
             //   5. week6 (192h ago)
 
             it('should identify lastMajorQuake and previousMajorQuake correctly from combined feeds with new logic', async () => {
-                const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+                const { result } = renderHook(() => useEarthquakeData());
                 await act(async () => { await vi.runAllTimersAsync(); });
 
                 expect(result.current.lastMajorQuake).toBeDefined();
@@ -338,16 +341,17 @@ describe('useEarthquakeData', () => {
             it('should handle scenario with only one major quake', async () => {
                 const singleMajorDaily = {
                     ...mockDailyResponse,
+                    // Revert to using MAJOR_QUAKE_THRESHOLD directly for clarity and stability
                     features: [createMockEarthquake('singleMajor', 5, MAJOR_QUAKE_THRESHOLD + 0.5)]
                 };
                 const emptyWeekly = {...mockWeeklyResponse, features: []};
-                mockFetchDataCb.mockImplementation(async (url) => {
-                    if (url === USGS_API_URL_DAY) return singleMajorDaily;
-                    if (url === USGS_API_URL_WEEK) return emptyWeekly;
-                    return { features: [] };
+                fetchUsgsData.mockImplementation(async (url) => {
+                    if (url === USGS_API_URL_DAY) return Promise.resolve(singleMajorDaily);
+                    if (url === USGS_API_URL_WEEK) return Promise.resolve(emptyWeekly);
+                    return Promise.resolve({ features: [] });
                 });
 
-                const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+                const { result } = renderHook(() => useEarthquakeData());
                 await act(async () => { await vi.runAllTimersAsync(); }); // Let this instance load
 
                 expect(result.current.lastMajorQuake?.id).toBe('testsingleMajor');
@@ -358,18 +362,19 @@ describe('useEarthquakeData', () => {
             it('should handle no major quakes', async () => {
                  const noMajorDaily = {
                     ...mockDailyResponse,
+                    // Filter based on the constant, not a potentially missing feature from a base mock
                     features: mockDailyResponse.features.filter(f => f.properties.mag < MAJOR_QUAKE_THRESHOLD)
                 };
                 const noMajorWeekly = {
                     ...mockWeeklyResponse,
                     features: mockWeeklyResponse.features.filter(f => f.properties.mag < MAJOR_QUAKE_THRESHOLD)
                 };
-                 mockFetchDataCb.mockImplementation(async (url) => {
-                    if (url === USGS_API_URL_DAY) return noMajorDaily;
-                    if (url === USGS_API_URL_WEEK) return noMajorWeekly;
-                    return { features: [] };
+                 fetchUsgsData.mockImplementation(async (url) => {
+                    if (url === USGS_API_URL_DAY) return Promise.resolve(noMajorDaily);
+                    if (url === USGS_API_URL_WEEK) return Promise.resolve(noMajorWeekly);
+                    return Promise.resolve({ features: [] });
                 });
-                const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+                const { result } = renderHook(() => useEarthquakeData());
                 await act(async () => { await vi.runAllTimersAsync(); }); // Let this instance load
 
                 expect(result.current.lastMajorQuake).toBeNull();
@@ -381,20 +386,20 @@ describe('useEarthquakeData', () => {
 
     describe('Error Handling', () => {
         it('should set error state if daily fetch fails, but still process weekly', async () => {
-            mockFetchDataCb.mockImplementation(async (url) => {
+            fetchUsgsData.mockImplementation(async (url) => {
                 if (url === USGS_API_URL_DAY) {
-                    return { metadata: { errorMessage: 'Daily fetch failed' } };
+                    return Promise.resolve({ error: { message: 'Daily fetch failed', status: 500 } });
                 }
                 if (url === USGS_API_URL_WEEK) {
-                    return { ...mockWeeklyResponse };
+                    return Promise.resolve({ ...mockWeeklyResponse });
                 }
-                return { features: [] };
+                return Promise.resolve({ features: [] });
             });
 
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); }); // Let load complete
 
-            expect(result.current.error).toContain('Daily data error: Daily fetch failed');
+            expect(result.current.error).toBe('Daily data error: Daily fetch failed.');
             expect(result.current.isLoadingDaily).toBe(false);
             expect(result.current.isLoadingWeekly).toBe(false);
             // Check if weekly data was processed
@@ -403,20 +408,20 @@ describe('useEarthquakeData', () => {
         });
 
         it('should set error state if weekly fetch fails, but still process daily', async () => {
-            mockFetchDataCb.mockImplementation(async (url) => {
+            fetchUsgsData.mockImplementation(async (url) => {
                 if (url === USGS_API_URL_DAY) {
-                    return { ...mockDailyResponse };
+                    return Promise.resolve({ ...mockDailyResponse });
                 }
                 if (url === USGS_API_URL_WEEK) {
-                    return { metadata: { errorMessage: 'Weekly fetch failed' } };
+                    return Promise.resolve({ error: { message: 'Weekly fetch failed', status: 500 } });
                 }
-                return { features: [] };
+                return Promise.resolve({ features: [] });
             });
 
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); }); // Let load complete
 
-            expect(result.current.error).toContain('Weekly data error: Weekly fetch failed');
+            expect(result.current.error).toBe('Weekly data error: Weekly fetch failed.');
             expect(result.current.isLoadingDaily).toBe(false);
             expect(result.current.isLoadingWeekly).toBe(false);
             // Check if daily data was processed
@@ -425,10 +430,10 @@ describe('useEarthquakeData', () => {
         });
 
         it('should set a generic error if both fetches fail', async () => {
-            mockFetchDataCb.mockImplementation(async (url) => {
-                 return { metadata: { errorMessage: 'Fetch failed for ' + url } };
+            fetchUsgsData.mockImplementation(async (url) => {
+                 return Promise.resolve({ error: { message: 'Fetch failed for ' + url, status: 500 } });
             });
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); }); // Let load complete
 
             expect(result.current.error).toBe('Failed to fetch critical earthquake data. Some features may be unavailable.');
@@ -440,17 +445,19 @@ describe('useEarthquakeData', () => {
             expect(result.current.lastMajorQuake).toBeNull(); // Should reset if fetches fail
         });
 
-        it('should handle network/exception errors during fetch', async () => {
-            mockFetchDataCb.mockImplementation(async (url) => {
+        it('should handle network/exception errors (e.g. fetchUsgsData throws itself)', async () => {
+            fetchUsgsData.mockImplementation(async (url) => {
                 if (url === USGS_API_URL_DAY) {
-                    throw new Error("Network error daily");
+                    // This simulates an error caught by the catch block inside fetchUsgsData,
+                    // which then returns the { error: ... } object.
+                    return Promise.resolve({ error: { message: "Simulated network error daily", status: null } });
                 }
-                return { ...mockWeeklyResponse }; // Weekly is fine for this test
+                return Promise.resolve({ ...mockWeeklyResponse }); // Weekly is fine
             });
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); }); // Let load complete
 
-            expect(result.current.error).toContain('Daily data error: Network error daily');
+            expect(result.current.error).toBe('Daily data error: Simulated network error daily.');
             expect(result.current.earthquakesLast72Hours.length).toBeGreaterThan(0);
         });
     });
@@ -458,27 +465,27 @@ describe('useEarthquakeData', () => {
     describe('Refresh Cycle', () => {
         beforeEach(() => {
             // Start with successful fetches
-            mockFetchDataCb.mockImplementation(async (url) => {
-                if (url === USGS_API_URL_DAY) return { ...mockDailyResponse };
-                if (url === USGS_API_URL_WEEK) return { ...mockWeeklyResponse };
-                return { features: [], metadata: { generated: MOCKED_NOW } };
+            fetchUsgsData.mockImplementation(async (url) => {
+                if (url === USGS_API_URL_DAY) return Promise.resolve({ ...mockDailyResponse });
+                if (url === USGS_API_URL_WEEK) return Promise.resolve({ ...mockWeeklyResponse });
+                return Promise.resolve({ features: [], metadata: { generated: MOCKED_NOW } });
             });
         });
 
         // This test is skipped because setInterval is globally disabled to prevent timer loops.
         it.skip('should refetch data after REFRESH_INTERVAL_MS', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
 
             // Initial fetch
             await act(async () => { await vi.runAllTimersAsync(); });
-            expect(mockFetchDataCb).toHaveBeenCalledTimes(2); // Daily and Weekly
+            expect(fetchUsgsData).toHaveBeenCalledTimes(2); // Daily and Weekly
             // Re-access result.current after state updates
             expect(result.current.isInitialAppLoad).toBe(false);
             const initialFetchTime = result.current.dataFetchTime;
 
 
             // Advance time to trigger refresh
-            mockFetchDataCb.mockClear(); // Clear previous call counts
+            fetchUsgsData.mockClear(); // Clear previous call counts
             const newMockedNow = MOCKED_NOW + REFRESH_INTERVAL_MS + 1000;
             vi.setSystemTime(new Date(newMockedNow)); // Important: update "now" for filtering
 
@@ -487,10 +494,10 @@ describe('useEarthquakeData', () => {
                 await vi.runAllTimersAsync(); // This should execute the queued callback, leading to new fetches
             });
             // Since refresh interval is disabled by the global setInterval mock,
-            // mockFetchDataCb will only be called for the initial load.
+            // fetchUsgsData will only be called for the initial load.
             // This test is now skipped, but if it were to run with refresh disabled,
             // this expectation would be 2, not 4.
-            expect(mockFetchDataCb).toHaveBeenCalledTimes(2);
+            expect(fetchUsgsData).toHaveBeenCalledTimes(2);
             expect(result.current.isLoadingDaily).toBe(false); // Should be false after refresh
             expect(result.current.isLoadingWeekly).toBe(false);
             expect(result.current.isLoadingInitialData).toBe(false); // Should remain false
@@ -525,10 +532,10 @@ describe('useEarthquakeData', () => {
                 metadata: { ...mockWeeklyResponse.metadata, generated: MOCKED_NOW + 1000}
             };
 
-            mockFetchDataCb.mockImplementation(async (url) => {
-                if (url === USGS_API_URL_DAY) return noNewMajorDaily;
-                if (url === USGS_API_URL_WEEK) return noNewMajorWeekly;
-                return { features: [] };
+            fetchUsgsData.mockImplementation(async (url) => {
+                if (url === USGS_API_URL_DAY) return Promise.resolve(noNewMajorDaily);
+                if (url === USGS_API_URL_WEEK) return Promise.resolve(noNewMajorWeekly);
+                return Promise.resolve({ features: [] });
             });
 
             // To test this properly, we need to simulate that `lastMajorQuake` and `previousMajorQuake`
@@ -588,22 +595,23 @@ describe('useEarthquakeData', () => {
 
 
         it.skip('should update lastMajorQuake if a newer one arrives during refresh', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
             await act(async () => { await vi.runAllTimersAsync(); }); // Initial load
 
             expect(result.current.lastMajorQuake?.id).toBe('testday2'); // As per revised main test
 
             // Prepare new data for the refresh
-            const newerMajorQuake = createMockEarthquake('newMajor', 0.1, MAJOR_QUAKE_THRESHOLD + 2, 0, 'red', 'Super New Major'); // mag 6.5
+            // Use MAJOR_QUAKE_THRESHOLD for consistency in test data creation
+            const newerMajorQuake = createMockEarthquake('newMajor', 0.1, MAJOR_QUAKE_THRESHOLD + 2, 0, 'red', 'Super New Major');
             const updatedDailyResponse = {
                 ...mockDailyResponse,
                 features: [newerMajorQuake, ...mockDailyResponse.features.filter(f => f.id !== 'testday2' && f.id !== 'testday3')], // remove old majors to ensure new one is picked
                  metadata: { ...mockDailyResponse.metadata, generated: MOCKED_NOW + REFRESH_INTERVAL_MS }
             };
-            mockFetchDataCb.mockImplementation(async (url) => {
-                if (url === USGS_API_URL_DAY) return updatedDailyResponse;
-                if (url === USGS_API_URL_WEEK) return { ...mockWeeklyResponse, metadata: { ...mockWeeklyResponse.metadata, generated: MOCKED_NOW + REFRESH_INTERVAL_MS } };
-                return { features: [] };
+            fetchUsgsData.mockImplementation(async (url) => {
+                if (url === USGS_API_URL_DAY) return Promise.resolve(updatedDailyResponse);
+                if (url === USGS_API_URL_WEEK) return Promise.resolve({ ...mockWeeklyResponse, metadata: { ...mockWeeklyResponse.metadata, generated: MOCKED_NOW + REFRESH_INTERVAL_MS } });
+                return Promise.resolve({ features: [] });
             });
 
             // Advance time and refetch
@@ -635,7 +643,7 @@ describe('useEarthquakeData', () => {
         });
 
         it.skip('isInitialAppLoad should be false after the first load cycle and remain false on refresh', async () => {
-            const { result, rerender } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result, rerender } = renderHook(() => useEarthquakeData());
 
             // Initial state before any fetch completes
             // The important check is after the first load.
@@ -655,7 +663,7 @@ describe('useEarthquakeData', () => {
         });
 
         it.skip('should not show initial loading messages again on refresh', async () => {
-            const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+            const { result } = renderHook(() => useEarthquakeData());
 
             // Initial load - messages will cycle
             await act(async () => { await vi.runAllTimersAsync(); }); // Complete initial load
@@ -686,21 +694,22 @@ describe('useEarthquakeData', () => {
 
         // New Test Cases for Major Quake Logic
         describe('Additional Major Quake Scenarios', () => {
+            // Using MAJOR_QUAKE_THRESHOLD directly instead of getMajorMag for stability
             it('Test Case: Multiple major quakes in daily, one in weekly, daily provides both last and previous.', async () => {
                 const dailyQuakes = [
-                    createMockEarthquake('D1', 1, MAJOR_QUAKE_THRESHOLD + 0.5), // 1h ago, mag 5.0
-                    createMockEarthquake('D2', 5, MAJOR_QUAKE_THRESHOLD + 0.6), // 5h ago, mag 5.1
-                    createMockEarthquake('D_non_major', 0.5, MAJOR_QUAKE_THRESHOLD -1) // 0.5h ago, not major
+                    createMockEarthquake('D1', 1, MAJOR_QUAKE_THRESHOLD + 0.5), // e.g., mag 5.0
+                    createMockEarthquake('D2', 5, MAJOR_QUAKE_THRESHOLD + 0.6), // e.g., mag 5.1
+                    createMockEarthquake('D_non_major', 0.5, MAJOR_QUAKE_THRESHOLD -1) // e.g., mag 3.5 (not major)
                 ];
                 const weeklyQuakes = [
-                    createMockEarthquake('W1', 10, MAJOR_QUAKE_THRESHOLD + 1.5) // 10h ago, mag 6.0
+                    createMockEarthquake('W1', 10, MAJOR_QUAKE_THRESHOLD + 1.5) // e.g., mag 6.0
                 ];
-                mockFetchDataCb.mockImplementation(async (url) => {
-                    if (url === USGS_API_URL_DAY) return { features: dailyQuakes, metadata: { generated: MOCKED_NOW } };
-                    if (url === USGS_API_URL_WEEK) return { features: weeklyQuakes, metadata: { generated: MOCKED_NOW } };
-                    return { features: [] };
+                fetchUsgsData.mockImplementation(async (url) => {
+                    if (url === USGS_API_URL_DAY) return Promise.resolve({ features: dailyQuakes, metadata: { generated: MOCKED_NOW } });
+                    if (url === USGS_API_URL_WEEK) return Promise.resolve({ features: weeklyQuakes, metadata: { generated: MOCKED_NOW } });
+                    return Promise.resolve({ features: [] });
                 });
-                const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+                const { result } = renderHook(() => useEarthquakeData());
                 await act(async () => { await vi.runAllTimersAsync(); });
 
                 expect(result.current.lastMajorQuake?.id).toBe('testD1');
@@ -709,17 +718,17 @@ describe('useEarthquakeData', () => {
 
             it('Test Case: Last major from weekly, previous from daily.', async () => {
                 const dailyQuakes = [
-                    createMockEarthquake('D1', 5, MAJOR_QUAKE_THRESHOLD + 0.5) // 5h ago, mag 5.0
+                    createMockEarthquake('D1', 5, MAJOR_QUAKE_THRESHOLD + 0.5)
                 ];
                 const weeklyQuakes = [
-                    createMockEarthquake('W1', 1, MAJOR_QUAKE_THRESHOLD + 1.5) // 1h ago, mag 6.0
+                    createMockEarthquake('W1', 1, MAJOR_QUAKE_THRESHOLD + 1.5)
                 ];
-                 mockFetchDataCb.mockImplementation(async (url) => {
-                    if (url === USGS_API_URL_DAY) return { features: dailyQuakes, metadata: { generated: MOCKED_NOW } };
-                    if (url === USGS_API_URL_WEEK) return { features: weeklyQuakes, metadata: { generated: MOCKED_NOW } };
-                    return { features: [] };
+                 fetchUsgsData.mockImplementation(async (url) => {
+                    if (url === USGS_API_URL_DAY) return Promise.resolve({ features: dailyQuakes, metadata: { generated: MOCKED_NOW } });
+                    if (url === USGS_API_URL_WEEK) return Promise.resolve({ features: weeklyQuakes, metadata: { generated: MOCKED_NOW } });
+                    return Promise.resolve({ features: [] });
                 });
-                const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+                const { result } = renderHook(() => useEarthquakeData());
                 await act(async () => { await vi.runAllTimersAsync(); });
 
                 expect(result.current.lastMajorQuake?.id).toBe('testW1');
@@ -728,18 +737,18 @@ describe('useEarthquakeData', () => {
 
             it('Test Case: Last major from daily, previous from weekly.', async () => {
                 const dailyQuakes = [
-                    createMockEarthquake('D1', 1, MAJOR_QUAKE_THRESHOLD + 0.5), // 1h ago, mag 5.0
-                    createMockEarthquake('D2', 10, MAJOR_QUAKE_THRESHOLD + 0.1) // 10h ago, mag 4.6
+                    createMockEarthquake('D1', 1, MAJOR_QUAKE_THRESHOLD + 0.5),
+                    createMockEarthquake('D2', 10, MAJOR_QUAKE_THRESHOLD + 0.1)
                 ];
                 const weeklyQuakes = [
-                    createMockEarthquake('W1', 5, MAJOR_QUAKE_THRESHOLD + 1.5) // 5h ago, mag 6.0
+                    createMockEarthquake('W1', 5, MAJOR_QUAKE_THRESHOLD + 1.5)
                 ];
-                mockFetchDataCb.mockImplementation(async (url) => {
-                    if (url === USGS_API_URL_DAY) return { features: dailyQuakes, metadata: { generated: MOCKED_NOW } };
-                    if (url === USGS_API_URL_WEEK) return { features: weeklyQuakes, metadata: { generated: MOCKED_NOW } };
-                    return { features: [] };
+                fetchUsgsData.mockImplementation(async (url) => {
+                    if (url === USGS_API_URL_DAY) return Promise.resolve({ features: dailyQuakes, metadata: { generated: MOCKED_NOW } });
+                    if (url === USGS_API_URL_WEEK) return Promise.resolve({ features: weeklyQuakes, metadata: { generated: MOCKED_NOW } });
+                    return Promise.resolve({ features: [] });
                 });
-                const { result } = renderHook(() => useEarthquakeData(mockFetchDataCb));
+                const { result } = renderHook(() => useEarthquakeData());
                 await act(async () => { await vi.runAllTimersAsync(); });
 
                 expect(result.current.lastMajorQuake?.id).toBe('testD1');

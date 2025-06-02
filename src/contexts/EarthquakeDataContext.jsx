@@ -1,8 +1,7 @@
 // src/contexts/EarthquakeDataContext.jsx
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useMemo } from 'react'; // Removed useState, useEffect, useCallback, useRef as they are not directly used here
 import useEarthquakeData from '../hooks/useEarthquakeData';
 import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData';
-import { fetchDataCb } from '../utils/fetchUtils';
 
 const EarthquakeDataContext = createContext(null);
 
@@ -32,7 +31,7 @@ export const EarthquakeDataProvider = ({ children }) => {
         setTimeBetweenPreviousMajorQuakes,
         currentLoadingMessage,
         isInitialAppLoad
-    } = useEarthquakeData(fetchDataCb);
+    } = useEarthquakeData();
 
     const {
         isLoadingMonthly,
@@ -45,7 +44,6 @@ export const EarthquakeDataProvider = ({ children }) => {
         prev14DayData,
         loadMonthlyData
     } = useMonthlyEarthquakeData(
-        fetchDataCb,
         lastMajorQuake,
         setLastMajorQuake,
         setPreviousMajorQuake,
