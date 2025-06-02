@@ -1,6 +1,6 @@
 // src/pages/HomePage.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import SeoMetadata from '../components/SeoMetadata';
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
 import InteractiveGlobeView from '../components/InteractiveGlobeView';
@@ -33,6 +33,7 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // import useEarthquakeData from '../hooks/useEarthquakeData'; // Will use context instead
 // import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
+import { useUIState } from '../contexts/UIStateContext.jsx'; // Import the new hook
 import {
     // USGS_API_URL_MONTH, // Now used inside useMonthlyEarthquakeData
     CLUSTER_MAX_DISTANCE_KM,
@@ -128,6 +129,8 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
  * @returns {JSX.Element} The rendered App component.
  */
 function App() {
+    // Use the UIStateContext for sidebar view management
+    const { activeSidebarView, setActiveSidebarView } = useUIState(); // Use the context hook
 
     const [appRenderTrigger, setAppRenderTrigger] = useState(0);
     const [activeFeedPeriod, setActiveFeedPeriod] = useState('last_24_hours'); // NEW STATE - default to 24 hours
@@ -257,17 +260,13 @@ function App() {
 
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now());
-    const [searchParams, setSearchParams] = useSearchParams();
-    const [activeSidebarView, setActiveSidebarView] = useState(searchParams.get('sidebarActiveView') || 'overview_panel'); // Manages UI state
+    // const [searchParams, setSearchParams] = useSearchParams(); // REMOVED - Handled by UIStateContext
+    // const [activeSidebarView, setActiveSidebarView] = useState(searchParams.get('sidebarActiveView') || 'overview_panel'); // REMOVED - Handled by UIStateContext
     const [globeFocusLng, setGlobeFocusLng] = useState(0); // UI state for globe
     const [focusedNotableQuake, setFocusedNotableQuake] = useState(null); // UI state for map interaction
     const [activeClusters, setActiveClusters] = useState([]); // Derived from earthquake data
 
-    // setActiveSidebarView is now the main function to change view and URL param
-    const changeSidebarView = (view) => {
-        setActiveSidebarView(view);
-        setSearchParams({ sidebarActiveView: view });
-    };
+    // changeSidebarView function is REMOVED - setActiveSidebarView from UIStateContext is used directly
 
     // --- Data Fetching Callbacks ---
     // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
@@ -852,12 +851,12 @@ function App() {
                 <aside className="hidden lg:flex w-[480px] bg-slate-800 p-0 flex-col border-l border-slate-700 shadow-2xl z-20">
                     <div className="p-3 border-b border-slate-700"> <h2 className="text-md font-semibold text-indigo-400">Detailed Earthquake Analysis</h2> </div>
                     <div className="flex-shrink-0 p-2 space-x-1 border-b border-slate-700 whitespace-nowrap overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
-                        <button onClick={() => changeSidebarView('overview_panel')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
-                        <button onClick={() => changeSidebarView('details_1hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>
-                        <button onClick={() => changeSidebarView('details_24hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_24hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 24hr</button>
-                        <button onClick={() => changeSidebarView('details_7day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_7day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 7day</button>
-                        {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={() => changeSidebarView('details_14day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={() => changeSidebarView('details_30day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
-                        <button onClick={() => changeSidebarView('learn_more')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
+                        <button onClick={() => setActiveSidebarView('overview_panel')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
+                        <button onClick={() => setActiveSidebarView('details_1hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>
+                        <button onClick={() => setActiveSidebarView('details_24hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_24hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 24hr</button>
+                        <button onClick={() => setActiveSidebarView('details_7day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_7day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 7day</button>
+                        {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={() => setActiveSidebarView('details_14day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={() => setActiveSidebarView('details_30day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
+                        <button onClick={() => setActiveSidebarView('learn_more')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
                     </div>
                     <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800" key={activeSidebarView}>
                         {error && !showFullScreenLoader && (
@@ -1050,7 +1049,7 @@ function App() {
                 </aside>
             </div> {/* End of main flex container (main + aside) */}
 
-            <BottomNav />
+            <BottomNav onNavClick={setActiveSidebarView} activeView={activeSidebarView} />
 
             {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
         </div>
