@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react'; // Added useMemo
 import PropTypes from 'prop-types';
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 import { useParams, useNavigate } from 'react-router-dom';
 import EarthquakeDetailView from './EarthquakeDetailView'; // Path relative to src/components/
 import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
@@ -12,11 +13,25 @@ import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
  * @param {Array<object>} props.broaderEarthquakeData - Broader earthquake data for context.
  * @param {number} [props.dataSourceTimespanDays] - Optional: Timespan of the data source in days.
  * @param {function} props.handleLoadMonthlyData - Function to load monthly data.
- * @param {boolean} props.hasAttemptedMonthlyLoad - Whether monthly data load was attempted.
- * @param {boolean} props.isLoadingMonthly - Whether monthly data is currently loading.
+ * @param {boolean} props.hasAttemptedMonthlyLoad - Whether monthly data load was attempted. (Removed, from context)
+ * @param {boolean} props.isLoadingMonthly - Whether monthly data is currently loading. (Removed, from context)
  * @returns {JSX.Element} The rendered EarthquakeDetailView component configured as a modal.
  */
-const EarthquakeDetailModalComponent = ({ broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) => {
+const EarthquakeDetailModalComponent = ({ dataSourceTimespanDays }) => { // Removed props from context
+    const {
+        allEarthquakes,
+        earthquakesLast7Days,
+        loadMonthlyData, // Renamed from handleLoadMonthlyData for clarity
+        hasAttemptedMonthlyLoad,
+        isLoadingMonthly
+    } = useEarthquakeDataState();
+
+    // Corrected derivation for broaderEarthquakeData:
+    const internalBroaderEarthquakeData = useMemo(() => {
+        return (hasAttemptedMonthlyLoad && allEarthquakes && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days;
+    }, [hasAttemptedMonthlyLoad, allEarthquakes, earthquakesLast7Days]);
+
+
     const { detailUrlParam } = useParams();
     const navigate = useNavigate();
     const detailUrl = decodeURIComponent(detailUrlParam);
@@ -117,22 +132,22 @@ const EarthquakeDetailModalComponent = ({ broaderEarthquakeData, dataSourceTimes
                 detailUrl={detailUrl}
                 onClose={handleClose}
                 onDataLoadedForSeo={handleSeoDataLoaded} // Pass the callback
-                broaderEarthquakeData={broaderEarthquakeData}
-            dataSourceTimespanDays={dataSourceTimespanDays}
-            handleLoadMonthlyData={handleLoadMonthlyData}
-            hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
-            isLoadingMonthly={isLoadingMonthly}
+                broaderEarthquakeData={internalBroaderEarthquakeData}
+            dataSourceTimespanDays={dataSourceTimespanDays} // This prop remains if needed for other logic
+            handleLoadMonthlyData={loadMonthlyData} // Use directly from context
+            hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad} // Use directly from context
+            isLoadingMonthly={isLoadingMonthly} // Use directly from context
         />
         </>
     );
 };
 
 EarthquakeDetailModalComponent.propTypes = {
-    broaderEarthquakeData: PropTypes.array.isRequired,
+    // broaderEarthquakeData: PropTypes.array.isRequired, // Now derived internally
     dataSourceTimespanDays: PropTypes.number,
-    handleLoadMonthlyData: PropTypes.func.isRequired,
-    hasAttemptedMonthlyLoad: PropTypes.bool.isRequired,
-    isLoadingMonthly: PropTypes.bool.isRequired,
+    // handleLoadMonthlyData: PropTypes.func.isRequired, // From context
+    // hasAttemptedMonthlyLoad: PropTypes.bool.isRequired, // From context
+    // isLoadingMonthly: PropTypes.bool.isRequired, // From context
 };
 
 export default EarthquakeDetailModalComponent;
