@@ -1,9 +1,12 @@
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, act } from '@testing-library/react'; // Import act
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
-import { expect, describe, it } from 'vitest';
+import { expect, describe, it, vi } from 'vitest'; // Import vi
 import App from './HomePage'; // Assuming HomePage is the default export from App.jsx or HomePage.jsx
+import { EarthquakeDataProvider } from '../contexts/EarthquakeDataContext.jsx'; // Import the provider
+
+vi.mock('../utils/fetchUtils.js'); // Mock fetchDataCb
 
 // Mock IntersectionObserver
 class IntersectionObserver {
@@ -35,20 +38,24 @@ describe('HomePage Accessibility', () => {
       originalConsoleError(...args);
     };
 
-    const { container } = render(
-      <MemoryRouter initialEntries={['/']}>
-        <App />
-      </MemoryRouter>
-    );
+    let container;
+    await act(async () => {
+      const renderResult = render(
+        <MemoryRouter initialEntries={['/']}>
+          <EarthquakeDataProvider>
+            <App />
+          </EarthquakeDataProvider>
+        </MemoryRouter>
+      );
+      container = renderResult.container;
+      // Wait for initial data loading to settle, if possible, or use a timeout.
+      // For critical async content, ideally wait for elements to appear.
+      // Here, we'll test the initial state which includes loading states.
+      // Let's give a brief moment for initial effects.
+      await new Promise(resolve => setTimeout(resolve, 500));
+    });
 
-    // Wait for initial data loading to settle, if possible, or use a timeout.
-    // For critical async content, ideally wait for elements to appear.
-    // Here, we'll test the initial state which includes loading states.
-    // Let's give a brief moment for initial effects.
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-
-    const results = await axe(container);
+    const results = await act(async () => await axe(container));
     expect(results).toHaveNoViolations();
 
     // Restore console.error
