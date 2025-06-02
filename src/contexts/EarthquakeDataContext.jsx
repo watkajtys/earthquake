@@ -7,7 +7,7 @@ import { fetchDataCb } from '../utils/fetchUtils.js';
 const EarthquakeDataContext = createContext(null);
 
 export const EarthquakeDataProvider = ({ children }) => {
-    // State definitions (as before)
+    // State definitions
     const [isLoadingDaily, setIsLoadingDaily] = useState(false);
     const [isLoadingWeekly, setIsLoadingWeekly] = useState(false);
     const [isLoadingMonthly, setIsLoadingMonthly] = useState(false);
@@ -38,7 +38,7 @@ export const EarthquakeDataProvider = ({ children }) => {
     const [isInitialAppLoad, setIsInitialAppLoad] = useState(true);
     const [hasAttemptedMonthlyLoad, setHasAttemptedMonthlyLoad] = useState(false);
 
-    // Updater functions (as before)
+    // Updater functions
     const setLoadingStatus = useCallback(({ daily, weekly, monthly, initial }) => {
         if (daily !== undefined) setIsLoadingDaily(daily);
         if (weekly !== undefined) setIsLoadingWeekly(weekly);
@@ -75,24 +75,55 @@ export const EarthquakeDataProvider = ({ children }) => {
         if (prev14) setPrev14DayData(prev14);
     }, []);
 
-    const updateLastMajorQuake = useCallback((newMajorQuake) => {
-        setLastMajorQuakeState(currentLastMajor => {
-            if (newMajorQuake && (!currentLastMajor || newMajorQuake.time > currentLastMajor.time)) {
-                setPreviousMajorQuakeState(currentLastMajor);
-                if (currentLastMajor && newMajorQuake) {
-                    setTimeBetweenPreviousMajorQuakesState(newMajorQuake.time - currentLastMajor.time);
-                }
-                return newMajorQuake;
+    const updateLastMajorQuake = useCallback((newQuakeCandidate) => {
+        // Use lastMajorQuake and previousMajorQuake from the provider's scope directly
+        const candidates = [newQuakeCandidate, lastMajorQuake, previousMajorQuake]
+            .filter(q => q && q.id && q.properties && typeof q.properties.time === 'number') // Ensure valid quake objects
+            .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id)); // Deduplicate by ID
+
+        candidates.sort((a, b) => b.properties.time - a.properties.time); // Sort newest first
+
+        const newFinalLastMajorQuake = candidates[0] || null;
+        const newFinalPreviousMajorQuake = candidates[1] || null;
+
+        // Only update if the derived new values are different from current state
+        // to prevent unnecessary re-renders if the candidate doesn't change anything.
+        if (newFinalLastMajorQuake?.id !== lastMajorQuake?.id || newFinalPreviousMajorQuake?.id !== previousMajorQuake?.id) {
+            setLastMajorQuakeState(newFinalLastMajorQuake);
+            setPreviousMajorQuakeState(newFinalPreviousMajorQuake);
+
+            if (newFinalLastMajorQuake && newFinalPreviousMajorQuake) {
+                setTimeBetweenPreviousMajorQuakesState(
+                    newFinalLastMajorQuake.properties.time - newFinalPreviousMajorQuake.properties.time
+                );
+            } else {
+                setTimeBetweenPreviousMajorQuakesState(null);
             }
-            return currentLastMajor;
-        });
-    }, []);
+        } else {
+            // If the top two quakes haven't changed, check if the time between them needs recalculation
+            // (e.g. if one was null and now isn't, or vice-versa, even if IDs are same).
+            // This handles edge case where current lastMajorQuake is newQuakeCandidate and previousMajorQuake was null.
+            const currentTimeBetween = (lastMajorQuake && previousMajorQuake) 
+                ? lastMajorQuake.properties.time - previousMajorQuake.properties.time 
+                : null;
+            const newTimeBetween = (newFinalLastMajorQuake && newFinalPreviousMajorQuake)
+                ? newFinalLastMajorQuake.properties.time - newFinalPreviousMajorQuake.properties.time
+                : null;
+
+            if (currentTimeBetween !== newTimeBetween) {
+                 setTimeBetweenPreviousMajorQuakesState(newTimeBetween);
+            }
+        }
+
+    }, [lastMajorQuake, previousMajorQuake, setLastMajorQuakeState, setPreviousMajorQuakeState, setTimeBetweenPreviousMajorQuakesState]);
     
-    const setPreviousMajorQuake = useCallback((quake) => { // This specific setter might not be directly used by hooks if updateLastMajorQuake handles all logic
+    // Direct setters for individual properties are generally not needed by hooks if updateLastMajorQuake is comprehensive.
+    // Keeping them for now if context consumers might need them, but they are not part of this specific refactor's direct use by hooks.
+    const setPreviousMajorQuake = useCallback((quake) => {
         setPreviousMajorQuakeState(quake);
     }, []);
 
-    const setTimeBetweenPreviousMajorQuakes = useCallback((time) => { // Same as above
+    const setTimeBetweenPreviousMajorQuakes = useCallback((time) => {
         setTimeBetweenPreviousMajorQuakesState(time);
     }, []);
 
@@ -105,7 +136,7 @@ export const EarthquakeDataProvider = ({ children }) => {
         setErrorState,
         setDailyEarthquakeData,
         setWeeklyEarthquakeData,
-        updateLastMajorQuake,
+        updateLastMajorQuake, // Pass the refactored updater
         setDataFetchTime,
         setLastUpdated,
         setCurrentLoadingMessage,
@@ -117,17 +148,17 @@ export const EarthquakeDataProvider = ({ children }) => {
         setLoadingStatus,
         setErrorState,
         setMonthlyEarthquakeData,
-        updateLastMajorQuake,
+        updateLastMajorQuake, // Pass the refactored updater
         setHasAttemptedMonthlyLoad
     });
 
     const contextValue = useMemo(() => ({
-        isLoadingDaily, setIsLoadingDaily, // Exposing main setters for direct use if ever needed, though hooks use specific ones
+        isLoadingDaily, setIsLoadingDaily,
         isLoadingWeekly, setIsLoadingWeekly,
         isLoadingMonthly, setIsLoadingMonthly,
         isLoadingInitialData, setIsLoadingInitialData,
-        error, setError, // Main error setter
-        monthlyError, setMonthlyError, // Monthly error setter
+        error, setError,
+        monthlyError, setMonthlyError,
         dataFetchTime, setDataFetchTime,
         lastUpdated, setLastUpdated,
         earthquakesLastHour, setEarthquakesLastHour,
@@ -152,22 +183,19 @@ export const EarthquakeDataProvider = ({ children }) => {
         isInitialAppLoad, setIsInitialAppLoad,
         hasAttemptedMonthlyLoad, setHasAttemptedMonthlyLoad,
         
-        // Provider's own setters, which are passed to hooks
         setLoadingStatus,
         setErrorState,
         setDailyEarthquakeData,
         setWeeklyEarthquakeData,
         setMonthlyEarthquakeData,
-        updateLastMajorQuake,
-        setLastMajorQuake: setLastMajorQuakeState, // Direct state setter for lastMajorQuake
-        setPreviousMajorQuake: setPreviousMajorQuakeState, // Direct state setter for previousMajorQuake
-        setTimeBetweenPreviousMajorQuakes: setTimeBetweenPreviousMajorQuakesState, // Direct state setter
+        updateLastMajorQuake, // The refactored one
+        setLastMajorQuake: setLastMajorQuakeState, 
+        setPreviousMajorQuake: setPreviousMajorQuakeState, 
+        setTimeBetweenPreviousMajorQuakes: setTimeBetweenPreviousMajorQuakesState,
 
-        // Functions from hooks
         forceRefresh,
         loadMonthlyData,
     }), [
-        // All state values
         isLoadingDaily, isLoadingWeekly, isLoadingMonthly, isLoadingInitialData,
         error, monthlyError, dataFetchTime, lastUpdated,
         earthquakesLastHour, earthquakesPriorHour, earthquakesLast24Hours,
@@ -177,12 +205,10 @@ export const EarthquakeDataProvider = ({ children }) => {
         hasRecentTsunamiWarning, highestRecentAlert, lastMajorQuake, previousMajorQuake,
         timeBetweenPreviousMajorQuakes, currentLoadingMessage, isInitialAppLoad,
         hasAttemptedMonthlyLoad,
-        // All updater functions from provider
         setLoadingStatus, setErrorState, setDailyEarthquakeData, setWeeklyEarthquakeData, 
         setMonthlyEarthquakeData, updateLastMajorQuake, setLastMajorQuakeState, 
         setPreviousMajorQuakeState, setTimeBetweenPreviousMajorQuakesState,
         setDataFetchTime, setLastUpdated, setCurrentLoadingMessage, setIsInitialAppLoad, setHasAttemptedMonthlyLoad,
-        // Functions from hooks
         forceRefresh, loadMonthlyData
     ]);
 
