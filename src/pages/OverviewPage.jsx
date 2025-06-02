@@ -1,46 +1,76 @@
 // src/pages/OverviewPage.jsx
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useEarthquakeDataState } from '../../contexts/EarthquakeDataContext.jsx';
+import { getMagnitudeColor } from '../../utils/utils.js';
+import { ALERT_LEVELS, REGIONS, FEELABLE_QUAKE_THRESHOLD, MAJOR_QUAKE_THRESHOLD } from '../../constants/appConstants.js';
+
 import SeoMetadata from '../components/SeoMetadata';
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
-import RegionalDistributionList from '../components/RegionalDistributionList';
+// RegionalDistributionList is not used in the provided JSX snippet, so import is removed for now.
+// If it were used, it would be: import RegionalDistributionList from '../components/RegionalDistributionList';
 import InfoSnippet from '../components/InfoSnippet';
-import ClusterSummaryItem from '../components/ClusterSummaryItem'; // Assuming this is used here
+import ClusterSummaryItem from '../components/ClusterSummaryItem'; 
 // Import any other components specific to the previous inline overview content if needed
 
-// Props that would have been passed to the inline JSX in HomePage.jsx for the /overview route
-// These will need to be passed from HomePage.jsx when rendering this component
 const OverviewPage = ({
-    currentAlertConfig,
-    ALERT_LEVELS, // Constant, but might be passed if structure demands
-    hasRecentTsunamiWarning,
-    lastMajorQuake,
-    getMagnitudeColor,
     formatDate,
     handleQuakeClick, // Callback
-    latestFeelableQuakesSnippet,
     formatTimeAgo,
-    // BottomNav related click might be handled by NavLink if this page is simple
-    isLoadingInitialData, // For TimeSinceLastMajorQuakeBanner
-    isLoadingMonthly, // For TimeSinceLastMajorQuakeBanner
-    hasAttemptedMonthlyLoad, // For TimeSinceLastMajorQuakeBanner
-    timeBetweenPreviousMajorQuakes, // For TimeSinceLastMajorQuakeBanner
-    previousMajorQuake, // For TimeSinceLastMajorQuakeBanner
     formatTimeDuration, // For TimeSinceLastMajorQuakeBanner
     getRegionForEarthquake, // For TimeSinceLastMajorQuakeBanner & RegionalDistributionList
-    earthquakesLast24Hours, // For SummaryStatisticsCard & RegionalDistributionList
-    prev24HourData, // For SummaryStatisticsCard
-    isLoadingDaily, // For SummaryStatisticsCard & RegionalDistributionList
-    isLoadingWeekly, // For SummaryStatisticsCard (if earthquakesLast24Hours can be from weekly)
     calculateStats, // For SummaryStatisticsCard
     overviewClusters, // For ClusterSummaryItem list
     handleClusterSummaryClick, // For ClusterSummaryItem list
-    topActiveRegionsOverview, // For active region display
-    REGIONS, // For active region display color (if not handled by topActiveRegionsOverview structure)
-    navigate, // For "Learn More" button, if not using Link
 }) => {
-    // This component will replicate the JSX structure previously under the /overview Route in HomePage.jsx
-    // For brevity, I'm showing a simplified structure. The actual content should be moved from HomePage.jsx
+    const navigate = useNavigate();
+    const {
+        hasRecentTsunamiWarning,
+        lastMajorQuake,
+        isLoadingInitialData,
+        isLoadingMonthly,
+        hasAttemptedMonthlyLoad,
+        timeBetweenPreviousMajorQuakes,
+        previousMajorQuake,
+        earthquakesLast24Hours,
+        prev24HourData,
+        isLoadingDaily,
+        isLoadingWeekly,
+        highestRecentAlert,
+        activeAlertTriggeringQuakes // Added this
+    } = useEarthquakeDataState();
+
+    const currentAlertConfig = useMemo(() => {
+        if (highestRecentAlert && ALERT_LEVELS[highestRecentAlert.toUpperCase()]) {
+            return ALERT_LEVELS[highestRecentAlert.toUpperCase()];
+        }
+        return null;
+    }, [highestRecentAlert]);
+
+    const latestFeelableQuakesSnippet = useMemo(() => {
+        if (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0) return [];
+        return earthquakesLast24Hours
+            .filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD)
+            .sort((a, b) => b.properties.time - a.properties.time)
+            .slice(0, 3);
+    }, [earthquakesLast24Hours]);
+
+    const topActiveRegionsOverview = useMemo(() => {
+        if (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0 || !getRegionForEarthquake) {
+            return [];
+        }
+        const counts = REGIONS.map(r => ({ ...r, count: 0 })); // REGIONS is imported constant
+        earthquakesLast24Hours.forEach(q => {
+            const region = getRegionForEarthquake(q); // getRegionForEarthquake is a prop
+            const regionCounter = counts.find(r => r.name === region.name);
+            if (regionCounter) regionCounter.count++;
+        });
+        const sortedRegions = counts.filter(r => r.count > 0).sort((a, b) => b.count - a.count);
+        return sortedRegions.slice(0,2);
+    }, [earthquakesLast24Hours, getRegionForEarthquake]);
+
+
     return (
         <>
             <SeoMetadata
@@ -57,11 +87,11 @@ const OverviewPage = ({
                     Overview
                 </h2>
 
-                {/* Example of how one of the components would be used with passed props */}
                 {currentAlertConfig && (
                     <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}>
                         <p className="font-bold text-sm mb-1">Active USGS Alert: {currentAlertConfig.text}</p>
                         <p className="text-xs">{currentAlertConfig.description}</p>
+                         {/* TODO: Consider if activeAlertTriggeringQuakes table needs to be here or if it's too much for mobile overview */}
                     </div>
                 )}
 
@@ -72,7 +102,6 @@ const OverviewPage = ({
                     </div>
                 )}
 
-                {/* Last Major Quake section */}
                 {lastMajorQuake && (
                     <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md">
                         <h3 className="text-sm font-semibold text-indigo-300 mb-1">Latest Significant Event</h3>
@@ -82,7 +111,7 @@ const OverviewPage = ({
                         <p className="text-sm text-slate-300 truncate" title={lastMajorQuake.properties.place}>
                             {lastMajorQuake.properties.place || "Location details pending..."}
                         </p>
-                        <p className="text-xs text-slate-300"> {/* Changed from text-slate-400 */}
+                        <p className="text-xs text-slate-300">
                            {formatDate(lastMajorQuake.properties.time)}
                             {lastMajorQuake.geometry?.coordinates?.[2] !== undefined && `, Depth: ${lastMajorQuake.geometry.coordinates[2].toFixed(1)} km`}
                         </p>
@@ -95,7 +124,6 @@ const OverviewPage = ({
                    </div>
                 )}
 
-                {/* Latest Feelable Quakes */}
                 {latestFeelableQuakesSnippet && latestFeelableQuakesSnippet.length > 0 && (
                     <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md">
                         <h3 className="text-sm font-semibold text-indigo-300 mb-2">Latest Activity</h3>
@@ -114,7 +142,7 @@ const OverviewPage = ({
                                             <span className="font-semibold" style={{ color: getMagnitudeColor(quake.properties.mag) }}>
                                             M {quake.properties.mag?.toFixed(1)}
                                         </span>
-                                        <span className="text-slate-300"> {/* Changed from text-slate-400 */}
+                                        <span className="text-slate-300">
                                                 {formatTimeAgo(Date.now() - quake.properties.time)}
                                             </span>
                                         </div>
@@ -126,7 +154,7 @@ const OverviewPage = ({
                             ))}
                         </ul>
                         <button
-                            onClick={() => navigate('/feeds?activeFeedPeriod=last_24_hours')} // Example navigation
+                            onClick={() => navigate('/feeds?activeFeedPeriod=last_24_hours')}
                             className="mt-3 w-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
                         >
                             View All Recent Activity
@@ -138,12 +166,12 @@ const OverviewPage = ({
                     lastMajorQuake={lastMajorQuake}
                     timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
                     previousMajorQuake={previousMajorQuake}
-                    isLoadingInitial={isLoadingInitialData}
-                    isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad}
+                    isLoadingInitial={isLoadingInitialData} // This prop is actually used by the component
+                    isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad} // This prop is used
                     formatTimeDuration={formatTimeDuration}
                     getRegionForEarthquake={getRegionForEarthquake}
                     handleQuakeClick={handleQuakeClick}
-                    getMagnitudeColor={getMagnitudeColor}
+                    getMagnitudeColor={getMagnitudeColor} // This is also used by the component
                 />
                 <SummaryStatisticsCard
                     title="Global Statistics (Last 24 Hours)"
@@ -153,7 +181,6 @@ const OverviewPage = ({
                     calculateStats={calculateStats}
                 />
 
-                {/* Active Earthquake Clusters Section */}
                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
                     <h3 className="text-md font-semibold mb-2 text-indigo-300">
                         Active Earthquake Clusters
@@ -169,21 +196,21 @@ const OverviewPage = ({
                             ))}
                         </ul>
                     ) : (
-                        <p className="text-xs text-slate-300 text-center py-2"> {/* Changed from text-slate-400 */}
+                        <p className="text-xs text-slate-300 text-center py-2">
                             No significant active clusters detected currently.
                         </p>
                     )}
                 </div>
 
-                {/* Most Active Region */}
                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
                     <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
-                    {isLoadingDaily && !earthquakesLast24Hours ? (
-                        <p>Loading...</p>
+                    {isLoadingDaily && !earthquakesLast24Hours ? ( // isLoadingDaily from context
+                        <p>Loading...</p> // Consider SkeletonText here
                     ) : (
                         topActiveRegionsOverview && topActiveRegionsOverview.length > 0 ? (
                             topActiveRegionsOverview.map((region, index) => {
-                                const regionColor = REGIONS.find(r => r.name === region.name)?.color || '#9CA3AF';
+                                // REGIONS constant is imported and used in useMemo for topActiveRegionsOverview
+                                const regionColor = region.color || '#9CA3AF'; // Use color from derived data
                                 return (
                                     <p key={region.name} className={`text-slate-300 ${index > 0 ? 'mt-0.5' : ''}`}>
                                         <span className="font-semibold" style={{color: regionColor}}>
@@ -199,7 +226,6 @@ const OverviewPage = ({
                     )}
                 </div>
 
-                {/* Quick Fact & Learn More */}
                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
                     <h3 className="text-md font-semibold mb-1 text-indigo-400">Quick Fact</h3>
                     <InfoSnippet topic="magnitude" />
@@ -210,7 +236,6 @@ const OverviewPage = ({
                         Learn More About Earthquakes
                     </button>
                 </div>
-                {/* ... other content from /overview route ... */}
             </div>
         </>
     );

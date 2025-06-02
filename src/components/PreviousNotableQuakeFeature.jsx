@@ -1,27 +1,21 @@
 // src/PreviousNotableQuakeFeature.jsx
 import React, { useState, useEffect } from 'react';
-import { getMagnitudeColor as getMagnitudeColorUtil } from '../utils/utils.js'; // Renamed to avoid conflict
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
+import { getMagnitudeColor } from '../utils/utils.js';
 
 /**
  * A React component that displays a feature card for the second most recent significant earthquake.
  * This component is intended to show the major quake that occurred before the one currently highlighted as 'latest'.
  * @param {object} props - The component's props.
- * @param {object | null} props.previousMajorQuake - The data object for the previously recorded significant earthquake.
- * @param {boolean} props.isLoadingPreviousQuake - Flag indicating if the data for the previous quake is currently loading.
  * @param {function(object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card is clicked. Receives the quake data object.
- * @param {function(number):string} [props.getMagnitudeColorFunc] - Optional: Function that returns a color string based on earthquake magnitude.
  * @returns {JSX.Element} The rendered PreviousNotableQuakeFeature component.
  */
-const PreviousNotableQuakeFeature = ({
-                                 previousMajorQuake,
-                                 isLoadingPreviousQuake,
-                                 onNotableQuakeSelect,
-                                 getMagnitudeColorFunc
-                             }) => {
+const PreviousNotableQuakeFeature = ({ onNotableQuakeSelect }) => {
+    const { previousMajorQuake, isLoadingInitialData } = useEarthquakeDataState();
     const [displayQuake, setDisplayQuake] = useState(null);
 
     useEffect(() => {
-        if (isLoadingPreviousQuake) {
+        if (isLoadingInitialData) {
             setDisplayQuake(null); // Show loading or nothing
             return;
         }
@@ -41,10 +35,10 @@ const PreviousNotableQuakeFeature = ({
         } else {
             setDisplayQuake(null); // No quake to display
         }
-    }, [previousMajorQuake, isLoadingPreviousQuake]);
+    }, [previousMajorQuake, isLoadingInitialData]);
 
 
-    if (isLoadingPreviousQuake && !previousMajorQuake) {
+    if (isLoadingInitialData && !previousMajorQuake) {
         return (
             <div className="p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-[220px] backdrop-blur-sm border border-slate-700 animate-pulse">
                 <div className="h-3 bg-slate-700 rounded w-3/4 mb-1.5"></div> {/* Title placeholder */}
@@ -63,8 +57,7 @@ const PreviousNotableQuakeFeature = ({
         );
     }
 
-    const colorFunc = getMagnitudeColorFunc || getMagnitudeColorUtil;
-    const quakeColor = displayQuake?.mag !== undefined ? colorFunc(displayQuake.mag) : '#FFFFFF';
+    const quakeColor = displayQuake?.mag !== undefined ? getMagnitudeColor(displayQuake.mag) : '#FFFFFF';
 
     return (
         <div className="p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-[220px] backdrop-blur-sm border border-slate-600"> {/* Slightly different border for distinction if desired */}

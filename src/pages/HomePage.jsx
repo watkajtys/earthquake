@@ -132,7 +132,7 @@ function App() {
     // Use the UIStateContext for sidebar view management
     const { activeSidebarView, setActiveSidebarView } = useUIState(); // Use the context hook
 
-    const [appRenderTrigger, setAppRenderTrigger] = useState(0);
+    // const [appRenderTrigger, setAppRenderTrigger] = useState(0); // Removed as unused
     const [activeFeedPeriod, setActiveFeedPeriod] = useState('last_24_hours'); // NEW STATE - default to 24 hours
 
     // --- Callback Hooks (Formatting, Colors, Regions, Stats) ---
@@ -730,30 +730,24 @@ function App() {
                                         defaultFocusLat={20}
                                         defaultFocusLng={globeFocusLng}
                                         onQuakeClick={handleQuakeClick}
-                                        getMagnitudeColorFunc={getMagnitudeColor}
+                                        // getMagnitudeColorFunc prop removed
                                         allowUserDragRotation={true}
                                         enableAutoRotation={true}
                                         globeAutoRotateSpeed={0.1}
                                         coastlineGeoJson={coastlineData}
                                         tectonicPlatesGeoJson={tectonicPlatesData}
-                                        // highlightedQuakeId prop removed (logic internal to GlobeView via context)
+                                        // highlightedQuakeId prop removed
                                         // latestMajorQuakeForRing prop removed (data from context)
                                         // previousMajorQuake prop removed (data from context)
                                         activeClusters={activeClusters}
                                     />
                                     <div className="absolute top-2 left-2 z-10 space-y-2">
                                         <NotableQuakeFeature
-                                            dynamicFeaturedQuake={lastMajorQuake} // from useEarthquakeData
-                                            isLoadingDynamicQuake={isLoadingInitialData} // from useEarthquakeData
                                             onNotableQuakeSelect={handleNotableQuakeSelect}
-                                            getMagnitudeColorFunc={getMagnitudeColor}
                                         />
                                         <div className="hidden md:block">
                                             <PreviousNotableQuakeFeature
-                                                previousMajorQuake={previousMajorQuake} // from useEarthquakeData
-                                                isLoadingPreviousQuake={isLoadingInitialData} // from useEarthquakeData
                                                 onNotableQuakeSelect={handleNotableQuakeSelect}
-                                                getMagnitudeColorFunc={getMagnitudeColor}
                                             />
                                         </div>
                                         <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-[220px] backdrop-blur-sm border border-slate-700">
@@ -765,42 +759,22 @@ function App() {
                                     </div>
                                 </div>
                                 <GlobalLastMajorQuakeTimer
-                                    lastMajorQuake={lastMajorQuake}
                                     formatTimeDuration={formatTimeDuration}
-                                    handleTimerClick={handleQuakeClick} // <--- ADD THIS LINE
-                                    // SkeletonText is now imported by GlobalLastMajorQuakeTimer
+                                    handleTimerClick={handleQuakeClick}
                                 />
                                 </div>
                             </>
                         } />
                         <Route path="/overview" element={
                             <OverviewPage
-                                currentAlertConfig={currentAlertConfig}
-                                ALERT_LEVELS={ALERT_LEVELS} // Make sure ALERT_LEVELS is defined in HomePage or passed if imported in OverviewPage
-                                hasRecentTsunamiWarning={hasRecentTsunamiWarning}
-                                lastMajorQuake={lastMajorQuake}
-                                getMagnitudeColor={getMagnitudeColor}
                                 formatDate={formatDate}
                                 handleQuakeClick={handleQuakeClick}
-                                latestFeelableQuakesSnippet={latestFeelableQuakesSnippet}
                                 formatTimeAgo={formatTimeAgo}
-                                isLoadingInitialData={isLoadingInitialData}
-                                isLoadingMonthly={isLoadingMonthly}
-                                hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
-                                timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
-                                previousMajorQuake={previousMajorQuake}
                                 formatTimeDuration={formatTimeDuration}
-                                getRegionForEarthquake={getRegionForEarthquake} // Ensure this is the one from HomePage scope
-                                earthquakesLast24Hours={earthquakesLast24Hours}
-                                prev24HourData={prev24HourData}
-                                isLoadingDaily={isLoadingDaily}
-                                isLoadingWeekly={isLoadingWeekly}
+                                getRegionForEarthquake={getRegionForEarthquake}
                                 calculateStats={calculateStats}
-                                overviewClusters={overviewClusters} // This is the memoized one from HomePage
-                                handleClusterSummaryClick={handleClusterSummaryClick} // This is the callback from HomePage
-                                topActiveRegionsOverview={topActiveRegionsOverview} // This is the memoized one from HomePage
-                                REGIONS={REGIONS} // This is the memoized REGIONS constant from HomePage
-                                navigate={navigate} // Pass navigate from HomePage
+                                overviewClusters={overviewClusters}
+                                handleClusterSummaryClick={handleClusterSummaryClick}
                             />
                         } />
                         <Route path="/feeds" element={

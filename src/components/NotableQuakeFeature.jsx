@@ -1,6 +1,7 @@
 // src/NotableQuakeFeature.jsx
 import React, { useState, useEffect } from 'react';
-import { getMagnitudeColor as getMagnitudeColorUtil } from '../utils/utils.js'; // Renamed to avoid conflict if prop is also named getMagnitudeColor
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
+import { getMagnitudeColor } from '../utils/utils.js';
 
 /**
  * @const {Array<object>} historicalNotableQuakes
@@ -25,56 +26,48 @@ const historicalNotableQuakes = [
  * A React component that displays a feature card for a notable earthquake.
  * It can show a dynamically provided recent significant quake or cycle through a predefined list of historical quakes if no dynamic quake is available.
  * @param {object} props - The component's props.
- * @param {object | null} props.dynamicFeaturedQuake - The dynamically fetched latest significant earthquake object.
- * @param {boolean} props.isLoadingDynamicQuake - Flag indicating if the dynamic quake data is currently loading.
  * @param {function(object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card is clicked. Receives the quake data object.
- * @param {function(number):string} [props.getMagnitudeColorFunc] - Optional: Function that returns a color string based on earthquake magnitude. If not provided, util is used.
  * @returns {JSX.Element} The rendered NotableQuakeFeature component.
  */
-const NotableQuakeFeature = ({
-                                 dynamicFeaturedQuake,
-                                 isLoadingDynamicQuake,
-                                 onNotableQuakeSelect,
-                                 getMagnitudeColorFunc // Optional prop
-                             }) => {
+const NotableQuakeFeature = ({ onNotableQuakeSelect }) => {
+    const { lastMajorQuake, isLoadingInitialData } = useEarthquakeDataState();
     const [displayQuake, setDisplayQuake] = useState(null);
     const [historicalIndex, setHistoricalIndex] = useState(0);
     const [isCyclingHistorical, setIsCyclingHistorical] = useState(false);
 
     useEffect(() => {
-        if (isLoadingDynamicQuake) {
+        if (isLoadingInitialData) {
             setDisplayQuake(null); // Show loading or nothing
             setIsCyclingHistorical(false);
             return;
         }
 
-        if (dynamicFeaturedQuake && dynamicFeaturedQuake.properties) {
+        if (lastMajorQuake && lastMajorQuake.properties) {
             setDisplayQuake({
-                id: dynamicFeaturedQuake.id || `dyn-${dynamicFeaturedQuake.properties.time}`,
-                name: dynamicFeaturedQuake.properties.place || "Unknown Location",
-                mag: parseFloat(dynamicFeaturedQuake.properties.mag),
-                year: new Date(dynamicFeaturedQuake.properties.time).getFullYear(),
-                time: dynamicFeaturedQuake.properties.time, // Keep time for freshness check
-                description: `Latest significant (M${dynamicFeaturedQuake.properties.mag?.toFixed(1)}) earthquake.`,
-                url: dynamicFeaturedQuake.properties.url || dynamicFeaturedQuake.properties.detail,
+                id: lastMajorQuake.id || `dyn-${lastMajorQuake.properties.time}`,
+                name: lastMajorQuake.properties.place || "Unknown Location",
+                mag: parseFloat(lastMajorQuake.properties.mag),
+                year: new Date(lastMajorQuake.properties.time).getFullYear(),
+                time: lastMajorQuake.properties.time, // Keep time for freshness check
+                description: `Latest significant (M${lastMajorQuake.properties.mag?.toFixed(1)}) earthquake.`,
+                url: lastMajorQuake.properties.url || lastMajorQuake.properties.detail,
                 source: 'Recent',
-                originalQuake: dynamicFeaturedQuake // Pass the full original object for onNotableQuakeSelect
+                originalQuake: lastMajorQuake // Pass the full original object for onNotableQuakeSelect
             });
             setIsCyclingHistorical(false); // Stop cycling historical if a recent major is found
         } else if (historicalNotableQuakes.length > 0) {
             // No recent dynamic quake, or it's invalid, so start cycling historical ones
             setIsCyclingHistorical(true);
             const currentHistorical = historicalNotableQuakes[historicalIndex];
-            const colorFunc = getMagnitudeColorFunc || getMagnitudeColorUtil;
             setDisplayQuake({
                 ...currentHistorical,
-                color: colorFunc(currentHistorical.mag)
+                color: getMagnitudeColor(currentHistorical.mag) // Use imported getMagnitudeColor
             });
         } else {
             setDisplayQuake(null);
             setIsCyclingHistorical(false);
         }
-    }, [dynamicFeaturedQuake, isLoadingDynamicQuake, historicalIndex, getMagnitudeColorFunc]);
+    }, [lastMajorQuake, isLoadingInitialData, historicalIndex]);
 
     // Timer to cycle through historical quakes ONLY if isCyclingHistorical is true
     useEffect(() => {
@@ -88,7 +81,7 @@ const NotableQuakeFeature = ({
     }, [isCyclingHistorical, historicalNotableQuakes.length]);
 
 
-    if (isLoadingDynamicQuake && !dynamicFeaturedQuake) { // Show loading state only if dynamic quake is loading and not yet available
+    if (isLoadingInitialData && !lastMajorQuake) { // Show loading state only if dynamic quake is loading and not yet available
         return (
             <div className="p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-[220px] backdrop-blur-sm border border-slate-700 animate-pulse">
                 <div className="h-3 bg-slate-700 rounded w-3/4 mb-1.5"></div> {/* Title placeholder */}
@@ -106,9 +99,8 @@ const NotableQuakeFeature = ({
             </div>
         );
     }
-
-    const colorFunc = getMagnitudeColorFunc || getMagnitudeColorUtil;
-    const quakeColor = displayQuake?.mag !== undefined ? colorFunc(displayQuake.mag) : '#FFFFFF';
+    
+    const quakeColor = displayQuake?.mag !== undefined ? getMagnitudeColor(displayQuake.mag) : '#FFFFFF';
 
     return (
         <div className="p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-[220px] backdrop-blur-sm border border-slate-700">
