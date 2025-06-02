@@ -104,6 +104,7 @@ const useEarthquakeData = (fetchDataCb) => {
             };
 
             let dailyMajor = null;
+            let majD = []; // Initialize majD in a higher scope
             // Preserve lastMajorQuake across fetches until a newer one is found
             let currentLocalLastMajorQuake = lastMajorQuake;
             let currentLocalPreviousMajorQuake = previousMajorQuake;
@@ -136,8 +137,9 @@ const useEarthquakeData = (fetchDataCb) => {
                         setActiveAlertTriggeringQuakes([]);
                     }
 
-                    const majD = dD.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
-                    dailyMajor = majD.length > 0 ? majD[0] : null;
+                    // Assign to the higher-scoped majD
+                    majD = dD.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
+                    dailyMajor = majD.length > 0 ? majD[0] : null; 
                     if (dailyMajor) {
                         if (!currentLocalLastMajorQuake || dailyMajor.properties.time > currentLocalLastMajorQuake.properties.time) {
                             currentLocalLastMajorQuake = dailyMajor;
@@ -181,9 +183,12 @@ const useEarthquakeData = (fetchDataCb) => {
                     }
 
                     let consolidatedMajors = [];
-                    if (dailyMajor) consolidatedMajors.push(dailyMajor); // From current day fetch
-                    consolidatedMajors = [...consolidatedMajors, ...weeklyMajorsList]; // From current week fetch
+                    // majD (from daily fetch, now in scope) is already sorted by time, newest first.
+                    // weeklyMajorsList is also sorted by time, newest first.
+                    if (majD.length > 0) consolidatedMajors.push(...majD); // Add ALL major quakes from daily
+                    consolidatedMajors.push(...weeklyMajorsList); // Add ALL major quakes from weekly
                     // Add pre-existing lastMajorQuake if it's not already included and potentially newer than fetched ones
+                    // This pre-existing one could be from a previous fetch and might be older than daily/weekly but newer than others not in current feeds.
                     if(lastMajorQuake && !consolidatedMajors.find(q => q.id === lastMajorQuake.id)){
                         consolidatedMajors.push(lastMajorQuake);
                     }
