@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { expect, describe, it, vi } from 'vitest'; // Import vi
 import App from './HomePage'; // Assuming HomePage is the default export from App.jsx or HomePage.jsx
 import { EarthquakeDataProvider } from '../contexts/EarthquakeDataContext.jsx'; // Import the provider
-import { UIStateProvider } from '../contexts/UIStateContext.jsx'; // Import UIStateProvider
+import { UIStateProvider } from '../contexts/UIStateContext.jsx'; // Import the UIStateProvider
 
 vi.mock('../utils/fetchUtils.js'); // Mock fetchDataCb
 
@@ -44,7 +44,7 @@ describe('HomePage Accessibility', () => {
       const renderResult = render(
         <MemoryRouter initialEntries={['/']}>
           <EarthquakeDataProvider>
-            <UIStateProvider> {/* Wrap with UIStateProvider */}
+            <UIStateProvider> {/* Added UIStateProvider */}
               <App />
             </UIStateProvider>
           </EarthquakeDataProvider>

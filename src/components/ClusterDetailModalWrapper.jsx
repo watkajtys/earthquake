@@ -1,10 +1,8 @@
 // src/ClusterDetailModalWrapper.jsx
 import React from 'react';
-// Remove useNavigate, it will be handled by UIStateContext
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import ClusterDetailModal from './ClusterDetailModal';
-import SeoMetadata from './SeoMetadata';
-import { useUIState } from '../contexts/UIStateContext.jsx'; // Import useUIState
+import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
 
 /**
  * Wrapper component for ClusterDetailModal to integrate with React Router.
@@ -18,25 +16,25 @@ import { useUIState } from '../contexts/UIStateContext.jsx'; // Import useUIStat
  */
 function ClusterDetailModalWrapper({ overviewClusters, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
     const { clusterId } = useParams();
-    // navigate is removed
-    const { closeDetails } = useUIState(); // Get closeDetails from context
+    const navigate = useNavigate();
 
     // Find the cluster data from overviewClusters using clusterId
     const cluster = overviewClusters?.find(c => c.id === clusterId);
 
     const handleClose = () => {
-        closeDetails(); // Use context function to close (navigate back)
+        navigate(-1); // Go back to the previous page
     };
 
     const canonicalUrl = `https://earthquakeslive.com/cluster/${clusterId}`;
 
     if (!cluster) {
+        // Even if cluster is not found, set a basic SEO for the error page
         return (
             <>
                 <SeoMetadata
                     title="Cluster Not Found | Seismic Monitor"
                     description="The requested earthquake cluster details could not be found."
-                    pageUrl={canonicalUrl}
+                    pageUrl={canonicalUrl} // Use canonicalUrl even for error page for consistency
                     canonicalUrl={canonicalUrl}
                     locale="en_US"
                 />
@@ -45,7 +43,7 @@ function ClusterDetailModalWrapper({ overviewClusters, formatDate, getMagnitudeC
                         <h2 className="text-xl font-semibold text-amber-400 mb-3">Cluster Not Found</h2>
                         <p className="text-sm mb-4">The cluster details you are looking for could not be found. It might have expired or the link may be incorrect.</p>
                         <button
-                            onClick={handleClose} // This now uses closeDetails from context
+                            onClick={handleClose}
                             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"
                         >
                             Go Back
@@ -69,15 +67,15 @@ function ClusterDetailModalWrapper({ overviewClusters, formatDate, getMagnitudeC
                 pageUrl={canonicalUrl}
                 canonicalUrl={canonicalUrl}
                 locale="en_US"
-                type="website"
+                type="website" // Or "Event" if more appropriate, but website is safe
             />
             <ClusterDetailModal
                 cluster={cluster}
-                onClose={handleClose} // handleClose now uses closeDetails from context
-                formatDate={formatDate}
-                getMagnitudeColorStyle={getMagnitudeColorStyle}
-                onIndividualQuakeSelect={onIndividualQuakeSelect}
-            />
+                onClose={handleClose}
+            formatDate={formatDate}
+            getMagnitudeColorStyle={getMagnitudeColorStyle}
+            onIndividualQuakeSelect={onIndividualQuakeSelect} // Pass this down
+        />
         </>
     );
 }
