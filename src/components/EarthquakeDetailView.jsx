@@ -226,6 +226,24 @@ const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`
  * @param {boolean} [props.isLoadingMonthly] - Optional boolean indicating if monthly data is currently being loaded.
  * @returns {JSX.Element} The rendered EarthquakeDetailView component.
  */
+import ErrorBoundary from './ErrorBoundary'; // Assuming ErrorBoundary.jsx is in the same components folder
+
+/**
+ * A React component that displays detailed information about a specific earthquake event.
+ * It fetches data from a provided URL, parses it, and presents it in a structured,
+ * user-friendly modal view with various informational panels and diagrams.
+ *
+ * @param {object} props - The component's props.
+ * @param {string} props.detailUrl - The URL to fetch detailed earthquake data from.
+ * @param {function(): void} props.onClose - Callback function to close the detail view.
+ * @param {function(object): void} [props.onDataLoadedForSeo] - Optional callback. Receives an object with key data points (title, place, time, mag, depth, etc.) once details are loaded, intended for SEO updates.
+ * @param {Array<object>} props.broaderEarthquakeData - Array of earthquake objects (matching USGS GeoJSON feature structure) for nearby/regional events, used by the RegionalSeismicityChart.
+ * @param {number} props.dataSourceTimespanDays - The timespan (e.g., 7 or 30 days) of the `broaderEarthquakeData` source, used by RegionalSeismicityChart for context.
+ * @param {function(): void} [props.handleLoadMonthlyData] - Optional callback function to trigger loading of broader monthly data if not already loaded or in progress.
+ * @param {boolean} [props.hasAttemptedMonthlyLoad] - Optional boolean indicating if an attempt to load monthly data has already been made.
+ * @param {boolean} [props.isLoadingMonthly] - Optional boolean indicating if monthly data is currently being loaded.
+ * @returns {JSX.Element} The rendered EarthquakeDetailView component.
+ */
 function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) { // Add dataSourceTimespanDays
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -569,9 +587,10 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
             aria-modal="true"
             aria-labelledby="earthquake-detail-title"
         >
-            <div
-                ref={modalContentRef}
-                className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800"
+            <ErrorBoundary> {/* ErrorBoundary goes here, around the main content box */}
+                <div
+                    ref={modalContentRef}
+                    className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800"
                 onClick={(e) => e.stopPropagation()}
                 tabIndex="-1" // Make the modal container focusable for the trap if no inner elements are
             >
@@ -1071,8 +1090,9 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                             </p>
                         </div>
                     )}
-                </div>
-            </div>
+                </div> {/* This closes the div with className="p-3 md:p-5 space-y-5 text-sm" */}
+            </div> {/* This closes the div with ref={modalContentRef} */}
+            </ErrorBoundary>
         </div>
     );
 }
