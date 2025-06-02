@@ -227,6 +227,14 @@ const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`
  * @returns {JSX.Element} The rendered EarthquakeDetailView component.
  */
 import ErrorBoundary from './ErrorBoundary'; // Assuming ErrorBoundary.jsx is in the same components folder
+import EarthquakeDetailHeader from './earthquakeDetail/EarthquakeDetailHeader'; // Import the new header
+import EarthquakeSnapshotPanel from './earthquakeDetail/EarthquakeSnapshotPanel'; // Import the new snapshot panel
+import EarthquakeRegionalMapPanel from './earthquakeDetail/EarthquakeRegionalMapPanel'; // Import the new regional map panel
+import EarthquakeEnergyPanel from './earthquakeDetail/EarthquakeEnergyPanel'; // Import the new energy panel
+import EarthquakeRegionalSeismicityPanel from './earthquakeDetail/EarthquakeRegionalSeismicityPanel'; // Import the new regional seismicity panel
+import EarthquakeDepthProfilePanel from './earthquakeDetail/EarthquakeDepthProfilePanel'; // Import the new depth profile panel
+import EarthquakeSeismicWavesPanel from './earthquakeDetail/EarthquakeSeismicWavesPanel'; // Import the new seismic waves panel
+import EarthquakeLocationPanel from './earthquakeDetail/EarthquakeLocationPanel'; // Import the new location panel
 
 /**
  * A React component that displays detailed information about a specific earthquake event.
@@ -601,159 +609,75 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                     aria-label="Close detail view"
                 >&times;</button>
 
-                {isValidString(properties.title) && (
-                    <header className="text-center p-4 md:p-5 bg-white rounded-t-lg border-b border-gray-300">
-                        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-blue-700">Unpacking the Shakes!</h1>
-                        <p id="earthquake-detail-title" className="text-md text-slate-600 mt-1">{properties.title}</p>
-                    </header>
-                )}
+                <EarthquakeDetailHeader properties={properties} isValidString={isValidString} />
 
                 <div className="p-3 md:p-5 space-y-5 text-sm">
-                    {/* --- Snapshot Panel --- */}
-                    <div className={`${exhibitPanelClass} border-blue-500`}>
-                        <h2 className={`${exhibitTitleClass} text-blue-800 border-blue-200`}>Earthquake Snapshot</h2>
-                        <table className="w-full text-xs md:text-sm"><tbody>
-                        {isValidString(properties.title) && (
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600 w-2/5 md:w-1/3">Event Name</td><td className="py-1.5">{properties.title}</td></tr>
-                        )}
-                        {isValuePresent(properties.time) && ( // Assuming timestamp 0 is not valid, otherwise check more carefully
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Date & Time (UTC)</td><td className="py-1.5">{formatDate(properties.time)}</td></tr>
-                        )}
-                        {geometry?.coordinates && isValidNumber(geometry.coordinates[1]) && isValidNumber(geometry.coordinates[0]) && (
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Location</td><td className="py-1.5">{formatNumber(geometry.coordinates[1], 3)}°, {formatNumber(geometry.coordinates[0], 3)}°</td></tr>
-                        )}
-                        {isValidNumber(properties.mag) && (
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Magnitude ({isValidString(properties.magType) ? properties.magType : 'Mww'})</td><td className="py-1.5">{formatNumber(properties.mag, 1)}</td></tr>
-                        )}
-                        {geometry?.coordinates && isValidNumber(geometry.coordinates[2]) && ( // Depth can be 0
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Depth</td><td className="py-1.5">{formatNumber(geometry.coordinates[2], 1)} km</td></tr>
-                        )}
-                        {isValidNumber(energyJoules) && ( // energyJoules (scalarMoment) can be 0
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Energy (Seismic Moment)</td><td className="py-1.5">{formatLargeNumber(energyJoules)} N-m</td></tr>
-                        )}
-                        {momentTensorProductProps && isValidNumber(momentTensorProductProps['percent-double-couple']) && (
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Percent Double Couple</td><td className="py-1.5">{formatNumber(parseFloat(momentTensorProductProps['percent-double-couple']) * 100, 0)}%</td></tr>
-                        )}
-                        {isValuePresent(properties.tsunami) && ( // tsunami can be 0 or 1
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Tsunami?</td><td className="py-1.5">{properties.tsunami === 1 ? 'Yes' : 'No'}</td></tr>
-                        )}
-                        {isValidString(properties.status) && (
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Status</td><td className="py-1.5 capitalize">{properties.status}</td></tr>
-                        )}
-                        {isValuePresent(properties.felt) && isValidNumber(properties.felt) && ( // felt can be 0
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Felt Reports (DYFI)</td><td className="py-1.5">{properties.felt}</td></tr>
-                        )}
-                        {isValidNumber(mmiValue) && (
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">MMI (ShakeMap)</td><td className="py-1.5">{formatNumber(mmiValue,1)}</td></tr>
-                        )}
-                        {isValidString(pagerAlertValue) && (
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">PAGER Alert</td><td className={`py-1.5 capitalize font-semibold ${pagerAlertValue === 'green' ? 'text-green-600' : pagerAlertValue === 'yellow' ? 'text-yellow-600' : pagerAlertValue === 'orange' ? 'text-orange-600' : pagerAlertValue === 'red' ? 'text-red-600' : 'text-slate-600'}`}>{pagerAlertValue}</td></tr>
-                        )}
-                        {(isValidNumber(originProductProps?.['num-stations-used']) || isValidNumber(properties?.nst)) && (
-                            <tr className="border-t border-gray-300 mt-2 pt-2"><td className="pt-2 pr-2 font-semibold text-slate-600">Stations Used:</td><td className="pt-2">{isValidNumber(originProductProps?.['num-stations-used']) ? originProductProps['num-stations-used'] : properties.nst}</td></tr>
-                        )}
-                        {(isValidNumber(originProductProps?.['azimuthal-gap']) || isValidNumber(properties?.gap)) && (
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Azimuthal Gap:</td><td className="py-1.5">{formatNumber(originProductProps?.['azimuthal-gap'] ?? properties.gap, 0)}°</td></tr>
-                        )}
-                        {(isValidNumber(originProductProps?.['minimum-distance']) || isValidNumber(properties?.dmin)) && (
-                            <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Min. Distance:</td><td className="py-1.5">{formatNumber(originProductProps?.['minimum-distance'] ?? properties.dmin, 1)}°</td></tr>
-                        )}
-                        {(isValidNumber(originProductProps?.['standard-error']) || isValidNumber(properties?.rms)) && (
-                            <tr><td className="py-1.5 pr-2 font-semibold text-slate-600">RMS Error:</td><td className="py-1.5">{formatNumber(originProductProps?.['standard-error'] ?? properties.rms, 2)} s</td></tr>
-                        )}
-                        </tbody></table>
-                    </div>
+                    <EarthquakeSnapshotPanel
+                        properties={properties}
+                        geometry={geometry}
+                        originProductProps={originProductProps}
+                        momentTensorProductProps={momentTensorProductProps}
+                        energyJoules={energyJoules}
+                        mmiValue={mmiValue}
+                        pagerAlertValue={pagerAlertValue}
+                        isValidString={isValidString}
+                        isValuePresent={isValuePresent}
+                        isValidNumber={isValidNumber}
+                        formatDate={formatDate}
+                        formatNumber={formatNumber}
+                        formatLargeNumber={formatLargeNumber}
+                        exhibitPanelClass={exhibitPanelClass}
+                        exhibitTitleClass={exhibitTitleClass}
+                    />
 
-                    {/* Earthquake Map Section - Restructured as a standard panel */}
-                    {geometry && geometry.coordinates && isValidNumber(geometry.coordinates[1]) && isValidNumber(geometry.coordinates[0]) && (
-                        <div className={`${exhibitPanelClass} border-sky-500`}>
-                            <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
-                            <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
-                                <EarthquakeMap
-                                    latitude={geometry.coordinates[1]}
-                                    longitude={geometry.coordinates[0]}
-                                    magnitude={properties.mag}
-                                    title={properties.title}
-                                    shakeMapUrl={shakemapIntensityImageUrl}
-                                    nearbyQuakes={regionalQuakes}
-                                    mainQuakeDetailUrl={detailUrl}
-                                />
-                            </div>
-                        </div>
-                    )}
+                    <EarthquakeRegionalMapPanel
+                        geometry={geometry}
+                        properties={properties}
+                        shakemapIntensityImageUrl={shakemapIntensityImageUrl}
+                        regionalQuakes={regionalQuakes}
+                        detailUrl={detailUrl}
+                        isValidNumber={isValidNumber}
+                        exhibitPanelClass={exhibitPanelClass}
+                        exhibitTitleClass={exhibitTitleClass}
+                    />
 
-                    {/* --- Energy Unleashed Panel --- */}
-                    {isValidNumber(energyJoules) && ( // energyJoules can be 0
-                        <div className={`${exhibitPanelClass} border-orange-500`}>
-                            <h2 className={`${exhibitTitleClass} text-orange-800 border-orange-200`}>Energy Unleashed</h2>
-                            <p className="mb-3">Approx. Energy: <strong className={`${highlightClass} text-orange-600`}>{formatLargeNumber(energyJoules)} Joules</strong>.</p>
-                            <div className="space-y-2">
-                                {energyJoules > 0 && ( // Only show comparisons if energy is greater than 0
-                                    <>
-                                        <div className="flex items-start p-2 bg-orange-50 rounded-md"><svg width="24" height="24" viewBox="0 0 24 24" className="mr-2 shrink-0 mt-0.5 fill-yellow-500 stroke-yellow-700"><path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" strokeWidth="1.5" /></svg><div><strong className="text-orange-700">Lightning Bolt:</strong> ~1 billion Joules. This quake was like <strong className={`${highlightClass} text-orange-600`}>{formatLargeNumber(energyJoules / 1e9)}</strong> lightning bolts.</div></div>
-                                        <div className="flex items-start p-2 bg-red-50 rounded-md"><svg width="24" height="24" viewBox="0 0 24 24" className="mr-2 shrink-0 mt-0.5 fill-red-500 stroke-red-700" strokeWidth="1.5"><path d="M12 2C12 2 10.263 4.73897 9.00001 7.49997C9.00001 7.49997 6.00001 7.49997 6.00001 9.99997C6.00001 12.5 9.00001 12.5 9.00001 15C9.00001 17.5 6.00001 17.5 6.00001 20C6.00001 22.5 12 22.5 12 22.5C12 22.5 18 22.5 18 20C18 17.5 15 17.5 15 15C15 12.5 18 12.5 18 9.99997C18 7.49997 15 7.49997 15 7.49997C13.737 4.73897 12 2 12 2Z" /></svg><div><strong className="text-red-700">Hiroshima Bomb:</strong> ~63 trillion Joules. This quake was like <strong className={`${highlightClass} text-red-600`}>{formatLargeNumber(energyJoules / 6.3e13)}</strong> Hiroshima bombs.</div></div>
-                                    </>
-                                )}
-                            </div>
-                            {energyJoules > 0 && <p className={captionClass}>Comparisons are for scale.</p>}
-                        </div>
-                    )}
+                    <EarthquakeEnergyPanel
+                        energyJoules={energyJoules}
+                        isValidNumber={isValidNumber}
+                        formatLargeNumber={formatLargeNumber}
+                        exhibitPanelClass={exhibitPanelClass}
+                        exhibitTitleClass={exhibitTitleClass}
+                        highlightClass={highlightClass}
+                        captionClass={captionClass}
+                    />
 
-                    {/* --- Regional Seismicity Chart Panel --- */}
-                    {detailData && ( /* Ensure detailData (currentEarthquake) is loaded */
-                        <div className={`${exhibitPanelClass} border-cyan-500`}>
-                            <RegionalSeismicityChart
-                                currentEarthquake={detailData}
-                                nearbyEarthquakesData={broaderEarthquakeData}
-                                dataSourceTimespanDays={dataSourceTimespanDays} // Pass it
-                            />
-                        </div>
-                    )}
+                    <EarthquakeRegionalSeismicityPanel
+                        detailData={detailData}
+                        broaderEarthquakeData={broaderEarthquakeData}
+                        dataSourceTimespanDays={dataSourceTimespanDays}
+                        exhibitPanelClass={exhibitPanelClass}
+                    />
 
-    {/* --- Simplified Depth Profile Panel --- */}
-    {detailData?.geometry?.coordinates?.[2] !== undefined && detailData?.properties?.mag !== undefined && (
-      <div className={`${exhibitPanelClass} border-amber-500`}>
-        <SimplifiedDepthProfile
-          earthquakeDepth={detailData.geometry.coordinates[2]}
-          magnitude={detailData.properties.mag}
-        />
-      </div>
-    )}
+                    <EarthquakeDepthProfilePanel
+                        detailData={detailData}
+                        exhibitPanelClass={exhibitPanelClass}
+                    />
 
-                    {/* --- Understanding Seismic Waves Panel (Static content) --- */}
-                    <div className={`${exhibitPanelClass} border-fuchsia-500`}>
-                        <h2 className={`${exhibitTitleClass} text-fuchsia-800 border-fuchsia-200`}>Understanding Seismic Waves</h2>
-                        <div className="grid md:grid-cols-2 gap-4 mt-2">
-                            <div className="text-center p-2 bg-blue-50 rounded-md"><strong>P-Waves (Primary)</strong><svg width="150" height="80" viewBox="0 0 150 80" className="mx-auto mt-1"><line x1="10" y1="40" x2="140" y2="40" stroke="#4b5563" strokeWidth="1"/><line x1="20" y1="30" x2="20" y2="50" stroke="#3b82f6" strokeWidth="2"/><line x1="25" y1="30" x2="25" y2="50" stroke="#3b82f6" strokeWidth="2"/><line x1="70" y1="30" x2="70" y2="50" stroke="#3b82f6" strokeWidth="2"/><line x1="75" y1="30" x2="75" y2="50" stroke="#3b82f6" strokeWidth="2"/><text x="75" y="70" fontSize="10" textAnchor="middle">Push-Pull Motion →</text></svg><p className="text-xs text-slate-600">Fastest, compressional.</p></div>
-                            <div className="text-center p-2 bg-red-50 rounded-md"><strong>S-Waves (Secondary)</strong><svg width="150" height="80" viewBox="0 0 150 80" className="mx-auto mt-1"><path d="M10 40 Q 25 20 40 40 T 70 40 T 100 40 T 130 40" stroke="#ef4444" strokeWidth="2" fill="none"/><line x1="10" y1="40" x2="140" y2="40" stroke="#4b5563" strokeWidth="0.5" strokeDasharray="2,2"/><text x="75" y="70" fontSize="10" textAnchor="middle">Side-to-Side Motion ↕</text></svg><p className="text-xs text-slate-600">Slower, shear, solids only.</p></div>
-                        </div>
-                        <p className={`${captionClass} mt-3`}>Surface waves (Love & Rayleigh) arrive later and often cause most shaking.</p>
-                    </div>
-                    {/* --- Pinpointing the Quake (Location Quality) --- */}
-                    {(originProductProps || (properties && (isValidNumber(properties.nst) || isValidNumber(properties.gap) || isValidNumber(properties.dmin) || isValidNumber(properties.rms)))) && (
-                        <div className={`${exhibitPanelClass} border-yellow-500`}>
-                            <h2 className={`${exhibitTitleClass} text-yellow-800 border-yellow-300`}>Pinpointing the Quake</h2>
-                            <p className="mb-2 text-xs md:text-sm">Location quality based on available data:</p>
-                            <ul className="text-xs md:text-sm space-y-1 list-disc list-inside ml-4">
-                                {(isValidNumber(originProductProps?.['num-stations-used']) || isValidNumber(properties?.nst)) && (
-                                    <li><strong className="text-slate-700">Stations Used (nst):</strong> {isValidNumber(originProductProps?.['num-stations-used']) ? originProductProps['num-stations-used'] : properties.nst}</li>
-                                )}
-                                {(isValidNumber(originProductProps?.['azimuthal-gap']) || isValidNumber(properties?.gap)) && (
-                                    <li><strong className="text-slate-700">Azimuthal Gap (gap):</strong> {formatNumber(originProductProps?.['azimuthal-gap'] ?? properties.gap, 0)}° (smaller is better)</li>
-                                )}
-                                {(isValidNumber(originProductProps?.['minimum-distance']) || isValidNumber(properties?.dmin)) && (
-                                    <li><strong className="text-slate-700">Nearest Station (dmin):</strong> {formatNumber(originProductProps?.['minimum-distance'] ?? properties.dmin, 1)}° (~{formatNumber((originProductProps?.['minimum-distance'] ?? properties.dmin) * 111, 0)} km)</li>
-                                )}
-                                {(isValidNumber(originProductProps?.['standard-error']) || isValidNumber(properties?.rms)) && (
-                                    <li><strong className="text-slate-700">RMS Error (rms):</strong> {formatNumber(originProductProps?.['standard-error'] ?? properties.rms, 2)} s (smaller indicates better fit)</li>
-                                )}
-                            </ul>
-                            <div className={`${diagramContainerClass} bg-purple-50 mt-3`} style={{minHeight: '160px'}}>
-                                <svg width="200" height="150" viewBox="0 0 200 150"><circle cx="40" cy="40" r="5" fill="#1d4ed8"/><text x="40" y="30" fontSize="8">Sta 1</text><circle cx="160" cy="50" r="5" fill="#1d4ed8"/><text x="160" y="40" fontSize="8">Sta 2</text><circle cx="100" cy="130" r="5" fill="#1d4ed8"/><text x="100" y="145" fontSize="8">Sta 3</text><circle cx="40" cy="40" r="50" fill="none" stroke="#60a5fa" strokeWidth="1" strokeDasharray="2,2"/><circle cx="160" cy="50" r="65" fill="none" stroke="#60a5fa" strokeWidth="1" strokeDasharray="2,2"/><circle cx="100" cy="130" r="45" fill="none" stroke="#60a5fa" strokeWidth="1" strokeDasharray="2,2"/><circle cx="105" cy="85" r="4" fill="#ef4444"/><text x="105" y="78" fontSize="8" fill="#b91c1c">Epicenter</text></svg>
-                            </div>
-                            <p className={captionClass}>Epicenter is found by triangulating arrival times from multiple seismometers.</p>
-                        </div>
-                    )}
+                    <EarthquakeSeismicWavesPanel
+                        exhibitPanelClass={exhibitPanelClass}
+                        exhibitTitleClass={exhibitTitleClass}
+                        captionClass={captionClass}
+                    />
+                    <EarthquakeLocationPanel
+                        properties={properties}
+                        originProductProps={originProductProps}
+                        isValidNumber={isValidNumber}
+                        formatNumber={formatNumber}
+                        exhibitPanelClass={exhibitPanelClass}
+                        exhibitTitleClass={exhibitTitleClass}
+                        diagramContainerClass={diagramContainerClass}
+                        captionClass={captionClass}
+                    />
 
                     {/* --- ShakeMap / PAGER Impact Panel --- */}
                     {(shakemapProductProps || losspagerProductProps || isValidNumber(properties?.mmi) || isValidString(properties?.alert)) && (
