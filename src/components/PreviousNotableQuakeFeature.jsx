@@ -1,23 +1,23 @@
 // src/PreviousNotableQuakeFeature.jsx
 import React, { useState, useEffect } from 'react';
 import { getMagnitudeColor as getMagnitudeColorUtil } from '../utils/utils.js'; // Renamed to avoid conflict
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 
 /**
  * A React component that displays a feature card for the second most recent significant earthquake.
  * This component is intended to show the major quake that occurred before the one currently highlighted as 'latest'.
  * @param {object} props - The component's props.
- * @param {object | null} props.previousMajorQuake - The data object for the previously recorded significant earthquake.
- * @param {boolean} props.isLoadingPreviousQuake - Flag indicating if the data for the previous quake is currently loading.
  * @param {function(object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card is clicked. Receives the quake data object.
  * @param {function(number):string} [props.getMagnitudeColorFunc] - Optional: Function that returns a color string based on earthquake magnitude.
  * @returns {JSX.Element} The rendered PreviousNotableQuakeFeature component.
  */
 const PreviousNotableQuakeFeature = ({
-                                 previousMajorQuake,
-                                 isLoadingPreviousQuake,
+                                 // previousMajorQuake, // From context
+                                 // isLoadingPreviousQuake, // From context
                                  onNotableQuakeSelect,
                                  getMagnitudeColorFunc
                              }) => {
+    const { previousMajorQuake, isLoadingInitialData: isLoadingPreviousQuake } = useEarthquakeDataState();
     const [displayQuake, setDisplayQuake] = useState(null);
 
     useEffect(() => {

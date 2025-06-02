@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react'; // Added useMemo
 import PropTypes from 'prop-types';
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
+import { useUIState } from '../contexts/UIStateContext'; // Import context
 import SeoMetadata from './SeoMetadata';
 import SummaryStatisticsCard from './SummaryStatisticsCard';
 import PaginatedEarthquakeTable from './PaginatedEarthquakeTable';
@@ -27,13 +29,89 @@ import { FEELABLE_QUAKE_THRESHOLD, MAJOR_QUAKE_THRESHOLD } from '../constants/ap
  * @returns {JSX.Element} The rendered FeedsPageLayout component.
  */
 const FeedsPageLayout = ({
-    currentFeedTitle, activeFeedPeriod, currentFeedData, currentFeedisLoading,
-    previousDataForCurrentFeed, handleQuakeClick, setActiveFeedPeriod,
-    handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly, allEarthquakes,
+    // currentFeedTitle, activeFeedPeriod, currentFeedData, currentFeedisLoading, // Will be derived or from context
+    // previousDataForCurrentFeed, // Will be derived
+    handleQuakeClick, 
+    // setActiveFeedPeriod, // From context
+    // handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly, allEarthquakes, // From context
     getFeedPageSeoInfo,
     calculateStats, // for SummaryStatisticsCard
     getMagnitudeColorStyle, formatTimeAgo, formatDate // for PaginatedEarthquakeTable
 }) => {
+    const {
+        earthquakesLastHour, earthquakesPriorHour,
+        earthquakesLast24Hours, prev24HourData,
+        earthquakesLast7Days, prev7DayData, // Assuming prev7DayData is from monthly for 7-14 days comparison
+        earthquakesLast14Days, prev14DayData, // Assuming prev14DayData is from monthly for 14-28 days comparison
+        earthquakesLast30Days,
+        allEarthquakes: contextAllEarthquakes, // Renamed to avoid conflict if allEarthquakes prop was kept
+        isLoadingDaily, isLoadingWeekly,
+        isLoadingMonthly: contextIsLoadingMonthly, // Renamed
+        hasAttemptedMonthlyLoad: contextHasAttemptedMonthlyLoad, // Renamed
+        loadMonthlyData // This is the actual function from context
+    } = useEarthquakeDataState();
+
+    const { activeFeedPeriod, setActiveFeedPeriod } = useUIState();
+
+    // Re-derive currentFeedData
+    const currentFeedData = useMemo(() => {
+        const baseDataForFilters = (contextHasAttemptedMonthlyLoad && contextAllEarthquakes.length > 0) ? contextAllEarthquakes : earthquakesLast7Days;
+        switch (activeFeedPeriod) {
+            case 'last_hour': return earthquakesLastHour;
+            case 'last_24_hours': return earthquakesLast24Hours;
+            case 'last_7_days': return earthquakesLast7Days;
+            case 'last_14_days': return (contextHasAttemptedMonthlyLoad && contextAllEarthquakes.length > 0) ? earthquakesLast14Days : null;
+            case 'last_30_days': return (contextHasAttemptedMonthlyLoad && contextAllEarthquakes.length > 0) ? earthquakesLast30Days : null;
+            case 'feelable_quakes': return baseDataForFilters ? baseDataForFilters.filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD) : [];
+            case 'significant_quakes': return baseDataForFilters ? baseDataForFilters.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD) : [];
+            default: return earthquakesLast24Hours;
+        }
+    }, [activeFeedPeriod, earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
+        earthquakesLast14Days, earthquakesLast30Days, contextAllEarthquakes, contextHasAttemptedMonthlyLoad]);
+
+    // Re-derive currentFeedTitle
+    const currentFeedTitle = useMemo(() => {
+        const filterPeriodSuffix = (contextHasAttemptedMonthlyLoad && contextAllEarthquakes.length > 0) ? "(Last 30 Days)" : "(Last 7 Days)";
+        switch (activeFeedPeriod) {
+            case 'last_hour': return "Earthquakes (Last Hour)";
+            case 'last_24_hours': return "Earthquakes (Last 24 Hours)";
+            case 'last_7_days': return "Earthquakes (Last 7 Days)";
+            case 'last_14_days': return "Earthquakes (Last 14 Days)";
+            case 'last_30_days': return "Earthquakes (Last 30 Days)";
+            case 'feelable_quakes': return `Feelable Quakes (M${FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+) ${filterPeriodSuffix}`;
+            case 'significant_quakes': return `Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) ${filterPeriodSuffix}`;
+            default: return "Earthquakes (Last 24 Hours)";
+        }
+    }, [activeFeedPeriod, contextHasAttemptedMonthlyLoad, contextAllEarthquakes]);
+
+    // Re-derive currentFeedisLoading
+    const currentFeedisLoading = useMemo(() => {
+        if (activeFeedPeriod === 'last_hour') return isLoadingDaily && (!earthquakesLastHour || earthquakesLastHour.length === 0);
+        if (activeFeedPeriod === 'last_24_hours') return isLoadingDaily && (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0);
+        if (activeFeedPeriod === 'last_7_days') return isLoadingWeekly && (!earthquakesLast7Days || earthquakesLast7Days.length === 0);
+        if (activeFeedPeriod === 'feelable_quakes' || activeFeedPeriod === 'significant_quakes') {
+            if (contextHasAttemptedMonthlyLoad && contextAllEarthquakes.length > 0) return contextIsLoadingMonthly && contextAllEarthquakes.length === 0;
+            return isLoadingWeekly && (!earthquakesLast7Days || earthquakesLast7Days.length === 0);
+        }
+        if ((activeFeedPeriod === 'last_14_days' || activeFeedPeriod === 'last_30_days')) {
+            return contextIsLoadingMonthly && (!contextAllEarthquakes || contextAllEarthquakes.length === 0);
+        }
+        return currentFeedData === null; // Fallback based on derived currentFeedData
+    }, [activeFeedPeriod, isLoadingDaily, isLoadingWeekly, contextIsLoadingMonthly,
+        earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
+        contextAllEarthquakes, contextHasAttemptedMonthlyLoad, currentFeedData]);
+        
+    // Re-derive previousDataForCurrentFeed
+    const previousDataForCurrentFeed = useMemo(() => {
+        switch (activeFeedPeriod) {
+            case 'last_hour': return earthquakesPriorHour;
+            case 'last_24_hours': return prev24HourData;
+            case 'last_7_days': return prev7DayData;
+            case 'last_14_days': return prev14DayData;
+            default: return null;
+        }
+    }, [activeFeedPeriod, earthquakesPriorHour, prev24HourData, prev7DayData, prev14DayData]);
+
     const seoInfo = getFeedPageSeoInfo(currentFeedTitle, activeFeedPeriod);
 
     return (
@@ -55,7 +133,7 @@ const FeedsPageLayout = ({
                     <button onClick={() => setActiveFeedPeriod('significant_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'significant_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Significant (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)</button>
                     <button onClick={() => setActiveFeedPeriod('last_24_hours')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_24_hours' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last 24hr</button>
                     <button onClick={() => setActiveFeedPeriod('last_7_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_7_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last 7day</button>
-                    {(hasAttemptedMonthlyLoad && allEarthquakes && allEarthquakes.length > 0) && (
+                    {(contextHasAttemptedMonthlyLoad && contextAllEarthquakes && contextAllEarthquakes.length > 0) && (
                         <React.Fragment key="monthly-feed-buttons">
                             <button onClick={() => setActiveFeedPeriod('last_14_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_14_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>14-Day</button>
                             <button onClick={() => setActiveFeedPeriod('last_30_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_30_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>30-Day</button>
@@ -81,33 +159,32 @@ const FeedsPageLayout = ({
                     formatTimeAgo={formatTimeAgo}
                     formatDate={formatDate}
                 />
-                {!hasAttemptedMonthlyLoad && (
+                {!contextHasAttemptedMonthlyLoad && (
                     <div className="text-center py-3 mt-3 border-t border-slate-700">
-                        <button onClick={handleLoadMonthlyData} disabled={isLoadingMonthly} className="w-full bg-teal-600 hover:bg-teal-500 p-2.5 rounded-md text-white font-semibold transition-colors text-xs shadow-md disabled:opacity-60">
-                            {isLoadingMonthly ? 'Loading Extended Data...' : 'Load 14 & 30-Day Data'}
+                        <button onClick={loadMonthlyData} disabled={contextIsLoadingMonthly} className="w-full bg-teal-600 hover:bg-teal-500 p-2.5 rounded-md text-white font-semibold transition-colors text-xs shadow-md disabled:opacity-60">
+                            {contextIsLoadingMonthly ? 'Loading Extended Data...' : 'Load 14 & 30-Day Data'}
                         </button>
                     </div>
                 )}
-                {hasAttemptedMonthlyLoad && isLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
+                {contextHasAttemptedMonthlyLoad && contextIsLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
             </div>
         </>
     );
 };
 
 FeedsPageLayout.propTypes = {
-    currentFeedTitle: PropTypes.string.isRequired,
-    activeFeedPeriod: PropTypes.string.isRequired,
-    currentFeedData: PropTypes.array,
-    currentFeedisLoading: PropTypes.bool,
-    previousDataForCurrentFeed: PropTypes.array,
+    // currentFeedTitle: PropTypes.string.isRequired, // Derived
+    // activeFeedPeriod: PropTypes.string.isRequired, // From context
+    // currentFeedData: PropTypes.array, // Derived
+    // currentFeedisLoading: PropTypes.bool, // Derived
+    // previousDataForCurrentFeed: PropTypes.array, // Derived
     handleQuakeClick: PropTypes.func.isRequired,
-    setActiveFeedPeriod: PropTypes.func.isRequired,
-    handleLoadMonthlyData: PropTypes.func.isRequired,
-    hasAttemptedMonthlyLoad: PropTypes.bool,
-    isLoadingMonthly: PropTypes.bool,
-    allEarthquakes: PropTypes.array,
+    // setActiveFeedPeriod: PropTypes.func.isRequired, // From context
+    // handleLoadMonthlyData: PropTypes.func.isRequired, // From context (loadMonthlyData)
+    // hasAttemptedMonthlyLoad: PropTypes.bool, // From context
+    // isLoadingMonthly: PropTypes.bool, // From context
+    // allEarthquakes: PropTypes.array, // From context (contextAllEarthquakes)
     getFeedPageSeoInfo: PropTypes.func.isRequired,
-    // FEELABLE_QUAKE_THRESHOLD and MAJOR_QUAKE_THRESHOLD are now imported
     calculateStats: PropTypes.func.isRequired,
     getMagnitudeColorStyle: PropTypes.func.isRequired,
     formatTimeAgo: PropTypes.func.isRequired,
