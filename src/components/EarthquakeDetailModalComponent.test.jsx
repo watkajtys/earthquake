@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext'; // Import context
 
 // MOCKS MUST BE AT THE TOP (or at least before imports that use them)
 let mockOnDataLoadedForSeoCallback;
@@ -47,6 +48,14 @@ describe('EarthquakeDetailModalComponent', () => {
     isLoadingMonthly: false,
   };
 
+  const defaultEarthquakeContextValue = {
+    allEarthquakes: [],
+    earthquakesLast7Days: [],
+    loadMonthlyData: vi.fn(),
+    hasAttemptedMonthlyLoad: false,
+    isLoadingMonthly: false,
+  };
+
   beforeEach(() => {
     // Clear mock call history
     mockNavigate.mockClear();
@@ -58,14 +67,17 @@ describe('EarthquakeDetailModalComponent', () => {
     if (SeoMetadata && SeoMetadata.mock) SeoMetadata.mockClear();
     mockOnDataLoadedForSeoCallback = undefined;
     mockOnCloseCallback = undefined;
+    defaultEarthquakeContextValue.loadMonthlyData.mockClear();
   });
 
-  const renderComponent = (props = defaultMockProps) => {
+  const renderComponent = (props = defaultMockProps, earthquakeContextValue = defaultEarthquakeContextValue) => {
     return render(
       <MemoryRouter initialEntries={['/quake/test-detail-url']}>
-        <Routes>
-          <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModalComponent {...props} />} />
-        </Routes>
+        <EarthquakeDataContext.Provider value={earthquakeContextValue}>
+          <Routes>
+            <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModalComponent {...props} />} />
+          </Routes>
+        </EarthquakeDataContext.Provider>
       </MemoryRouter>
     );
   };

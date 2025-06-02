@@ -1,6 +1,7 @@
 // src/NotableQuakeFeature.jsx
 import React, { useState, useEffect } from 'react';
 import { getMagnitudeColor as getMagnitudeColorUtil } from '../utils/utils.js'; // Renamed to avoid conflict if prop is also named getMagnitudeColor
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 
 /**
  * @const {Array<object>} historicalNotableQuakes
@@ -25,18 +26,17 @@ const historicalNotableQuakes = [
  * A React component that displays a feature card for a notable earthquake.
  * It can show a dynamically provided recent significant quake or cycle through a predefined list of historical quakes if no dynamic quake is available.
  * @param {object} props - The component's props.
- * @param {object | null} props.dynamicFeaturedQuake - The dynamically fetched latest significant earthquake object.
- * @param {boolean} props.isLoadingDynamicQuake - Flag indicating if the dynamic quake data is currently loading.
  * @param {function(object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card is clicked. Receives the quake data object.
  * @param {function(number):string} [props.getMagnitudeColorFunc] - Optional: Function that returns a color string based on earthquake magnitude. If not provided, util is used.
  * @returns {JSX.Element} The rendered NotableQuakeFeature component.
  */
 const NotableQuakeFeature = ({
-                                 dynamicFeaturedQuake,
-                                 isLoadingDynamicQuake,
+                                 // dynamicFeaturedQuake, // From context
+                                 // isLoadingDynamicQuake, // From context
                                  onNotableQuakeSelect,
                                  getMagnitudeColorFunc // Optional prop
                              }) => {
+    const { lastMajorQuake: dynamicFeaturedQuake, isLoadingInitialData: isLoadingDynamicQuake } = useEarthquakeDataState();
     const [displayQuake, setDisplayQuake] = useState(null);
     const [historicalIndex, setHistoricalIndex] = useState(0);
     const [isCyclingHistorical, setIsCyclingHistorical] = useState(false);

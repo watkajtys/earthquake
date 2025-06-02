@@ -8,30 +8,32 @@ import InfoSnippet from '../components/InfoSnippet';
 import ClusterSummaryItem from '../components/ClusterSummaryItem'; // Assuming this is used here
 // Import any other components specific to the previous inline overview content if needed
 
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
+
 // Props that would have been passed to the inline JSX in HomePage.jsx for the /overview route
 // These will need to be passed from HomePage.jsx when rendering this component
 const OverviewPage = ({
-    currentAlertConfig,
+    // currentAlertConfig, // Will get from context via highestRecentAlert
     ALERT_LEVELS, // Constant, but might be passed if structure demands
-    hasRecentTsunamiWarning,
-    lastMajorQuake,
+    // hasRecentTsunamiWarning, // Will get from context
+    // lastMajorQuake, // Will get from context
     getMagnitudeColor,
     formatDate,
     handleQuakeClick, // Callback
     latestFeelableQuakesSnippet,
     formatTimeAgo,
     // BottomNav related click might be handled by NavLink if this page is simple
-    isLoadingInitialData, // For TimeSinceLastMajorQuakeBanner
-    isLoadingMonthly, // For TimeSinceLastMajorQuakeBanner
-    hasAttemptedMonthlyLoad, // For TimeSinceLastMajorQuakeBanner
-    timeBetweenPreviousMajorQuakes, // For TimeSinceLastMajorQuakeBanner
-    previousMajorQuake, // For TimeSinceLastMajorQuakeBanner
+    // isLoadingInitialData, // Will get from context
+    // isLoadingMonthly, // Will get from context
+    // hasAttemptedMonthlyLoad, // Will get from context
+    // timeBetweenPreviousMajorQuakes, // Will get from context
+    // previousMajorQuake, // Will get from context
     formatTimeDuration, // For TimeSinceLastMajorQuakeBanner
     getRegionForEarthquake, // For TimeSinceLastMajorQuakeBanner & RegionalDistributionList
-    earthquakesLast24Hours, // For SummaryStatisticsCard & RegionalDistributionList
-    prev24HourData, // For SummaryStatisticsCard
-    isLoadingDaily, // For SummaryStatisticsCard & RegionalDistributionList
-    isLoadingWeekly, // For SummaryStatisticsCard (if earthquakesLast24Hours can be from weekly)
+    // earthquakesLast24Hours, // Will get from context
+    // prev24HourData, // Will get from context
+    // isLoadingDaily, // Will get from context
+    // isLoadingWeekly, // Will get from context
     calculateStats, // For SummaryStatisticsCard
     overviewClusters, // For ClusterSummaryItem list
     handleClusterSummaryClick, // For ClusterSummaryItem list
@@ -39,6 +41,29 @@ const OverviewPage = ({
     REGIONS, // For active region display color (if not handled by topActiveRegionsOverview structure)
     navigate, // For "Learn More" button, if not using Link
 }) => {
+    const {
+        highestRecentAlert, // Used to derive currentAlertConfig
+        hasRecentTsunamiWarning,
+        lastMajorQuake,
+        isLoadingInitialData,
+        isLoadingMonthly,
+        hasAttemptedMonthlyLoad,
+        timeBetweenPreviousMajorQuakes,
+        previousMajorQuake,
+        earthquakesLast24Hours,
+        prev24HourData,
+        isLoadingDaily,
+        isLoadingWeekly
+    } = useEarthquakeDataState();
+
+    // Derive currentAlertConfig here
+    const currentAlertConfig = React.useMemo(() => {
+        if (highestRecentAlert && ALERT_LEVELS[highestRecentAlert.toUpperCase()]) {
+            return ALERT_LEVELS[highestRecentAlert.toUpperCase()];
+        }
+        return null;
+    }, [highestRecentAlert, ALERT_LEVELS]);
+    
     // This component will replicate the JSX structure previously under the /overview Route in HomePage.jsx
     // For brevity, I'm showing a simplified structure. The actual content should be moved from HomePage.jsx
     return (
