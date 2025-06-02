@@ -1,72 +1,45 @@
-import React, { createContext, useState, useContext, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 // Create the context
 const UIStateContext = createContext();
 
-// Custom hook to use the UIState context
-export const useUIState = () => {
-    const context = useContext(UIStateContext);
-    if (!context) {
-        throw new Error('useUIState must be used within a UIStateProvider');
-    }
-    return context;
-};
-
-// Provider component
+// Create a provider component
 export const UIStateProvider = ({ children }) => {
-    const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
+    const [activeSidebarView, setActiveSidebarView_internal] = useState(
+        searchParams.get('sidebarActiveView') || 'overview_panel'
+    );
 
-    const [activeSidebarView, setActiveSidebarView_internal] = useState(searchParams.get('sidebarActiveView') || 'overview_panel');
-    const [globeFocusLng, setGlobeFocusLng_internal] = useState(0);
-
-    const setActiveSidebarView = useCallback((viewName) => {
-        setActiveSidebarView_internal(viewName);
-        setSearchParams(prevParams => {
-            const newParams = new URLSearchParams(prevParams);
-            newParams.set('sidebarActiveView', viewName);
-            return newParams;
-        });
-    }, [setSearchParams]);
-
-    const setGlobeFocusLng = useCallback((longitude) => {
-        setGlobeFocusLng_internal(longitude);
-    }, []);
-
-    const showEarthquakeDetails = useCallback((quake) => {
-        const detailUrl = quake?.properties?.detail || quake?.properties?.url;
-        if (detailUrl) {
-            navigate(`/quake/${encodeURIComponent(detailUrl)}`);
-        } else {
-            console.warn("No detail URL for earthquake:", quake?.id, quake);
-            // Consider a user-facing notification strategy for production
-            alert(`Earthquake: M ${quake?.properties?.mag?.toFixed(1)} - ${quake?.properties?.place || 'Unknown location'}. No further details link available.`);
+    // Effect to update state if URL changes (e.g., browser back/forward)
+    useEffect(() => {
+        const currentQueryParam = searchParams.get('sidebarActiveView');
+        if (currentQueryParam && currentQueryParam !== activeSidebarView) {
+            setActiveSidebarView_internal(currentQueryParam);
         }
-    }, [navigate]);
+        // If the param is removed or empty, and state is not the default, reset.
+        // This depends on desired behavior: should clearing param reset view or keep last state?
+        // For now, if param is gone, we don't change the state from here,
+        // changeSidebarView handles setting it to default if view is empty.
+    }, [searchParams, activeSidebarView]);
 
-    const showClusterDetails = useCallback((clusterData) => {
-        // Assuming clusterData has an 'id' property suitable for the URL
-        if (clusterData?.id) {
-            navigate(`/cluster/${clusterData.id}`);
-        } else {
-            console.warn("No ID for cluster:", clusterData);
-            alert("Cannot display cluster details: Cluster ID missing.");
+    const changeSidebarView = useCallback((view) => {
+        const newView = view || 'overview_panel'; // Default to overview_panel if view is null/empty
+        setActiveSidebarView_internal(newView);
+        if (searchParams.get('sidebarActiveView') !== newView) {
+            setSearchParams(prevParams => {
+                const newSearchQuery = new URLSearchParams(prevParams);
+                newSearchQuery.set('sidebarActiveView', newView);
+                return newSearchQuery;
+            });
         }
-    }, [navigate]);
+    }, [setSearchParams, searchParams]);
 
-    const closeDetails = useCallback(() => {
-        navigate(-1); // Go back to the previous page
-    }, [navigate]);
-
+    // Value to be passed to consuming components
     const value = {
         activeSidebarView,
-        setActiveSidebarView,
-        globeFocusLng,
-        setGlobeFocusLng,
-        showEarthquakeDetails,
-        showClusterDetails,
-        closeDetails,
+        setActiveSidebarView: changeSidebarView, // Expose the combined state and URL updater
+        // Direct setter is not exposed to enforce using changeSidebarView for URL sync
     };
 
     return (
@@ -74,4 +47,13 @@ export const UIStateProvider = ({ children }) => {
             {children}
         </UIStateContext.Provider>
     );
+};
+
+// Custom hook to use the UIState context
+export const useUIState = () => {
+    const context = useContext(UIStateContext);
+    if (context === undefined) {
+        throw new Error('useUIState must be used within a UIStateProvider');
+    }
+    return context;
 };

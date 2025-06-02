@@ -18,30 +18,21 @@ vi.mock('./SeoMetadata', () => ({
   default: vi.fn(() => null)
 }));
 
-// Mock UIStateContext
-const mockCloseDetails = vi.fn();
-vi.mock('../contexts/UIStateContext.jsx', () => ({
-  useUIState: () => ({
-    closeDetails: mockCloseDetails,
-  }),
-  UIStateProvider: ({ children }) => <div>{children}</div> // Simple pass-through for provider
-}));
-
-
+const mockNavigate = vi.fn();
 // We need to ensure that MemoryRouter, Routes, Route are NOT from the mock,
-// but useParams IS. useNavigate is no longer directly used by the component.
+// but useParams and useNavigate ARE.
+// So, we selectively mock, and import the non-mocked parts directly.
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual, // Spread actual to ensure things like Link, MemoryRouter etc. are included
     useParams: () => ({ detailUrlParam: encodeURIComponent('test-detail-url') }),
-    // useNavigate: () => mockNavigate, // Removed as component doesn't call it directly
+    useNavigate: () => mockNavigate,
   };
 });
 // END MOCKS
 
 import EarthquakeDetailModalComponent from './EarthquakeDetailModalComponent';
-import { UIStateProvider } from '../contexts/UIStateContext.jsx'; // Import the actual provider for wrapping
 // These imports get the mocked versions because vi.mock is hoisted.
 import EarthquakeDetailView from './EarthquakeDetailView';
 import SeoMetadata from './SeoMetadata';
@@ -58,7 +49,7 @@ describe('EarthquakeDetailModalComponent', () => {
 
   beforeEach(() => {
     // Clear mock call history
-    mockCloseDetails.mockClear(); // Updated from mockNavigate
+    mockNavigate.mockClear();
     // For vi.fn(), use .mockClear()
     if (EarthquakeDetailView.mockClear) EarthquakeDetailView.mockClear();
     if (SeoMetadata.mockClear) SeoMetadata.mockClear();
@@ -72,11 +63,9 @@ describe('EarthquakeDetailModalComponent', () => {
   const renderComponent = (props = defaultMockProps) => {
     return render(
       <MemoryRouter initialEntries={['/quake/test-detail-url']}>
-        <UIStateProvider> {/* Wrap with UIStateProvider */}
-          <Routes>
-            <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModalComponent {...props} />} />
-          </Routes>
-        </UIStateProvider>
+        <Routes>
+          <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModalComponent {...props} />} />
+        </Routes>
       </MemoryRouter>
     );
   };
@@ -220,10 +209,10 @@ describe('EarthquakeDetailModalComponent', () => {
   });
 
 
-  test('calls closeDetails when onClose is triggered from EarthquakeDetailView', () => {
+  test('calls navigate(-1) when onClose is triggered from EarthquakeDetailView', () => {
     renderComponent();
 
-    expect(mockCloseDetails).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
 
     act(() => {
       if (mockOnCloseCallback) {
@@ -231,6 +220,6 @@ describe('EarthquakeDetailModalComponent', () => {
       }
     });
 
-    expect(mockCloseDetails).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith(-1);
   });
 });
