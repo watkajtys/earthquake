@@ -1,10 +1,13 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi } from 'vitest';
 import useMonthlyEarthquakeData from './useMonthlyEarthquakeData';
-import { USGS_API_URL_MONTH, MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
+import { USGS_API_URL_MONTH } from '../constants/appConstants'; // MAJOR_QUAKE_THRESHOLD is used by createMockEarthquake
+import { fetchUsgsData } from '../services/usgsApiService';
 
-// Mock fetchDataCb
-const mockFetchDataCb = vi.fn();
+// Mock the usgsApiService
+vi.mock('../services/usgsApiService', () => ({
+    fetchUsgsData: vi.fn()
+}));
 
 // Mock state setters passed as props
 const mockSetLastMajorQuake = vi.fn();
@@ -71,7 +74,7 @@ describe('useMonthlyEarthquakeData', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.setSystemTime(MOCKED_NOW_DATE);
-        mockFetchDataCb.mockReset();
+        fetchUsgsData.mockReset(); // Use the mocked service function
         mockSetLastMajorQuake.mockReset();
         mockSetPreviousMajorQuake.mockReset();
         mockSetTimeBetweenPreviousMajorQuakes.mockReset();
@@ -83,7 +86,6 @@ describe('useMonthlyEarthquakeData', () => {
     });
 
     const getHook = () => renderHook(() => useMonthlyEarthquakeData(
-        mockFetchDataCb,
         currentLastMajorQuakeMock,
         mockSetLastMajorQuake,
         mockSetPreviousMajorQuake,
@@ -106,7 +108,10 @@ describe('useMonthlyEarthquakeData', () => {
 
     describe('loadMonthlyData Functionality (Successful Fetch)', () => {
         beforeEach(() => {
-            mockFetchDataCb.mockResolvedValue({ ...mockMonthlyResponse });
+            fetchUsgsData.mockImplementation(async (url) => {
+                if (url === USGS_API_URL_MONTH) return Promise.resolve({ ...mockMonthlyResponse });
+                return Promise.resolve({ features: [], metadata: { generated: MOCKED_NOW } });
+            });
         });
 
         it('should set loading states correctly during and after fetch', async () => {
@@ -200,7 +205,7 @@ describe('useMonthlyEarthquakeData', () => {
             it('should handle no major quakes in monthly feed but currentLastMajorQuake exists', async () => {
                 currentLastMajorQuakeMock = createMockEarthquake('onlyMajor', 10, 7.0);
                 const noMajorMonthlyResponse = { ...mockMonthlyResponse, features: [createMockEarthquake('nonMajor', 1, 4.0)] };
-                mockFetchDataCb.mockResolvedValue(noMajorMonthlyResponse);
+                fetchUsgsData.mockResolvedValue(noMajorMonthlyResponse); // Simplified for this test
                 const { result } = getHook();
                 await act(async () => { await result.current.loadMonthlyData(); });
 
@@ -212,19 +217,26 @@ describe('useMonthlyEarthquakeData', () => {
     });
 
     describe('loadMonthlyData Functionality (Error Handling)', () => {
-        it('should set monthlyError if fetch fails (network error)', async () => {
-            mockFetchDataCb.mockRejectedValue(new Error("Network failure"));
+        it('should set monthlyError if fetch fails (simulated network error via service)', async () => {
+            fetchUsgsData.mockResolvedValue({ error: { message: "Network failure via service", status: null } });
             const { result } = getHook();
             await act(async () => { await result.current.loadMonthlyData(); });
 
             expect(result.current.isLoadingMonthly).toBe(false);
-            expect(result.current.monthlyError).toBe("Monthly Data Error: Network failure");
+            // The hook prepends "Monthly Data Error: " or "Monthly Data Processing Error: "
+            // Based on the refactored hook, if monthlyResult.error exists, it uses monthlyResult.error.message.
+            expect(result.current.monthlyError).toBe("Network failure via service");
             expect(result.current.allEarthquakes).toEqual([]);
             expect(mockSetLastMajorQuake).not.toHaveBeenCalled();
         });
 
-        it('should set monthlyError if response has no features', async () => {
-            mockFetchDataCb.mockResolvedValue({ metadata: { generated: MOCKED_NOW }, features: [] }); // Empty features
+        it('should set monthlyError if response has no features (error from service)', async () => {
+            // This scenario implies the service successfully fetched but the data was empty,
+            // which fetchUsgsData would return as success. The hook then checks features.length.
+            // Or, if the service itself considered "no features" an error and returned an error object.
+            // Let's assume the hook's logic `!monthlyResult.error && monthlyResult.features && monthlyResult.features.length > 0`
+            // means an empty features array is handled by the `else` block.
+            fetchUsgsData.mockResolvedValue({ metadata: { generated: MOCKED_NOW }, features: [] });
             const { result } = getHook();
             await act(async () => { await result.current.loadMonthlyData(); });
 
@@ -232,8 +244,9 @@ describe('useMonthlyEarthquakeData', () => {
             expect(result.current.monthlyError).toBe("Monthly data is currently unavailable or incomplete.");
         });
 
-        it('should set monthlyError if response has metadata error message', async () => {
-            mockFetchDataCb.mockResolvedValue({ metadata: { errorMessage: "USGS server error" } });
+        it('should set monthlyError if service returns error object (e.g. HTTP error)', async () => {
+            // This simulates fetchUsgsData returning an error object due to e.g. a non-200 response
+            fetchUsgsData.mockResolvedValue({ error: { message: "USGS server error", status: 500 } });
             const { result } = getHook();
             await act(async () => { await result.current.loadMonthlyData(); });
 
