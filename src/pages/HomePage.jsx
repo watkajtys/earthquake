@@ -1,6 +1,6 @@
 // src/pages/HomePage.jsx
-import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useCallback, useRef, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime
+import { Routes, Route, useNavigate } from 'react-router-dom'; // Removed useParams
 import SeoMetadata from '../components/SeoMetadata';
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
 import InteractiveGlobeView from '../components/InteractiveGlobeView';
@@ -129,11 +129,16 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
  * @returns {JSX.Element} The rendered App component.
  */
 function App() {
-    // Use the UIStateContext for sidebar view management
-    const { activeSidebarView, setActiveSidebarView } = useUIState(); // Use the context hook
+    // Use the UIStateContext for sidebar view management and other UI states
+    const { 
+        activeSidebarView, setActiveSidebarView,
+        activeFeedPeriod, setActiveFeedPeriod, // from UIStateContext
+        globeFocusLng, setGlobeFocusLng,       // from UIStateContext
+        focusedNotableQuake, setFocusedNotableQuake // from UIStateContext
+    } = useUIState(); // Use the context hook
 
-    const [appRenderTrigger, setAppRenderTrigger] = useState(0);
-    const [activeFeedPeriod, setActiveFeedPeriod] = useState('last_24_hours'); // NEW STATE - default to 24 hours
+    // appRenderTrigger removed (unused)
+    // activeFeedPeriod is now from useUIState
 
     // --- Callback Hooks (Formatting, Colors, Regions, Stats) ---
     /**
@@ -259,14 +264,9 @@ function App() {
     }, []);
 
     // --- State Hooks ---
-    const [appCurrentTime, setAppCurrentTime] = useState(Date.now());
-    // const [searchParams, setSearchParams] = useSearchParams(); // REMOVED - Handled by UIStateContext
-    // const [activeSidebarView, setActiveSidebarView] = useState(searchParams.get('sidebarActiveView') || 'overview_panel'); // REMOVED - Handled by UIStateContext
-    const [globeFocusLng, setGlobeFocusLng] = useState(0); // UI state for globe
-    const [focusedNotableQuake, setFocusedNotableQuake] = useState(null); // UI state for map interaction
-    const [activeClusters, setActiveClusters] = useState([]); // Derived from earthquake data
-
-    // changeSidebarView function is REMOVED - setActiveSidebarView from UIStateContext is used directly
+    const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Kept local
+    // activeSidebarView, activeFeedPeriod, globeFocusLng, focusedNotableQuake are from useUIState()
+    const [activeClusters, setActiveClusters] = useState([]); // Derived from earthquake data, kept local
 
     // --- Data Fetching Callbacks ---
     // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
@@ -391,15 +391,14 @@ function App() {
         if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.geometry.coordinates && lastMajorQuake.geometry.coordinates.length >= 2) {
             const lng = lastMajorQuake.geometry.coordinates[0];
             if (typeof lng === 'number' && !isNaN(lng)) {
-                // setGlobeFocusLat(lat); // Removed
-                setGlobeFocusLng(lng);
+                setGlobeFocusLng(lng); // Use setter from UIStateContext
             }
         }
         // If lastMajorQuake is null, we could reset to defaults here, e.g.:
         // else {
         //   setGlobeFocusLng(0);  // Default longitude
         // }
-    }, [lastMajorQuake]);
+    }, [lastMajorQuake, setGlobeFocusLng]); // Added setGlobeFocusLng to dependencies
 
     // --- UI Calculations & Memos ---
     // showFullScreenLoader now uses isLoadingInitialData from the hook
@@ -661,7 +660,7 @@ function App() {
 
     // const handleCloseDetail = useCallback(() => setSelectedDetailUrl(null), []); // Removed
     const handleNotableQuakeSelect = useCallback((quakeFromFeature) => {
-        setFocusedNotableQuake(quakeFromFeature);
+        setFocusedNotableQuake(quakeFromFeature); // Use setter from UIStateContext
         const detailUrl = quakeFromFeature?.properties?.detail || quakeFromFeature?.properties?.url || quakeFromFeature?.url;
         if (detailUrl) {
             navigate(`/quake/${encodeURIComponent(detailUrl)}`);
@@ -728,7 +727,7 @@ function App() {
                                     <InteractiveGlobeView
                                         // earthquakes prop removed (data from context)
                                         defaultFocusLat={20}
-                                        defaultFocusLng={globeFocusLng}
+                                        defaultFocusLng={globeFocusLng} // from UIStateContext
                                         onQuakeClick={handleQuakeClick}
                                         getMagnitudeColorFunc={getMagnitudeColor}
                                         allowUserDragRotation={true}
@@ -743,15 +742,13 @@ function App() {
                                     />
                                     <div className="absolute top-2 left-2 z-10 space-y-2">
                                         <NotableQuakeFeature
-                                            dynamicFeaturedQuake={lastMajorQuake} // from useEarthquakeData
-                                            isLoadingDynamicQuake={isLoadingInitialData} // from useEarthquakeData
+                                            // dynamicFeaturedQuake and isLoadingDynamicQuake are now from context
                                             onNotableQuakeSelect={handleNotableQuakeSelect}
                                             getMagnitudeColorFunc={getMagnitudeColor}
                                         />
                                         <div className="hidden md:block">
                                             <PreviousNotableQuakeFeature
-                                                previousMajorQuake={previousMajorQuake} // from useEarthquakeData
-                                                isLoadingPreviousQuake={isLoadingInitialData} // from useEarthquakeData
+                                                // previousMajorQuake and isLoadingPreviousQuake are now from context
                                                 onNotableQuakeSelect={handleNotableQuakeSelect}
                                                 getMagnitudeColorFunc={getMagnitudeColor}
                                             />
@@ -765,59 +762,37 @@ function App() {
                                     </div>
                                 </div>
                                 <GlobalLastMajorQuakeTimer
-                                    lastMajorQuake={lastMajorQuake}
+                                    lastMajorQuake={lastMajorQuake} // from EarthquakeDataContext
                                     formatTimeDuration={formatTimeDuration}
-                                    handleTimerClick={handleQuakeClick} // <--- ADD THIS LINE
-                                    // SkeletonText is now imported by GlobalLastMajorQuakeTimer
+                                    handleTimerClick={handleQuakeClick}
                                 />
                                 </div>
                             </>
                         } />
                         <Route path="/overview" element={
                             <OverviewPage
-                                currentAlertConfig={currentAlertConfig}
-                                ALERT_LEVELS={ALERT_LEVELS} // Make sure ALERT_LEVELS is defined in HomePage or passed if imported in OverviewPage
-                                hasRecentTsunamiWarning={hasRecentTsunamiWarning}
-                                lastMajorQuake={lastMajorQuake}
+                                // Props sourced from context in OverviewPage are removed here
+                                ALERT_LEVELS={ALERT_LEVELS}
                                 getMagnitudeColor={getMagnitudeColor}
                                 formatDate={formatDate}
                                 handleQuakeClick={handleQuakeClick}
-                                latestFeelableQuakesSnippet={latestFeelableQuakesSnippet}
+                                latestFeelableQuakesSnippet={latestFeelableQuakesSnippet} // Derived in HomePage
                                 formatTimeAgo={formatTimeAgo}
-                                isLoadingInitialData={isLoadingInitialData}
-                                isLoadingMonthly={isLoadingMonthly}
-                                hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
-                                timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
-                                previousMajorQuake={previousMajorQuake}
                                 formatTimeDuration={formatTimeDuration}
-                                getRegionForEarthquake={getRegionForEarthquake} // Ensure this is the one from HomePage scope
-                                earthquakesLast24Hours={earthquakesLast24Hours}
-                                prev24HourData={prev24HourData}
-                                isLoadingDaily={isLoadingDaily}
-                                isLoadingWeekly={isLoadingWeekly}
+                                getRegionForEarthquake={getRegionForEarthquake}
                                 calculateStats={calculateStats}
-                                overviewClusters={overviewClusters} // This is the memoized one from HomePage
-                                handleClusterSummaryClick={handleClusterSummaryClick} // This is the callback from HomePage
-                                topActiveRegionsOverview={topActiveRegionsOverview} // This is the memoized one from HomePage
-                                REGIONS={REGIONS} // This is the memoized REGIONS constant from HomePage
-                                navigate={navigate} // Pass navigate from HomePage
+                                overviewClusters={overviewClusters} // Derived in HomePage
+                                handleClusterSummaryClick={handleClusterSummaryClick}
+                                topActiveRegionsOverview={topActiveRegionsOverview} // Derived in HomePage
+                                REGIONS={REGIONS}
+                                navigate={navigate}
                             />
                         } />
                         <Route path="/feeds" element={
                             <FeedsPageLayoutComponent
-                                currentFeedTitle={currentFeedTitle}
-                                activeFeedPeriod={activeFeedPeriod}
-                                currentFeedData={currentFeedData}
-                                currentFeedisLoading={currentFeedisLoading}
-                                previousDataForCurrentFeed={previousDataForCurrentFeed}
+                                // Props sourced from context or derived internally in FeedsPageLayoutComponent are removed
                                 handleQuakeClick={handleQuakeClick}
-                                setActiveFeedPeriod={setActiveFeedPeriod} // This is for the UI buttons in FeedsPageLayout
-                                handleLoadMonthlyData={loadMonthlyData} // Use new function from hook
-                                hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad} // from useMonthlyEarthquakeData
-                                isLoadingMonthly={isLoadingMonthly} // from useMonthlyEarthquakeData
-                                allEarthquakes={allEarthquakes} // from useMonthlyEarthquakeData
                                 getFeedPageSeoInfo={getFeedPageSeoInfo}
-                                // Constants are now imported directly by FeedsPageLayoutComponent
                                 calculateStats={calculateStats}
                                 getMagnitudeColorStyle={getMagnitudeColorStyle}
                                 formatTimeAgo={formatTimeAgo}
@@ -828,10 +803,10 @@ function App() {
                         <Route
                             path="/quake/:detailUrlParam"
                             element={<EarthquakeDetailModalComponent
-                                broaderEarthquakeData={ (allEarthquakes && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days }
-                                handleLoadMonthlyData={loadMonthlyData}
-                                hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
-                                isLoadingMonthly={isLoadingMonthly}
+                                // Props sourced from context are removed
+                                // broaderEarthquakeData is derived inside EarthquakeDetailModalComponent
+                                // handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly are from context
+                                // dataSourceTimespanDays could be passed if still relevant and not derivable
                             />}
                         />
                         <Route path="/cluster/:clusterId" element={
@@ -894,12 +869,7 @@ function App() {
                                 </div>
                             )}
                             <TimeSinceLastMajorQuakeBanner
-                                lastMajorQuake={lastMajorQuake}
-                                previousMajorQuake={previousMajorQuake}
-                                timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
-                                isLoadingInitial={isLoadingInitialData}
-                                isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad}
-                                // majorQuakeThreshold is imported by TimeSinceLastMajorQuakeBanner
+                                    // Props sourced from context are removed
                                 formatTimeDuration={formatTimeDuration}
                                 getRegionForEarthquake={getRegionForEarthquake}
                                 handleQuakeClick={handleQuakeClick}
