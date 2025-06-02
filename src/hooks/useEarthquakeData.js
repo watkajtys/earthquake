@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react'; // Removed useCallback as orchestrateInitialDataLoad will be directly in useEffect
+import { fetchUsgsData } from '../services/usgsApiService';
 import {
     USGS_API_URL_DAY,
     USGS_API_URL_WEEK,
@@ -14,9 +15,6 @@ import {
  * It handles initial data load, periodic refreshing, and derives various data views like recent quakes,
  * globe data, and statistics for major quakes and alerts.
  *
- * @param {function} fetchDataCb - Callback function responsible for fetching data from a given URL.
- *   This function should accept a URL string and return a Promise that resolves with the fetched data
- *   or an object containing an error message (e.g., `{ metadata: { errorMessage: 'Fetch failed' } }`).
  * @returns {object} An object containing various states and data derived from earthquake feeds:
  * @property {boolean} isLoadingDaily - Loading state for the daily earthquake data feed.
  * @property {boolean} isLoadingWeekly - Loading state for the weekly earthquake data feed.
@@ -43,7 +41,7 @@ import {
  * @property {string} currentLoadingMessage - A dynamic message displayed during the initial data loading sequence.
  * @property {boolean} isInitialAppLoad - True if the hook is currently processing its very first data load cycle upon app startup.
  */
-const useEarthquakeData = (fetchDataCb) => {
+const useEarthquakeData = () => {
     const [isLoadingDaily, setIsLoadingDaily] = useState(true);
     const [isLoadingWeekly, setIsLoadingWeekly] = useState(true);
     const [error, setError] = useState(null);
@@ -116,10 +114,10 @@ const useEarthquakeData = (fetchDataCb) => {
 
             try {
                 if (isMounted && isInitialAppLoadRef.current) setLoadingMessageIndex(0);
-                const dailyRes = await fetchDataCb(USGS_API_URL_DAY);
+                const dailyRes = await fetchUsgsData(USGS_API_URL_DAY);
                 if (!isMounted) return;
 
-                if (dailyRes?.features) {
+                if (!dailyRes.error && dailyRes.features) {
                     if (isMounted && isInitialAppLoadRef.current) setLoadingMessageIndex(1);
                     const dD = dailyRes.features;
                     setEarthquakesLastHour(filterByTime(dD, 1));
@@ -146,23 +144,26 @@ const useEarthquakeData = (fetchDataCb) => {
                         }
                     }
                     setDataFetchTime(nowForFiltering);
+                    // Assuming successful fetch implies metadata might exist in dailyRes, not dailyRes.data
+                    // If fetchUsgsData returns { data: dailyResJson } then it would be dailyRes.data.metadata
+                    // Based on current fetchUsgsData, it's just dailyRes.metadata
                     setLastUpdated(new Date(dailyRes.metadata?.generated || nowForFiltering).toLocaleString());
                 } else {
-                    dailyErrorMsg = dailyRes?.metadata?.errorMessage || "Daily data features are missing.";
+                    dailyErrorMsg = dailyRes?.error?.message || "Daily data features are missing or an error occurred.";
                 }
-            } catch (e) {
+            } catch (e) { // This catch is for unexpected errors in processing, not fetch errors handled by fetchUsgsData
                 if (!isMounted) return;
-                dailyErrorMsg = e.message;
+                dailyErrorMsg = e.message || "An unexpected error occurred processing daily data.";
             }
             finally { if (isMounted) setIsLoadingDaily(false); }
 
             let weeklyMajorsList = [];
             try {
                 if (isMounted && isInitialAppLoadRef.current) setLoadingMessageIndex(2);
-                const weeklyResult = await fetchDataCb(USGS_API_URL_WEEK);
+                const weeklyResult = await fetchUsgsData(USGS_API_URL_WEEK);
                 if (!isMounted) return;
 
-                if (weeklyResult?.features) {
+                if (!weeklyResult.error && weeklyResult.features) {
                     if (isMounted && isInitialAppLoadRef.current) setLoadingMessageIndex(3);
                     const weeklyData = weeklyResult.features;
                     const last72HoursData = filterByTime(weeklyData, 72);
@@ -210,11 +211,11 @@ const useEarthquakeData = (fetchDataCb) => {
                         currentLocalTimeBetween = null;
                     }
                 } else {
-                     weeklyErrorMsg = weeklyResult?.metadata?.errorMessage || "Weekly data features are missing.";
+                     weeklyErrorMsg = weeklyResult?.error?.message || "Weekly data features are missing or an error occurred.";
                 }
-            } catch (e) {
+            } catch (e) { // This catch is for unexpected errors in processing, not fetch errors handled by fetchUsgsData
                 if (!isMounted) return;
-                weeklyErrorMsg = e.message;
+                weeklyErrorMsg = e.message || "An unexpected error occurred processing weekly data.";
             }
             finally {
                 if (isMounted) {
@@ -246,7 +247,7 @@ const useEarthquakeData = (fetchDataCb) => {
             clearInterval(intervalId);
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fetchDataCb]); // Dependencies: fetchDataCb. Other states are managed internally.
+    }, []); // Dependencies removed as fetchDataCb is now imported and orchestrateInitialDataLoad is defined within useEffect
 
      // Update loading message
     useEffect(() => {
