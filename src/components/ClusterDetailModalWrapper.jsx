@@ -1,6 +1,7 @@
 // src/ClusterDetailModalWrapper.jsx
-import React from 'react';
+import React, { useEffect } from 'react'; // Added useEffect
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUIState } from '../contexts/UIStateContext'; // Import useUIState
 import ClusterDetailModal from './ClusterDetailModal';
 import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
 
@@ -15,17 +16,24 @@ import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
  * @returns {JSX.Element} The rendered ClusterDetailModal or a "not found" message.
  */
 function ClusterDetailModalWrapper({ overviewClusters, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
-    const { clusterId } = useParams();
+    const { clusterId: routeClusterId } = useParams(); // Renamed to routeClusterId
     const navigate = useNavigate();
+    const { selectedClusterId } = useUIState(); // Consume context
 
-    // Find the cluster data from overviewClusters using clusterId
-    const cluster = overviewClusters?.find(c => c.id === clusterId);
+    // Find the cluster data from overviewClusters using routeClusterId
+    const cluster = overviewClusters?.find(c => c.id === routeClusterId);
+
+    useEffect(() => {
+        console.log("ClusterDetailModalWrapper: context selectedClusterId:", selectedClusterId);
+        console.log("ClusterDetailModalWrapper: route clusterId:", routeClusterId);
+        // You might expect selectedClusterId to be equal to routeClusterId when this modal is open.
+    }, [selectedClusterId, routeClusterId]);
 
     const handleClose = () => {
         navigate(-1); // Go back to the previous page
     };
 
-    const canonicalUrl = `https://earthquakeslive.com/cluster/${clusterId}`;
+    const canonicalUrl = `https://earthquakeslive.com/cluster/${routeClusterId}`; // Use routeClusterId
 
     if (!cluster) {
         // Even if cluster is not found, set a basic SEO for the error page

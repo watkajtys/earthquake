@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUIState } from '../contexts/UIStateContext';
 import EarthquakeDetailView from './EarthquakeDetailView'; // Path relative to src/components/
 import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
 
@@ -22,6 +23,14 @@ const EarthquakeDetailModalComponent = ({ broaderEarthquakeData, dataSourceTimes
     const detailUrl = decodeURIComponent(detailUrlParam);
     const [seoData, setSeoData] = useState(null);
     const [eventJsonLdData, setEventJsonLdData] = useState(null);
+
+    const { selectedEarthquakeId } = useUIState();
+
+    useEffect(() => {
+        console.log("EarthquakeDetailModalComponent: context selectedEarthquakeId:", selectedEarthquakeId);
+        console.log("EarthquakeDetailModalComponent: route detailUrlParam (decoded):", detailUrl);
+        // You might expect selectedEarthquakeId to be equal to detailUrl when this modal is open.
+    }, [selectedEarthquakeId, detailUrl]);
 
     const handleClose = () => {
         navigate(-1); // Go back to the previous page

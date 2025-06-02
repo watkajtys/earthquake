@@ -33,6 +33,7 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // import useEarthquakeData from '../hooks/useEarthquakeData'; // Will use context instead
 // import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
+import { UIStateProvider, useUIState } from '../contexts/UIStateContext';
 import {
     // USGS_API_URL_MONTH, // Now used inside useMonthlyEarthquakeData
     CLUSTER_MAX_DISTANCE_KM,
@@ -257,17 +258,18 @@ function App() {
 
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now());
-    const [searchParams, setSearchParams] = useSearchParams();
-    const [activeSidebarView, setActiveSidebarView] = useState(searchParams.get('sidebarActiveView') || 'overview_panel'); // Manages UI state
+    const [searchParams, setSearchParams] = useSearchParams(); // Retained for now, though direct usage in App might be removed. UIStateContext uses it.
+    // const [activeSidebarView, setActiveSidebarView] = useState(searchParams.get('sidebarActiveView') || 'overview_panel'); // Manages UI state -- REMOVED
+    const { activeSidebarView, setActiveSidebarView: changeSidebarView, setSelectedEarthquakeId, setSelectedClusterId } = useUIState(); // Consumed from context
     const [globeFocusLng, setGlobeFocusLng] = useState(0); // UI state for globe
     const [focusedNotableQuake, setFocusedNotableQuake] = useState(null); // UI state for map interaction
     const [activeClusters, setActiveClusters] = useState([]); // Derived from earthquake data
 
-    // setActiveSidebarView is now the main function to change view and URL param
-    const changeSidebarView = (view) => {
-        setActiveSidebarView(view);
-        setSearchParams({ sidebarActiveView: view });
-    };
+    // setActiveSidebarView is now the main function to change view and URL param -- REMOVED (obtained from useUIState)
+    // const changeSidebarView = (view) => {
+    //     setActiveSidebarView(view);
+    //     setSearchParams({ sidebarActiveView: view });
+    // };
 
     // --- Data Fetching Callbacks ---
     // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
@@ -602,6 +604,7 @@ function App() {
             // Existing logic for individual earthquake clicks
             const detailUrl = quake?.properties?.detail || quake?.properties?.url; // Check both common USGS fields
             if (detailUrl) {
+                setSelectedEarthquakeId(detailUrl); // Set the ID using the detail URL
                 navigate(`/quake/${encodeURIComponent(detailUrl)}`);
             } else {
                 console.warn("No detail URL for individual earthquake:", quake?.id, quake);
@@ -609,7 +612,7 @@ function App() {
                 alert(`Earthquake: M ${quake?.properties?.mag?.toFixed(1)} - ${quake?.properties?.place || 'Unknown location'}. No further details link available.`);
             }
         }
-    }, [navigate]);
+    }, [navigate, setSelectedEarthquakeId]); // Add setSelectedEarthquakeId to dependencies
 
     // Helper function for /feeds SEO
     const getFeedPageSeoInfo = (feedTitle, activePeriod) => {
@@ -662,18 +665,24 @@ function App() {
 
     // const handleCloseDetail = useCallback(() => setSelectedDetailUrl(null), []); // Removed
     const handleNotableQuakeSelect = useCallback((quakeFromFeature) => {
-        setFocusedNotableQuake(quakeFromFeature);
+        setFocusedNotableQuake(quakeFromFeature); // This state is still local to HomePage
         const detailUrl = quakeFromFeature?.properties?.detail || quakeFromFeature?.properties?.url || quakeFromFeature?.url;
         if (detailUrl) {
+            setSelectedEarthquakeId(detailUrl); // Set the ID using the detail URL
             navigate(`/quake/${encodeURIComponent(detailUrl)}`);
         } else {
             alert(`Featured Quake: ${quakeFromFeature.name || quakeFromFeature.properties?.place}\n${quakeFromFeature.description || ''}`);
         }
-    }, [navigate]);
+    }, [navigate, setSelectedEarthquakeId]); // Add setSelectedEarthquakeId to dependencies
 
     const handleClusterSummaryClick = useCallback((clusterData) => {
-        navigate(`/cluster/${clusterData.id}`);
-    }, [navigate]); // Added navigate to dependencies
+        if (clusterData && clusterData.id) {
+            setSelectedClusterId(clusterData.id); // Set the cluster ID
+            navigate(`/cluster/${clusterData.id}`);
+        } else {
+            console.warn("Cluster data or ID missing for handleClusterSummaryClick", clusterData);
+        }
+    }, [navigate, setSelectedClusterId]); // Add setSelectedClusterId to dependencies
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 
@@ -697,9 +706,10 @@ function App() {
     // --- Main Render ---
 
     return (
-        <div className="flex flex-col h-[100svh] font-sans bg-slate-900 text-slate-100 antialiased">
-            <header className="bg-slate-800 text-white pt-4 pb-2 px-2 shadow-lg z-40 border-b border-slate-700">
-                <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
+        <UIStateProvider>
+            <div className="flex flex-col h-[100svh] font-sans bg-slate-900 text-slate-100 antialiased">
+                <header className="bg-slate-800 text-white pt-4 pb-2 px-2 shadow-lg z-40 border-b border-slate-700">
+                    <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
                     <p className="text-xs sm:text-sm text-slate-400 mt-0.5 sm:mt-0">{headerTimeDisplay}</p>
                 </div>
@@ -1053,7 +1063,8 @@ function App() {
             <BottomNav />
 
             {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
-        </div>
+            </div>
+        </UIStateProvider>
     );
 }
 

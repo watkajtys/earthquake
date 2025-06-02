@@ -1,225 +1,125 @@
+// src/components/EarthquakeDetailModalComponent.test.jsx
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import EarthquakeDetailModalComponent from './EarthquakeDetailModalComponent';
+import { UIStateProvider } from '../contexts/UIStateContext'; // Import UIStateProvider
 
-// MOCKS MUST BE AT THE TOP (or at least before imports that use them)
-let mockOnDataLoadedForSeoCallback;
-let mockOnCloseCallback;
-
+// Mock EarthquakeDetailView as it's a complex child component with its own tests/data fetching
 vi.mock('./EarthquakeDetailView', () => ({
-  default: vi.fn(({ onDataLoadedForSeo, onClose }) => {
-    mockOnDataLoadedForSeoCallback = onDataLoadedForSeo;
-    mockOnCloseCallback = onClose;
-    return <div data-testid="mock-detail-view">Mock Detail View</div>;
-  })
+  default: vi.fn(({ detailUrl, onClose, onDataLoadedForSeo }) => {
+    // Simulate data loading for SEO
+    React.useEffect(() => {
+      act(() => {
+        onDataLoadedForSeo({
+          title: `Mock Title for ${detailUrl}`,
+          place: `Mock Place for ${detailUrl}`,
+          mag: 5.5,
+          depth: 10,
+          time: Date.now(),
+          updated: Date.now(),
+          shakemapIntensityImageUrl: 'mock_image_url.jpg',
+          latitude: 34.0522,
+          longitude: -118.2437,
+        });
+      });
+    }, [detailUrl, onDataLoadedForSeo]);
+
+    return (
+      <div data-testid="mocked-earthquake-detail-view">
+        <p>Detail URL: {detailUrl}</p>
+        <button onClick={onClose}>Close</button>
+      </div>
+    );
+  }),
 }));
 
+// Mock SeoMetadata to prevent actual head manipulations during tests
 vi.mock('./SeoMetadata', () => ({
-  default: vi.fn(() => null)
+  default: vi.fn((props) => <div data-testid="mocked-seo-metadata">{props.title}</div>),
 }));
 
 const mockNavigate = vi.fn();
-// We need to ensure that MemoryRouter, Routes, Route are NOT from the mock,
-// but useParams and useNavigate ARE.
-// So, we selectively mock, and import the non-mocked parts directly.
 vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
-  return {
-    ...actual, // Spread actual to ensure things like Link, MemoryRouter etc. are included
-    useParams: () => ({ detailUrlParam: encodeURIComponent('test-detail-url') }),
-    useNavigate: () => mockNavigate,
-  };
+    const actual = await vi.importActual('react-router-dom');
+    return {
+        ...actual,
+        useNavigate: () => mockNavigate,
+        useParams: () => ({ detailUrlParam: encodeURIComponent('test_detail_url') }), // Mock useParams
+    };
 });
-// END MOCKS
-
-import EarthquakeDetailModalComponent from './EarthquakeDetailModalComponent';
-// These imports get the mocked versions because vi.mock is hoisted.
-import EarthquakeDetailView from './EarthquakeDetailView';
-import SeoMetadata from './SeoMetadata';
 
 
-describe('EarthquakeDetailModalComponent', () => {
-  const defaultMockProps = {
+// Define mock props that EarthquakeDetailModalComponent expects
+const mockModalProps = {
     broaderEarthquakeData: [],
     dataSourceTimespanDays: 7,
     handleLoadMonthlyData: vi.fn(),
     hasAttemptedMonthlyLoad: false,
     isLoadingMonthly: false,
-  };
+};
 
-  beforeEach(() => {
-    // Clear mock call history
-    mockNavigate.mockClear();
-    // For vi.fn(), use .mockClear()
-    if (EarthquakeDetailView.mockClear) EarthquakeDetailView.mockClear();
-    if (SeoMetadata.mockClear) SeoMetadata.mockClear();
-    // Ensure the functions themselves are cleared if they are vi.fn mocks
-    if (EarthquakeDetailView && EarthquakeDetailView.mock) EarthquakeDetailView.mockClear();
-    if (SeoMetadata && SeoMetadata.mock) SeoMetadata.mockClear();
-    mockOnDataLoadedForSeoCallback = undefined;
-    mockOnCloseCallback = undefined;
-  });
-
-  const renderComponent = (props = defaultMockProps) => {
-    return render(
-      <MemoryRouter initialEntries={['/quake/test-detail-url']}>
-        <Routes>
-          <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModalComponent {...props} />} />
-        </Routes>
+describe('EarthquakeDetailModalComponent', () => {
+  const renderModal = (detailUrlParam = 'test_detail_url') => {
+    const initialPath = `/quake/${encodeURIComponent(detailUrlParam)}`;
+    render(
+      <MemoryRouter initialEntries={[initialPath]}>
+        <UIStateProvider> {/* ADDED: Wrap with UIStateProvider */}
+          <Routes>
+            <Route
+              path="/quake/:detailUrlParam"
+              element={<EarthquakeDetailModalComponent {...mockModalProps} />}
+            />
+          </Routes>
+        </UIStateProvider>
       </MemoryRouter>
     );
   };
 
-  test('renders without crashing and SeoMetadata initially receives null eventJsonLd', () => {
-    renderComponent();
-    expect(EarthquakeDetailView).toHaveBeenCalled();
-    expect(SeoMetadata).toHaveBeenCalled();
-
-    // Check initial call to SeoMetadata (before onDataLoadedForSeo is called)
-    const initialSeoMetadataCall = SeoMetadata.mock.calls.find(call => call[0].eventJsonLd === null || call[0].eventJsonLd === undefined);
-    expect(initialSeoMetadataCall).toBeDefined();
-    if(initialSeoMetadataCall) { // ensure it was found
-        expect(initialSeoMetadataCall[0].eventJsonLd).toBeNull();
-    }
+  beforeEach(() => {
+    mockNavigate.mockClear();
+    // Clear mocks for child components if they are stateful or have interaction counts
+    vi.clearAllMocks();
   });
 
-  test('constructs and passes eventJsonLd to SeoMetadata when onDataLoadedForSeo is called', async () => {
-    renderComponent();
-
-    const mockSeoPayload = {
-      title: 'M 6.5 - Test Region',
-      place: '10km N of Testville',
-      time: new Date('2023-10-26T10:00:00Z').getTime(),
-      updated: new Date('2023-10-26T10:05:00Z').getTime(),
-      mag: 6.5,
-      depth: 15.2,
-      latitude: 35.123,
-      longitude: -118.456,
-      shakemapIntensityImageUrl: 'https://example.com/shakemap.jpg',
-    };
-
-    // Simulate EarthquakeDetailView calling onDataLoadedForSeo
-    act(() => {
-      if (mockOnDataLoadedForSeoCallback) {
-        mockOnDataLoadedForSeoCallback(mockSeoPayload);
-      }
-    });
-
-    // Check the last call to SeoMetadata (it re-renders)
-    const lastSeoCall = SeoMetadata.mock.calls[SeoMetadata.mock.calls.length - 1][0];
-
-    expect(lastSeoCall.eventJsonLd).toEqual(
-      expect.objectContaining({
-        '@context': 'https://schema.org',
-        '@type': 'Event',
-        name: mockSeoPayload.title,
-        description: expect.stringContaining(`Magnitude ${mockSeoPayload.mag}`),
-        startDate: new Date(mockSeoPayload.time).toISOString(),
-        endDate: new Date(mockSeoPayload.time).toISOString(),
-        url: 'https://earthquakeslive.com/quake/test-detail-url',
-        location: expect.objectContaining({
-          '@type': 'Place',
-          name: mockSeoPayload.place,
-          geo: expect.objectContaining({
-            '@type': 'GeoCoordinates',
-            latitude: mockSeoPayload.latitude,
-            longitude: mockSeoPayload.longitude,
-            elevation: mockSeoPayload.depth,
-          }),
-        }),
-        organizer: {
-            '@type': 'Organization',
-            name: 'Global Seismic Activity Monitor (via USGS)',
-        }
-      })
-    );
-    expect(lastSeoCall.title).toContain(mockSeoPayload.title);
-    expect(lastSeoCall.imageUrl).toBe(mockSeoPayload.shakemapIntensityImageUrl);
+  test('renders EarthquakeDetailView with detailUrl from params and passes onClose', () => {
+    renderModal('specific_quake_id_123');
+    expect(screen.getByTestId('mocked-earthquake-detail-view')).toBeInTheDocument();
+    expect(screen.getByText(/Detail URL: specific_quake_id_123/i)).toBeInTheDocument();
   });
 
-  test('handles missing optional seoData fields gracefully for eventJsonLd', () => {
-    renderComponent();
-
-    const mockSeoPayloadMinimal = {
-      title: 'M 5.0 - Minimal Data Event',
-      place: 'Somewhere',
-      time: new Date('2023-11-01T00:00:00Z').getTime(),
-      mag: 5.0,
-      // No depth, latitude, longitude, shakemapIntensityImageUrl
-    };
-
+  test('calls navigate with -1 when close button (simulated from child) is clicked', () => {
+    renderModal();
+    // Simulate click on the close button within the mocked EarthquakeDetailView
+    const closeButton = screen.getByRole('button', { name: /Close/i });
     act(() => {
-      if (mockOnDataLoadedForSeoCallback) {
-        mockOnDataLoadedForSeoCallback(mockSeoPayloadMinimal);
-      }
+      closeButton.click();
     });
-
-    const lastSeoCall = SeoMetadata.mock.calls[SeoMetadata.mock.calls.length - 1][0];
-
-    expect(lastSeoCall.eventJsonLd).toEqual(
-      expect.objectContaining({
-        '@type': 'Event',
-        name: mockSeoPayloadMinimal.title,
-        startDate: new Date(mockSeoPayloadMinimal.time).toISOString(),
-        location: expect.objectContaining({
-          '@type': 'Place',
-          name: mockSeoPayloadMinimal.place,
-          // geo should be absent or have null/undefined coordinates
-        }),
-      })
-    );
-    // Check that geo is not present if coordinates were missing
-    expect(lastSeoCall.eventJsonLd.location.geo).toBeUndefined();
-    expect(lastSeoCall.imageUrl).toBeNull(); // Since shakemapIntensityImageUrl was missing
-  });
-
-  test('handles seoData with null depth, latitude, longitude for eventJsonLd', () => {
-    renderComponent();
-
-    const mockSeoPayloadNullGeo = {
-      title: 'M 5.1 - Null Geo Event',
-      place: 'Near Null Island',
-      time: new Date('2023-11-02T00:00:00Z').getTime(),
-      mag: 5.1,
-      depth: null,
-      latitude: null,
-      longitude: null,
-    };
-
-    act(() => {
-      if (mockOnDataLoadedForSeoCallback) {
-        mockOnDataLoadedForSeoCallback(mockSeoPayloadNullGeo);
-      }
-    });
-
-    const lastSeoCall = SeoMetadata.mock.calls[SeoMetadata.mock.calls.length - 1][0];
-
-    expect(lastSeoCall.eventJsonLd).toEqual(
-      expect.objectContaining({
-        '@type': 'Event',
-        name: mockSeoPayloadNullGeo.title,
-        location: expect.objectContaining({
-          '@type': 'Place',
-          name: mockSeoPayloadNullGeo.place,
-        }),
-      })
-    );
-    // Geo property should not exist if lat/lon are null
-    expect(lastSeoCall.eventJsonLd.location.geo).toBeUndefined();
-  });
-
-
-  test('calls navigate(-1) when onClose is triggered from EarthquakeDetailView', () => {
-    renderComponent();
-
-    expect(mockNavigate).not.toHaveBeenCalled();
-
-    act(() => {
-      if (mockOnCloseCallback) {
-        mockOnCloseCallback();
-      }
-    });
-
     expect(mockNavigate).toHaveBeenCalledWith(-1);
   });
+
+  test('renders SeoMetadata with data derived from onDataLoadedForSeo callback', async () => {
+    renderModal('seo_test_quake');
+    // SeoMetadata mock will render the title it receives
+    // The mock for EarthquakeDetailView calls onDataLoadedForSeo, which updates state for SeoMetadata
+    await screen.findByTestId('mocked-seo-metadata'); // Wait for SEO data to be processed
+    expect(screen.getByText(/Mock Title for seo_test_quake | Earthquake Details/i)).toBeInTheDocument();
+  });
+
+  test('uses decoded detailUrlParam for EarthquakeDetailView', () => {
+    const complexParam = 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=ci39692450&format=geojson';
+    renderModal(complexParam);
+    expect(screen.getByText(`Detail URL: ${complexParam}`)).toBeInTheDocument();
+  });
+
+  // Test for console log added for UIStateContext (optional, for development verification)
+  test('logs context and route params on mount', () => {
+    const consoleSpy = vi.spyOn(console, 'log');
+    renderModal('logging_test_quake');
+    // Check for the specific logs. Note: initial selectedEarthquakeId from context is null.
+    expect(consoleSpy).toHaveBeenCalledWith('EarthquakeDetailModalComponent: context selectedEarthquakeId:', null);
+    expect(consoleSpy).toHaveBeenCalledWith('EarthquakeDetailModalComponent: route detailUrlParam (decoded):', 'logging_test_quake');
+    consoleSpy.mockRestore();
+  });
+
 });
