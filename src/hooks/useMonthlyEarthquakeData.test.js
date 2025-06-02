@@ -1,244 +1,180 @@
 import { renderHook, act } from '@testing-library/react';
-import { vi } from 'vitest';
-import useMonthlyEarthquakeData from './useMonthlyEarthquakeData';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+
+// Removed React and EarthquakeDataContext direct imports
+import useMonthlyEarthquakeData from './useMonthlyEarthquakeData'; 
+import { fetchDataCb as actualFetchDataCb } from '../utils/fetchUtils'; 
+
 import { USGS_API_URL_MONTH, MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 
-// Mock fetchDataCb
-const mockFetchDataCb = vi.fn();
+vi.mock('../utils/fetchUtils', () => ({
+  fetchDataCb: vi.fn(),
+}));
+const mockedFetchDataCb = actualFetchDataCb; 
 
-// Mock state setters passed as props
-const mockSetLastMajorQuake = vi.fn();
-const mockSetPreviousMajorQuake = vi.fn();
-const mockSetTimeBetweenPreviousMajorQuakes = vi.fn();
-
-// Mock Date.now() for consistent time-based filtering
-const MOCKED_NOW = 1700000000000; // Fixed point: Nov 14, 2023 22:13:20 GMT
-const MOCKED_NOW_DATE = new Date(MOCKED_NOW);
-
-// Helper to create mock earthquake features
+const MOCKED_NOW = 1700000000000; 
 const createMockEarthquake = (id, timeOffsetDays, mag, title = 'Test Quake') => ({
     type: 'Feature',
-    properties: {
-        mag,
-        place: 'Test Place',
-        time: MOCKED_NOW - timeOffsetDays * 24 * 3600 * 1000, // timeOffsetDays days ago
-        updated: MOCKED_NOW - timeOffsetDays * 24 * 3600 * 1000,
-        url: `https://earthquake.usgs.gov/earthquakes/eventpage/test${id}`,
-        detail: `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/test${id}.geojson`,
-        alert: null,
-        status: 'reviewed',
-        tsunami: 0,
-        sig: Math.round(mag * 100),
-        net: 'test',
-        code: `test${id}`,
-        ids: `,test${id},`,
-        sources: ',test,',
-        types: ',origin,phase-data,',
-        magType: 'mw',
-        type: 'earthquake',
-        title,
-    },
-    geometry: { type: 'Point', coordinates: [0, 0, 0] },
+    properties: { mag, place: 'Test Place', time: MOCKED_NOW - timeOffsetDays * 24 * 3600 * 1000, updated: MOCKED_NOW - timeOffsetDays * 24 * 3600 * 1000, title, type: 'earthquake', status: 'reviewed', ids: `,test${id},` },
+    geometry: { type: 'Point', coordinates: [0,0,0] },
     id: `test${id}`,
 });
 
-// Mock API response for monthly data
 const mockMonthlyResponse = {
-    type: 'FeatureCollection',
-    metadata: {
-        generated: MOCKED_NOW - 1000 * 60 * 60, // 1 hour ago
-        url: USGS_API_URL_MONTH,
-        title: 'USGS All Earthquakes, Past Month',
-        status: 200,
-        api: '1.10.3',
-        count: 5,
-    },
+    type: 'FeatureCollection', metadata: { generated: MOCKED_NOW - 1000 * 60 * 60, count: 3 },
     features: [
-        createMockEarthquake('month1', 1, 5.5),  // 1 day ago, Major
-        createMockEarthquake('month2', 5, 4.0),  // 5 days ago
-        createMockEarthquake('month3', 10, 6.0), // 10 days ago, Major
-        createMockEarthquake('month4', 15, 3.0), // 15 days ago
-        createMockEarthquake('month5', 20, 5.2), // 20 days ago, Major
-        createMockEarthquake('month6', 25, 2.5), // 25 days ago
-        createMockEarthquake('month7', 35, 5.8), // 35 days ago (outside 30 day filter for some arrays), Major
+        createMockEarthquake('month1', 1, 5.5),  
+        createMockEarthquake('month2', 10, 6.0), 
+        createMockEarthquake('month3', 20, 4.0), 
     ],
 };
+const emptyMockMonthlyResponse = { type: 'FeatureCollection', metadata: { generated: MOCKED_NOW, count: 0 }, features: [] };
+
+// Mock functions that would be passed from the provider
+let mockSetLoadingStatus;
+let mockSetErrorState;
+let mockSetMonthlyEarthquakeData;
+let mockUpdateLastMajorQuake;
+let mockSetHasAttemptedMonthlyLoad;
+let mockHookProps;
 
 
 describe('useMonthlyEarthquakeData', () => {
-    let currentLastMajorQuakeMock = null;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(MOCKED_NOW));
+    
+    mockedFetchDataCb.mockReset();
+    mockSetLoadingStatus = vi.fn();
+    mockSetErrorState = vi.fn();
+    mockSetMonthlyEarthquakeData = vi.fn();
+    mockUpdateLastMajorQuake = vi.fn();
+    mockSetHasAttemptedMonthlyLoad = vi.fn();
 
+    mockHookProps = {
+      lastMajorQuake: null, // This will be set by tests for different scenarios
+      setLoadingStatus: mockSetLoadingStatus,
+      setErrorState: mockSetErrorState,
+      setMonthlyEarthquakeData: mockSetMonthlyEarthquakeData,
+      updateLastMajorQuake: mockUpdateLastMajorQuake,
+      setHasAttemptedMonthlyLoad: mockSetHasAttemptedMonthlyLoad,
+    };
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  // Helper to render the hook with current mockHookProps
+  const renderTestHook = (propsChanges = {}) => {
+    const currentProps = { ...mockHookProps, ...propsChanges };
+    return renderHook((p) => useMonthlyEarthquakeData(mockedFetchDataCb, p), { 
+      initialProps: currentProps 
+    });
+  };
+
+
+  describe('loadMonthlyData Functionality (Successful Fetch)', () => {
     beforeEach(() => {
-        vi.useFakeTimers();
-        vi.setSystemTime(MOCKED_NOW_DATE);
-        mockFetchDataCb.mockReset();
-        mockSetLastMajorQuake.mockReset();
-        mockSetPreviousMajorQuake.mockReset();
-        mockSetTimeBetweenPreviousMajorQuakes.mockReset();
-        currentLastMajorQuakeMock = null; // Reset mock for current major quake
+      mockedFetchDataCb.mockResolvedValue({ ...mockMonthlyResponse });
     });
 
-    afterEach(() => {
-        vi.useRealTimers();
+    it('should call context loading and attempt setters', async () => {
+      const { result } = renderTestHook();
+      await act(async () => { await result.current.loadMonthlyData(); });
+
+      expect(mockSetLoadingStatus).toHaveBeenCalledWith({ monthly: true });
+      expect(mockSetHasAttemptedMonthlyLoad).toHaveBeenCalledWith(true);
+      expect(mockSetErrorState).toHaveBeenCalledWith({ type: 'monthly', message: null });
+      expect(mockSetLoadingStatus).toHaveBeenCalledWith({ monthly: false });
     });
 
-    const getHook = () => renderHook(() => useMonthlyEarthquakeData(
-        mockFetchDataCb,
-        currentLastMajorQuakeMock,
-        mockSetLastMajorQuake,
-        mockSetPreviousMajorQuake,
-        mockSetTimeBetweenPreviousMajorQuakes
-    ));
+    it('should call setMonthlyEarthquakeData with processed data', async () => {
+      const { result } = renderTestHook();
+      await act(async () => { await result.current.loadMonthlyData(); });
 
-    describe('Initial State & Loading', () => {
-        it('should have correct initial states', () => {
-            const { result } = getHook();
-            expect(result.current.isLoadingMonthly).toBe(false);
-            expect(result.current.hasAttemptedMonthlyLoad).toBe(false);
-            expect(result.current.monthlyError).toBeNull();
-            expect(result.current.allEarthquakes).toEqual([]);
-            expect(result.current.earthquakesLast14Days).toEqual([]);
-            expect(result.current.earthquakesLast30Days).toEqual([]);
-            expect(result.current.prev7DayData).toEqual([]);
-            expect(result.current.prev14DayData).toEqual([]);
-        });
+      expect(mockSetMonthlyEarthquakeData).toHaveBeenCalledWith(expect.objectContaining({
+        all: mockMonthlyResponse.features,
+        last14: expect.arrayContaining([
+            expect.objectContaining({ id: 'testmonth1' }),
+            expect.objectContaining({ id: 'testmonth2' }),
+        ]),
+        last30: expect.arrayContaining([
+            expect.objectContaining({ id: 'testmonth1' }),
+            expect.objectContaining({ id: 'testmonth2' }),
+            expect.objectContaining({ id: 'testmonth3' }),
+        ]),
+        prev7: expect.arrayContaining([expect.objectContaining({ id: 'testmonth2' })]), 
+        prev14: expect.arrayContaining([expect.objectContaining({ id: 'testmonth3' })]), 
+      }));
     });
 
-    describe('loadMonthlyData Functionality (Successful Fetch)', () => {
-        beforeEach(() => {
-            mockFetchDataCb.mockResolvedValue({ ...mockMonthlyResponse });
-        });
+    describe('Major Quake Consolidation with Context', () => {
+      it('should call updateLastMajorQuake for major quakes from monthly if hook is passed null for lastMajorQuake', async () => {
+        const { result } = renderTestHook({ lastMajorQuake: null }); // Explicitly pass null
+        await act(async () => { await result.current.loadMonthlyData(); });
 
-        it('should set loading states correctly during and after fetch', async () => {
-            const { result } = getHook();
-            let loadPromise;
+        expect(mockUpdateLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth1' }));
+        expect(mockUpdateLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth2' }));
+      });
 
-            // Act for the synchronous part of loadMonthlyData
-            act(() => {
-                loadPromise = result.current.loadMonthlyData();
-            });
-            // Check isLoadingMonthly immediately after loadMonthlyData is called
-            expect(result.current.isLoadingMonthly).toBe(true);
-            expect(result.current.hasAttemptedMonthlyLoad).toBe(true); // This is set sync
+      it('should call updateLastMajorQuake consolidating with passed lastMajorQuake', async () => {
+        const passedLastMajorQuake = createMockEarthquake('contextMajor', 5, 5.8);
+        const { result } = renderTestHook({ lastMajorQuake: passedLastMajorQuake });
+        
+        await act(async () => { await result.current.loadMonthlyData(); });
 
-            // Act for the asynchronous part to complete
-            await act(async () => { await loadPromise; });
+        expect(mockUpdateLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth1' }));
+        expect(mockUpdateLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testcontextMajor' }));
+        expect(mockUpdateLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth2' }));
+        
+        const calls = mockUpdateLastMajorQuake.mock.calls;
+        const times = calls.map(call => call[0].properties.time);
+        expect(times[0]).toBeGreaterThanOrEqual(times[1]);
+        if (times.length > 2) expect(times[1]).toBeGreaterThanOrEqual(times[2]);
+      });
 
-            expect(result.current.isLoadingMonthly).toBe(false);
-            expect(result.current.monthlyError).toBeNull();
-        });
+      it('should call updateLastMajorQuake even if passed lastMajorQuake is newest', async () => {
+        const passedNewestMajorQuake = createMockEarthquake('contextNewestMajor', 0.5, 7.0);
+        const { result } = renderTestHook({ lastMajorQuake: passedNewestMajorQuake });
+        await act(async () => { await result.current.loadMonthlyData(); });
 
-        it('should process and filter data correctly', async () => {
-            const { result } = getHook();
-            await act(async () => { await result.current.loadMonthlyData(); });
+        expect(mockUpdateLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testcontextNewestMajor' }));
+        expect(mockUpdateLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth1' }));
+        expect(mockUpdateLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth2' }));
+      });
+    });
+  });
 
-            expect(result.current.allEarthquakes.length).toBe(mockMonthlyResponse.features.length);
-            expect(result.current.earthquakesLast14Days.map(e => e.id)).toEqual(
-                expect.arrayContaining(['testmonth1', 'testmonth2', 'testmonth3'])
-            );
-            expect(result.current.earthquakesLast30Days.map(e => e.id)).toEqual(
-                expect.arrayContaining(['testmonth1', 'testmonth2', 'testmonth3', 'testmonth4', 'testmonth5', 'testmonth6'])
-            );
-            // prev7DayData: 7-14 days ago. month3 (10d)
-            expect(result.current.prev7DayData.map(e => e.id)).toEqual(['testmonth3']);
-             // prev14DayData: 14-28 days ago. month4 (15d), month5 (20d), month6 (25d)
-            expect(result.current.prev14DayData.map(e => e.id)).toEqual(
-                expect.arrayContaining(['testmonth4', 'testmonth5', 'testmonth6'])
-            );
-        });
+  describe('loadMonthlyData Functionality (Error Handling)', () => {
+    it('should call setErrorState if fetch fails (network error)', async () => {
+      mockedFetchDataCb.mockRejectedValue(new Error("Monthly network failure"));
+      const { result } = renderTestHook();
+      await act(async () => { await result.current.loadMonthlyData(); });
 
-        describe('Major Quake Consolidation', () => {
-            it('should set major quakes from monthly if currentLastMajorQuake is null', async () => {
-                currentLastMajorQuakeMock = null;
-                const { result } = getHook();
-                await act(async () => { await result.current.loadMonthlyData(); });
-
-                // month1 (5.5, 1 day ago), month3 (6.0, 10 days ago)
-                expect(mockSetLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth1' }));
-                expect(mockSetPreviousMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth3' }));
-                const time1 = mockMonthlyResponse.features.find(f=>f.id === 'testmonth1').properties.time;
-                const time3 = mockMonthlyResponse.features.find(f=>f.id === 'testmonth3').properties.time;
-                expect(mockSetTimeBetweenPreviousMajorQuakes).toHaveBeenCalledWith(time1 - time3);
-            });
-
-            it('should update with monthly if monthly major quake is newer', async () => {
-                currentLastMajorQuakeMock = createMockEarthquake('currentMajor', 12, 7.0); // 12 days ago
-                const { result } = getHook();
-                await act(async () => { await result.current.loadMonthlyData(); });
-
-                // month1 (5.5, 1 day ago) is newer than currentMajor (12 days ago)
-                expect(mockSetLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth1' }));
-                // previous should be month3 (10 days ago) as it's next most recent from combined list after month1
-                expect(mockSetPreviousMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth3'}));
-                const time1 = mockMonthlyResponse.features.find(f=>f.id === 'testmonth1').properties.time;
-                const time3 = mockMonthlyResponse.features.find(f=>f.id === 'testmonth3').properties.time;
-                expect(mockSetTimeBetweenPreviousMajorQuakes).toHaveBeenCalledWith(time1 - time3);
-            });
-
-            it('should keep current if currentLastMajorQuake is newer than any in monthly', async () => {
-                currentLastMajorQuakeMock = createMockEarthquake('superMajor', 0.5, 7.5); // 0.5 days ago
-                const { result } = getHook();
-                await act(async () => { await result.current.loadMonthlyData(); });
-
-                expect(mockSetLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testsuperMajor' }));
-                // previous would be month1 (1 day ago)
-                expect(mockSetPreviousMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth1' }));
-            });
-
-            it('should correctly place currentLastMajorQuake if it is between monthly major quakes', async () => {
-                currentLastMajorQuakeMock = createMockEarthquake('midMajor', 7, 6.2); // 7 days ago
-                 // Monthly: month1 (1d, 5.5), month3 (10d, 6.0)
-                const { result } = getHook();
-                await act(async () => { await result.current.loadMonthlyData(); });
-
-                // month1 is newest
-                expect(mockSetLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmonth1' }));
-                // midMajor (7d) is next
-                expect(mockSetPreviousMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testmidMajor' }));
-            });
-
-            it('should handle no major quakes in monthly feed but currentLastMajorQuake exists', async () => {
-                currentLastMajorQuakeMock = createMockEarthquake('onlyMajor', 10, 7.0);
-                const noMajorMonthlyResponse = { ...mockMonthlyResponse, features: [createMockEarthquake('nonMajor', 1, 4.0)] };
-                mockFetchDataCb.mockResolvedValue(noMajorMonthlyResponse);
-                const { result } = getHook();
-                await act(async () => { await result.current.loadMonthlyData(); });
-
-                expect(mockSetLastMajorQuake).toHaveBeenCalledWith(expect.objectContaining({ id: 'testonlyMajor' }));
-                expect(mockSetPreviousMajorQuake).toHaveBeenCalledWith(null);
-                expect(mockSetTimeBetweenPreviousMajorQuakes).toHaveBeenCalledWith(null);
-            });
-        });
+      expect(mockSetLoadingStatus).toHaveBeenCalledWith({ monthly: false });
+      expect(mockSetErrorState).toHaveBeenCalledWith({ type: 'monthly', message: 'Monthly Data Error: Monthly network failure' });
+      expect(mockSetMonthlyEarthquakeData).not.toHaveBeenCalled(); 
+      expect(mockUpdateLastMajorQuake).not.toHaveBeenCalled();
     });
 
-    describe('loadMonthlyData Functionality (Error Handling)', () => {
-        it('should set monthlyError if fetch fails (network error)', async () => {
-            mockFetchDataCb.mockRejectedValue(new Error("Network failure"));
-            const { result } = getHook();
-            await act(async () => { await result.current.loadMonthlyData(); });
-
-            expect(result.current.isLoadingMonthly).toBe(false);
-            expect(result.current.monthlyError).toBe("Monthly Data Error: Network failure");
-            expect(result.current.allEarthquakes).toEqual([]);
-            expect(mockSetLastMajorQuake).not.toHaveBeenCalled();
-        });
-
-        it('should set monthlyError if response has no features', async () => {
-            mockFetchDataCb.mockResolvedValue({ metadata: { generated: MOCKED_NOW }, features: [] }); // Empty features
-            const { result } = getHook();
-            await act(async () => { await result.current.loadMonthlyData(); });
-
-            expect(result.current.isLoadingMonthly).toBe(false);
-            expect(result.current.monthlyError).toBe("Monthly data is currently unavailable or incomplete.");
-        });
-
-        it('should set monthlyError if response has metadata error message', async () => {
-            mockFetchDataCb.mockResolvedValue({ metadata: { errorMessage: "USGS server error" } });
-            const { result } = getHook();
-            await act(async () => { await result.current.loadMonthlyData(); });
-
-            expect(result.current.isLoadingMonthly).toBe(false);
-            expect(result.current.monthlyError).toBe("USGS server error");
-        });
+    it('should call setErrorState if response has no features', async () => {
+      mockedFetchDataCb.mockResolvedValue({ ...emptyMockMonthlyResponse });
+      const { result } = renderTestHook();
+      await act(async () => { await result.current.loadMonthlyData(); });
+      
+      expect(mockSetErrorState).toHaveBeenCalledWith({ type: 'monthly', message: "Monthly data is currently unavailable or incomplete." });
+      expect(mockSetLoadingStatus).toHaveBeenCalledWith({ monthly: false });
     });
+
+    it('should call setErrorState if response has metadata error message', async () => {
+      mockedFetchDataCb.mockResolvedValue({ metadata: { errorMessage: "USGS monthly error" } });
+      const { result } = renderTestHook();
+      await act(async () => { await result.current.loadMonthlyData(); });
+
+      expect(mockSetErrorState).toHaveBeenCalledWith({ type: 'monthly', message: "USGS monthly error" });
+      expect(mockSetLoadingStatus).toHaveBeenCalledWith({ monthly: false });
+    });
+  });
 });
