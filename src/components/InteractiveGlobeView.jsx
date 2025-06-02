@@ -1,6 +1,7 @@
 // src/InteractiveGlobeView.jsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 
 /**
  * Takes a color string (hex or rgba) and returns a new rgba string with reduced opacity.
@@ -68,26 +69,20 @@ const makeColorDuller = (colorString, opacityFactor) => {
  * @param {number} [props.defaultFocusAltitude=2.5] - Target altitude (zoom level) for the globe's camera focus. Can be updated dynamically.
  * @param {number} [props.defaultFocusLat=20] - Target latitude for the globe's camera focus. Can be updated dynamically.
  * @param {number} [props.defaultFocusLng=0] - Target longitude for the globe's camera focus. Can be updated dynamically.
- * @param {Array<object>} props.earthquakes - An array of earthquake data objects to plot on the globe.
  * @param {boolean} [props.enableAutoRotation=true] - Whether the globe should auto-rotate.
  * @param {function(number):string} props.getMagnitudeColorFunc - Function that returns a color string based on earthquake magnitude.
  * @param {number} [props.globeAutoRotateSpeed=0.1] - Speed of the auto-rotation.
  * @param {string} [props.highlightedQuakeId] - The ID of an earthquake to be visually highlighted on the globe.
- * @param {object} [props.latestMajorQuakeForRing] - Data for the latest major earthquake, used to display a visual ring indicator.
  * @param {function(object):void} props.onQuakeClick - Callback function triggered when an earthquake point is clicked. Receives the quake data object.
- * @param {object} [props.previousMajorQuake] - Data for the previously recorded major earthquake, used to display a visual ring indicator.
  * @param {object} [props.tectonicPlatesGeoJson] - GeoJSON data for rendering tectonic plate boundaries.
  * @returns {JSX.Element} The rendered InteractiveGlobeView component.
  */
 const InteractiveGlobeView = ({
-                                  earthquakes,
                                   onQuakeClick,
                                   getMagnitudeColorFunc,
                                   coastlineGeoJson,
                                   tectonicPlatesGeoJson,
                                   highlightedQuakeId,
-                                  latestMajorQuakeForRing,
-                                  previousMajorQuake, // Added new prop
                                   activeClusters = [], // <-- New prop with default
                                   atmosphereColor = "rgba(100,100,255,0.3)",
                                   defaultFocusLat = 20,
@@ -98,6 +93,8 @@ const InteractiveGlobeView = ({
                                   enableAutoRotation = true,
                                   globeAutoRotateSpeed = 0.1
                               }) => {
+    const { globeEarthquakes, lastMajorQuake, previousMajorQuake } = useEarthquakeDataState(); // Get data from context
+
     const globeRef = useRef();
     const containerRef = useRef(null);
     const [points, setPoints] = useState([]);
@@ -200,7 +197,7 @@ const InteractiveGlobeView = ({
     }, [initialLayoutComplete]); // Add initialLayoutComplete to dependency array.
 
     useEffect(() => {
-        let allPointsData = (earthquakes || []).map(quake => {
+        let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
             const isHighlighted = quake.id === highlightedQuakeId;
             const magValue = parseFloat(quake.properties.mag) || 0;
             let pointRadius, pointColor, pointAltitude, pointLabel, pointType;
@@ -342,7 +339,7 @@ const InteractiveGlobeView = ({
         // }
         // --- END NEW ---
         setPoints(allPointsData);
-    }, [earthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]);
+    }, [globeEarthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]); // Update dependency array
 
     useEffect(() => {
         let processedPaths = [];
@@ -493,20 +490,20 @@ const InteractiveGlobeView = ({
     useEffect(() => {
         const newRings = [];
 
-        // Ring for latestMajorQuakeForRing
-        if (latestMajorQuakeForRing &&
-            latestMajorQuakeForRing.geometry &&
-            Array.isArray(latestMajorQuakeForRing.geometry.coordinates) &&
-            latestMajorQuakeForRing.geometry.coordinates.length >= 2 &&
-            typeof latestMajorQuakeForRing.geometry.coordinates[1] === 'number' &&
-            typeof latestMajorQuakeForRing.geometry.coordinates[0] === 'number' &&
-            latestMajorQuakeForRing.properties &&
-            typeof latestMajorQuakeForRing.properties.mag === 'number'
+        // Ring for lastMajorQuake (from context, previously latestMajorQuakeForRing)
+        if (lastMajorQuake &&
+            lastMajorQuake.geometry &&
+            Array.isArray(lastMajorQuake.geometry.coordinates) &&
+            lastMajorQuake.geometry.coordinates.length >= 2 &&
+            typeof lastMajorQuake.geometry.coordinates[1] === 'number' &&
+            typeof lastMajorQuake.geometry.coordinates[0] === 'number' &&
+            lastMajorQuake.properties &&
+            typeof lastMajorQuake.properties.mag === 'number'
         ) {
-            const coords = latestMajorQuakeForRing.geometry.coordinates;
-            const mag = parseFloat(latestMajorQuakeForRing.properties.mag);
+            const coords = lastMajorQuake.geometry.coordinates;
+            const mag = parseFloat(lastMajorQuake.properties.mag);
             newRings.push({
-                id: `major_quake_ring_latest_${latestMajorQuakeForRing.id}_${latestMajorQuakeForRing.properties.time}_${Date.now()}`,
+                id: `major_quake_ring_latest_${lastMajorQuake.id}_${lastMajorQuake.properties.time}_${Date.now()}`,
                 lat: coords[1],
                 lng: coords[0],
                 altitude: 0.02,
@@ -517,8 +514,8 @@ const InteractiveGlobeView = ({
             });
         }
 
-        // Ring for previousMajorQuake
-        if (previousMajorQuake &&
+        // Ring for previousMajorQuake (from context)
+        if (previousMajorQuake && // This is now from context
             previousMajorQuake.geometry &&
             Array.isArray(previousMajorQuake.geometry.coordinates) &&
             previousMajorQuake.geometry.coordinates.length >= 2 &&
@@ -546,7 +543,7 @@ const InteractiveGlobeView = ({
              setRingsData(newRings);
         }
 
-    }, [latestMajorQuakeForRing, previousMajorQuake, ringsData.length]); // Added previousMajorQuake and ringsData.length to dependency array
+    }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]); // Update dependency array, added getMagnitudeColorFunc as it's used in color callbacks
 
 
 

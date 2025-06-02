@@ -30,8 +30,9 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // PaginatedEarthquakeTable will be lazy loaded
 // FeedsPageLayoutComponent will be lazy loaded
 // EarthquakeDetailModalComponent will be lazy loaded
-import useEarthquakeData from '../hooks/useEarthquakeData';
-import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Import the new monthly hook
+// import useEarthquakeData from '../hooks/useEarthquakeData'; // Will use context instead
+// import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 import {
     // USGS_API_URL_MONTH, // Now used inside useMonthlyEarthquakeData
     CLUSTER_MAX_DISTANCE_KM,
@@ -269,94 +270,42 @@ function App() {
     };
 
     // --- Data Fetching Callbacks ---
-    // fetchDataCb remains here as it's passed to the hook
-    const fetchDataCb = useCallback(async (url) => {
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                let errorBody = '';
-                try {
-                    errorBody = await response.text();
-                } catch (e) {
-                    // Ignore if reading error body fails
-                }
-                throw new Error(`HTTP error! status: ${response.status} ${response.statusText}. ${errorBody}`);
-            }
-            const contentType = response.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-                throw new Error(`Expected JSON but received ${contentType}`);
-            }
-            const data = await response.json();
+    // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
 
-            // Robustness check for data and data.features
-            const featuresArray = Array.isArray(data?.features) ? data.features : [];
-
-            const sanitizedFeatures = featuresArray
-                .filter(f => f?.properties?.type === 'earthquake')
-                .map(f => ({
-                    ...f,
-                    properties: {
-                        ...f.properties,
-                        mag: (f.properties.mag === null || typeof f.properties.mag === 'number') ? f.properties.mag : null,
-                        detail: f.properties.detail || f.properties.url
-                    },
-                    geometry: f.geometry || {type: "Point", coordinates: [null, null, null]}
-                }));
-            return {features: sanitizedFeatures, metadata: data?.metadata || {generated: Date.now()}};
-        } catch (e) {
-            console.error(`Error in fetchDataCb from ${url}:`, e);
-            // To ensure the function still returns the expected structure in case of error,
-            // allowing downstream processing to handle empty/default values.
-            return {features: [], metadata: {generated: Date.now(), error: true, errorMessage: e.message}};
-        }
-    }, []);
-
-    // Use the new hook
+    // Use the EarthquakeDataContext
     const {
-        isLoadingDaily, // Renamed from hook's isLoadingDaily
-        isLoadingWeekly, // Renamed from hook's isLoadingWeekly
-        isLoadingInitialData, // Directly use from hook
-        error, // Directly use from hook
-        dataFetchTime, // Directly use from hook
-        lastUpdated, // Directly use from hook
+        isLoadingDaily,
+        isLoadingWeekly,
+        isLoadingInitialData,
+        error,
+        dataFetchTime,
+        lastUpdated,
         earthquakesLastHour,
         earthquakesPriorHour,
         earthquakesLast24Hours,
         earthquakesLast72Hours,
         earthquakesLast7Days,
-        prev24HourData, // This was named prev24HourData in hook too
-        globeEarthquakes,
+        prev24HourData,
+        globeEarthquakes, // This will be used by InteractiveGlobeView via its own context consumption
         hasRecentTsunamiWarning,
         highestRecentAlert,
         activeAlertTriggeringQuakes,
-        lastMajorQuake, setLastMajorQuake, // Get setter for monthly update
-        previousMajorQuake, setPreviousMajorQuake, // Get setter for monthly update
-        timeBetweenPreviousMajorQuakes, setTimeBetweenPreviousMajorQuakes, // Get setter for monthly update
-        currentLoadingMessage, // Use from hook
-        isInitialAppLoad // Use from hook (value, not ref)
-    } = useEarthquakeData(fetchDataCb);
-
-    // The original isInitialAppLoad ref is now managed within the hook and its value exposed.
-    // const [appRenderTrigger, setAppRenderTrigger] = useState(0); // Kept for re-renders not tied to data loading -> This was the duplicate
-
-    // Initialize the monthly data hook
-    const {
+        lastMajorQuake, // Setters (setLastMajorQuake, etc.) are managed by context
+        previousMajorQuake,
+        timeBetweenPreviousMajorQuakes,
+        currentLoadingMessage,
+        isInitialAppLoad,
         isLoadingMonthly,
         hasAttemptedMonthlyLoad,
         monthlyError,
         allEarthquakes,
         earthquakesLast14Days,
         earthquakesLast30Days,
-        prev7DayData, // Renamed from hook to make it clear it's for 7-day trend with 14-day data
-        prev14DayData, // Renamed from hook for 14-day trend with 30-day data
-        loadMonthlyData // This is the function to call to trigger the fetch
-    } = useMonthlyEarthquakeData(
-        fetchDataCb,
-        lastMajorQuake, // from useEarthquakeData
-        setLastMajorQuake, // from useEarthquakeData
-        setPreviousMajorQuake, // from useEarthquakeData
-        setTimeBetweenPreviousMajorQuakes // from useEarthquakeData
-    );
+        prev7DayData,
+        prev14DayData,
+        loadMonthlyData
+    } = useEarthquakeDataState();
+
 
     const latestFeelableQuakesSnippet = useMemo(() => {
         if (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0) return [];
@@ -778,7 +727,7 @@ function App() {
                                 />
                                 <div className="lg:block h-full w-full">
                                     <InteractiveGlobeView
-                                        earthquakes={globeEarthquakes} // from useEarthquakeData
+                                        // earthquakes prop removed (data from context)
                                         defaultFocusLat={20}
                                         defaultFocusLng={globeFocusLng}
                                         onQuakeClick={handleQuakeClick}
@@ -788,9 +737,9 @@ function App() {
                                         globeAutoRotateSpeed={0.1}
                                         coastlineGeoJson={coastlineData}
                                         tectonicPlatesGeoJson={tectonicPlatesData}
-                                        highlightedQuakeId={lastMajorQuake?.id} // from useEarthquakeData
-                                        latestMajorQuakeForRing={lastMajorQuake} // from useEarthquakeData
-                                        previousMajorQuake={previousMajorQuake} // from useEarthquakeData
+                                        // highlightedQuakeId prop removed (logic internal to GlobeView via context)
+                                        // latestMajorQuakeForRing prop removed (data from context)
+                                        // previousMajorQuake prop removed (data from context)
                                         activeClusters={activeClusters}
                                     />
                                     <div className="absolute top-2 left-2 z-10 space-y-2">
