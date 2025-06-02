@@ -1,6 +1,6 @@
 // src/pages/HomePage.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Routes, Route, useParams } from 'react-router-dom'; // Removed useNavigate, useSearchParams
 import SeoMetadata from '../components/SeoMetadata';
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
 import InteractiveGlobeView from '../components/InteractiveGlobeView';
@@ -12,7 +12,7 @@ import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json';
 import GlobalLastMajorQuakeTimer from "../components/GlobalLastMajorQuakeTimer.jsx";
 import BottomNav from "../components/BottomNav.jsx";
 import ClusterSummaryItem from '../components/ClusterSummaryItem';
-import ClusterDetailModal from '../components/ClusterDetailModal'; // This is for the cluster map point, not the route component
+// ClusterDetailModal import removed as it's unused
 // import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx'; // Removed static import, will use lazy loaded
 import { calculateDistance, getMagnitudeColor } from '../utils/utils.js';
 
@@ -33,6 +33,7 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // import useEarthquakeData from '../hooks/useEarthquakeData'; // Will use context instead
 // import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
+import { useUIState } from '../contexts/UIStateContext.jsx'; // Import useUIState
 import {
     // USGS_API_URL_MONTH, // Now used inside useMonthlyEarthquakeData
     CLUSTER_MAX_DISTANCE_KM,
@@ -204,7 +205,7 @@ function App() {
         return 'bg-red-900 bg-opacity-70 text-red-50';
     }, []);
 
-    const REGIONS = useMemo(() => [
+    const memoizedREGIONS = useMemo(() => [ // Renamed to avoid conflict
         { name: "Alaska & W. Canada", latMin: 50, latMax: 72, lonMin: -170, lonMax: -125, color: "#A78BFA" },
         { name: "California & W. USA", latMin: 30, latMax: 50, lonMin: -125, lonMax: -110, color: "#F472B6" },
         { name: "Japan & Kuril Isl.", latMin: 25, latMax: 50, lonMin: 125, lonMax: 155, color: "#34D399" },
@@ -219,13 +220,13 @@ function App() {
     const getRegionForEarthquake = useCallback((quake) => {
         const lon = quake.geometry?.coordinates?.[0];
         const lat = quake.geometry?.coordinates?.[1];
-        if (lon === null || lat === null || lon === undefined || lat === undefined) return REGIONS[REGIONS.length - 1]; // Default to 'Other / Oceanic'
-        for (let i = 0; i < REGIONS.length - 1; i++) { // Exclude the last 'Other / Oceanic' region from specific checks
-            const region = REGIONS[i];
+        if (lon === null || lat === null || lon === undefined || lat === undefined) return memoizedREGIONS[memoizedREGIONS.length - 1]; // Default to 'Other / Oceanic'
+        for (let i = 0; i < memoizedREGIONS.length - 1; i++) { // Exclude the last 'Other / Oceanic' region from specific checks
+            const region = memoizedREGIONS[i];
             if (lat >= region.latMin && lat <= region.latMax && lon >= region.lonMin && lon <= region.lonMax) return region;
         }
-        return REGIONS[REGIONS.length - 1]; // Default to 'Other / Oceanic' if no specific region matches
-    }, [REGIONS]);
+        return memoizedREGIONS[memoizedREGIONS.length - 1]; // Default to 'Other / Oceanic' if no specific region matches
+    }, [memoizedREGIONS]);
 
     /**
      * Calculates various statistics from an array of earthquake objects.
@@ -257,17 +258,19 @@ function App() {
 
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now());
-    const [searchParams, setSearchParams] = useSearchParams();
-    const [activeSidebarView, setActiveSidebarView] = useState(searchParams.get('sidebarActiveView') || 'overview_panel'); // Manages UI state
-    const [globeFocusLng, setGlobeFocusLng] = useState(0); // UI state for globe
+    // Get UI states and functions from UIStateContext
+    const {
+        activeSidebarView,
+        setActiveSidebarView,
+        globeFocusLng,
+        setGlobeFocusLng,
+        showEarthquakeDetails,
+        showClusterDetails
+    } = useUIState();
     const [focusedNotableQuake, setFocusedNotableQuake] = useState(null); // UI state for map interaction
     const [activeClusters, setActiveClusters] = useState([]); // Derived from earthquake data
 
-    // setActiveSidebarView is now the main function to change view and URL param
-    const changeSidebarView = (view) => {
-        setActiveSidebarView(view);
-        setSearchParams({ sidebarActiveView: view });
-    };
+    // changeSidebarView function is removed, use setActiveSidebarView from context directly in onClick
 
     // --- Data Fetching Callbacks ---
     // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
@@ -393,14 +396,14 @@ function App() {
             const lng = lastMajorQuake.geometry.coordinates[0];
             if (typeof lng === 'number' && !isNaN(lng)) {
                 // setGlobeFocusLat(lat); // Removed
-                setGlobeFocusLng(lng);
+                setGlobeFocusLng(lng); // Use context setter
             }
         }
         // If lastMajorQuake is null, we could reset to defaults here, e.g.:
         // else {
         //   setGlobeFocusLng(0);  // Default longitude
         // }
-    }, [lastMajorQuake]);
+    }, [lastMajorQuake, setGlobeFocusLng]); // Added setGlobeFocusLng from context
 
     // --- UI Calculations & Memos ---
     // showFullScreenLoader now uses isLoadingInitialData from the hook
@@ -477,7 +480,7 @@ function App() {
         if (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0) {
             return [];
         }
-        const counts = REGIONS.map(r => ({ ...r, count: 0 }));
+        const counts = memoizedREGIONS.map(r => ({ ...r, count: 0 }));
         earthquakesLast24Hours.forEach(q => {
             const region = getRegionForEarthquake(q);
             const regionCounter = counts.find(r => r.name === region.name);
@@ -485,7 +488,7 @@ function App() {
         });
         const sortedRegions = counts.filter(r => r.count > 0).sort((a, b) => b.count - a.count);
         return sortedRegions.slice(0,2);
-    }, [earthquakesLast24Hours, REGIONS, getRegionForEarthquake]);
+    }, [earthquakesLast24Hours, memoizedREGIONS, getRegionForEarthquake]);
 
     const overviewClusters = useMemo(() => {
         if (!activeClusters || activeClusters.length === 0) {
@@ -572,44 +575,19 @@ function App() {
     }, [activeClusters, formatDate, formatTimeAgo, formatTimeDuration]); // Include formatDate, formatTimeAgo, formatTimeDuration if they are from useCallback/component scope
 
     // --- Event Handlers ---
-    const navigate = useNavigate();
+    // navigate is removed as UIStateContext handles navigation
     const handleQuakeClick = useCallback((quake) => {
-        // --- NEW LOGIC ---
         if (quake?.isCluster && quake?.clusterDetails) {
-            // This is a cluster point
             const clusterInfo = quake.clusterDetails;
-            const numQuakesDisplay = clusterInfo.quakes.length;
-            const maxMagDisplay = quake.properties.mag; // This was set to maxMag of cluster
-
-            let message = `Cluster Information:\n`;
-            message += `------------------------\n`;
-            message += `Total Earthquakes: ${numQuakesDisplay}\n`;
-            message += `Maximum Magnitude: M ${maxMagDisplay?.toFixed(1)}\n`;
-            message += `Earthquakes in Cluster (up to 5 shown):\n`;
-
-            clusterInfo.quakes.slice(0, 5).forEach((q, index) => {
-                message += `  ${index + 1}. M ${q.mag?.toFixed(1)} - ${q.place}\n`;
-            });
-            if (clusterInfo.quakes.length > 5) {
-                message += `  ...and ${clusterInfo.quakes.length - 5} more.\n`;
-            }
-
-            alert(message);
-            // Optionally, you could also log to console for more detailed inspection
+            // This part shows an alert, does not navigate. Keep as is for now.
+            alert(`Cluster Information:
+Total Earthquakes: ${clusterInfo.quakes.length}
+Max Magnitude: M ${quake.properties.mag?.toFixed(1)}`);
             console.log("Cluster clicked:", quake);
-
         } else {
-            // Existing logic for individual earthquake clicks
-            const detailUrl = quake?.properties?.detail || quake?.properties?.url; // Check both common USGS fields
-            if (detailUrl) {
-                navigate(`/quake/${encodeURIComponent(detailUrl)}`);
-            } else {
-                console.warn("No detail URL for individual earthquake:", quake?.id, quake);
-                // Fallback alert if no detail URL for a non-cluster point
-                alert(`Earthquake: M ${quake?.properties?.mag?.toFixed(1)} - ${quake?.properties?.place || 'Unknown location'}. No further details link available.`);
-            }
+            showEarthquakeDetails(quake);
         }
-    }, [navigate]);
+    }, [showEarthquakeDetails]);
 
     // Helper function for /feeds SEO
     const getFeedPageSeoInfo = (feedTitle, activePeriod) => {
@@ -662,18 +640,13 @@ function App() {
 
     // const handleCloseDetail = useCallback(() => setSelectedDetailUrl(null), []); // Removed
     const handleNotableQuakeSelect = useCallback((quakeFromFeature) => {
-        setFocusedNotableQuake(quakeFromFeature);
-        const detailUrl = quakeFromFeature?.properties?.detail || quakeFromFeature?.properties?.url || quakeFromFeature?.url;
-        if (detailUrl) {
-            navigate(`/quake/${encodeURIComponent(detailUrl)}`);
-        } else {
-            alert(`Featured Quake: ${quakeFromFeature.name || quakeFromFeature.properties?.place}\n${quakeFromFeature.description || ''}`);
-        }
-    }, [navigate]);
+        setFocusedNotableQuake(quakeFromFeature); // Keep local state for potential UI effects
+        showEarthquakeDetails(quakeFromFeature); // Use context function for navigation
+    }, [showEarthquakeDetails, setFocusedNotableQuake]); // Add dependencies
 
     const handleClusterSummaryClick = useCallback((clusterData) => {
-        navigate(`/cluster/${clusterData.id}`);
-    }, [navigate]); // Added navigate to dependencies
+        showClusterDetails(clusterData); // Use context function
+    }, [showClusterDetails]); // Add showClusterDetails to dependencies
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 
@@ -729,7 +702,7 @@ function App() {
                                     <InteractiveGlobeView
                                         // earthquakes prop removed (data from context)
                                         defaultFocusLat={20}
-                                        defaultFocusLng={globeFocusLng}
+                                        defaultFocusLng={globeFocusLng} // From context
                                         onQuakeClick={handleQuakeClick}
                                         getMagnitudeColorFunc={getMagnitudeColor}
                                         allowUserDragRotation={true}
@@ -800,8 +773,8 @@ function App() {
                                 overviewClusters={overviewClusters} // This is the memoized one from HomePage
                                 handleClusterSummaryClick={handleClusterSummaryClick} // This is the callback from HomePage
                                 topActiveRegionsOverview={topActiveRegionsOverview} // This is the memoized one from HomePage
-                                REGIONS={REGIONS} // This is the memoized REGIONS constant from HomePage
-                                navigate={navigate} // Pass navigate from HomePage
+                                REGIONS={memoizedREGIONS} // This is the memoized REGIONS constant from HomePage
+                                // navigate prop removed
                             />
                         } />
                         <Route path="/feeds" element={
@@ -833,7 +806,7 @@ function App() {
                                 handleLoadMonthlyData={loadMonthlyData}
                                 hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
                                 isLoadingMonthly={isLoadingMonthly}
-                            />}
+                                />}
                         />
                         <Route path="/cluster/:clusterId" element={
                             <ClusterDetailModalWrapper
@@ -841,7 +814,7 @@ function App() {
                                 formatDate={formatDate}
                                 getMagnitudeColorStyle={getMagnitudeColorStyle} // Pass this if ClusterDetailModalWrapper needs it
                                 onIndividualQuakeSelect={handleQuakeClick} // Pass if selecting individual quake from cluster modal
-                            />}
+                                />}
                         />
                     </Routes>
                 </Suspense>
@@ -851,13 +824,14 @@ function App() {
                 {/* The desktop sidebar's visibility is controlled by CSS (hidden lg:flex) */}
                 <aside className="hidden lg:flex w-[480px] bg-slate-800 p-0 flex-col border-l border-slate-700 shadow-2xl z-20">
                     <div className="p-3 border-b border-slate-700"> <h2 className="text-md font-semibold text-indigo-400">Detailed Earthquake Analysis</h2> </div>
+                    {/* Updated sidebar buttons to use setActiveSidebarView from context */}
                     <div className="flex-shrink-0 p-2 space-x-1 border-b border-slate-700 whitespace-nowrap overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
-                        <button onClick={() => changeSidebarView('overview_panel')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
-                        <button onClick={() => changeSidebarView('details_1hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>
-                        <button onClick={() => changeSidebarView('details_24hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_24hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 24hr</button>
-                        <button onClick={() => changeSidebarView('details_7day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_7day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 7day</button>
-                        {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={() => changeSidebarView('details_14day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={() => changeSidebarView('details_30day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
-                        <button onClick={() => changeSidebarView('learn_more')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
+                        <button onClick={() => setActiveSidebarView('overview_panel')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
+                        <button onClick={() => setActiveSidebarView('details_1hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>
+                        <button onClick={() => setActiveSidebarView('details_24hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_24hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 24hr</button>
+                        <button onClick={() => setActiveSidebarView('details_7day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_7day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 7day</button>
+                        {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={() => setActiveSidebarView('details_14day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={() => setActiveSidebarView('details_30day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
+                        <button onClick={() => setActiveSidebarView('learn_more')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
                     </div>
                     <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800" key={activeSidebarView}>
                         {error && !showFullScreenLoader && (
