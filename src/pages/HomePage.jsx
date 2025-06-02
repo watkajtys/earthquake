@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useCallback, useRef, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime
 import { Routes, Route, useNavigate } from 'react-router-dom'; // Removed useParams
 import SeoMetadata from '../components/SeoMetadata';
+import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
 import InteractiveGlobeView from '../components/InteractiveGlobeView';
 import NotableQuakeFeature from '../components/NotableQuakeFeature';
@@ -710,23 +711,25 @@ function App() {
                 {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
                 {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
                 <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto">
-                    <Suspense fallback={<RouteLoadingFallback />}>
-                        <Routes>
-                            <Route path="/" element={
-                                <>
-                                    <SeoMetadata
-                                    title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
-                                    description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
-                                    keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
-                                    pageUrl="https://earthquakeslive.com/"
-                                    canonicalUrl="https://earthquakeslive.com/"
-                                    locale="en_US"
-                                    type="website"
-                                />
-                                <div className="lg:block h-full w-full">
-                                    <InteractiveGlobeView
-                                        // earthquakes prop removed (data from context)
-                                        defaultFocusLat={20}
+                    <ErrorBoundary>
+                        <Suspense fallback={<RouteLoadingFallback />}>
+                            <Routes>
+                                <Route path="/" element={
+                                    <>
+                                        <SeoMetadata
+                                        title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
+                                        description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
+                                        keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
+                                        pageUrl="https://earthquakeslive.com/"
+                                        canonicalUrl="https://earthquakeslive.com/"
+                                        locale="en_US"
+                                        type="website"
+                                    />
+                                    <div className="lg:block h-full w-full">
+                                        <ErrorBoundary>
+                                            <InteractiveGlobeView
+                                                // earthquakes prop removed (data from context)
+                                                defaultFocusLat={20}
                                         defaultFocusLng={globeFocusLng} // from UIStateContext
                                         onQuakeClick={handleQuakeClick}
                                         getMagnitudeColorFunc={getMagnitudeColor}
@@ -740,6 +743,7 @@ function App() {
                                         // previousMajorQuake prop removed (data from context)
                                         activeClusters={activeClusters}
                                     />
+                                        </ErrorBoundary>
                                     <div className="absolute top-2 left-2 z-10 space-y-2">
                                         <NotableQuakeFeature
                                             // dynamicFeaturedQuake and isLoadingDynamicQuake are now from context
@@ -819,6 +823,7 @@ function App() {
                         />
                     </Routes>
                 </Suspense>
+            </ErrorBoundary>
                 </main>
 
                 {/* DESKTOP SIDEBAR (hidden on small screens, flex on large) */}
