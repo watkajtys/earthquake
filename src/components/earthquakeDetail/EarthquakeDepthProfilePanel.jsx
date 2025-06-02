@@ -6,10 +6,6 @@ function EarthquakeDepthProfilePanel({
     exhibitPanelClass
 }) {
     // Guard condition based on the original rendering logic
-    if (!detailData?.geometry?.coordinates?.[2] !== undefined && detailData?.properties?.mag !== undefined) {
-        // This condition seems a bit off. It should likely be:
-        // !(detailData?.geometry?.coordinates?.[2] !== undefined && detailData?.properties?.mag !== undefined)
-        // or more simply:
     if (!(detailData &&
         detailData.geometry &&
         detailData.geometry.coordinates &&

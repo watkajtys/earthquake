@@ -1,16 +1,17 @@
 import React from 'react';
+import { isValidNumber, formatLargeNumber } from '../../utils/detailViewUtils.js';
 
 function EarthquakeEnergyPanel({
     energyJoules,
-    isValidNumber,
-    formatLargeNumber,
+    // isValidNumber, // Now imported
+    // formatLargeNumber, // Now imported
     exhibitPanelClass,
     exhibitTitleClass,
     highlightClass,
     captionClass
 }) {
     // Guard condition based on the original rendering logic
-    if (!isValidNumber(energyJoules)) {
+    if (!isValidNumber(energyJoules)) { // isValidNumber is now imported
         return null; // Or some fallback UI if energyJoules is not valid
     }
 

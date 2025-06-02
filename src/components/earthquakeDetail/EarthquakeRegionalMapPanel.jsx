@@ -1,5 +1,6 @@
 import React from 'react';
 import EarthquakeMap from '../EarthquakeMap'; // Adjusted path
+import { isValidNumber } from '../../utils/detailViewUtils.js';
 
 function EarthquakeRegionalMapPanel({
     geometry,
@@ -7,12 +8,12 @@ function EarthquakeRegionalMapPanel({
     shakemapIntensityImageUrl,
     regionalQuakes,
     detailUrl,
-    isValidNumber, // Helper function
+    // isValidNumber, // Helper function - now imported
     exhibitPanelClass, // Style class
     exhibitTitleClass  // Style class
 }) {
     // Guard condition based on the original rendering logic
-    if (!geometry || !geometry.coordinates || !isValidNumber(geometry.coordinates[1]) || !isValidNumber(geometry.coordinates[0])) {
+    if (!geometry || !geometry.coordinates || !isValidNumber(geometry.coordinates[1]) || !isValidNumber(geometry.coordinates[0])) { // isValidNumber is now imported
         return null; // Or some fallback UI if the map cannot be displayed
     }
 

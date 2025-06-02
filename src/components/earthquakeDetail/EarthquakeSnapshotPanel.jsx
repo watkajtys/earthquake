@@ -1,4 +1,12 @@
 import React from 'react';
+import {
+    isValidString,
+    isValuePresent,
+    isValidNumber,
+    formatDate,
+    formatNumber,
+    formatLargeNumber
+} from '../../utils/detailViewUtils.js';
 
 function EarthquakeSnapshotPanel({
     properties,
@@ -8,12 +16,13 @@ function EarthquakeSnapshotPanel({
     energyJoules,             // Derived in parent: scalarMomentValue from momentTensorProductProps
     mmiValue,                 // Derived in parent: from shakemapProductProps or properties.mmi
     pagerAlertValue,          // Derived in parent: from losspagerProductProps or properties.alert
-    isValidString,
-    isValuePresent,
-    isValidNumber,
-    formatDate,
-    formatNumber,
-    formatLargeNumber,
+    // Helper functions below are now imported
+    // isValidString,
+    // isValuePresent,
+    // isValidNumber,
+    // formatDate,
+    // formatNumber,
+    // formatLargeNumber,
     exhibitPanelClass,
     exhibitTitleClass
 }) {

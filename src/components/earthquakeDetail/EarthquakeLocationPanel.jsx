@@ -1,17 +1,18 @@
 import React from 'react';
+import { isValidNumber, formatNumber } from '../../utils/detailViewUtils.js';
 
 function EarthquakeLocationPanel({
     properties,
     originProductProps,
-    isValidNumber,
-    formatNumber,
+    // isValidNumber, // Now imported
+    // formatNumber, // Now imported
     exhibitPanelClass,
     exhibitTitleClass,
     diagramContainerClass,
     captionClass
 }) {
     // Conditional rendering based on the original logic
-    if (!(originProductProps || (properties && (isValidNumber(properties.nst) || isValidNumber(properties.gap) || isValidNumber(properties.dmin) || isValidNumber(properties.rms))))) {
+    if (!(originProductProps || (properties && (isValidNumber(properties.nst) || isValidNumber(properties.gap) || isValidNumber(properties.dmin) || isValidNumber(properties.rms))))) { // isValidNumber is now imported
         return null;
     }
 
