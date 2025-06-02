@@ -1,4 +1,4 @@
-import { formatTimeAgo } from './utils';
+import { formatTimeAgo, calculateDistance, getMagnitudeColor } from './utils';
 
 describe('formatTimeAgo', () => {
   const MOCKED_NOW = 1678886400000; // March 15, 2023, 12:00:00 PM UTC
@@ -184,5 +184,132 @@ describe('formatTimeAgo', () => {
       const timestamp = MOCKED_NOW + 100 * 1000; // 100 seconds in the future
       expect(formatTimeAgo(timestamp)).toBe("just now");
     });
+  });
+});
+
+describe('calculateDistance', () => {
+  // Test with coordinates resulting in a known distance
+  // Example: San Francisco to Los Angeles (approx. 559 km)
+  it('should return the known distance between two coordinates', () => {
+    const lat1 = 37.7749; // San Francisco latitude
+    const lon1 = -122.4194; // San Francisco longitude
+    const lat2 = 34.0522; // Los Angeles latitude
+    const lon2 = -118.2437; // Los Angeles longitude
+    const expectedDistance = 559; // Approximate distance in km
+    expect(calculateDistance(lat1, lon1, lat2, lon2)).toBeCloseTo(expectedDistance, 0);
+  });
+
+  // Test with the same coordinates (zero distance)
+  it('should return 0 for the same coordinates', () => {
+    const lat = 37.7749;
+    const lon = -122.4194;
+    expect(calculateDistance(lat, lon, lat, lon)).toBe(0);
+  });
+
+  // Test with coordinates on opposite sides of the Earth
+  // Example: North Pole to South Pole (approx. 20015 km, half Earth's circumference)
+  it('should return the correct distance for opposite sides of the Earth', () => {
+    const lat1 = 90.0; // North Pole
+    const lon1 = 0.0;
+    const lat2 = -90.0; // South Pole
+    const lon2 = 0.0;
+    const expectedDistance = 20015; // Approximate distance in km
+    expect(calculateDistance(lat1, lon1, lat2, lon2)).toBeCloseTo(expectedDistance, 0);
+  });
+
+  // Test with invalid inputs (e.g., non-numeric)
+  // The current implementation of calculateDistance does not explicitly handle non-numeric inputs.
+  // It will likely result in NaN due to arithmetic operations on non-numbers.
+  // Testing for NaN is a way to acknowledge this behavior.
+  it('should return NaN for non-numeric latitude input', () => {
+    expect(calculateDistance("not-a-number", 0, 0, 0)).toBeNaN();
+  });
+
+  it('should return NaN for non-numeric longitude input', () => {
+    expect(calculateDistance(0, "not-a-number", 0, 0)).toBeNaN();
+  });
+});
+
+describe('getMagnitudeColor', () => {
+  // Test with null and undefined magnitude
+  it('should return slate-400 for null magnitude', () => {
+    expect(getMagnitudeColor(null)).toBe('#94A3B8');
+  });
+
+  it('should return slate-400 for undefined magnitude', () => {
+    expect(getMagnitudeColor(undefined)).toBe('#94A3B8');
+  });
+
+  // Test with magnitudes at the lower bound of each color category
+  it('should return cyan-300 for magnitude < 1.0 (e.g., 0.5)', () => {
+    expect(getMagnitudeColor(0.5)).toBe('#67E8F9');
+  });
+
+  it('should return cyan-400 for magnitude 1.0', () => {
+    expect(getMagnitudeColor(1.0)).toBe('#22D3EE');
+  });
+
+  it('should return emerald-400 for magnitude 2.5', () => {
+    expect(getMagnitudeColor(2.5)).toBe('#34D399');
+  });
+
+  it('should return yellow-400 for magnitude 4.0', () => {
+    expect(getMagnitudeColor(4.0)).toBe('#FACC15');
+  });
+
+  it('should return orange-400 for magnitude 5.0', () => {
+    expect(getMagnitudeColor(5.0)).toBe('#FB923C');
+  });
+
+  it('should return orange-500 for magnitude 6.0', () => {
+    expect(getMagnitudeColor(6.0)).toBe('#F97316');
+  });
+
+  it('should return red-500 for magnitude 7.0', () => {
+    expect(getMagnitudeColor(7.0)).toBe('#EF4444');
+  });
+
+  it('should return red-700 for magnitude 8.0', () => {
+    expect(getMagnitudeColor(8.0)).toBe('#B91C1C');
+  });
+
+  // Test with magnitudes within each color category
+  it('should return cyan-300 for magnitude 0.9', () => {
+    expect(getMagnitudeColor(0.9)).toBe('#67E8F9');
+  });
+
+  it('should return cyan-400 for magnitude 1.5', () => {
+    expect(getMagnitudeColor(1.5)).toBe('#22D3EE');
+  });
+
+  it('should return emerald-400 for magnitude 3.0', () => {
+    expect(getMagnitudeColor(3.0)).toBe('#34D399');
+  });
+
+  it('should return yellow-400 for magnitude 4.5', () => {
+    expect(getMagnitudeColor(4.5)).toBe('#FACC15');
+  });
+
+  it('should return orange-400 for magnitude 5.5', () => {
+    expect(getMagnitudeColor(5.5)).toBe('#FB923C');
+  });
+
+  it('should return orange-500 for magnitude 6.5', () => {
+    expect(getMagnitudeColor(6.5)).toBe('#F97316');
+  });
+
+  it('should return red-500 for magnitude 7.5', () => {
+    expect(getMagnitudeColor(7.5)).toBe('#EF4444');
+  });
+
+  // Test with a very high magnitude (>= 8.0)
+  it('should return red-700 for magnitude 9.0 (very high)', () => {
+    expect(getMagnitudeColor(9.0)).toBe('#B91C1C');
+  });
+
+  // Test with negative magnitudes
+  // Based on the function, negative magnitudes will fall into the (magnitude < 1.0) category.
+  it('should return cyan-300 for negative magnitude (e.g., -1.0)', () => {
+    expect(getMagnitudeColor(-1.0)).toBe('#67E8F9');
   });
 });
