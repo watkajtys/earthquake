@@ -1,10 +1,11 @@
 import React from 'react';
+import { isValidString } from '../../utils/detailViewUtils.js';
 
 // Assuming isValidString will be passed as a prop or defined/imported here
 // For now, let's assume it's passed as a prop as per instructions.
 
-function EarthquakeDetailHeader({ properties, isValidString }) {
-    if (!properties || !isValidString(properties.title)) {
+function EarthquakeDetailHeader({ properties }) { // Removed isValidString from props
+    if (!properties || !isValidString(properties.title)) { // isValidString is now imported
         return null; // Or some fallback UI if the title is not valid
     }
 
