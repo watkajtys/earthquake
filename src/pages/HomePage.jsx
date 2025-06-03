@@ -267,7 +267,7 @@ function App() {
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Kept local
     // activeSidebarView, activeFeedPeriod, globeFocusLng, focusedNotableQuake are from useUIState()
-    const [activeClusters, setActiveClusters] = useState([]); // Derived from earthquake data, kept local
+    // const [activeClusters, setActiveClusters] = useState([]); // REPLACED with useMemo below
 
     // --- Data Fetching Callbacks ---
     // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
@@ -386,19 +386,18 @@ function App() {
 
     // Old handleLoadMonthlyData is removed. `loadMonthlyData` from the hook is used instead.
 
+    // Calculate activeClusters using useMemo
+    const activeClusters = useMemo(() => {
+        if (earthquakesLast72Hours && earthquakesLast72Hours.length > 0) {
+            return findActiveClusters(earthquakesLast72Hours, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
+        }
+        return [];
+    }, [earthquakesLast72Hours]);
+
     useEffect(() => {
         const timerId = setInterval(() => setAppCurrentTime(Date.now()), HEADER_TIME_UPDATE_INTERVAL_MS);
         return () => clearInterval(timerId);
     }, []);
-
-    useEffect(() => {
-        if (earthquakesLast72Hours && earthquakesLast72Hours.length > 0) {
-            const foundClusters = findActiveClusters(earthquakesLast72Hours, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
-            setActiveClusters(foundClusters);
-        } else {
-            setActiveClusters([]);
-        }
-    }, [earthquakesLast72Hours]);
 
     useEffect(() => {
         if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.geometry.coordinates && lastMajorQuake.geometry.coordinates.length >= 2) {
@@ -780,10 +779,10 @@ function App() {
                                         </div>
                                         <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-[220px] backdrop-blur-sm border border-slate-700">
                                         <h3 className="text-[10px] sm:text-xs font-semibold mb-0.5 sm:mb-1 text-indigo-300 uppercase">Live Statistics</h3>
-                                        <p className="text-[10px] sm:text-xs">Last Hour: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.lastHourCount}</span></p>
-                                        <p className="text-[10px] sm:text-xs">24h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count24h}</span></p>
-                                        <p className="text-[10px] sm:text-xs">72h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count72h}</span></p>
-                                        <p className="text-[10px] sm:text-xs">24h Strongest: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.strongest24h}</span></p>
+                                        <div className="text-[10px] sm:text-xs">Last Hour: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.lastHourCount}</span></div>
+                                        <div className="text-[10px] sm:text-xs">24h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count24h}</span></div>
+                                        <div className="text-[10px] sm:text-xs">72h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count72h}</span></div>
+                                        <div className="text-[10px] sm:text-xs">24h Strongest: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.strongest24h}</span></div>
                                     </div>
                                 </div>
                                 <GlobalLastMajorQuakeTimer
