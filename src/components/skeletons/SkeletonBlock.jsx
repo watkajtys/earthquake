@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 /**
  * A skeleton loader component for a block of content.
@@ -9,4 +9,4 @@ import React from 'react';
  */
 const SkeletonBlock = ({ height = 'h-24', className = '' }) => <div className={`bg-gray-300 rounded ${height} animate-pulse ${className}`}></div>;
 
-export default SkeletonBlock;
+export default memo(SkeletonBlock);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 const LoadMoreDataButton = ({ hasAttemptedMonthlyLoad, isLoadingMonthly, loadMonthlyData }) => {
   return (
@@ -21,4 +21,4 @@ const LoadMoreDataButton = ({ hasAttemptedMonthlyLoad, isLoadingMonthly, loadMon
   );
 };
 
-export default LoadMoreDataButton;
+export default memo(LoadMoreDataButton);

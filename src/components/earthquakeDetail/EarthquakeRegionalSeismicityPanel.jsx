@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import RegionalSeismicityChart from '../RegionalSeismicityChart'; // Adjusted path
 
 function EarthquakeRegionalSeismicityPanel({
@@ -23,4 +23,4 @@ function EarthquakeRegionalSeismicityPanel({
     );
 }
 
-export default EarthquakeRegionalSeismicityPanel;
+export default memo(EarthquakeRegionalSeismicityPanel);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import InfoSnippet from '../InfoSnippet.jsx';
 import { isValidNumber, formatNumber } from '../../utils/detailViewUtils.js';
 
@@ -102,4 +102,4 @@ function EarthquakeFaultParamsPanel({
     );
 }
 
-export default EarthquakeFaultParamsPanel;
+export default memo(EarthquakeFaultParamsPanel);
