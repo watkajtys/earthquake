@@ -57,9 +57,12 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
           if (entry.contentRect.width > 0) {
             setContainerWidth(entry.contentRect.width);
             // Invalidate map size when container width changes to ensure it rerenders correctly
-            if (mapRef.current) {
-              mapRef.current.invalidateSize();
-            }
+            // Defer invalidateSize to allow React to complete rendering cycle
+            setTimeout(() => {
+              if (mapRef.current) { // Check mapRef.current again inside setTimeout
+                mapRef.current.invalidateSize();
+              }
+            }, 0);
           }
         }
       });
