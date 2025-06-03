@@ -6,6 +6,7 @@ import {
     USGS_API_URL_WEEK,
     USGS_API_URL_MONTH,
     REFRESH_INTERVAL_MS,
+    FEELABLE_QUAKE_THRESHOLD, // Added
     MAJOR_QUAKE_THRESHOLD,
     ALERT_LEVELS,
     INITIAL_LOADING_MESSAGES,
@@ -75,15 +76,8 @@ export const EarthquakeDataProvider = ({ children }) => {
             }
             setError(null);
 
-            // Initialize daily/weekly data states
-            setEarthquakesLastHour([]);
-            setEarthquakesPriorHour([]);
-            setEarthquakesLast24Hours([]);
-            setEarthquakesLast72Hours([]);
-            setEarthquakesLast7Days([]);
-            setPrev24HourData([]);
-            setGlobeEarthquakes([]);
-            setActiveAlertTriggeringQuakes([]);
+            // REMOVED: Initialize daily/weekly data states (setEarthquakesLastHour([]), etc.)
+            // Data will persist during refresh, isLoading flags indicate refresh status.
 
             const nowForFiltering = Date.now();
             let dailyErrorMsg = null;
@@ -217,11 +211,8 @@ export const EarthquakeDataProvider = ({ children }) => {
         setHasAttemptedMonthlyLoad(true);
         setMonthlyError(null);
 
-        setAllEarthquakes([]);
-        setEarthquakesLast14Days([]);
-        setEarthquakesLast30Days([]);
-        setPrev7DayData([]);
-        setPrev14DayData([]);
+        // REMOVED: Clearing of monthly data arrays (setAllEarthquakes([]), etc.)
+        // Data will persist, isLoadingMonthly indicates refresh status.
         
         const nowForFiltering = Date.now();
         // Helper for monthly data (days to hours)
@@ -286,6 +277,35 @@ export const EarthquakeDataProvider = ({ children }) => {
 
     const isLoadingInitialData = useMemo(() => (isLoadingDaily || isLoadingWeekly) && isInitialAppLoadRef.current, [isLoadingDaily, isLoadingWeekly]);
     const currentLoadingMessage = useMemo(() => currentLoadingMessages[loadingMessageIndex], [currentLoadingMessages, loadingMessageIndex]);
+
+    // Memoized filtered lists
+    const feelableQuakes7Days_ctx = useMemo(() => {
+        if (!earthquakesLast7Days) return [];
+        return earthquakesLast7Days.filter(
+            quake => quake.properties.mag !== null && quake.properties.mag >= FEELABLE_QUAKE_THRESHOLD
+        );
+    }, [earthquakesLast7Days]);
+
+    const significantQuakes7Days_ctx = useMemo(() => {
+        if (!earthquakesLast7Days) return [];
+        return earthquakesLast7Days.filter(
+            quake => quake.properties.mag !== null && quake.properties.mag >= MAJOR_QUAKE_THRESHOLD
+        );
+    }, [earthquakesLast7Days]);
+
+    const feelableQuakes30Days_ctx = useMemo(() => {
+        if (!allEarthquakes) return [];
+        return allEarthquakes.filter(
+            quake => quake.properties.mag !== null && quake.properties.mag >= FEELABLE_QUAKE_THRESHOLD
+        );
+    }, [allEarthquakes]);
+
+    const significantQuakes30Days_ctx = useMemo(() => {
+        if (!allEarthquakes) return [];
+        return allEarthquakes.filter(
+            quake => quake.properties.mag !== null && quake.properties.mag >= MAJOR_QUAKE_THRESHOLD
+        );
+    }, [allEarthquakes]);
     
     const contextValue = useMemo(() => ({
         isLoadingDaily,
@@ -320,6 +340,11 @@ export const EarthquakeDataProvider = ({ children }) => {
         prev14DayData,
         // Function to trigger monthly data load
         loadMonthlyData,
+        // New filtered lists
+        feelableQuakes7Days_ctx,
+        significantQuakes7Days_ctx,
+        feelableQuakes30Days_ctx,
+        significantQuakes30Days_ctx,
         // No need to expose setters like setLastMajorQuake to the context consumers directly
         // as they are managed internally by the provider now.
     }), [
@@ -329,7 +354,9 @@ export const EarthquakeDataProvider = ({ children }) => {
         highestRecentAlert, activeAlertTriggeringQuakes, lastMajorQuake, previousMajorQuake,
         timeBetweenPreviousMajorQuakes, currentLoadingMessage, 
         isLoadingMonthly, hasAttemptedMonthlyLoad, monthlyError, allEarthquakes,
-        earthquakesLast14Days, earthquakesLast30Days, prev7DayData, prev14DayData, loadMonthlyData
+        earthquakesLast14Days, earthquakesLast30Days, prev7DayData, prev14DayData, loadMonthlyData,
+        feelableQuakes7Days_ctx, significantQuakes7Days_ctx, // Added new dependencies
+        feelableQuakes30Days_ctx, significantQuakes30Days_ctx // Added new dependencies
         // Note: isInitialAppLoadRef.current is not a state, so it doesn't need to be in deps for contextValue if it only changes `isInitialAppLoad`
         // but to be safe and ensure context updates when its value for `isInitialAppLoad` changes:
         // However, since it's a ref, its change doesn't trigger re-render for contextValue.

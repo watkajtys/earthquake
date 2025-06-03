@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'; // Added useMemo
+import React, { useMemo, memo } from 'react'; // Added useMemo, memo
 import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 import { useUIState } from '../contexts/UIStateContext'; // Import context
@@ -185,4 +185,4 @@ FeedsPageLayout.propTypes = {
     formatDate: PropTypes.func.isRequired,
 };
 
-export default FeedsPageLayout;
+export default memo(FeedsPageLayout);
