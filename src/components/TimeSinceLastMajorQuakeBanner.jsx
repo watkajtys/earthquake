@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import SkeletonText from './SkeletonText';
+import SkeletonText from './skeletons/SkeletonText';
 import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 

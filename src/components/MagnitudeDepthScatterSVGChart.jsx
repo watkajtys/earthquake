@@ -1,22 +1,23 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Added import
-import SkeletonBlock from './SkeletonBlock';
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext';
+// import SkeletonBlock from './skeletons/SkeletonBlock'; // Comment out or remove
+import MagnitudeDepthScatterSVGChartSkeleton from './skeletons/MagnitudeDepthScatterSVGChartSkeleton'; // New import
 import { getMagnitudeColor } from '../utils/utils.js';
 
 /**
  * A React component that displays an SVG scatter plot of earthquake magnitude versus depth.
  * It uses a ResizeObserver to dynamically adjust chart dimensions.
- * @param {object} props - The component's props.
- * @param {Array<object> | null} props.earthquakes - An array of earthquake feature objects.
- * @param {string} [props.titleSuffix='(Last 30 Days)'] - Suffix for the component's title.
- * @param {boolean} props.isLoading - Whether the data is currently loading.
- * @returns {JSX.Element} The rendered MagnitudeDepthScatterSVGChart component.
  */
 const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
-    const { sampledEarthquakesLast7Days, sampledEarthquakesLast14Days, sampledEarthquakesLast30Days } = useEarthquakeDataState(); // Access context data
-    const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const gridLineColor = "text-slate-600"; const borderColor = "border-slate-600";
-    const chartContainerRef = useRef(null);
+    const { sampledEarthquakesLast7Days, sampledEarthquakesLast14Days, sampledEarthquakesLast30Days } = useEarthquakeDataState();
+    const cardBg = "bg-slate-700";
+    const titleColor = "text-indigo-400";
+    const axisLabelColor = "text-slate-400";
+    const tickLabelColor = "text-slate-500";
+    const gridLineColor = "text-slate-600";
+    const borderColor = "border-slate-600";
+    const chartContainerRef = useRef(null); // This ref is for the actual chart, not the skeleton
     const [chartDimensions, setChartDimensions] = useState({ width: 500, height: 350 });
 
     useEffect(() => {
@@ -38,26 +39,23 @@ const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(
         });
         resizeObserver.observe(chartContainer);
 
-        // Set initial dimensions
         const initialWidth = Math.max(chartContainer.clientWidth, 300);
-         setChartDimensions(prevDimensions => {
+        setChartDimensions(prevDimensions => {
             if (prevDimensions.width !== initialWidth || prevDimensions.height !== 350) {
-                 return { width: initialWidth, height: 350 };
+                return { width: initialWidth, height: 350 };
             }
             return prevDimensions;
         });
-
 
         return () => {
             if (chartContainer) {
                 resizeObserver.unobserve(chartContainer);
             }
         };
-    }, []);
+    }, []); // Empty dependency array means this effect runs once on mount and cleanup on unmount
 
     const data = useMemo(() => {
-        let sourceEarthquakes = earthquakes; // Default to the prop
-
+        let sourceEarthquakes = earthquakes;
         if (titleSuffix === "(Last 7 Days)" && sampledEarthquakesLast7Days) {
             sourceEarthquakes = sampledEarthquakesLast7Days;
         } else if (titleSuffix === "(Last 14 Days)" && sampledEarthquakesLast14Days) {
@@ -65,9 +63,7 @@ const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(
         } else if (titleSuffix === "(Last 30 Days)" && sampledEarthquakesLast30Days) {
             sourceEarthquakes = sampledEarthquakesLast30Days;
         }
-
         if (!sourceEarthquakes) return [];
-
         return sourceEarthquakes.map(q => ({
             mag: q.properties.mag,
             depth: q.geometry?.coordinates?.[2],
@@ -76,7 +72,10 @@ const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(
         })).filter(q => q.mag !== null && typeof q.mag === 'number' && q.depth !== null && typeof q.depth === 'number');
     }, [earthquakes, titleSuffix, sampledEarthquakesLast7Days, sampledEarthquakesLast14Days, sampledEarthquakesLast30Days]);
 
-    if (isLoading) return <div ref={chartContainerRef} className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-hidden shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Magnitude vs. Depth {titleSuffix}</h3><SkeletonBlock height="h-[350px]" className="bg-slate-600"/></div>;
+    // Use the new skeleton component when isLoading is true
+    if (isLoading) return <MagnitudeDepthScatterSVGChartSkeleton titleSuffix={titleSuffix} />;
+
+    // Pass the chartContainerRef to the actual chart's div, not the skeleton
     if (!data || data.length === 0) return <div ref={chartContainerRef} className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-hidden shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Magnitude vs. Depth {titleSuffix}</h3><p className="text-slate-400 p-4 text-center text-sm">No sufficient data for chart.</p></div>;
 
     const { width: dynamicWidth, height: dynamicHeight } = chartDimensions;
@@ -138,7 +137,6 @@ MagnitudeDepthScatterSVGChart.propTypes = {
     earthquakes: PropTypes.array,
     titleSuffix: PropTypes.string,
     isLoading: PropTypes.bool,
-    // getMagnitudeColor is now imported
 };
 
 export default MagnitudeDepthScatterSVGChart;
