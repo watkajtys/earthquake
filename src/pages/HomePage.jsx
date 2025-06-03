@@ -82,7 +82,7 @@ const GlobeLayout = (props) => {
   } = props;
 
   return (
-    <div className="lg:block h-full w-full"> {/* Base container for the globe and its fixed UI elements */}
+    <div className="block h-full w-full"> {/* Base container for the globe and its fixed UI elements */}
       <InteractiveGlobeView
         defaultFocusLat={20}
         defaultFocusLng={globeFocusLng}
