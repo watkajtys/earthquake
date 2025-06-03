@@ -74,9 +74,20 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
         };
     }, [onClose]);
 
-
-    if (!cluster) {
-        return null;
+    // Enhanced check for cluster and originalQuakes
+    if (!cluster || !Array.isArray(cluster.originalQuakes)) {
+        console.error("ClusterDetailModal: Cluster data is incomplete or malformed.", cluster);
+        // Fallback UI for invalid cluster data
+        return (
+            <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[51] p-4" role="alertdialog" aria-modal="true" aria-labelledby="error-message">
+                <div className="bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 max-w-md text-center">
+                    <h2 id="error-message" className="text-lg font-semibold text-red-400 mb-2">Error</h2>
+                    <p>Cluster data is incomplete or malformed. Unable to display details.</p>
+                    {/* It might be good to have a close button here too, or explain how to close (e.g. press Esc) */}
+                    {/* For now, keeping it simple as per original fallback examples */}
+                </div>
+            </div>
+        );
     }
 
     const {
