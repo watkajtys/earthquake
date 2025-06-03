@@ -18,10 +18,10 @@ import ClusterDetailModal from '../components/ClusterDetailModal'; // This is fo
 import { calculateDistance, getMagnitudeColor } from '../utils/utils.js';
 
 // Import newly created components
-import SkeletonText from '../components/SkeletonText';
-import SkeletonBlock from '../components/SkeletonBlock';
-import SkeletonListItem from '../components/SkeletonListItem';
-import SkeletonTableRow from '../components/SkeletonTableRow';
+import SkeletonText from '../components/skeletons/SkeletonText';
+import SkeletonBlock from '../components/skeletons/SkeletonBlock';
+import SkeletonListItem from '../components/skeletons/SkeletonListItem';
+import SkeletonTableRow from '../components/skeletons/SkeletonTableRow';
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // RegionalDistributionList will be lazy loaded
