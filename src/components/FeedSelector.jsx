@@ -16,40 +16,40 @@ const FeedSelector = ({
     <div className="my-2 flex flex-wrap gap-2 pb-2">
       <button
         onClick={() => setActiveFeedPeriod('last_hour')}
-        className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${
-          activeFeedPeriod === 'last_hour' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'
+        className={`text-xs px-3 py-1.5 font-medium rounded-md transition-colors whitespace-nowrap ${
+          activeFeedPeriod === 'last_hour' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed'
         }`}
       >
         Last Hour
       </button>
       <button
         onClick={() => setActiveFeedPeriod('feelable_quakes')}
-        className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${
-          activeFeedPeriod === 'feelable_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'
+        className={`text-xs px-3 py-1.5 font-medium rounded-md transition-colors whitespace-nowrap ${
+          activeFeedPeriod === 'feelable_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed'
         }`}
       >
         Feelable (M{FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+)
       </button>
       <button
         onClick={() => setActiveFeedPeriod('significant_quakes')}
-        className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${
-          activeFeedPeriod === 'significant_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'
+        className={`text-xs px-3 py-1.5 font-medium rounded-md transition-colors whitespace-nowrap ${
+          activeFeedPeriod === 'significant_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed'
         }`}
       >
         Significant (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)
       </button>
       <button
         onClick={() => setActiveFeedPeriod('last_24_hours')}
-        className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${
-          activeFeedPeriod === 'last_24_hours' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'
+        className={`text-xs px-3 py-1.5 font-medium rounded-md transition-colors whitespace-nowrap ${
+          activeFeedPeriod === 'last_24_hours' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed'
         }`}
       >
         Last 24hr
       </button>
       <button
         onClick={() => setActiveFeedPeriod('last_7_days')}
-        className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${
-          activeFeedPeriod === 'last_7_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'
+        className={`text-xs px-3 py-1.5 font-medium rounded-md transition-colors whitespace-nowrap ${
+          activeFeedPeriod === 'last_7_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed'
         }`}
       >
         Last 7day
@@ -59,16 +59,16 @@ const FeedSelector = ({
         <React.Fragment key="monthly-feed-buttons">
           <button
             onClick={() => setActiveFeedPeriod('last_14_days')}
-            className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${
-              activeFeedPeriod === 'last_14_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'
+            className={`text-xs px-3 py-1.5 font-medium rounded-md transition-colors whitespace-nowrap ${
+              activeFeedPeriod === 'last_14_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
           >
             14-Day
           </button>
           <button
             onClick={() => setActiveFeedPeriod('last_30_days')}
-            className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${
-              activeFeedPeriod === 'last_30_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'
+            className={`text-xs px-3 py-1.5 font-medium rounded-md transition-colors whitespace-nowrap ${
+              activeFeedPeriod === 'last_30_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
           >
             30-Day

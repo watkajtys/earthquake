@@ -8,7 +8,7 @@ const QuickFact = ({ navigate }) => {
       <InfoSnippet topic="magnitude" />
       <button
         onClick={() => navigate('/learn')}
-        className="mt-2 w-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
+        className="mt-2 w-full bg-slate-600 hover:bg-slate-500 focus:bg-slate-700 text-white text-xs font-medium py-1.5 px-3 rounded-md transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Learn More About Earthquakes
       </button>

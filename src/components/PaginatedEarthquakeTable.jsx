@@ -26,7 +26,7 @@ const PaginatedEarthquakeTable = React.memo(({
     periodName, filterPredicate,
     getMagnitudeColorStyle, formatTimeAgo, formatDate
 }) => {
-    const cardBg = "bg-slate-700"; const titleColor = "text-indigo-300"; const tableHeaderBg = "bg-slate-800"; const tableHeaderTextColor = "text-slate-400"; const tableRowHover = "hover:bg-slate-600"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-slate-300 border-slate-500 disabled:opacity-40"; const paginationText = "text-slate-300";
+    const cardBg = "bg-slate-700"; const titleColor = "text-indigo-300"; const tableHeaderBg = "bg-slate-800"; const tableHeaderTextColor = "text-slate-400"; const tableRowHover = "hover:bg-slate-600"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"; const paginationText = "text-slate-300";
     const [sortConfig, setSortConfig] = useState({key: defaultSortKey, direction: initialSortDirection}); const [currentPage, setCurrentPage] = useState(1);
 
     const processedEarthquakes = useMemo(() => {
@@ -177,9 +177,9 @@ const PaginatedEarthquakeTable = React.memo(({
             </div>
             {totalPages > 1 && (
                 <div className="mt-3 flex justify-between items-center">
-                    <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className={`px-3 py-1 text-xs font-medium border rounded-md transition-colors ${paginationButton}`}>Prev</button>
+                    <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}>Prev</button>
                     <span className={`text-xs ${paginationText}`}>Page {currentPage} of {totalPages} ({processedEarthquakes.length})</span>
-                    <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className={`px-3 py-1 text-xs font-medium border rounded-md transition-colors ${paginationButton}`}>Next</button>
+                    <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}>Next</button>
                 </div>
             )}
         </div>
