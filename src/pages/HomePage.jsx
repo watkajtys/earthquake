@@ -676,6 +676,15 @@ function App() {
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 
+    // --- Sidebar onClick Handlers ---
+    const handleSetSidebarOverview = useCallback(() => setActiveSidebarView('overview_panel'), [setActiveSidebarView]);
+    const handleSetSidebarDetails1hr = useCallback(() => setActiveSidebarView('details_1hr'), [setActiveSidebarView]);
+    const handleSetSidebarDetails24hr = useCallback(() => setActiveSidebarView('details_24hr'), [setActiveSidebarView]);
+    const handleSetSidebarDetails7day = useCallback(() => setActiveSidebarView('details_7day'), [setActiveSidebarView]);
+    const handleSetSidebarDetails14day = useCallback(() => setActiveSidebarView('details_14day'), [setActiveSidebarView]);
+    const handleSetSidebarDetails30day = useCallback(() => setActiveSidebarView('details_30day'), [setActiveSidebarView]);
+    const handleSetSidebarLearnMore = useCallback(() => setActiveSidebarView('learn_more'), [setActiveSidebarView]);
+
     // --- Full Screen Loader ---
     if (showFullScreenLoader) { // Uses isLoadingInitialData from hook
         return (
@@ -831,12 +840,12 @@ function App() {
                 <aside className="hidden lg:flex w-[480px] bg-slate-800 p-0 flex-col border-l border-slate-700 shadow-2xl z-20">
                     <div className="p-3 border-b border-slate-700"> <h2 className="text-md font-semibold text-indigo-400">Detailed Earthquake Analysis</h2> </div>
                     <div className="flex-shrink-0 p-2 space-x-1 border-b border-slate-700 whitespace-nowrap overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
-                        <button onClick={() => setActiveSidebarView('overview_panel')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
-                        <button onClick={() => setActiveSidebarView('details_1hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>
-                        <button onClick={() => setActiveSidebarView('details_24hr')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_24hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 24hr</button>
-                        <button onClick={() => setActiveSidebarView('details_7day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_7day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 7day</button>
-                        {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={() => setActiveSidebarView('details_14day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={() => setActiveSidebarView('details_30day')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
-                        <button onClick={() => setActiveSidebarView('learn_more')} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
+                        <button onClick={handleSetSidebarOverview} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
+                        <button onClick={handleSetSidebarDetails1hr} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>
+                        <button onClick={handleSetSidebarDetails24hr} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_24hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 24hr</button>
+                        <button onClick={handleSetSidebarDetails7day} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_7day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 7day</button>
+                        {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={handleSetSidebarDetails14day} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={handleSetSidebarDetails30day} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
+                        <button onClick={handleSetSidebarLearnMore} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
                     </div>
                     <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800" key={activeSidebarView}>
                         {error && !showFullScreenLoader && (
