@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react'; // Import Suspense
 import RegionalSeismicityChart from './RegionalSeismicityChart';
 import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
@@ -34,7 +33,8 @@ import SkeletonBlock from './skeletons/SkeletonBlock.jsx';
 import ErrorBoundary from './ErrorBoundary'; // Assuming ErrorBoundary.jsx is in the same components folder
 import EarthquakeDetailHeader from './earthquakeDetail/EarthquakeDetailHeader'; // Import the new header
 import EarthquakeSnapshotPanel from './earthquakeDetail/EarthquakeSnapshotPanel'; // Import the new snapshot panel
-import EarthquakeRegionalFaultsPanel from './earthquakeDetail/EarthquakeRegionalFaultsPanel'; // Import the new panel
+// import EarthquakeRegionalFaultsPanel from './earthquakeDetail/EarthquakeRegionalFaultsPanel'; // Changed to lazy import
+const EarthquakeRegionalFaultsPanel = React.lazy(() => import('./earthquakeDetail/EarthquakeRegionalFaultsPanel')); // Lazy import
 import EarthquakeRegionalMapPanel from './earthquakeDetail/EarthquakeRegionalMapPanel'; // Import the new regional map panel
 import EarthquakeEnergyPanel from './earthquakeDetail/EarthquakeEnergyPanel'; // Import the new energy panel
 import EarthquakeRegionalSeismicityPanel from './earthquakeDetail/EarthquakeRegionalSeismicityPanel'; // Import the new regional seismicity panel
@@ -330,13 +330,15 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         exhibitTitleClass={exhibitTitleClass}
                     />
 
-                    <EarthquakeRegionalFaultsPanel
-                        momentTensorProductProps={momentTensorProductProps}
-                        geometry={geometry}
-                        properties={properties}
-                        exhibitPanelClass={exhibitPanelClass}
-                        exhibitTitleClass={exhibitTitleClass}
-                    />
+                    <Suspense fallback={<div className={`${exhibitPanelClass} h-24 animate-pulse`}>Loading tectonic setting...</div>}> {/* Added Suspense with fallback */}
+                        <EarthquakeRegionalFaultsPanel
+                            momentTensorProductProps={momentTensorProductProps}
+                            geometry={geometry}
+                            properties={properties}
+                            exhibitPanelClass={exhibitPanelClass}
+                            exhibitTitleClass={exhibitTitleClass}
+                        />
+                    </Suspense>
 
                     <EarthquakeEnergyPanel
                         energyJoules={energyJoules}

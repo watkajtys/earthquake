@@ -1,56 +1,103 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 const ConvergentBoundaryIcon = ({ className = "w-12 h-8" }) => {
-  const leftBlockVariants = {
+  const [enableAnimations, setEnableAnimations] = useState(true);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handleChange = () => {
+      setEnableAnimations(!mediaQuery.matches);
+    };
+    handleChange(); // Initial check
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const collisionPointX = 25;
+
+  const leftBlockDefaultAnimate = [
+    { x: 0, transition: { duration: 0.5 } },
+    { x: 4, transition: { duration: 1, ease: "easeIn" } },
+    { x: 3, transition: { duration: 1.5, ease: "easeInOut" } },
+    { x: 3, transition: { duration: 0.5 } },
+    { x: 0, transition: { duration: 1.5, ease: "easeInOut" } }
+  ];
+  const staticLeftBlockPose = { x: 3 }; // At collision
+
+  const leftBlockKeyframes = {
     initial: { x: 0 },
-    animate: { x: 3 }, // Moves right
+    animate: leftBlockDefaultAnimate,
+    static: staticLeftBlockPose,
   };
 
-  const rightBlockVariants = {
+  const rightBlockDefaultAnimate = [
+    { x: 0, transition: { duration: 0.5 } },
+    { x: -4, transition: { duration: 1, ease: "easeIn" } },
+    { x: -3, transition: { duration: 1.5, ease: "easeInOut" } },
+    { x: -3, transition: { duration: 0.5 } },
+    { x: 0, transition: { duration: 1.5, ease: "easeInOut" } }
+  ];
+  const staticRightBlockPose = { x: -3 }; // At collision
+
+  const rightBlockKeyframes = {
     initial: { x: 0 },
-    animate: { x: -3 }, // Moves left
+    animate: rightBlockDefaultAnimate,
+    static: staticRightBlockPose,
   };
 
-  const transitionSettings = {
-    duration: 1.5,
-    ease: "easeInOut",
+  const upliftDefaultAnimate = [
+    { scaleY: 0, opacity: 0, y: 15, transition: { duration: 0.5 + 1 } },
+    { scaleY: 1, opacity: 1, y: 10, transition: { duration: 1, ease: "easeOut" } },
+    { scaleY: 1, opacity: 1, y: 10, transition: { duration: 0.5 + 0.5 } },
+    { scaleY: 0, opacity: 0, y: 15, transition: { duration: 1, ease: "easeIn" } }
+  ];
+  const staticUpliftPose = { scaleY: 1, opacity: 1, y: 10 }; // Fully uplifted
+
+  const upliftKeyframes = {
+    initial: { scaleY: 0, opacity: 0, y: 15, x: collisionPointX - 5 },
+    animate: upliftDefaultAnimate,
+    static: staticUpliftPose,
+  };
+
+  const overallTransitionSettings = {
     repeat: Infinity,
-    repeatType: "reverse",
+    repeatDelay: 0.5,
   };
 
   return (
     <svg viewBox="0 0 50 30" className={className} aria-labelledby="convergentBoundaryTitle" role="img">
       <title id="convergentBoundaryTitle">Animated Convergent Boundary Diagram</title>
 
-      {/* Left Block - animated */}
       <motion.g
-        variants={leftBlockVariants}
+        variants={leftBlockKeyframes}
         initial="initial"
-        animate="animate"
-        transition={transitionSettings}
+        animate={enableAnimations ? "animate" : "static"}
+        transition={enableAnimations ? overallTransitionSettings : { duration: 0 }}
       >
         <rect x="2" y="5" width="20" height="20" fill="currentColor" opacity="0.7" />
-        {/* Arrow on left block pointing right */}
         <polyline points="18,15 22,15 20,12 22,15 20,18" stroke="white" strokeWidth="1.5" fill="none" />
       </motion.g>
 
-      {/* Right Block - animated */}
       <motion.g
-        variants={rightBlockVariants}
+        variants={rightBlockKeyframes}
         initial="initial"
-        animate="animate"
-        transition={transitionSettings}
+        animate={enableAnimations ? "animate" : "static"}
+        transition={enableAnimations ? overallTransitionSettings : { duration: 0 }}
       >
         <rect x="28" y="5" width="20" height="20" fill="currentColor" opacity="0.5" />
-        {/* Arrow on right block pointing left */}
         <polyline points="32,15 28,15 30,12 28,15 30,18" stroke="white" strokeWidth="1.5" fill="none" />
       </motion.g>
 
-      {/* Optional: Hint of collision/uplift - could be a static line or animated if desired */}
-      {/* <line x1="25" y1="4" x2="25" y2="8" stroke="currentColor" strokeWidth="1"/> */}
-      {/* <polyline points="23,8 25,5 27,8" stroke="currentColor" strokeWidth="1" fill="none"/> */}
-
+      <motion.polygon
+        points="0,0 10,0 5,-8"
+        fill="currentColor"
+        variants={upliftKeyframes}
+        initial="initial"
+        animate={enableAnimations ? "animate" : "static"}
+        transition={enableAnimations ? overallTransitionSettings : { duration: 0 }}
+        style={{ transformOrigin: "50% 100%" }}
+      />
     </svg>
   );
 };
