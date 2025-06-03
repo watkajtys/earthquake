@@ -1,6 +1,6 @@
 // src/pages/HomePage.jsx
 import React, { useEffect, useMemo, useCallback, useRef, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime
-import { Routes, Route, useNavigate } from 'react-router-dom'; // Removed useParams
+import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
@@ -65,6 +65,69 @@ const MagnitudeDistributionSVGChart = lazy(() => import('../components/Magnitude
 const EarthquakeTimelineSVGChart = lazy(() => import('../components/EarthquakeTimelineSVGChart'));
 const MagnitudeDepthScatterSVGChart = lazy(() => import('../components/MagnitudeDepthScatterSVGChart'));
 const PaginatedEarthquakeTable = lazy(() => import('../components/PaginatedEarthquakeTable'));
+
+// --- GlobeLayout Component ---
+const GlobeLayout = (props) => {
+  const {
+    globeFocusLng,
+    handleQuakeClick,
+    getMagnitudeColor, // This is the function itself
+    coastlineData,
+    tectonicPlatesData,
+    activeClusters,
+    lastMajorQuake,
+    formatTimeDuration,
+    handleNotableQuakeSelect,
+    keyStatsForGlobe
+  } = props;
+
+  return (
+    <div className="lg:block h-full w-full"> {/* Base container for the globe and its fixed UI elements */}
+      <InteractiveGlobeView
+        defaultFocusLat={20}
+        defaultFocusLng={globeFocusLng}
+        onQuakeClick={handleQuakeClick}
+        getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
+        allowUserDragRotation={true}
+        enableAutoRotation={true}
+        globeAutoRotateSpeed={0.1}
+        coastlineGeoJson={coastlineData}
+        tectonicPlatesGeoJson={tectonicPlatesData}
+        activeClusters={activeClusters}
+      />
+
+      {/* Absolutely positioned UI elements over the globe */}
+      <div className="absolute top-2 left-2 z-10 space-y-2">
+        <NotableQuakeFeature
+            onNotableQuakeSelect={handleNotableQuakeSelect}
+            getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
+        />
+        <div className="hidden md:block">
+            <PreviousNotableQuakeFeature
+                onNotableQuakeSelect={handleNotableQuakeSelect}
+                getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
+            />
+        </div>
+        <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-xs backdrop-blur-sm border border-slate-700">
+            <h3 className="text-xs sm:text-sm font-semibold mb-0.5 sm:mb-1 text-indigo-300 uppercase">Live Statistics</h3>
+            <div className="text-xs sm:text-sm">Last Hour: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.lastHourCount}</span></div>
+            <div className="text-xs sm:text-sm">24h Total: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.count24h}</span></div>
+            <div className="text-xs sm:text-sm">72h Total: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.count72h}</span></div>
+            <div className="text-xs sm:text-sm">24h Strongest: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.strongest24h}</span></div>
+        </div>
+      </div>
+
+      <GlobalLastMajorQuakeTimer
+        lastMajorQuake={lastMajorQuake}
+        formatTimeDuration={formatTimeDuration}
+        handleTimerClick={handleQuakeClick}
+      />
+
+      {/* Outlet for Modals (child routes) */}
+      <Outlet />
+    </div>
+  );
+};
 
 /**
  * Calculates the distance between two geographical coordinates using the Haversine formula.
@@ -734,114 +797,84 @@ function App() {
                     <ErrorBoundary>
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <Routes>
-                                <Route path="/" element={
-                                    <>
-                                        <SeoMetadata
-                                        title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
-                                        description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
-                                        keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
-                                        pageUrl="https://earthquakeslive.com/"
-                                        canonicalUrl="https://earthquakeslive.com/"
-                                        locale="en_US"
-                                        type="website"
+                              <Route
+                                path="/"
+                                element={
+                                  <>
+                                    <SeoMetadata
+                                      title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
+                                      description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
+                                      keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
+                                      pageUrl="https://earthquakeslive.com/"
+                                      canonicalUrl="https://earthquakeslive.com/"
+                                      locale="en_US"
+                                      type="website"
                                     />
-                                    <div className="lg:block h-full w-full">
-                                        <ErrorBoundary>
-                                            <InteractiveGlobeView
-                                                // earthquakes prop removed (data from context)
-                                                defaultFocusLat={20}
-                                        defaultFocusLng={globeFocusLng} // from UIStateContext
-                                        onQuakeClick={handleQuakeClick}
-                                        getMagnitudeColorFunc={getMagnitudeColor}
-                                        allowUserDragRotation={true}
-                                        enableAutoRotation={true}
-                                        globeAutoRotateSpeed={0.1}
-                                        coastlineGeoJson={coastlineData}
-                                        tectonicPlatesGeoJson={tectonicPlatesData}
-                                        // highlightedQuakeId prop removed (logic internal to GlobeView via context)
-                                        // latestMajorQuakeForRing prop removed (data from context)
-                                        // previousMajorQuake prop removed (data from context)
-                                        activeClusters={activeClusters}
+                                    <GlobeLayout
+                                      globeFocusLng={globeFocusLng}
+                                      handleQuakeClick={handleQuakeClick}
+                                      getMagnitudeColor={getMagnitudeColor}
+                                      coastlineData={coastlineData}
+                                      tectonicPlatesData={tectonicPlatesData}
+                                      activeClusters={activeClusters}
+                                      lastMajorQuake={lastMajorQuake}
+                                      formatTimeDuration={formatTimeDuration}
+                                      handleNotableQuakeSelect={handleNotableQuakeSelect}
+                                      keyStatsForGlobe={keyStatsForGlobe}
                                     />
-                                        </ErrorBoundary>
-                                    <div className="absolute top-2 left-2 z-10 space-y-2">
-                                        <NotableQuakeFeature
-                                            // dynamicFeaturedQuake and isLoadingDynamicQuake are now from context
-                                            onNotableQuakeSelect={handleNotableQuakeSelect}
-                                            getMagnitudeColorFunc={getMagnitudeColor}
-                                        />
-                                        <div className="hidden md:block">
-                                            <PreviousNotableQuakeFeature
-                                                // previousMajorQuake and isLoadingPreviousQuake are now from context
-                                                onNotableQuakeSelect={handleNotableQuakeSelect}
-                                                getMagnitudeColorFunc={getMagnitudeColor}
-                                            />
-                                        </div>
-                                        <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-[220px] backdrop-blur-sm border border-slate-700">
-                                        <h3 className="text-[10px] sm:text-xs font-semibold mb-0.5 sm:mb-1 text-indigo-300 uppercase">Live Statistics</h3>
-                                        <div className="text-[10px] sm:text-xs">Last Hour: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.lastHourCount}</span></div>
-                                        <div className="text-[10px] sm:text-xs">24h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count24h}</span></div>
-                                        <div className="text-[10px] sm:text-xs">72h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count72h}</span></div>
-                                        <div className="text-[10px] sm:text-xs">24h Strongest: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.strongest24h}</span></div>
-                                    </div>
-                                </div>
-                                <GlobalLastMajorQuakeTimer
-                                    lastMajorQuake={lastMajorQuake} // from EarthquakeDataContext
-                                    formatTimeDuration={formatTimeDuration}
-                                    handleTimerClick={handleQuakeClick}
+                                  </>
+                                }
+                              >
+                                {/* Child routes for modals correctly nested HERE */}
+                                <Route
+                                  path="quake/:detailUrlParam"
+                                  element={<EarthquakeDetailModalComponent />}
                                 />
-                                </div>
-                            </>
-                        } />
-                        <Route path="/overview" element={
-                            <OverviewPage
-                                // Props sourced from context in OverviewPage are removed here
-                                ALERT_LEVELS={ALERT_LEVELS}
-                                getMagnitudeColor={getMagnitudeColor}
-                                formatDate={formatDate}
-                                handleQuakeClick={handleQuakeClick}
-                                latestFeelableQuakesSnippet={latestFeelableQuakesSnippet} // Derived in HomePage
-                                formatTimeAgo={formatTimeAgo}
-                                formatTimeDuration={formatTimeDuration}
-                                getRegionForEarthquake={getRegionForEarthquake}
-                                calculateStats={calculateStats}
-                                overviewClusters={overviewClusters} // Derived in HomePage
-                                handleClusterSummaryClick={handleClusterSummaryClick}
-                                topActiveRegionsOverview={topActiveRegionsOverview} // Derived in HomePage
-                                REGIONS={REGIONS}
-                                navigate={navigate}
-                            />
-                        } />
-                        <Route path="/feeds" element={
-                            <FeedsPageLayoutComponent
-                                // Props sourced from context or derived internally in FeedsPageLayoutComponent are removed
-                                handleQuakeClick={handleQuakeClick}
-                                getFeedPageSeoInfo={getFeedPageSeoInfo}
-                                calculateStats={calculateStats}
-                                getMagnitudeColorStyle={getMagnitudeColorStyle}
-                                formatTimeAgo={formatTimeAgo}
-                                formatDate={formatDate}
-                            />
-                        } />
-                        <Route path="/learn" element={<LearnPage />} />
-                        <Route
-                            path="/quake/:detailUrlParam"
-                            element={<EarthquakeDetailModalComponent
-                                // Props sourced from context are removed
-                                // broaderEarthquakeData is derived inside EarthquakeDetailModalComponent
-                                // handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly are from context
-                                // dataSourceTimespanDays could be passed if still relevant and not derivable
-                            />}
-                        />
-                        <Route path="/cluster/:clusterId" element={
-                            <ClusterDetailModalWrapper
-                                overviewClusters={overviewClusters} // Pass the memoized overviewClusters
-                                formatDate={formatDate}
-                                getMagnitudeColorStyle={getMagnitudeColorStyle} // Pass this if ClusterDetailModalWrapper needs it
-                                onIndividualQuakeSelect={handleQuakeClick} // Pass if selecting individual quake from cluster modal
-                            />}
-                        />
-                    </Routes>
+                                <Route
+                                  path="cluster/:clusterId"
+                                  element={
+                                    <ClusterDetailModalWrapper
+                                      overviewClusters={overviewClusters}
+                                      formatDate={formatDate}
+                                      getMagnitudeColorStyle={getMagnitudeColorStyle}
+                                      onIndividualQuakeSelect={handleQuakeClick}
+                                    />
+                                  }
+                                />
+                              </Route> {/* End of main "/" route and its children */}
+
+                              {/* Other top-level routes as siblings */}
+                              <Route path="/overview" element={
+                                  <OverviewPage
+                                    ALERT_LEVELS={ALERT_LEVELS}
+                                    getMagnitudeColor={getMagnitudeColor}
+                                    formatDate={formatDate}
+                                    handleQuakeClick={handleQuakeClick}
+                                    latestFeelableQuakesSnippet={latestFeelableQuakesSnippet}
+                                    formatTimeAgo={formatTimeAgo}
+                                    formatTimeDuration={formatTimeDuration}
+                                    getRegionForEarthquake={getRegionForEarthquake}
+                                    calculateStats={calculateStats}
+                                    overviewClusters={overviewClusters}
+                                    handleClusterSummaryClick={handleClusterSummaryClick}
+                                    topActiveRegionsOverview={topActiveRegionsOverview}
+                                    REGIONS={REGIONS}
+                                    navigate={navigate}
+                                  />
+                              } />
+                              <Route path="/feeds" element={
+                                  <FeedsPageLayoutComponent
+                                    handleQuakeClick={handleQuakeClick}
+                                    getFeedPageSeoInfo={getFeedPageSeoInfo}
+                                    calculateStats={calculateStats}
+                                    getMagnitudeColorStyle={getMagnitudeColorStyle}
+                                    formatTimeAgo={formatTimeAgo}
+                                    formatDate={formatDate}
+                                  />
+                              } />
+                              <Route path="/learn" element={<LearnPage />} />
+
+                            </Routes>
                 </Suspense>
             </ErrorBoundary>
                 </main>
