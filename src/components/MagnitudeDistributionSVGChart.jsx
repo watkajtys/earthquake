@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Added import
-import SkeletonBlock from './SkeletonBlock';
+import SkeletonBlock from './skeletons/SkeletonBlock';
 import { getMagnitudeColor } from '../utils/utils.js';
 
 /**
