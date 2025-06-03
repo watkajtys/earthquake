@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Added import
 import SkeletonBlock from './SkeletonBlock';
 import { getMagnitudeColor } from '../utils/utils.js';
 
@@ -12,6 +13,7 @@ import { getMagnitudeColor } from '../utils/utils.js';
  * @returns {JSX.Element} The rendered MagnitudeDistributionSVGChart component.
  */
 const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
+    const { magnitudeDistribution7Days, magnitudeDistribution14Days, magnitudeDistribution30Days } = useEarthquakeDataState(); // Access context data
     const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const barCountLabelColor = "text-slate-300"; const borderColor = "border-slate-600";
 
     const magnitudeRanges = useMemo(() => [
@@ -23,19 +25,29 @@ const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(
         { name : '5-5.9', min : 5, max : 5.99, color: getMagnitudeColor(5.5) },
         {name: '6-6.9', min: 6, max: 6.99, color: getMagnitudeColor(6.5)},
         { name : '7+', min : 7, max : Infinity, color: getMagnitudeColor(7.5) },
-    ], [getMagnitudeColor]);
+    ], [getMagnitudeColor]); // getMagnitudeColor dependency for local magnitudeRanges
 
     const data = useMemo(() => {
-        if (!earthquakes) return [];
-        return magnitudeRanges.map(range => ({
-            name : range.name,
-            count: earthquakes.filter(q => q.properties.mag !== null && q.properties.mag >= range.min && q.properties.mag <= range.max).length,
-            color: range.color
-        }));
-    }, [earthquakes, magnitudeRanges]);
+        if (titleSuffix === "(Last 7 Days)" && magnitudeDistribution7Days && magnitudeDistribution7Days.length > 0) {
+            return magnitudeDistribution7Days;
+        } else if (titleSuffix === "(Last 14 Days)" && magnitudeDistribution14Days && magnitudeDistribution14Days.length > 0) {
+            return magnitudeDistribution14Days;
+        } else if (titleSuffix === "(Last 30 Days)" && magnitudeDistribution30Days && magnitudeDistribution30Days.length > 0) {
+            return magnitudeDistribution30Days;
+        } else {
+            // Fallback for other views or if context data is not yet available
+            if (!earthquakes) return [];
+            return magnitudeRanges.map(range => ({
+                name : range.name,
+                count: earthquakes.filter(q => q.properties.mag !== null && q.properties.mag >= range.min && q.properties.mag <= range.max).length,
+                color: range.color // Color is from the locally defined magnitudeRanges
+            }));
+        }
+    }, [earthquakes, titleSuffix, magnitudeDistribution7Days, magnitudeDistribution14Days, magnitudeDistribution30Days, magnitudeRanges]);
 
     if (isLoading) return <div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Magnitude Distribution {titleSuffix}</h3><SkeletonBlock height="h-[300px]" className="bg-slate-600"/></div>;
-    if (!earthquakes || earthquakes.length === 0) return <div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Magnitude Distribution {titleSuffix}</h3><p className="text-slate-400 p-4 text-center text-sm">No data for chart.</p></div>;
+    // Updated "No data" check
+    if (!data || data.filter(d => d.count > 0).length === 0) return <div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Magnitude Distribution {titleSuffix}</h3><p className="text-slate-400 p-4 text-center text-sm">No data for chart.</p></div>;
 
     const chartHeight = 280; const barPadding = 10; const barWidth = 35; const yAxisLabelOffset = 45; const xAxisLabelOffset = 40; const svgWidth = data.length * (barWidth + barPadding) + yAxisLabelOffset; const maxCount = Math.max(...data.map(d => d.count), 0); const yAxisLabels = [];
     if (maxCount > 0) { const numL = 5; const step = Math.ceil(maxCount / numL) || 1; for (let i = 0; i <= maxCount; i += step) { if (yAxisLabels.length <= numL) yAxisLabels.push(i); else break; } if (!yAxisLabels.includes(maxCount) && yAxisLabels.length <= numL && maxCount > 0) yAxisLabels.push(maxCount); } else { yAxisLabels.push(0); }

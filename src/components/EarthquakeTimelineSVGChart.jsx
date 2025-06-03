@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Added import
 import SkeletonBlock from './SkeletonBlock'; // Ensure this path is correct
 
 /**
@@ -12,10 +13,20 @@ import SkeletonBlock from './SkeletonBlock'; // Ensure this path is correct
  * @returns {JSX.Element} The rendered EarthquakeTimelineSVGChart component.
  */
 const EarthquakeTimelineSVGChart = React.memo(({earthquakes, days = 7, titleSuffix = "(Last 7 Days)", isLoading}) => {
+    const { dailyCounts7Days, dailyCounts14Days, dailyCounts30Days, earthquakesLast7Days } = useEarthquakeDataState(); // Access context data, added dailyCounts7Days
     const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const barCountLabelColor = "text-slate-300"; const barFillColor = "#818CF8"; const borderColor = "border-slate-600";
 
     const data = useMemo(() => {
-        if (!earthquakes) return [];
+        if (days === 7 && dailyCounts7Days) { // Prioritize context data for 7 days
+            return dailyCounts7Days.map(d => ({ date: d.dateString, count: d.count }));
+        } else if (days === 30 && dailyCounts30Days) {
+            return dailyCounts30Days.map(d => ({ date: d.dateString, count: d.count }));
+        } else if (days === 14 && dailyCounts14Days) {
+            return dailyCounts14Days.map(d => ({ date: d.dateString, count: d.count }));
+        }
+        // Fallback to existing logic using 'earthquakes' prop for other 'days' values or if context data is not available
+        const sourceData = earthquakes;
+        if (!sourceData) return [];
         const countsByDay = {};
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -26,7 +37,7 @@ const EarthquakeTimelineSVGChart = React.memo(({earthquakes, days = 7, titleSuff
             d.setDate(startDate.getDate() + i);
             countsByDay[d.toLocaleDateString([], {month: 'short', day: 'numeric'})] = 0;
         }
-        earthquakes.forEach(q => {
+        sourceData.forEach(q => {
             const eD = new Date(q.properties.time);
             if (eD >= startDate && eD <= new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1)) {
                 const dS = eD.toLocaleDateString([], {month: 'short', day: 'numeric'});
@@ -34,10 +45,20 @@ const EarthquakeTimelineSVGChart = React.memo(({earthquakes, days = 7, titleSuff
             }
         });
         return Object.entries(countsByDay).map(([date, count]) => ({date, count}));
-    }, [earthquakes, days]);
+    }, [earthquakes, days, dailyCounts7Days, dailyCounts14Days, dailyCounts30Days, earthquakesLast7Days]); // Added dailyCounts7Days to dependency array
 
     if (isLoading) return <div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Earthquake Frequency {titleSuffix}</h3><SkeletonBlock height="h-[300px]" className="bg-slate-600"/></div>;
-    if (!earthquakes || earthquakes.length === 0 || data.length === 0) return <div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Earthquake Frequency {titleSuffix}</h3><p className="text-slate-400 p-4 text-center text-sm">No data for chart.</p></div>;
+
+    // Updated condition for "No data for chart"
+    const noDataAvailable = useMemo(() => {
+        if (days === 7) return !dailyCounts7Days || dailyCounts7Days.length === 0 || dailyCounts7Days.every(d => d.count === 0);
+        if (days === 30) return !dailyCounts30Days || dailyCounts30Days.length === 0 || dailyCounts30Days.every(d => d.count === 0);
+        if (days === 14) return !dailyCounts14Days || dailyCounts14Days.length === 0 || dailyCounts14Days.every(d => d.count === 0);
+        // Fallback for custom days or if earthquakes prop is used
+        return !data || data.length === 0 || data.every(d => d.count === 0);
+    }, [days, dailyCounts7Days, dailyCounts14Days, dailyCounts30Days, earthquakes, data]); // Added dailyCounts7Days, updated data check
+
+    if (noDataAvailable) return <div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Earthquake Frequency {titleSuffix}</h3><p className="text-slate-400 p-4 text-center text-sm">No data for chart.</p></div>;
 
     const chartHeight = 280; const lblInt = days > 15 ? Math.floor(days / 7) : (days > 7 ? 2 : 1); const barW = days > 15 ? (days > 25 ? 15 : 20) : 30; const barP = days > 15 ? 5 : 8; const yOffset = 45; const xOffset = 40; const svgW = data.length * (barW + barP) + yOffset; const maxC = Math.max(...data.map(d => d.count), 0); const yLbls = [];
     if (maxC > 0) { const numL = 5; const step = Math.ceil(maxC / numL) || 1; for (let i = 0; i <= maxC; i += step) { if (yLbls.length <= numL) yLbls.push(i); else break; } if (!yLbls.includes(maxC) && yLbls.length <= numL && maxC > 0) yLbls.push(maxC); if (yLbls.length === 0 && maxC === 0) yLbls.push(0); } else { yLbls.push(0); }
