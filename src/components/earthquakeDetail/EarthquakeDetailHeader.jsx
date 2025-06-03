@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { isValidString } from '../../utils/detailViewUtils.js';
 
 // Assuming isValidString will be passed as a prop or defined/imported here
@@ -17,4 +17,4 @@ function EarthquakeDetailHeader({ properties }) { // Removed isValidString from 
     );
 }
 
-export default EarthquakeDetailHeader;
+export default memo(EarthquakeDetailHeader);

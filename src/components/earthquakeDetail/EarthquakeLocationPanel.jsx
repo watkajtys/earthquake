@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { isValidNumber, formatNumber } from '../../utils/detailViewUtils.js';
 
 function EarthquakeLocationPanel({
@@ -51,4 +51,4 @@ function EarthquakeLocationPanel({
     );
 }
 
-export default EarthquakeLocationPanel;
+export default memo(EarthquakeLocationPanel);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import EarthquakeMap from '../EarthquakeMap'; // Adjusted path
 import { isValidNumber } from '../../utils/detailViewUtils.js';
 
@@ -35,4 +35,4 @@ function EarthquakeRegionalMapPanel({
     );
 }
 
-export default EarthquakeRegionalMapPanel;
+export default memo(EarthquakeRegionalMapPanel);

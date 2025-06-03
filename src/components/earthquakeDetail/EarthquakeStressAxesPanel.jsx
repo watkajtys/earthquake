@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import InfoSnippet from '../InfoSnippet.jsx'; // Adjusted import path
 import { isValidNumber, formatNumber } from '../../utils/detailViewUtils.js';
 
@@ -63,4 +63,4 @@ function EarthquakeStressAxesPanel({
     );
 }
 
-export default EarthquakeStressAxesPanel;
+export default memo(EarthquakeStressAxesPanel);

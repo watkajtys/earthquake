@@ -1,5 +1,5 @@
 // src/ClusterSummaryItem.jsx
-import React from 'react';
+import React, { memo } from 'react';
 
 /**
  * Renders a summary for a single earthquake cluster.
@@ -58,4 +58,4 @@ function ClusterSummaryItem({ clusterData, onClusterSelect }) {
     );
 }
 
-export default ClusterSummaryItem;
+export default memo(ClusterSummaryItem);

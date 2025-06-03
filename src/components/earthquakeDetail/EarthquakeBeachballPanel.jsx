@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { isValidNumber, getBeachballPathsAndType } from '../../utils/detailViewUtils.js';
 
 function EarthquakeBeachballPanel({
@@ -78,4 +78,4 @@ function EarthquakeBeachballPanel({
     );
 }
 
-export default EarthquakeBeachballPanel;
+export default memo(EarthquakeBeachballPanel);

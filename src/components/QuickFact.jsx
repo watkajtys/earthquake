@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import InfoSnippet from './InfoSnippet'; // Assuming InfoSnippet is in the same directory
 
 const QuickFact = ({ navigate }) => {
@@ -16,4 +16,4 @@ const QuickFact = ({ navigate }) => {
   );
 };
 
-export default QuickFact;
+export default memo(QuickFact);

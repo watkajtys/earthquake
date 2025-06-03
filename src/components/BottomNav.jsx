@@ -1,5 +1,5 @@
 // src/BottomNav.jsx
-import React from 'react';
+import React, { memo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { FaGlobe, FaListAlt, FaStream, FaBook } from 'react-icons/fa';
 
@@ -40,4 +40,4 @@ const BottomNav = () => { // Removed activeMobileView and setActiveMobileView pr
     );
 };
 
-export default BottomNav;
+export default memo(BottomNav);
