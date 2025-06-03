@@ -69,6 +69,42 @@ const sampleArray = (array, sampleSize) => {
     return shuffled.slice(0, sampleSize);
 };
 
+// Helper function for sampling with priority for significant earthquakes
+function sampleArrayWithPriority(fullArray, sampleSize, priorityMagnitudeThreshold) {
+    if (!fullArray || fullArray.length === 0) {
+        return [];
+    }
+    if (sampleSize <= 0) {
+        return [];
+    }
+
+    const priorityQuakes = fullArray.filter(
+        q => q.properties && typeof q.properties.mag === 'number' && q.properties.mag >= priorityMagnitudeThreshold
+    );
+
+    const otherQuakes = fullArray.filter(
+        q => !q.properties || typeof q.properties.mag !== 'number' || q.properties.mag < priorityMagnitudeThreshold
+    );
+
+    if (priorityQuakes.length >= sampleSize) {
+        // If priority quakes alone meet or exceed sample size, sample from them
+        return sampleArray(priorityQuakes, sampleSize);
+    } else {
+        // All priority quakes are included
+        const remainingSlots = sampleSize - priorityQuakes.length;
+        // The check 'remainingSlots <= 0' is theoretically redundant here if priorityQuakes.length < sampleSize,
+        // but kept for robustness, though it implies sampleSize was already filled by priorityQuakes.
+        // If remainingSlots is 0 or less, means priorityQuakes filled or exceeded sampleSize.
+        // However, the outer 'if' handles priorityQuakes.length >= sampleSize.
+        // This path means priorityQuakes.length < sampleSize, so remainingSlots > 0.
+
+        // Sample from otherQuakes to fill remaining slots
+        const sampledOtherQuakes = sampleArray(otherQuakes, remainingSlots);
+
+        return [...priorityQuakes, ...sampledOtherQuakes];
+    }
+}
+
 // const SCATTER_PLOT_SAMPLING_THRESHOLD = 500; // Commented out old threshold
 const SCATTER_SAMPLING_THRESHOLD_7_DAYS = 300;
 const SCATTER_SAMPLING_THRESHOLD_14_DAYS = 500;
@@ -232,7 +268,7 @@ function earthquakeReducer(state, action) {
             });
 
             // Calculate sampledEarthquakesLast7Days
-            const sampledEarthquakesLast7Days = sampleArray(currentEarthquakesLast7Days, SCATTER_SAMPLING_THRESHOLD_7_DAYS);
+            const sampledEarthquakesLast7Days = sampleArrayWithPriority(currentEarthquakesLast7Days, SCATTER_SAMPLING_THRESHOLD_7_DAYS, MAJOR_QUAKE_THRESHOLD);
 
             // Calculate magnitudeDistribution7Days
             const magnitudeDistribution7Days = calculateMagnitudeDistribution(currentEarthquakesLast7Days);
@@ -296,8 +332,8 @@ function earthquakeReducer(state, action) {
                 allEarthquakes: features,
                 earthquakesLast14Days: currentEarthquakesLast14Days,
                 earthquakesLast30Days: currentEarthquakesLast30Days,
-                sampledEarthquakesLast14Days: sampleArray(currentEarthquakesLast14Days, SCATTER_SAMPLING_THRESHOLD_14_DAYS),
-                sampledEarthquakesLast30Days: sampleArray(currentEarthquakesLast30Days, SCATTER_SAMPLING_THRESHOLD_30_DAYS),
+                sampledEarthquakesLast14Days: sampleArrayWithPriority(currentEarthquakesLast14Days, SCATTER_SAMPLING_THRESHOLD_14_DAYS, MAJOR_QUAKE_THRESHOLD),
+                sampledEarthquakesLast30Days: sampleArrayWithPriority(currentEarthquakesLast30Days, SCATTER_SAMPLING_THRESHOLD_30_DAYS, MAJOR_QUAKE_THRESHOLD),
                 dailyCounts14Days, // Add to state
                 dailyCounts30Days, // Add to state
                 magnitudeDistribution14Days, // Add to state
