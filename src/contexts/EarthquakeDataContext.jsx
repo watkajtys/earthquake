@@ -69,7 +69,10 @@ const sampleArray = (array, sampleSize) => {
     return shuffled.slice(0, sampleSize);
 };
 
-const SCATTER_PLOT_SAMPLING_THRESHOLD = 500;
+// const SCATTER_PLOT_SAMPLING_THRESHOLD = 500; // Commented out old threshold
+const SCATTER_SAMPLING_THRESHOLD_7_DAYS = 300;
+const SCATTER_SAMPLING_THRESHOLD_14_DAYS = 500;
+const SCATTER_SAMPLING_THRESHOLD_30_DAYS = 700;
 
 // Define magnitude ranges locally for pre-aggregation
 const MAGNITUDE_RANGES = [
@@ -229,7 +232,7 @@ function earthquakeReducer(state, action) {
             });
 
             // Calculate sampledEarthquakesLast7Days
-            const sampledEarthquakesLast7Days = sampleArray(currentEarthquakesLast7Days, SCATTER_PLOT_SAMPLING_THRESHOLD);
+            const sampledEarthquakesLast7Days = sampleArray(currentEarthquakesLast7Days, SCATTER_SAMPLING_THRESHOLD_7_DAYS);
 
             // Calculate magnitudeDistribution7Days
             const magnitudeDistribution7Days = calculateMagnitudeDistribution(currentEarthquakesLast7Days);
@@ -293,8 +296,8 @@ function earthquakeReducer(state, action) {
                 allEarthquakes: features,
                 earthquakesLast14Days: currentEarthquakesLast14Days,
                 earthquakesLast30Days: currentEarthquakesLast30Days,
-                sampledEarthquakesLast14Days: sampleArray(currentEarthquakesLast14Days, SCATTER_PLOT_SAMPLING_THRESHOLD),
-                sampledEarthquakesLast30Days: sampleArray(currentEarthquakesLast30Days, SCATTER_PLOT_SAMPLING_THRESHOLD),
+                sampledEarthquakesLast14Days: sampleArray(currentEarthquakesLast14Days, SCATTER_SAMPLING_THRESHOLD_14_DAYS),
+                sampledEarthquakesLast30Days: sampleArray(currentEarthquakesLast30Days, SCATTER_SAMPLING_THRESHOLD_30_DAYS),
                 dailyCounts14Days, // Add to state
                 dailyCounts30Days, // Add to state
                 magnitudeDistribution14Days, // Add to state
