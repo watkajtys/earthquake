@@ -13,7 +13,7 @@ import { getMagnitudeColor } from '../utils/utils.js';
  * @returns {JSX.Element} The rendered MagnitudeDistributionSVGChart component.
  */
 const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
-    const { magnitudeDistribution14Days, magnitudeDistribution30Days } = useEarthquakeDataState(); // Access context data
+    const { magnitudeDistribution7Days, magnitudeDistribution14Days, magnitudeDistribution30Days } = useEarthquakeDataState(); // Access context data
     const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const barCountLabelColor = "text-slate-300"; const borderColor = "border-slate-600";
 
     const magnitudeRanges = useMemo(() => [
@@ -28,12 +28,14 @@ const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(
     ], [getMagnitudeColor]); // getMagnitudeColor dependency for local magnitudeRanges
 
     const data = useMemo(() => {
-        if (titleSuffix === "(Last 30 Days)" && magnitudeDistribution30Days && magnitudeDistribution30Days.length > 0) {
-            return magnitudeDistribution30Days;
+        if (titleSuffix === "(Last 7 Days)" && magnitudeDistribution7Days && magnitudeDistribution7Days.length > 0) {
+            return magnitudeDistribution7Days;
         } else if (titleSuffix === "(Last 14 Days)" && magnitudeDistribution14Days && magnitudeDistribution14Days.length > 0) {
             return magnitudeDistribution14Days;
+        } else if (titleSuffix === "(Last 30 Days)" && magnitudeDistribution30Days && magnitudeDistribution30Days.length > 0) {
+            return magnitudeDistribution30Days;
         } else {
-            // Fallback for 7-day view or if context data is not yet available
+            // Fallback for other views or if context data is not yet available
             if (!earthquakes) return [];
             return magnitudeRanges.map(range => ({
                 name : range.name,
@@ -41,7 +43,7 @@ const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(
                 color: range.color // Color is from the locally defined magnitudeRanges
             }));
         }
-    }, [earthquakes, titleSuffix, magnitudeDistribution14Days, magnitudeDistribution30Days, magnitudeRanges]);
+    }, [earthquakes, titleSuffix, magnitudeDistribution7Days, magnitudeDistribution14Days, magnitudeDistribution30Days, magnitudeRanges]);
 
     if (isLoading) return <div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Magnitude Distribution {titleSuffix}</h3><SkeletonBlock height="h-[300px]" className="bg-slate-600"/></div>;
     // Updated "No data" check
