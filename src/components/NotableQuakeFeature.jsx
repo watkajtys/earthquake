@@ -126,7 +126,7 @@ const NotableQuakeFeature = ({
             </p>
             <button
                 onClick={() => onNotableQuakeSelect(displayQuake.source === 'Recent' ? displayQuake.originalQuake : displayQuake)}
-                className="text-[10px] bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-1 px-1.5 rounded w-full transition-colors mt-0.5"
+                className="text-xs bg-slate-600 hover:bg-slate-500 focus:bg-slate-700 text-white font-medium py-1.5 px-3 rounded-md w-full transition-colors mt-0.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {/* Adjust button text based on source or if URL exists */}
                 {(displayQuake.url || displayQuake.originalQuake?.properties?.detail) ? 'View Details' : 'More Info'}

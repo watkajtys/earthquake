@@ -8,7 +8,7 @@ const LoadMoreDataButton = ({ hasAttemptedMonthlyLoad, isLoadingMonthly, loadMon
           <button 
             onClick={loadMonthlyData} 
             disabled={isLoadingMonthly} 
-            className="w-full bg-teal-600 hover:bg-teal-500 p-2.5 rounded-md text-white font-semibold transition-colors text-xs shadow-md disabled:opacity-60"
+            className="w-full bg-indigo-600 hover:bg-indigo-500 focus:bg-indigo-700 text-white px-4 py-2 text-sm font-medium rounded-md transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoadingMonthly ? 'Loading Extended Data...' : 'Load 14 & 30-Day Data'}
           </button>
