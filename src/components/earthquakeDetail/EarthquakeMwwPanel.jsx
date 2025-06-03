@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { isValidString, isValidNumber, formatNumber, formatLargeNumber } from '../../utils/detailViewUtils.js';
+import { isValidString, isValidNumber, formatNumber, formatLargeNumber } from '../../utils/utils.js';
 
 function EarthquakeMwwPanel({
     properties,

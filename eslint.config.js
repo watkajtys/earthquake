@@ -3,6 +3,7 @@ import globals from 'globals'
 import jsxA11y from "eslint-plugin-jsx-a11y"; // Import the plugin
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
+import vitest from 'eslint-plugin-vitest'
 
 export default [
   { ignores: ['dist'] },
@@ -34,4 +35,19 @@ export default [
       ],
     },
   },
+  {
+    files: ['**/*.test.{js,jsx}'],
+    plugins: {
+      vitest,
+    },
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...vitest.environments.env.globals,
+      }
+    },
+    rules: {
+      ...vitest.configs.recommended.rules,
+    }
+  }
 ]

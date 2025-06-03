@@ -1,7 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import AlertDisplay from './AlertDisplay'; // Assuming the component is in the same folder
-import { vi } from 'vitest'; // Import vi for mocking if needed for other tests
 
 // Mock ALERT_LEVELS constant as it's used by the component
 const ALERT_LEVELS = {
