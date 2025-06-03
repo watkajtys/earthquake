@@ -1,5 +1,5 @@
 // src/utils/fetchUtils.js
-import { useCallback } from 'react'; // fetchDataCb uses useCallback
+// useCallback import removed as it's unused
 
 export const fetchDataCb = async (url) => {
     try {
@@ -8,7 +8,7 @@ export const fetchDataCb = async (url) => {
             let errorBody = '';
             try {
                 errorBody = await response.text();
-            } catch (e) {
+            } catch (_) { // e variable removed as it's unused
                 // Ignore if reading error body fails
             }
             throw new Error(`HTTP error! status: ${response.status} ${response.statusText}. ${errorBody}`);

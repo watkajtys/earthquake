@@ -1,6 +1,6 @@
 import React from 'react';
 import InteractiveFaultDiagram from './InteractiveFaultDiagram'; // Import the previously moved component
-import { isValidNumber, formatNumber, isValidString } from '../../utils/detailViewUtils.js';
+import { isValidNumber, formatNumber, isValidString } from '../../utils/utils.js';
 
 function EarthquakeFaultDiagramPanel({
     selectedFaultPlaneKey,

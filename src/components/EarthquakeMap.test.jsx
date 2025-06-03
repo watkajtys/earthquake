@@ -276,7 +276,7 @@ describe('EarthquakeMap Component - Nearby Quakes', () => {
     const nearbyPopups = popups.filter(popup => !within(popup).queryByText(baseProps.title));
     expect(nearbyPopups.length).toBe(nearbyQuakesData.length);
 
-    nearbyQuakesData.forEach((quake, index) => {
+    nearbyQuakesData.forEach((quake) => {
       // Find the popup corresponding to the current nearby quake.
       // Use a regex to make the text matching more flexible regarding whitespace.
       const magnitudeRegex = new RegExp(`Magnitude:\\s*${quake.properties.mag}`);
