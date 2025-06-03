@@ -9,19 +9,22 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * Interactive 3D Globe: Visualizes earthquake epicenters on a zoomable, rotatable globe.
 * Real-time & Historical Data: Fetches and displays earthquake data from USGS for various periods (last hour, day, week, month).
 * Geographical Layers: Shows tectonic plate boundaries and coastlines for geological context.
-* Latest Major Quake Highlight: Animates a pulsing yellow ring on the globe to pinpoint the most recent significant earthquake (M4.5+).
-* Detailed Earthquake View: Modal display providing comprehensive information for selected earthquakes, including magnitude, depth, location, fault plane solutions, and ShakeMap/PAGER alerts when available.
+* Latest Major Quake Highlight: Visual highlight (pulsing ring on the globe) and textual banner/timer indicating the most recent significant earthquake (M4.5+).
+* Detailed Earthquake View: Modal display providing comprehensive information for selected earthquakes, including magnitude, depth, location, fault plane solutions (beachball diagrams), ShakeMap/PAGER alerts, moment tensor solutions (Mww), seismic wave data, and energy estimations when available.
     * **2D Regional Map**: Within the detail view, a 2D map displays the earthquake's epicenter, ShakeMap intensity image (if available), and tectonic plate boundaries for regional context.
 * Smart Globe Rotation: Globe auto-rotates and intelligently pauses when the user hovers over the sphere, resuming on mouse-out.
 * Dynamic Statistics & Charts:
     * Overview panel with key statistics for the last 24 hours.
     * Summaries for different timeframes (last hour, 24h, 7-day, 14-day, 30-day).
+    * Paginated and sortable earthquake list/table.
     * Magnitude distribution charts.
     * Earthquake frequency timelines.
     * Magnitude vs. Depth scatter plots.
     * Regional distribution lists.
+* Earthquake Cluster Analysis: Identifies and displays details for clusters of seismic events, including a mini-map and summary statistics for the cluster.
 * Featured Quakes: Highlights notable recent or historical earthquakes.
 * Educational Snippets: Provides brief explanations on earthquake concepts like magnitude, depth, and intensity.
+* Dedicated 'Learn' Page: Provides educational content and detailed explanations about earthquake science and terminology.
 * Responsive Sidebar: Dynamically loads and displays detailed analysis panels.
 
 ## Data Source
@@ -55,6 +58,10 @@ This Global Seismic Activity Monitor was brought to life through a dynamic and i
 
 This method facilitated a quick turnaround from concept to a functional prototype, emphasizing a fluid, responsive, and somewhat experimental path to development. It highlights how AI-assisted tools like Gemini Canvas can augment the creative and technical aspects of software development, allowing for rapid iteration and exploration of ideas.
 
+Beyond the initial conceptualization with Gemini Canvas, this project continues to serve as a dynamic testbed for advanced Large Language Model (LLM) capabilities in a real-world software engineering context. Development, maintenance, and iterative enhancements are frequently driven by AI agents like Jules. This involves regular and rigorous testing of the LLM's ability to understand complex requirements, generate and refactor code, debug issues, and contribute to documentation, as demonstrated by this very update to the README.
+
+This ongoing collaboration aims to push the boundaries of what LLMs can achieve in practical, non-trivial application development, providing valuable insights into their strengths and areas for continued improvement. The Global Seismic Activity Monitor is therefore not just a tool for visualizing earthquakes, but also a living experiment in the evolving landscape of AI-assisted software creation.
+
 The project reflects the spirit of innovation and agile creation championed by **Built By Vibes**.
 
 * **Twitter**: [@builtbyvibes](https://twitter.com/builtbyvibes)
@@ -84,7 +91,7 @@ To run this project locally:
     ```
     (or `yarn dev`)
 
-5.  Open your browser and navigate to the local URL provided by Vite (usually `http://localhost:5173` or similar).
+5.  **Open your browser and navigate to the local URL provided by Vite (usually `http://localhost:5173` or similar).**
 
 ## Project Structure
 
@@ -93,8 +100,8 @@ The `src/` directory contains the core source code for the application, organize
 -   **`assets/`**: Static assets like images, JSON data files (e.g., tectonic plate boundaries, coastline data), and other resources.
 -   **`components/`**: Reusable React components that make up the user interface. Each component is typically in its own `.jsx` file.
 -   **`constants/`**: Contains constant values used throughout the application, such as API endpoints, thresholds, or configuration settings (e.g., `appConstants.js`).
--   **`features/`**: Might contain modules or components related to specific application features. (Note: This directory was present in the `ls` output but empty, so its purpose is inferred. If it's unused, it could be omitted or its intended purpose clarified).
--   **`hooks/`**: Custom React hooks that encapsulate reusable stateful logic (e.g., `useEarthquakeData.js`).
+-   **`features/`**: Intended for modules or components related to specific application features. Currently, this directory is set up with a `.gitkeep` file and is awaiting future development or is not actively used.
+-   **`hooks/`**: Intended for custom React hooks that encapsulate reusable stateful logic. Currently, this directory is set up with a `.gitkeep` file and is awaiting future development or is not actively used.
 -   **`pages/`**: Top-level React components that represent different "pages" or views of the application (e.g., `HomePage.jsx`).
 -   **`utils/`**: Utility functions that provide helper functionalities used across different parts of the application (e.g., date formatting, calculations in `utils.js`).
 -   **`App.jsx`**: The root application component.
@@ -162,12 +169,26 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
     *Note: If you installed `docdash` locally, the path to the template would be `node_modules/docdash`. If globally, you might need to provide the full path to the global `docdash` template or use a JSDoc plugin to resolve global templates.*
 
 3.  **Run JSDoc**:
-    If you are using a configuration file:
+    Since `jsdoc` and `docdash` are listed as development dependencies in `package.json`, you can run JSDoc using `npx` after installing dependencies (`npm install`).
+
+    If you are using the `jsdoc.json` configuration file (recommended):
     ```bash
-    jsdoc -c jsdoc.json
+    npx jsdoc -c jsdoc.json
     ```
     Alternatively, you can specify options directly on the command line:
     ```bash
-    jsdoc src -r -d docs/jsdoc --template node_modules/docdash --readme README.md
+    npx jsdoc src -r -d docs/jsdoc --template node_modules/docdash --readme README.md
     ```
     This will generate the documentation in the `docs/jsdoc/` directory. Open the `index.html` file in that directory to view the documentation.
+
+    **Recommended:** For convenience, consider adding a script to your `package.json`:
+    ```json
+    "scripts": {
+      // ... other scripts
+      "docs": "jsdoc -c jsdoc.json"
+    }
+    ```
+    Then, you can simply run:
+    ```bash
+    npm run docs
+    ```
