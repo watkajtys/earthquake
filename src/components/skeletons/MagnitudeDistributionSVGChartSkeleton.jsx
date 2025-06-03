@@ -30,7 +30,7 @@ const MagnitudeDistributionSVGChartSkeleton = React.memo(({ titleSuffix = "(Last
     const maxYVal = 100; // Assumed max value for scaling skeleton bars
 
     // Placeholder magnitude range names for X-axis ticks (simplified)
-    const magnitudeRangePlaceholders = ['<1', '1-2', '2-3', '3-4', '4-5', '5-6', '6-7', '7+'];
+    // const magnitudeRangePlaceholders = ['<1', '1-2', '2-3', '3-4', '4-5', '5-6', '6-7', '7+']; // Unused
 
     const placeholderBars = useMemo(() => {
         return Array.from({ length: numBars }).map((_, i) => {
@@ -65,7 +65,7 @@ const MagnitudeDistributionSVGChartSkeleton = React.memo(({ titleSuffix = "(Last
                     })}
 
                     {/* Placeholder Bars and X-axis Tick Labels */}
-                    {placeholderBars.map((bar, i) => (
+                    {placeholderBars.map((bar) => ( // `i` parameter removed
                         <g key={bar.id}>
                             <rect x={bar.x} y={bar.y} width={bar.width} height={bar.height} className={`fill-current ${skeletonBarFillColor}`} />
                             {/* Placeholder for X-axis tick text (magnitude range) */}

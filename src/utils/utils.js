@@ -40,6 +40,47 @@ export const getMagnitudeColor = (magnitude) => {
 
 // Add other utility functions here as the app grows
 
+export const isValidNumber = (num) => {
+    const parsedNum = parseFloat(num);
+    return typeof parsedNum === 'number' && !isNaN(parsedNum);
+};
+
+export const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    return new Date(timestamp).toLocaleString([], { dateStyle: 'full', timeStyle: 'long' });
+};
+
+export const isValidString = (str) => {
+    return typeof str === 'string' && str.trim() !== '';
+};
+
+export const isValuePresent = (value) => {
+    return value !== null && value !== undefined;
+};
+
+export const formatNumber = (num, precision = 1) => {
+    const number = parseFloat(num);
+    if (Number.isNaN(number)) return 'N/A';
+    return number.toFixed(precision);
+};
+
+export const formatLargeNumber = (num) => {
+    // Note: This function relies on isValidNumber, defined above.
+    if (!isValidNumber(num)) return 'N/A';
+    if (num === 0) return '0';
+    const numAbs = Math.abs(num);
+    let value; let suffix = '';
+    if (numAbs < 1e3) { value = num.toLocaleString(undefined, { maximumFractionDigits: 2 }); }
+    else if (numAbs < 1e6) { value = (num / 1e3).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' thousand'; }
+    else if (numAbs < 1e9) { value = (num / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' million'; }
+    else if (numAbs < 1e12) { value = (num / 1e9).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' billion'; }
+    else if (numAbs < 1e15) { value = (num / 1e12).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' trillion'; }
+    else if (numAbs < 1e18) { value = (num / 1e15).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' quadrillion';}
+    else if (numAbs < 1e21) { value = (num / 1e18).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' quintillion';}
+    else { const expFormat = num.toExponential(2); const parts = expFormat.split('e+'); return parts.length === 2 ? `${parts[0]} x 10^${parts[1]}` : expFormat; }
+    return value + suffix;
+};
+
 /**
  * Formats a Unix timestamp into a human-readable "time ago" string.
  * @param {number} timestamp - The Unix timestamp in milliseconds.

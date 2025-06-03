@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import EarthquakeMap from '../EarthquakeMap'; // Adjusted path
-import { isValidNumber } from '../../utils/detailViewUtils.js';
+import { isValidNumber } from '../../utils/utils.js'; // Assuming this path
 
 function EarthquakeRegionalMapPanel({
     geometry,

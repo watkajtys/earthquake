@@ -4,7 +4,8 @@ import { earthquakeReducer, initialState, actionTypes, EarthquakeDataContext, Ea
 // --- React specific testing imports ---
 import { renderHook, act } from '@testing-library/react';
 import { vi } from 'vitest';
-import { initialState as contextInitialState, actionTypes as contextActionTypes, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext';
+// contextActionTypes removed from import as it's unused
+import { initialState as contextInitialState, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext';
 import { fetchUsgsData } from '../../services/usgsApiService';
 import {
     FEELABLE_QUAKE_THRESHOLD,
@@ -28,12 +29,12 @@ const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0, now = Date.now()) =>
 const filterMonthlyByTime = (data, daysAgoStart, daysAgoEnd = 0, now = Date.now()) => { if (!Array.isArray(data)) return []; const startTime = now - (daysAgoStart * 24 * 36e5); const endTime = now - (daysAgoEnd * 24 * 36e5); return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);};
 const consolidateMajorQuakesLogic = (currentLastMajor, currentPreviousMajor, newMajors) => { let potentialQuakes = [...newMajors]; if (currentLastMajor) potentialQuakes.push(currentLastMajor); if (currentPreviousMajor) potentialQuakes.push(currentPreviousMajor); const consolidated = potentialQuakes.sort((a, b) => b.properties.time - a.properties.time).filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id)); const newLastMajor = consolidated.length > 0 ? consolidated[0] : null; const newPreviousMajor = consolidated.length > 1 ? consolidated[1] : null; const newTimeBetween = newLastMajor && newPreviousMajor ? newLastMajor.properties.time - newPreviousMajor.properties.time : null; return { lastMajorQuake: newLastMajor, previousMajorQuake: newPreviousMajor, timeBetweenPreviousMajorQuakes: newTimeBetween };};
 const sampleArray = (array, sampleSize) => { if (!Array.isArray(array) || array.length === 0) return []; if (sampleSize <= 0) return []; if (sampleSize >= array.length) return [...array]; const shuffled = [...array]; for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled.slice(0, sampleSize);};
-function sampleArrayWithPriority(fullArray, sampleSize, priorityMagnitudeThreshold) { if (!fullArray || fullArray.length === 0) return []; if (sampleSize <= 0) return []; const priorityQuakes = fullArray.filter(q => q.properties && typeof q.properties.mag === 'number' && q.properties.mag >= priorityMagnitudeThreshold); const otherQuakes = fullArray.filter(q => !q.properties || typeof q.properties.mag !== 'number' || q.properties.mag < priorityMagnitudeThreshold); if (priorityQuakes.length >= sampleSize) return sampleArray(priorityQuakes, sampleSize); else { const remainingSlots = sampleSize - priorityQuakes.length; const validOtherQuakes = otherQuakes.filter(q => q.properties && typeof q.properties.mag === 'number'); const sampledOtherQuakes = sampleArray(validOtherQuakes, remainingSlots); return [...priorityQuakes, ...sampledOtherQuakes]; }}
+// function sampleArrayWithPriority (fullArray, sampleSize, priorityMagnitudeThreshold) { ... } // Removed unused helper
 const MAGNITUDE_RANGES = [ {name: '<1', min: -Infinity, max: 0.99}, {name : '1-1.9', min : 1, max : 1.99}, {name: '2-2.9', min: 2, max: 2.99}, {name : '3-3.9', min : 3, max : 3.99}, {name: '4-4.9', min: 4, max: 4.99}, {name : '5-5.9', min : 5, max : 5.99}, {name: '6-6.9', min: 6, max: 6.99}, {name : '7+', min : 7, max : Infinity}, ];
-const formatDateForTimeline = (timestamp) => { const date = new Date(timestamp); return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); };
-const getInitialDailyCounts = (numDays, baseTime) => { const counts = []; for (let i = 0; i < numDays; i++) { const date = new Date(baseTime); date.setDate(date.getDate() - i); counts.push({ dateString: formatDateForTimeline(date.getTime()), count: 0 }); } return counts.reverse();  };
-const getMagnitudeColor = (mag) => `color_for_mag_${mag}`;
-const calculateMagnitudeDistribution = (earthquakes) => { const distribution = MAGNITUDE_RANGES.map(range => ({ name: range.name, count: 0, color: getMagnitudeColor(range.min === -Infinity ? 0 : range.min)  })); earthquakes.forEach(quake => { const mag = quake.properties.mag; if (mag === null || typeof mag !== 'number') return; for (const range of distribution) { const rangeDetails = MAGNITUDE_RANGES.find(r => r.name === range.name); if (mag >= rangeDetails.min && mag <= rangeDetails.max) { range.count++; break; } } }); return distribution; };
+// const formatDateForTimeline = (timestamp) => { ... }; // Removed, as getInitialDailyCounts which used it is also removed
+// const getInitialDailyCounts = (numDays, baseTime) => { ... }; // Removed unused helper
+// const getMagnitudeColor = (mag) => `color_for_mag_${mag}`; // Removed, as calculateMagnitudeDistribution which used it is also removed
+// const calculateMagnitudeDistribution = (earthquakes) => { ... }; // Removed unused helper
 
 // --- Reducer Tests ---
 describe('EarthquakeDataContext Reducer', () => {

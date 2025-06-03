@@ -1,5 +1,5 @@
 import React from 'react';
-import { isValidNumber } from '../../utils/detailViewUtils.js';
+import { isValidNumber } from '../../utils/utils.js';
 
 // Temporarily defined here. Will be moved to a utils file later.
 // const isValidNumber = (num) => { // Now imported

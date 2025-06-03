@@ -4,16 +4,8 @@ import RegionalSeismicityChart from './RegionalSeismicityChart';
 import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
-import { calculateDistance } from '../utils/utils.js'; // Import calculateDistance
-import {
-    formatDate,
-    isValidNumber,
-    isValidString,
-    isValuePresent,
-    formatNumber,
-    formatLargeNumber,
-    getBeachballPathsAndType
-} from '../utils/detailViewUtils.js';
+import { calculateDistance } from '../utils/utils.js'; // isValidNumber import removed
+// getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
 
 // Define REGIONAL_RADIUS_KM
 const REGIONAL_RADIUS_KM = 804.672; // 500 miles
@@ -398,10 +390,10 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                     />
 
                     {/* Interactive Fault Diagram Panel & Decoding Fault Panel Wrapper */}
-                    {(isValidNumber(np1Data?.strike) || isValidNumber(np2Data?.strike)) && ( // Keep outer conditional based on np1Data/np2Data strike
-                        <>
-                            <EarthquakeFaultDiagramPanel
-                                selectedFaultPlaneKey={selectedFaultPlaneKey}
+                    {/* Conditional rendering based on isValidNumber removed from here; children handle their own rendering logic */}
+                    <>
+                        <EarthquakeFaultDiagramPanel
+                            selectedFaultPlaneKey={selectedFaultPlaneKey}
                                 setSelectedFaultPlaneKey={setSelectedFaultPlaneKey}
                                 np1Data={np1Data}
                                 np2Data={np2Data}
@@ -419,8 +411,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                                 exhibitPanelClass={exhibitPanelClass}
                                 exhibitTitleClass={exhibitTitleClass}
                             />
-                        </>
-                    )}
+                    </>
+                    {/* End of Interactive Fault Diagram Panel & Decoding Fault Panel Wrapper */}
 
                     <EarthquakeMwwPanel
                         properties={properties}
@@ -456,8 +448,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         selectedFaultPlaneKey={selectedFaultPlaneKey}
                         pAxis={pAxis}
                         tAxis={tAxis}
-                        // isValidNumber, getBeachballPathsAndType are now imported by child (getBeachballPathsAndType will be passed for now)
-                        getBeachballPathsAndType={getBeachballPathsAndType} // Still passed as prop
+                        // isValidNumber, getBeachballPathsAndType are now imported by child
                         exhibitPanelClass={exhibitPanelClass}
                         exhibitTitleClass={exhibitTitleClass}
                         diagramContainerClass={diagramContainerClass}

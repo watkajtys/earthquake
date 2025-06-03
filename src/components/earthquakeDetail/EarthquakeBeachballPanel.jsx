@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
-import { isValidNumber, getBeachballPathsAndType } from '../../utils/detailViewUtils.js';
+import { getBeachballPathsAndType } from '../../utils/detailViewUtils.js';
+import { isValidNumber } from '../../utils/utils.js';
 
 function EarthquakeBeachballPanel({
     momentTensorProductProps,
@@ -43,7 +44,7 @@ function EarthquakeBeachballPanel({
                             );
                         }
                         
-                        const { shadedPaths: canonicalShadedPaths, nodalPlanes: canonicalNodalPlanes } = getBeachballPathsAndType(rake, dip);
+                        const { shadedPaths: canonicalShadedPaths, nodalPlanes: canonicalNodalPlanes } = getBeachballPathsAndType(rake); // dip argument removed
 
                         return (
                             <g transform={`rotate(${orientationStrike}, 60, 60)`}>
