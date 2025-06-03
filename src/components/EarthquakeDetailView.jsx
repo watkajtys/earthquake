@@ -290,7 +290,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
 
     return (
         <div
-            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-50 p-2 sm:p-4 pt-10 md:pt-16 overflow-y-auto"
+            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-[55] p-2 sm:p-4 pt-10 md:pt-16"
             onClick={onClose}
             role="dialog"
             aria-modal="true"
@@ -299,7 +299,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
             <ErrorBoundary> {/* ErrorBoundary goes here, around the main content box */}
                 <div
                     ref={modalContentRef}
-                    className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800"
+                    className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800 overflow-y-auto max-h-[calc(100svh-5rem)]"
                 onClick={(e) => e.stopPropagation()}
                 tabIndex="-1" // Make the modal container focusable for the trap if no inner elements are
             >
