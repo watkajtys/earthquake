@@ -76,9 +76,34 @@ function InteractiveFaultDiagram({ planeData, planeKey }) {
                 <line x1="175" y1="50" x2="175" y2="230" stroke={blockStroke} strokeWidth="3" strokeDasharray="6,3" transform={`rotate(${faultStrikeRotation} 175 140)`}/>
             }
             <g transform={`rotate(${isValidNumber(faultStrikeRotation) ? faultStrikeRotation : 0} 175 140)`}>
+                {/* Block A */}
                 <rect x="25" y="70" width="140" height="140" fill={blockFill} stroke={blockStroke} strokeWidth="1.5" />
+                <text
+                    x="95"
+                    y="140"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize="12px"
+                    fill="#333333"
+                    fontWeight="bold"
+                >
+                    Block A
+                </text>
                 {arrowPath1 && <path d={arrowPath1} stroke="black" strokeWidth="2.5" markerEnd="url(#arrowhead-detail-fault)" />}
+
+                {/* Block B */}
                 <rect x="185" y="70" width="140" height="140" fill={blockFill} stroke={blockStroke} strokeWidth="1.5" />
+                <text
+                    x="255"
+                    y="140"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize="12px"
+                    fill="#333333"
+                    fontWeight="bold"
+                >
+                    Block B
+                </text>
                 {arrowPath2 && <path d={arrowPath2} stroke="black" strokeWidth="2.5" markerEnd="url(#arrowhead-detail-fault)" />}
             </g>
             <defs>
