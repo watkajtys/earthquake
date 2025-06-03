@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Added import
 import SkeletonBlock from './SkeletonBlock';
 import { getMagnitudeColor } from '../utils/utils.js';
 
@@ -13,6 +14,7 @@ import { getMagnitudeColor } from '../utils/utils.js';
  * @returns {JSX.Element} The rendered MagnitudeDepthScatterSVGChart component.
  */
 const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
+    const { sampledEarthquakesLast14Days, sampledEarthquakesLast30Days } = useEarthquakeDataState(); // Access context data
     const cardBg = "bg-slate-700"; const titleColor = "text-indigo-400"; const axisLabelColor = "text-slate-400"; const tickLabelColor = "text-slate-500"; const gridLineColor = "text-slate-600"; const borderColor = "border-slate-600";
     const chartContainerRef = useRef(null);
     const [chartDimensions, setChartDimensions] = useState({ width: 500, height: 350 });
@@ -54,14 +56,23 @@ const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(
     }, []);
 
     const data = useMemo(() => {
-        if (!earthquakes) return [];
-        return earthquakes.map(q => ({
+        let sourceEarthquakes = earthquakes; // Default to the prop
+
+        if (titleSuffix === "(Last 30 Days)" && sampledEarthquakesLast30Days) {
+            sourceEarthquakes = sampledEarthquakesLast30Days;
+        } else if (titleSuffix === "(Last 14 Days)" && sampledEarthquakesLast14Days) {
+            sourceEarthquakes = sampledEarthquakesLast14Days;
+        }
+
+        if (!sourceEarthquakes) return [];
+
+        return sourceEarthquakes.map(q => ({
             mag: q.properties.mag,
             depth: q.geometry?.coordinates?.[2],
             id: q.id,
             place: q.properties.place
         })).filter(q => q.mag !== null && typeof q.mag === 'number' && q.depth !== null && typeof q.depth === 'number');
-    }, [earthquakes]);
+    }, [earthquakes, titleSuffix, sampledEarthquakesLast14Days, sampledEarthquakesLast30Days]);
 
     if (isLoading) return <div ref={chartContainerRef} className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-hidden shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Magnitude vs. Depth {titleSuffix}</h3><SkeletonBlock height="h-[350px]" className="bg-slate-600"/></div>;
     if (!data || data.length === 0) return <div ref={chartContainerRef} className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-hidden shadow-md`}><h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Magnitude vs. Depth {titleSuffix}</h3><p className="text-slate-400 p-4 text-center text-sm">No sufficient data for chart.</p></div>;
