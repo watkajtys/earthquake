@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-const UIStateContext = createContext();
+export const UIStateContext = createContext();
 
 // Provider component
 export const UIStateProvider = ({ children }) => {
