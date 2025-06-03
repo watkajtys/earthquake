@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning, ALERT_LEVELS }) => {
   if (!currentAlertConfig && !hasRecentTsunamiWarning) {
@@ -24,4 +24,4 @@ const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning, ALERT_LEVEL
   );
 };
 
-export default AlertDisplay;
+export default memo(AlertDisplay);

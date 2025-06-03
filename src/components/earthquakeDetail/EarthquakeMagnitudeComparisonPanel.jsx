@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { isValidNumber, formatNumber } from '../../utils/detailViewUtils.js';
 
 function EarthquakeMagnitudeComparisonPanel({
@@ -37,4 +37,4 @@ function EarthquakeMagnitudeComparisonPanel({
     );
 }
 
-export default EarthquakeMagnitudeComparisonPanel;
+export default memo(EarthquakeMagnitudeComparisonPanel);

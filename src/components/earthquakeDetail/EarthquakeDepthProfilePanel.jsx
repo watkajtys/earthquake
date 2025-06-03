@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import SimplifiedDepthProfile from '../SimplifiedDepthProfile'; // Adjusted path
 
 function EarthquakeDepthProfilePanel({
@@ -25,4 +25,4 @@ function EarthquakeDepthProfilePanel({
     );
 }
 
-export default EarthquakeDepthProfilePanel;
+export default memo(EarthquakeDepthProfilePanel);
