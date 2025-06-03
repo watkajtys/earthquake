@@ -34,6 +34,7 @@ import SkeletonBlock from './skeletons/SkeletonBlock.jsx';
 import ErrorBoundary from './ErrorBoundary'; // Assuming ErrorBoundary.jsx is in the same components folder
 import EarthquakeDetailHeader from './earthquakeDetail/EarthquakeDetailHeader'; // Import the new header
 import EarthquakeSnapshotPanel from './earthquakeDetail/EarthquakeSnapshotPanel'; // Import the new snapshot panel
+import EarthquakeRegionalFaultsPanel from './earthquakeDetail/EarthquakeRegionalFaultsPanel'; // Import the new panel
 import EarthquakeRegionalMapPanel from './earthquakeDetail/EarthquakeRegionalMapPanel'; // Import the new regional map panel
 import EarthquakeEnergyPanel from './earthquakeDetail/EarthquakeEnergyPanel'; // Import the new energy panel
 import EarthquakeRegionalSeismicityPanel from './earthquakeDetail/EarthquakeRegionalSeismicityPanel'; // Import the new regional seismicity panel
@@ -325,6 +326,14 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         regionalQuakes={regionalQuakes}
                         detailUrl={detailUrl}
                         // isValidNumber is now imported by child
+                        exhibitPanelClass={exhibitPanelClass}
+                        exhibitTitleClass={exhibitTitleClass}
+                    />
+
+                    <EarthquakeRegionalFaultsPanel
+                        momentTensorProductProps={momentTensorProductProps}
+                        geometry={geometry}
+                        properties={properties}
                         exhibitPanelClass={exhibitPanelClass}
                         exhibitTitleClass={exhibitTitleClass}
                     />
