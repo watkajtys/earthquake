@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
-import SkeletonListItem from './SkeletonListItem';
+import SkeletonListItem from './skeletons/SkeletonListItem';
 import { REGIONS } from '../constants/appConstants';
 
 /**

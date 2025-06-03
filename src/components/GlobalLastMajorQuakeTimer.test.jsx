@@ -3,10 +3,10 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { vi } from 'vitest';
 import GlobalLastMajorQuakeTimer from './GlobalLastMajorQuakeTimer';
 import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
-import SkeletonText from './SkeletonText'; // Assuming SkeletonText is a direct import
+import SkeletonText from './skeletons/SkeletonText'; // Assuming SkeletonText is a direct import
 
 // Mock SkeletonText
-vi.mock('./SkeletonText', () => ({
+vi.mock('./skeletons/SkeletonText', () => ({
     __esModule: true,
     default: vi.fn(({ animated, width, height, className }) => (
         <div data-testid="skeleton-text" className={className} style={{ width, height }}>
