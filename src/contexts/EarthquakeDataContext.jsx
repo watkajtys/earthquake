@@ -1,11 +1,12 @@
 // src/contexts/EarthquakeDataContext.jsx
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useCallback, useMemo, useReducer } from 'react'; // Removed useState, useRef; Added useReducer
 import { fetchUsgsData } from '../services/usgsApiService';
 import {
     USGS_API_URL_DAY,
     USGS_API_URL_WEEK,
     USGS_API_URL_MONTH,
     REFRESH_INTERVAL_MS,
+    FEELABLE_QUAKE_THRESHOLD, // Added
     MAJOR_QUAKE_THRESHOLD,
     ALERT_LEVELS,
     INITIAL_LOADING_MESSAGES,
@@ -14,178 +15,250 @@ import {
 
 const EarthquakeDataContext = createContext(null);
 
-export const EarthquakeDataProvider = ({ children }) => {
-    // States from useEarthquakeData
-    const [isLoadingDaily, setIsLoadingDaily] = useState(true);
-    const [isLoadingWeekly, setIsLoadingWeekly] = useState(true);
-    const [error, setError] = useState(null); // Combined error for daily/weekly
-    const [dataFetchTime, setDataFetchTime] = useState(null);
-    const [lastUpdated, setLastUpdated] = useState(null);
-    const [earthquakesLastHour, setEarthquakesLastHour] = useState([]);
-    const [earthquakesPriorHour, setEarthquakesPriorHour] = useState([]);
-    const [earthquakesLast24Hours, setEarthquakesLast24Hours] = useState([]);
-    const [earthquakesLast72Hours, setEarthquakesLast72Hours] = useState([]);
-    const [earthquakesLast7Days, setEarthquakesLast7Days] = useState([]);
-    const [prev24HourData, setPrev24HourData] = useState([]);
-    const [globeEarthquakes, setGlobeEarthquakes] = useState([]);
-    const [hasRecentTsunamiWarning, setHasRecentTsunamiWarning] = useState(false);
-    const [highestRecentAlert, setHighestRecentAlert] = useState(null);
-    const [activeAlertTriggeringQuakes, setActiveAlertTriggeringQuakes] = useState([]);
+// Helper function for filtering by time (used by reducer)
+const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0, now = Date.now()) => {
+    if (!Array.isArray(data)) return [];
+    const startTime = now - hoursAgoStart * 36e5;
+    const endTime = now - hoursAgoEnd * 36e5;
+    return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);
+};
+
+// Helper for monthly data (days to hours)
+const filterMonthlyByTime = (data, daysAgoStart, daysAgoEnd = 0, now = Date.now()) => {
+    if (!Array.isArray(data)) return [];
+    const startTime = now - (daysAgoStart * 24 * 36e5);
+    const endTime = now - (daysAgoEnd * 24 * 36e5);
+    return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);
+};
+
+// Helper function for major quake consolidation (used by reducer)
+const consolidateMajorQuakesLogic = (currentLastMajor, currentPreviousMajor, newMajors) => {
+    let consolidated = [...newMajors];
+    if (currentLastMajor && !consolidated.find(q => q.id === currentLastMajor.id)) {
+        consolidated.push(currentLastMajor);
+    }
+    if (currentPreviousMajor && !consolidated.find(q => q.id === currentPreviousMajor.id)) {
+        consolidated.push(currentPreviousMajor);
+    }
+    consolidated = consolidated
+        .sort((a, b) => b.properties.time - a.properties.time)
+        .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id));
+
+    const newLastMajor = consolidated.length > 0 ? consolidated[0] : null;
+    const newPreviousMajor = consolidated.length > 1 ? consolidated[1] : null;
+    const newTimeBetween = newLastMajor && newPreviousMajor ? newLastMajor.properties.time - newPreviousMajor.properties.time : null;
     
-    // Major quake states - managed globally now
-    const [lastMajorQuake, setLastMajorQuake] = useState(null);
-    const [previousMajorQuake, setPreviousMajorQuake] = useState(null);
-    const [timeBetweenPreviousMajorQuakes, setTimeBetweenPreviousMajorQuakes] = useState(null);
-
-    // Loading message states from useEarthquakeData
-    const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
-    const [currentLoadingMessages, setCurrentLoadingMessages] = useState(INITIAL_LOADING_MESSAGES);
-    const isInitialAppLoadRef = useRef(true);
-
-    // States from useMonthlyEarthquakeData
-    const [isLoadingMonthly, setIsLoadingMonthly] = useState(false);
-    const [hasAttemptedMonthlyLoad, setHasAttemptedMonthlyLoad] = useState(false);
-    const [monthlyError, setMonthlyError] = useState(null);
-    const [allEarthquakes, setAllEarthquakes] = useState([]); // Monthly data
-    const [earthquakesLast14Days, setEarthquakesLast14Days] = useState([]);
-    const [earthquakesLast30Days, setEarthquakesLast30Days] = useState([]);
-    const [prev7DayData, setPrev7DayData] = useState([]); // Monthly context: 7-14 days ago
-    const [prev14DayData, setPrev14DayData] = useState([]); // Monthly context: 14-28 days ago
-
-    // Helper function for filtering
-    const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0, now = Date.now()) => {
-        if (!Array.isArray(data)) return [];
-        const startTime = now - hoursAgoStart * 36e5;
-        const endTime = now - hoursAgoEnd * 36e5;
-        return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);
+    return { 
+        lastMajorQuake: newLastMajor, 
+        previousMajorQuake: newPreviousMajor, 
+        timeBetweenPreviousMajorQuakes: newTimeBetween 
     };
+};
+
+
+const initialState = {
+    isLoadingDaily: true,
+    isLoadingWeekly: true,
+    isLoadingMonthly: false,
+    isInitialAppLoad: true,
+    error: null,
+    monthlyError: null,
+    dataFetchTime: null,
+    lastUpdated: null,
+    earthquakesLastHour: [],
+    earthquakesPriorHour: [],
+    earthquakesLast24Hours: [],
+    earthquakesLast72Hours: [],
+    earthquakesLast7Days: [],
+    prev24HourData: [],
+    prev7DayData: [],
+    prev14DayData: [],
+    allEarthquakes: [],
+    earthquakesLast14Days: [],
+    earthquakesLast30Days: [],
+    globeEarthquakes: [],
+    hasRecentTsunamiWarning: false,
+    highestRecentAlert: null,
+    activeAlertTriggeringQuakes: [],
+    lastMajorQuake: null,
+    previousMajorQuake: null,
+    timeBetweenPreviousMajorQuakes: null,
+    loadingMessageIndex: 0,
+    currentLoadingMessages: INITIAL_LOADING_MESSAGES,
+    hasAttemptedMonthlyLoad: false, // Added this from previous useState
+};
+
+const actionTypes = {
+    SET_LOADING_FLAGS: 'SET_LOADING_FLAGS',
+    SET_ERROR: 'SET_ERROR',
+    DAILY_DATA_PROCESSED: 'DAILY_DATA_PROCESSED',
+    WEEKLY_DATA_PROCESSED: 'WEEKLY_DATA_PROCESSED',
+    MONTHLY_DATA_PROCESSED: 'MONTHLY_DATA_PROCESSED',
+    SET_INITIAL_LOAD_COMPLETE: 'SET_INITIAL_LOAD_COMPLETE',
+    UPDATE_LOADING_MESSAGE_INDEX: 'UPDATE_LOADING_MESSAGE_INDEX',
+    SET_LOADING_MESSAGES: 'SET_LOADING_MESSAGES', // For setting initial messages
+};
+
+function earthquakeReducer(state, action) {
+    switch (action.type) {
+        case actionTypes.SET_LOADING_FLAGS:
+            return { ...state, ...action.payload };
+        case actionTypes.SET_ERROR:
+            return { ...state, ...action.payload };
+        case actionTypes.DAILY_DATA_PROCESSED: {
+            const { features, metadata, fetchTime } = action.payload;
+            const l24 = filterByTime(features, 24, 0, fetchTime);
+            const alertsIn24hr = l24.map(q => q.properties.alert).filter(a => a && a !== 'green' && ALERT_LEVELS[a.toUpperCase()]);
+            const currentHighestAlert = alertsIn24hr.length > 0 ? alertsIn24hr.sort((a,b) => ({ 'red':0, 'orange':1, 'yellow':2 }[a] - { 'red':0, 'orange':1, 'yellow':2 }[b]))[0] : null;
+            
+            const dailyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
+            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, dailyMajors);
+
+            return {
+                ...state,
+                isLoadingDaily: false,
+                dataFetchTime: fetchTime,
+                lastUpdated: new Date(metadata?.generated || fetchTime).toLocaleString(),
+                earthquakesLastHour: filterByTime(features, 1, 0, fetchTime),
+                earthquakesPriorHour: filterByTime(features, 2, 1, fetchTime),
+                earthquakesLast24Hours: l24,
+                hasRecentTsunamiWarning: l24.some(q => q.properties.tsunami === 1),
+                highestRecentAlert: currentHighestAlert,
+                activeAlertTriggeringQuakes: currentHighestAlert ? l24.filter(q => q.properties.alert === currentHighestAlert) : [],
+                ...majorQuakeUpdates,
+            };
+        }
+        case actionTypes.WEEKLY_DATA_PROCESSED: {
+            const { features, fetchTime } = action.payload; // Assuming fetchTime might be useful, though not directly used for weekly state here
+            const last72HoursData = filterByTime(features, 72, 0, fetchTime);
+            
+            const weeklyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
+            // Pass dailyMajors from state if available and recent, or an empty array.
+            // For simplicity here, we'll assume weekly can consolidate its own, or daily has already run.
+            // A more robust solution might involve passing daily fetched majors if they are newer than state's.
+            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, weeklyMajors);
+
+            return {
+                ...state,
+                isLoadingWeekly: false,
+                earthquakesLast72Hours: last72HoursData,
+                prev24HourData: filterByTime(features, 48, 24, fetchTime),
+                earthquakesLast7Days: filterByTime(features, 7 * 24, 0, fetchTime),
+                globeEarthquakes: [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900),
+                ...majorQuakeUpdates,
+            };
+        }
+        case actionTypes.MONTHLY_DATA_PROCESSED: {
+            const { features, fetchTime } = action.payload;
+            const monthlyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
+            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, monthlyMajors);
+            
+            return {
+                ...state,
+                isLoadingMonthly: false,
+                hasAttemptedMonthlyLoad: true,
+                monthlyError: null, // Clear error on success
+                allEarthquakes: features,
+                earthquakesLast14Days: filterMonthlyByTime(features, 14, 0, fetchTime),
+                earthquakesLast30Days: filterMonthlyByTime(features, 30, 0, fetchTime),
+                prev7DayData: filterMonthlyByTime(features, 14, 7, fetchTime),
+                prev14DayData: filterMonthlyByTime(features, 28, 14, fetchTime),
+                ...majorQuakeUpdates,
+            };
+        }
+        case actionTypes.SET_INITIAL_LOAD_COMPLETE:
+            return { ...state, isInitialAppLoad: false };
+        case actionTypes.UPDATE_LOADING_MESSAGE_INDEX:
+            return { ...state, loadingMessageIndex: (state.loadingMessageIndex + 1) % state.currentLoadingMessages.length };
+        case actionTypes.SET_LOADING_MESSAGES: // Added to set initial messages
+            return { ...state, currentLoadingMessages: action.payload, loadingMessageIndex: 0 };
+        default:
+            return state;
+    }
+}
+
+export const EarthquakeDataProvider = ({ children }) => {
+    const [state, dispatch] = useReducer(earthquakeReducer, initialState);
     
-    // Effect for daily and weekly data fetching (adapted from useEarthquakeData)
     useEffect(() => {
         let isMounted = true;
         const orchestrateInitialDataLoad = async () => {
             if (!isMounted) return;
 
-            if (!isInitialAppLoadRef.current) {
-                setIsLoadingDaily(true);
-                setIsLoadingWeekly(true);
-            } else {
-                setLoadingMessageIndex(0);
-                setCurrentLoadingMessages(INITIAL_LOADING_MESSAGES);
+            if (state.isInitialAppLoad) {
+                dispatch({ type: actionTypes.SET_LOADING_MESSAGES, payload: INITIAL_LOADING_MESSAGES });
             }
-            setError(null);
-
-            // Initialize daily/weekly data states
-            setEarthquakesLastHour([]);
-            setEarthquakesPriorHour([]);
-            setEarthquakesLast24Hours([]);
-            setEarthquakesLast72Hours([]);
-            setEarthquakesLast7Days([]);
-            setPrev24HourData([]);
-            setGlobeEarthquakes([]);
-            setActiveAlertTriggeringQuakes([]);
+            dispatch({ 
+                type: actionTypes.SET_LOADING_FLAGS, 
+                payload: { isLoadingDaily: true, isLoadingWeekly: true } 
+            });
+            dispatch({ type: actionTypes.SET_ERROR, payload: { generalError: null } });
 
             const nowForFiltering = Date.now();
-            let dailyErrorMsg = null;
-            let weeklyErrorMsg = null;
-            let fetchedDailyMajors = [];
-            let fetchedWeeklyMajors = [];
+            let dailyError = null;
+            let weeklyError = null;
 
             // Fetch Daily Data
             try {
-                if (isMounted && isInitialAppLoadRef.current) setLoadingMessageIndex(prev => (prev + 1) % INITIAL_LOADING_MESSAGES.length);
+                if (isMounted && state.isInitialAppLoad) dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
                 const dailyRes = await fetchUsgsData(USGS_API_URL_DAY);
                 if (!isMounted) return;
 
                 if (!dailyRes.error && dailyRes.features) {
-                    if (isMounted && isInitialAppLoadRef.current) setLoadingMessageIndex(prev => (prev + 1) % INITIAL_LOADING_MESSAGES.length);
-                    const dD = dailyRes.features;
-                    setEarthquakesLastHour(filterByTime(dD, 1, 0, nowForFiltering));
-                    setEarthquakesPriorHour(filterByTime(dD, 2, 1, nowForFiltering));
-                    const l24 = filterByTime(dD, 24, 0, nowForFiltering);
-                    setEarthquakesLast24Hours(l24);
-
-                    setHasRecentTsunamiWarning(l24.some(q => q.properties.tsunami === 1));
-                    const alertsIn24hr = l24.map(q => q.properties.alert).filter(a => a && a !== 'green' && ALERT_LEVELS[a.toUpperCase()]);
-                    const currentHighestAlertValue = alertsIn24hr.length > 0 ? alertsIn24hr.sort((a,b) => ({ 'red':0, 'orange':1, 'yellow':2 }[a] - { 'red':0, 'orange':1, 'yellow':2 }[b]))[0] : null;
-                    setHighestRecentAlert(currentHighestAlertValue);
-                    if (currentHighestAlertValue && ALERT_LEVELS[currentHighestAlertValue.toUpperCase()]) {
-                        setActiveAlertTriggeringQuakes(l24.filter(q => q.properties.alert === currentHighestAlertValue));
-                    } else {
-                        setActiveAlertTriggeringQuakes([]);
-                    }
-                    
-                    fetchedDailyMajors = dD.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
-                    setDataFetchTime(nowForFiltering);
-                    setLastUpdated(new Date(dailyRes.metadata?.generated || nowForFiltering).toLocaleString());
+                    if (isMounted && state.isInitialAppLoad) dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
+                    dispatch({
+                        type: actionTypes.DAILY_DATA_PROCESSED,
+                        payload: { features: dailyRes.features, metadata: dailyRes.metadata, fetchTime: nowForFiltering }
+                    });
                 } else {
-                    dailyErrorMsg = dailyRes?.error?.message || "Daily data features are missing.";
+                    dailyError = dailyRes?.error?.message || "Daily data features are missing.";
                 }
             } catch (e) {
                 if (!isMounted) return;
-                dailyErrorMsg = e.message || "Error processing daily data.";
+                dailyError = e.message || "Error processing daily data.";
             } finally {
-                if (isMounted) setIsLoadingDaily(false);
+                if (isMounted && !dailyError) { // Only set loading false if no error during fetch itself
+                     // isLoadingDaily is set by DAILY_DATA_PROCESSED
+                } else if (isMounted && dailyError) {
+                    dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingDaily: false } });
+                }
             }
 
             // Fetch Weekly Data
             try {
-                if (isMounted && isInitialAppLoadRef.current) setLoadingMessageIndex(prev => (prev + 1) % INITIAL_LOADING_MESSAGES.length);
+                if (isMounted && state.isInitialAppLoad) dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
                 const weeklyResult = await fetchUsgsData(USGS_API_URL_WEEK);
                 if (!isMounted) return;
 
                 if (!weeklyResult.error && weeklyResult.features) {
-                    if (isMounted && isInitialAppLoadRef.current) setLoadingMessageIndex(prev => (prev + 1) % INITIAL_LOADING_MESSAGES.length);
-                    const weeklyData = weeklyResult.features;
-                    const last72HoursData = filterByTime(weeklyData, 72, 0, nowForFiltering);
-                    setEarthquakesLast72Hours(last72HoursData);
-                    setPrev24HourData(filterByTime(weeklyData, 48, 24, nowForFiltering)); // 24-48 hours ago
-                    setEarthquakesLast7Days(filterByTime(weeklyData, 7 * 24, 0, nowForFiltering));
-                    
-                    const sortedForGlobe = [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-                    setGlobeEarthquakes(sortedForGlobe.slice(0, 900));
-
-                    fetchedWeeklyMajors = weeklyData.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD).sort((a, b) => b.properties.time - a.properties.time);
+                     if (isMounted && state.isInitialAppLoad) dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
+                    dispatch({
+                        type: actionTypes.WEEKLY_DATA_PROCESSED,
+                        payload: { features: weeklyResult.features, fetchTime: nowForFiltering }
+                    });
                 } else {
-                    weeklyErrorMsg = weeklyResult?.error?.message || "Weekly data features are missing.";
+                    weeklyError = weeklyResult?.error?.message || "Weekly data features are missing.";
                 }
             } catch (e) {
                 if (!isMounted) return;
-                weeklyErrorMsg = e.message || "Error processing weekly data.";
+                weeklyError = e.message || "Error processing weekly data.";
             } finally {
-                if (isMounted) setIsLoadingWeekly(false);
+                 if (isMounted && !weeklyError) {
+                    // isLoadingWeekly is set by WEEKLY_DATA_PROCESSED
+                 } else if (isMounted && weeklyError) {
+                    dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingWeekly: false } });
+                 }
             }
             
-            // Consolidate Major Quakes from Daily/Weekly (initial pass, monthly can override)
             if (isMounted) {
-                let consolidatedMajors = [...fetchedDailyMajors, ...fetchedWeeklyMajors];
-                // Add existing lastMajorQuake if it's not in the new fetches, it might be from monthly or a previous interval
-                if (lastMajorQuake && !consolidatedMajors.find(q => q.id === lastMajorQuake.id)) {
-                    consolidatedMajors.push(lastMajorQuake);
-                }
-
-                consolidatedMajors = consolidatedMajors
-                    .sort((a, b) => b.properties.time - a.properties.time)
-                    .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id)); // Deduplicate
-
-                const newLastMajor = consolidatedMajors.length > 0 ? consolidatedMajors[0] : null;
-                const newPreviousMajor = consolidatedMajors.length > 1 ? consolidatedMajors[1] : null;
-
-                setLastMajorQuake(newLastMajor);
-                setPreviousMajorQuake(newPreviousMajor);
-                if (newLastMajor && newPreviousMajor) {
-                    setTimeBetweenPreviousMajorQuakes(newLastMajor.properties.time - newPreviousMajor.properties.time);
-                } else {
-                    setTimeBetweenPreviousMajorQuakes(null);
-                }
-
-                if (dailyErrorMsg && weeklyErrorMsg) setError("Failed to fetch critical daily and weekly earthquake data.");
-                else if (dailyErrorMsg) setError(`Daily data error: ${dailyErrorMsg}. Weekly data loaded.`);
-                else if (weeklyErrorMsg) setError(`Weekly data error: ${weeklyErrorMsg}. Daily data loaded.`);
-                else setError(null);
+                let finalError = null;
+                if (dailyError && weeklyError) finalError = "Failed to fetch critical daily and weekly earthquake data.";
+                else if (dailyError) finalError = `Daily data error: ${dailyError}. Weekly data loaded if available.`;
+                else if (weeklyError) finalError = `Weekly data error: ${weeklyError}. Daily data loaded if available.`;
+                dispatch({ type: actionTypes.SET_ERROR, payload: { error: finalError } });
                 
-                if (isInitialAppLoadRef.current) {
-                    isInitialAppLoadRef.current = false;
+                if (state.isInitialAppLoad) {
+                    dispatch({ type: actionTypes.SET_INITIAL_LOAD_COMPLETE });
                 }
             }
         };
@@ -197,144 +270,93 @@ export const EarthquakeDataProvider = ({ children }) => {
             clearInterval(intervalId);
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Runs once on mount and sets up interval
+    }, [state.isInitialAppLoad]); // Dependency on isInitialAppLoad to re-initiate message cycling logic if app were to somehow reset to initial load state.
 
     // Loading message cycling effect
     useEffect(() => {
         let messageInterval;
-        if (isInitialAppLoadRef.current && (isLoadingDaily || isLoadingWeekly)) {
+        if (state.isInitialAppLoad && (state.isLoadingDaily || state.isLoadingWeekly)) {
             messageInterval = setInterval(() => {
-                setLoadingMessageIndex(prevIndex => (prevIndex + 1) % currentLoadingMessages.length);
+                dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
             }, LOADING_MESSAGE_INTERVAL_MS);
         }
         return () => clearInterval(messageInterval);
-    }, [isLoadingDaily, isLoadingWeekly, currentLoadingMessages.length]);
+    }, [state.isInitialAppLoad, state.isLoadingDaily, state.isLoadingWeekly]);
 
 
-    // loadMonthlyData function (adapted from useMonthlyEarthquakeData)
     const loadMonthlyData = useCallback(async () => {
-        setIsLoadingMonthly(true);
-        setHasAttemptedMonthlyLoad(true);
-        setMonthlyError(null);
-
-        setAllEarthquakes([]);
-        setEarthquakesLast14Days([]);
-        setEarthquakesLast30Days([]);
-        setPrev7DayData([]);
-        setPrev14DayData([]);
+        dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: true, hasAttemptedMonthlyLoad: true }});
+        dispatch({type: actionTypes.SET_ERROR, payload: { monthlyError: null }});
         
         const nowForFiltering = Date.now();
-        // Helper for monthly data (days to hours)
-        const filterMonthlyByTime = (data, daysAgoStart, daysAgoEnd = 0) => {
-             if (!Array.isArray(data)) return [];
-             const startTime = nowForFiltering - (daysAgoStart * 24 * 36e5);
-             const endTime = nowForFiltering - (daysAgoEnd * 24 * 36e5);
-             return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);
-        };
-
         try {
             const monthlyResult = await fetchUsgsData(USGS_API_URL_MONTH);
             if (!monthlyResult.error && monthlyResult.features && monthlyResult.features.length > 0) {
-                const monthlyData = monthlyResult.features;
-                setAllEarthquakes(monthlyData);
-
-                setEarthquakesLast14Days(filterMonthlyByTime(monthlyData, 14, 0));
-                setEarthquakesLast30Days(filterMonthlyByTime(monthlyData, 30, 0));
-                setPrev7DayData(filterMonthlyByTime(monthlyData, 14, 7)); // 7-14 days ago
-                setPrev14DayData(filterMonthlyByTime(monthlyData, 28, 14)); // 14-28 days ago
-
-                const fetchedMonthlyMajors = monthlyData
-                    .filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD)
-                    .sort((a, b) => b.properties.time - a.properties.time);
-
-                // Consolidate with existing major quakes (which might be from daily/weekly)
-                // `lastMajorQuake` state already holds the latest from daily/weekly/previous monthly
-                let consolidatedMajors = [...fetchedMonthlyMajors];
-                if (lastMajorQuake && !consolidatedMajors.find(q => q.id === lastMajorQuake.id)) {
-                    consolidatedMajors.push(lastMajorQuake);
-                }
-                if (previousMajorQuake && !consolidatedMajors.find(q => q.id === previousMajorQuake.id)) {
-                    consolidatedMajors.push(previousMajorQuake);
-                }
-                
-                consolidatedMajors = consolidatedMajors
-                    .sort((a,b) => b.properties.time - a.properties.time)
-                    .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id)); // Deduplicate
-
-                const finalLastMajor = consolidatedMajors.length > 0 ? consolidatedMajors[0] : null;
-                const finalPreviousMajor = consolidatedMajors.length > 1 ? consolidatedMajors[1] : null;
-
-                setLastMajorQuake(finalLastMajor);
-                setPreviousMajorQuake(finalPreviousMajor);
-
-                if (finalLastMajor && finalPreviousMajor) {
-                    setTimeBetweenPreviousMajorQuakes(finalLastMajor.properties.time - finalPreviousMajor.properties.time);
-                } else {
-                    setTimeBetweenPreviousMajorQuakes(null);
-                }
-                 setMonthlyError(null);
+                dispatch({
+                    type: actionTypes.MONTHLY_DATA_PROCESSED,
+                    payload: { features: monthlyResult.features, fetchTime: nowForFiltering }
+                });
             } else {
-                setMonthlyError(monthlyResult?.error?.message || "Monthly data is unavailable or incomplete.");
+                dispatch({type: actionTypes.SET_ERROR, payload: { monthlyError: monthlyResult?.error?.message || "Monthly data is unavailable or incomplete." }});
+                dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false }}); // Also set loading false on error
             }
         } catch (e) {
-            setMonthlyError(`Monthly Data Processing Error: ${e.message || "An unexpected error occurred."}`);
-        } finally {
-            setIsLoadingMonthly(false);
+            dispatch({ type: actionTypes.SET_ERROR, payload: { monthlyError: `Monthly Data Processing Error: ${e.message || "An unexpected error occurred."}` }});
+            dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false }}); // Also set loading false on error
         }
-    }, [lastMajorQuake, previousMajorQuake]); // Dependencies for major quake consolidation
+    }, []); 
 
 
-    const isLoadingInitialData = useMemo(() => (isLoadingDaily || isLoadingWeekly) && isInitialAppLoadRef.current, [isLoadingDaily, isLoadingWeekly]);
-    const currentLoadingMessage = useMemo(() => currentLoadingMessages[loadingMessageIndex], [currentLoadingMessages, loadingMessageIndex]);
+    const isLoadingInitialData = useMemo(() => (state.isLoadingDaily || state.isLoadingWeekly) && state.isInitialAppLoad, [state.isLoadingDaily, state.isLoadingWeekly, state.isInitialAppLoad]);
+    const currentLoadingMessage = useMemo(() => state.currentLoadingMessages[state.loadingMessageIndex], [state.currentLoadingMessages, state.loadingMessageIndex]);
+
+    // Memoized filtered lists
+    const feelableQuakes7Days_ctx = useMemo(() => {
+        if (!state.earthquakesLast7Days) return [];
+        return state.earthquakesLast7Days.filter(
+            quake => quake.properties.mag !== null && quake.properties.mag >= FEELABLE_QUAKE_THRESHOLD
+        );
+    }, [state.earthquakesLast7Days]);
+
+    const significantQuakes7Days_ctx = useMemo(() => {
+        if (!state.earthquakesLast7Days) return [];
+        return state.earthquakesLast7Days.filter(
+            quake => quake.properties.mag !== null && quake.properties.mag >= MAJOR_QUAKE_THRESHOLD
+        );
+    }, [state.earthquakesLast7Days]);
+
+    const feelableQuakes30Days_ctx = useMemo(() => {
+        if (!state.allEarthquakes) return [];
+        return state.allEarthquakes.filter(
+            quake => quake.properties.mag !== null && quake.properties.mag >= FEELABLE_QUAKE_THRESHOLD
+        );
+    }, [state.allEarthquakes]);
+
+    const significantQuakes30Days_ctx = useMemo(() => {
+        if (!state.allEarthquakes) return [];
+        return state.allEarthquakes.filter(
+            quake => quake.properties.mag !== null && quake.properties.mag >= MAJOR_QUAKE_THRESHOLD
+        );
+    }, [state.allEarthquakes]);
     
     const contextValue = useMemo(() => ({
-        isLoadingDaily,
-        isLoadingWeekly,
-        isLoadingInitialData, // Combines initial load status
-        error,
-        dataFetchTime,
-        lastUpdated,
-        earthquakesLastHour,
-        earthquakesPriorHour,
-        earthquakesLast24Hours,
-        earthquakesLast72Hours,
-        earthquakesLast7Days,
-        prev24HourData,
-        globeEarthquakes,
-        hasRecentTsunamiWarning,
-        highestRecentAlert,
-        activeAlertTriggeringQuakes,
-        lastMajorQuake,
-        previousMajorQuake,
-        timeBetweenPreviousMajorQuakes,
+        ...state, // Spread all state properties
+        isLoadingInitialData, 
         currentLoadingMessage,
-        isInitialAppLoad: isInitialAppLoadRef.current, // Expose the boolean value
-        // Monthly data states
-        isLoadingMonthly,
-        hasAttemptedMonthlyLoad,
-        monthlyError,
-        allEarthquakes,
-        earthquakesLast14Days,
-        earthquakesLast30Days,
-        prev7DayData,
-        prev14DayData,
-        // Function to trigger monthly data load
+        // Function to trigger monthly data load (already uses dispatch)
         loadMonthlyData,
-        // No need to expose setters like setLastMajorQuake to the context consumers directly
-        // as they are managed internally by the provider now.
+        // New filtered lists (derived from state)
+        feelableQuakes7Days_ctx,
+        significantQuakes7Days_ctx,
+        feelableQuakes30Days_ctx,
+        significantQuakes30Days_ctx,
     }), [
-        isLoadingDaily, isLoadingWeekly, isLoadingInitialData, error, dataFetchTime, lastUpdated,
-        earthquakesLastHour, earthquakesPriorHour, earthquakesLast24Hours, earthquakesLast72Hours,
-        earthquakesLast7Days, prev24HourData, globeEarthquakes, hasRecentTsunamiWarning,
-        highestRecentAlert, activeAlertTriggeringQuakes, lastMajorQuake, previousMajorQuake,
-        timeBetweenPreviousMajorQuakes, currentLoadingMessage, 
-        isLoadingMonthly, hasAttemptedMonthlyLoad, monthlyError, allEarthquakes,
-        earthquakesLast14Days, earthquakesLast30Days, prev7DayData, prev14DayData, loadMonthlyData
-        // Note: isInitialAppLoadRef.current is not a state, so it doesn't need to be in deps for contextValue if it only changes `isInitialAppLoad`
-        // but to be safe and ensure context updates when its value for `isInitialAppLoad` changes:
-        // However, since it's a ref, its change doesn't trigger re-render for contextValue.
-        // The `isInitialAppLoad` property in contextValue will update when other state dependencies cause a re-render.
-        // This is acceptable.
+        state, // Main state object from reducer
+        isLoadingInitialData, 
+        currentLoadingMessage, 
+        loadMonthlyData, // useCallback ensures this is stable if its deps are empty
+        feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
+        feelableQuakes30Days_ctx, significantQuakes30Days_ctx
     ]);
 
     return (

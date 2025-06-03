@@ -267,7 +267,7 @@ function App() {
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Kept local
     // activeSidebarView, activeFeedPeriod, globeFocusLng, focusedNotableQuake are from useUIState()
-    const [activeClusters, setActiveClusters] = useState([]); // Derived from earthquake data, kept local
+    // const [activeClusters, setActiveClusters] = useState([]); // REPLACED with useMemo below
 
     // --- Data Fetching Callbacks ---
     // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
@@ -303,7 +303,12 @@ function App() {
         earthquakesLast30Days,
         prev7DayData,
         prev14DayData,
-        loadMonthlyData
+        loadMonthlyData,
+        // New pre-filtered lists
+        feelableQuakes7Days_ctx,
+        significantQuakes7Days_ctx,
+        feelableQuakes30Days_ctx,
+        significantQuakes30Days_ctx
     } = useEarthquakeDataState();
 
 
@@ -316,20 +321,27 @@ function App() {
     }, [earthquakesLast24Hours]);
 
     const currentFeedData = useMemo(() => {
-        const baseDataForFilters = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days;
+        // const baseDataForFilters = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days; // Removed
         switch (activeFeedPeriod) {
             case 'last_hour': return earthquakesLastHour;
             case 'last_24_hours': return earthquakesLast24Hours;
             case 'last_7_days': return earthquakesLast7Days;
             case 'last_14_days': return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast14Days : null;
             case 'last_30_days': return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast30Days : null;
-            case 'feelable_quakes': return baseDataForFilters ? baseDataForFilters.filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD) : [];
-            case 'significant_quakes': return baseDataForFilters ? baseDataForFilters.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD) : [];
+            // Updated cases to use pre-filtered lists from context
+            case 'feelable_quakes': 
+                return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? feelableQuakes30Days_ctx : feelableQuakes7Days_ctx;
+            case 'significant_quakes': 
+                return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? significantQuakes30Days_ctx : significantQuakes7Days_ctx;
             default: return earthquakesLast24Hours;
         }
-    }, [activeFeedPeriod, earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
-        earthquakesLast14Days, earthquakesLast30Days, // from useMonthlyEarthquakeData
-        allEarthquakes, hasAttemptedMonthlyLoad // from useMonthlyEarthquakeData
+    }, [
+        activeFeedPeriod, earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
+        earthquakesLast14Days, earthquakesLast30Days,
+        allEarthquakes, hasAttemptedMonthlyLoad, // Still needed for the conditional logic
+        // Added new context dependencies
+        feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
+        feelableQuakes30Days_ctx, significantQuakes30Days_ctx
     ]);
 
     const currentFeedTitle = useMemo(() => {
@@ -374,19 +386,18 @@ function App() {
 
     // Old handleLoadMonthlyData is removed. `loadMonthlyData` from the hook is used instead.
 
+    // Calculate activeClusters using useMemo
+    const activeClusters = useMemo(() => {
+        if (earthquakesLast72Hours && earthquakesLast72Hours.length > 0) {
+            return findActiveClusters(earthquakesLast72Hours, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
+        }
+        return [];
+    }, [earthquakesLast72Hours]);
+
     useEffect(() => {
         const timerId = setInterval(() => setAppCurrentTime(Date.now()), HEADER_TIME_UPDATE_INTERVAL_MS);
         return () => clearInterval(timerId);
     }, []);
-
-    useEffect(() => {
-        if (earthquakesLast72Hours && earthquakesLast72Hours.length > 0) {
-            const foundClusters = findActiveClusters(earthquakesLast72Hours, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
-            setActiveClusters(foundClusters);
-        } else {
-            setActiveClusters([]);
-        }
-    }, [earthquakesLast72Hours]);
 
     useEffect(() => {
         if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.geometry.coordinates && lastMajorQuake.geometry.coordinates.length >= 2) {
@@ -611,7 +622,7 @@ function App() {
     }, [navigate]);
 
     // Helper function for /feeds SEO
-    const getFeedPageSeoInfo = (feedTitle, activePeriod) => {
+    const getFeedPageSeoInfo = useCallback((feedTitle, activePeriod) => {
         let periodDescription = "the latest updates";
         let periodKeywords = "earthquake feed, live seismic data";
 
@@ -657,7 +668,7 @@ function App() {
         const canonicalUrl = `https://earthquakeslive.com/feeds?activeFeedPeriod=${safeActivePeriod}`;
 
         return { title, description, keywords, pageUrl: canonicalUrl, canonicalUrl, locale: "en_US" };
-    };
+    }, []); // Empty dependency array as function definition does not change
 
     // const handleCloseDetail = useCallback(() => setSelectedDetailUrl(null), []); // Removed
     const handleNotableQuakeSelect = useCallback((quakeFromFeature) => {
@@ -768,10 +779,10 @@ function App() {
                                         </div>
                                         <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-[220px] backdrop-blur-sm border border-slate-700">
                                         <h3 className="text-[10px] sm:text-xs font-semibold mb-0.5 sm:mb-1 text-indigo-300 uppercase">Live Statistics</h3>
-                                        <p className="text-[10px] sm:text-xs">Last Hour: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.lastHourCount}</span></p>
-                                        <p className="text-[10px] sm:text-xs">24h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count24h}</span></p>
-                                        <p className="text-[10px] sm:text-xs">72h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count72h}</span></p>
-                                        <p className="text-[10px] sm:text-xs">24h Strongest: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.strongest24h}</span></p>
+                                        <div className="text-[10px] sm:text-xs">Last Hour: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.lastHourCount}</span></div>
+                                        <div className="text-[10px] sm:text-xs">24h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count24h}</span></div>
+                                        <div className="text-[10px] sm:text-xs">72h Total: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.count72h}</span></div>
+                                        <div className="text-[10px] sm:text-xs">24h Strongest: <span className="font-bold text-sm sm:text-md text-sky-300">{keyStatsForGlobe.strongest24h}</span></div>
                                     </div>
                                 </div>
                                 <GlobalLastMajorQuakeTimer
