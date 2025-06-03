@@ -56,7 +56,7 @@ function EarthquakeFaultDiagramPanel({
                 <div className="mt-3 text-xs md:text-sm text-slate-700 bg-purple-50 p-3 rounded-md">
                     <p>
                         {isValidNumber(selectedFaultPlane.strike) && (
-                            <span title="The compass direction of the fault line (azimuth) as it would appear on a horizontal surface.">
+                            <span title="Compass direction of the line formed where the fault plane meets a horizontal surface (like the Earth's surface).">
                                 <strong className={highlightClass}>Strike:</strong> {formatNumber(selectedFaultPlane.strike,0)}°
                             </span>
                         )}

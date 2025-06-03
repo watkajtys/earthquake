@@ -55,7 +55,7 @@ describe('EarthquakeFaultDiagramPanel', () => {
 
     test('Strike has correct tooltip', () => {
       const strikeElement = screen.getByText(/Strike:/i).closest('span');
-      expect(strikeElement).toHaveAttribute('title', 'The compass direction of the fault line (azimuth) as it would appear on a horizontal surface.');
+      expect(strikeElement).toHaveAttribute('title', "Compass direction of the line formed where the fault plane meets a horizontal surface (like the Earth's surface).");
     });
 
     test('Dip has correct tooltip', () => {

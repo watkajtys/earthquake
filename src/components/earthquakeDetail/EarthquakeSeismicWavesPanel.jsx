@@ -14,44 +14,35 @@ function EarthquakeSeismicWavesPanel({
                     <svg width="150" height="80" viewBox="0 0 150 80" className="mx-auto mt-1">
                         <line x1="10" y1="40" x2="140" y2="40" stroke="#4b5563" strokeWidth="1" />
 
-                        {/* Animated P-Wave Lines */}
-                        {/* Group 1: Compressing and expanding */}
-                        <line y1="30" y2="50" stroke="#3b82f6" strokeWidth="2">
-                            <animate attributeName="x1" values="20;23;20" dur="1.2s" repeatCount="indefinite" />
-                            <animate attributeName="x2" values="20;23;20" dur="1.2s" repeatCount="indefinite" />
-                        </line>
-                        <line y1="30" y2="50" stroke="#3b82f6" strokeWidth="2">
-                            <animate attributeName="x1" values="25;28;25" dur="1.2s" repeatCount="indefinite" />
-                            <animate attributeName="x2" values="25;28;25" dur="1.2s" repeatCount="indefinite" />
-                        </line>
-
-                        {/* Stationary reference for overall motion */}
-                        {/* <line x1="47.5" y1="25" x2="47.5" y2="55" stroke="#9ca3af" strokeWidth="0.5" strokeDasharray="1,1"/> */}
-
-                        {/* Group 2: Moving in phase with Group 1 but further along */}
-                        <line y1="30" y2="50" stroke="#3b82f6" strokeWidth="2">
-                            <animate attributeName="x1" values="70;73;70" dur="1.2s" begin="0.3s" repeatCount="indefinite" />
-                            <animate attributeName="x2" values="70;73;70" dur="1.2s" begin="0.3s" repeatCount="indefinite" />
-                        </line>
-                        <line y1="30" y2="50" stroke="#3b82f6" strokeWidth="2">
-                            <animate attributeName="x1" values="75;78;75" dur="1.2s" begin="0.3s" repeatCount="indefinite" />
-                            <animate attributeName="x2" values="75;78;75" dur="1.2s" begin="0.3s" repeatCount="indefinite" />
-                        </line>
-
-                        {/* Additional lines for a denser wave illusion */}
-                         <line y1="30" y2="50" stroke="#3b82f6" strokeWidth="1.5" strokeOpacity="0.7">
-                            <animate attributeName="x1" values="40;43;40" dur="1.2s" begin="0.15s" repeatCount="indefinite" />
-                            <animate attributeName="x2" values="40;43;40" dur="1.2s" begin="0.15s" repeatCount="indefinite" />
-                        </line>
-                         <line y1="30" y2="50" stroke="#3b82f6" strokeWidth="1.5" strokeOpacity="0.7">
-                            <animate attributeName="x1" values="90;93;90" dur="1.2s" begin="0.45s" repeatCount="indefinite" />
-                            <animate attributeName="x2" values="90;93;90" dur="1.2s" begin="0.45s" repeatCount="indefinite" />
-                        </line>
-                        <line y1="30" y2="50" stroke="#3b82f6" strokeWidth="1.5" strokeOpacity="0.7">
-                            <animate attributeName="x1" values="110;113;110" dur="1.2s" begin="0.6s" repeatCount="indefinite" />
-                            <animate attributeName="x2" values="110;113;110" dur="1.2s" begin="0.6s" repeatCount="indefinite" />
-                        </line>
-
+                        {/* Animated P-Wave Lines - Refined for clearer longitudinal motion */}
+                        {Array.from({ length: 11 }).map((_, i) => {
+                            const baseX = 20 + i * 10; // Base x position for each line
+                            const amplitude = 2.5; // Max displacement
+                            return (
+                                <line
+                                    key={`pwave-line-${i}`}
+                                    y1="32" // Shorter lines
+                                    y2="48"
+                                    stroke="#3b82f6"
+                                    strokeWidth="1.5" // Thinner lines
+                                >
+                                    <animate
+                                        attributeName="x1"
+                                        values={`${baseX};${baseX - amplitude};${baseX};${baseX + amplitude};${baseX};${baseX}`}
+                                        dur="2s"
+                                        begin={`${i * 0.12}s`} // Staggered start for propagation
+                                        repeatCount="indefinite"
+                                    />
+                                    <animate
+                                        attributeName="x2"
+                                        values={`${baseX};${baseX - amplitude};${baseX};${baseX + amplitude};${baseX};${baseX}`}
+                                        dur="2s"
+                                        begin={`${i * 0.12}s`} // Staggered start for propagation
+                                        repeatCount="indefinite"
+                                    />
+                                </line>
+                            );
+                        })}
                         <text x="75" y="70" fontSize="10" textAnchor="middle">Push-Pull Motion →</text>
                     </svg>
                     <p className="text-xs text-slate-600">Fastest, compressional.</p>
@@ -59,24 +50,20 @@ function EarthquakeSeismicWavesPanel({
                 <div className="text-center p-2 bg-red-50 rounded-md">
                     <strong>S-Waves (Secondary)</strong>
                     <svg width="150" height="80" viewBox="0 0 150 80" className="mx-auto mt-1">
-                        {/* Static guide path (can be made fainter) */}
-                        <path d="M10 40 Q 25 20 40 40 T 70 40 T 100 40 T 130 40" stroke="#ef4444" strokeWidth="1.5" fill="none" strokeOpacity="0.5"/>
-                        {/* Horizontal reference line */}
+                        <path d="M10 40 Q 25 20 40 40 T 70 40 T 100 40 T 130 40" stroke="#ef4444" strokeWidth="1.5" fill="none" strokeOpacity="0.4"/>
                         <line x1="10" y1="40" x2="140" y2="40" stroke="#4b5563" strokeWidth="0.5" strokeDasharray="2,2"/>
-
-                        {/* Animated Particles for S-Wave */}
+                        {/* Animated Particles for S-Wave - Refined */}
                         {[15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115, 125].map((cx, i) => (
                             <circle key={`swave-particle-${i}`} cx={cx} cy="40" r="2.5" fill="#ef4444">
                                 <animate
                                     attributeName="cy"
-                                    values="40;30;40;50;40"
-                                    dur="1.8s"
-                                    begin={`${i * 0.1}s`}
+                                    values="40;25;40;55;40" // Increased amplitude
+                                    dur="2s" // Slightly slower duration
+                                    begin={`${i * 0.12}s`} // Adjusted begin for smoother wave with new duration
                                     repeatCount="indefinite"
                                 />
                             </circle>
                         ))}
-
                         <text x="75" y="70" fontSize="10" textAnchor="middle">Side-to-Side Motion ↕</text>
                     </svg>
                     <p className="text-xs text-slate-600">Slower, shear, solids only.</p>

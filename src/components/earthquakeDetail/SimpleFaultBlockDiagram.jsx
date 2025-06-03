@@ -13,10 +13,11 @@ function SimpleFaultBlockDiagram({ faultType }) {
     }
 
     const faultName = faultType.name.toLowerCase(); // For easier matching
+    const isOblique = faultName.includes("oblique");
 
     // SVG Viewbox and Dimensions
     const width = 150;
-    const height = 120;
+    const height = 120; // Keep height, or adjust if text needs more space consistently
     const viewBox = `0 0 ${width} ${height}`;
 
     // Common styles
@@ -162,6 +163,18 @@ function SimpleFaultBlockDiagram({ faultType }) {
         <svg width={width} height={height} viewBox={viewBox} aria-labelledby="faultDiagramTitle" className="bg-slate-50 rounded border border-gray-300">
             <title id="faultDiagramTitle">{faultType.name || 'Fault diagram'}</title>
             {diagramContent}
+            {isOblique && (
+                <text
+                    x={width / 2}
+                    y={height - 8} // Position towards the bottom, adjust as needed
+                    textAnchor="middle"
+                    fontSize="10px"
+                    fill="#4b5563" // A slightly muted text color
+                    fontStyle="italic"
+                >
+                    (Oblique Slip)
+                </text>
+            )}
         </svg>
     );
 }

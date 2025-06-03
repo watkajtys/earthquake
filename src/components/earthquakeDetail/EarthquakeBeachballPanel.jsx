@@ -32,10 +32,10 @@ function EarthquakeBeachballPanel({
         captionText = `This '${faultType.name}' earthquake is represented by the 'beachball' diagram (left) and a simplified block diagram (right). `;
     }
     captionText += `On the beachball: The two curved lines are possible orientations of the fault plane. `;
-    captionText += `Shaded areas indicate COMPRESSION (where the ground was pushed away from the earthquake source); white areas indicate TENSION (where the ground was pulled towards the source). `;
-    captionText += `The 'P' (Pressure) axis shows the main direction of compression. `;
-    captionText += `The 'T' (Tension) axis shows the main direction of tension/stretching.`;
-
+    // Updated explanation for shaded/white areas and P/T axes:
+    captionText += `Shaded quadrants show where rock was compressed by the fault movement. White quadrants show where rock was pulled apart (dilatation). `;
+    captionText += `The 'P' (Pressure) axis points to the center of the compressional quadrants, indicating the main direction of squeezing. `;
+    captionText += `The 'T' (Tension) axis points to the center of the dilatational quadrants, indicating the main direction of stretching.`;
 
     return (
         <div className={`${exhibitPanelClass} border-teal-500`}>

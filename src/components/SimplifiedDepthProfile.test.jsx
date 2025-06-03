@@ -27,14 +27,14 @@ describe('SimplifiedDepthProfile', () => {
   describe('getDepthComparisonText integration', () => {
     const testCases = [
       { depth: 0.5, expectedText: /very shallow, happening just beneath the surface/i },
-      { depth: 3, expectedText: /upper crust, comparable to the depth of the world's deepest mines/i },
-      { depth: 10, expectedText: /Mariana Trench, the deepest point in our oceans/i },
-      { depth: 20, expectedText: /Earth's crust\. For comparison, Mount Everest is about 8\.8 km tall/i },
-      { depth: 40, expectedText: /uppermost part of the Earth's mantle, just below the crust/i },
-      { depth: 80, expectedText: /Earth's lithospheric mantle, the rigid outer part of the Earth/i },
-      { depth: 150, expectedText: /Deep into the Earth's upper mantle \(asthenosphere\)/i },
-      { depth: 400, expectedText: /Very deep within the Earth's mantle\. Earthquakes this deep are less common/i },
-      { depth: 750, expectedText: /Extremely deep, well within the Earth's mantle/i },
+      { depth: 3, expectedText: /upper crust\. For perspective, the world's deepest gold mines reach these depths/i },
+      { depth: 10, expectedText: /Mariana Trench, the deepest point in our oceans/i }, // Unchanged
+      { depth: 20, expectedText: /Earth's crust\. For scale, the Earth's continental crust is typically 20-70 km thick/i },
+      { depth: 40, expectedText: /lithospheric mantle, the rigid layer beneath the Earth's crust\. \(Continental crust is typically 20-70km thick, while oceanic crust is about 5-10km thick\)/i },
+      { depth: 80, expectedText: /Earth's lithospheric mantle, the rigid outer part of the Earth/i }, // Unchanged
+      { depth: 150, expectedText: /Deep into the Earth's upper mantle \(asthenosphere\)/i }, // Unchanged
+      { depth: 400, expectedText: /Very deep within the Earth's mantle\. Earthquakes this deep are less common/i }, // Unchanged
+      { depth: 750, expectedText: /Extremely deep, likely within the Earth's lower mantle\. Earthquakes at this depth are exceptionally rare/i },
     ];
 
     testCases.forEach(({ depth, expectedText }) => {

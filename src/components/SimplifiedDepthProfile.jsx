@@ -17,13 +17,13 @@ function getDepthComparisonText(depthInKm) {
   if (depth < 1) {
     return "This is very shallow, happening just beneath the surface.";
   } else if (depth < 5) {
-    return "This occurred in the upper crust, comparable to the depth of the world's deepest mines.";
+    return "This occurred in the upper crust. For perspective, the world's deepest gold mines reach these depths.";
   } else if (depth < 12) {
     return "This is about as deep as the Mariana Trench, the deepest point in our oceans (around 11 km).";
   } else if (depth < 35) {
-    return "This earthquake was within the Earth's crust. For comparison, Mount Everest is about 8.8 km tall.";
+    return "This earthquake was within the Earth's crust. For scale, the Earth's continental crust is typically 20-70 km thick.";
   } else if (depth < 70) {
-    return "Occurred in the uppermost part of the Earth's mantle, just below the crust (typically 35-70km thick under continents).";
+    return "This earthquake occurred in the lithospheric mantle, the rigid layer beneath the Earth's crust. (Continental crust is typically 20-70km thick, while oceanic crust is about 5-10km thick).";
   } else if (depth < 100) {
     return "Located in the Earth's lithospheric mantle, the rigid outer part of the Earth.";
   } else if (depth < 300) {
@@ -31,7 +31,7 @@ function getDepthComparisonText(depthInKm) {
   } else if (depth <= 700) {
     return "Very deep within the Earth's mantle. Earthquakes this deep are less common and often occur in subduction zones.";
   } else { // depth > 700
-    return "Extremely deep, well within the Earth's mantle.";
+    return "Extremely deep, likely within the Earth's lower mantle. Earthquakes at this depth are exceptionally rare.";
   }
 }
 

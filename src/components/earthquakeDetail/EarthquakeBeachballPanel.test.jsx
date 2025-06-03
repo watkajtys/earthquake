@@ -65,8 +65,11 @@ describe('EarthquakeBeachballPanel', () => {
   test('renders the updated detailed caption with fault type', () => {
     render(<EarthquakeBeachballPanel {...defaultProps} />);
     expect(screen.getByText(/This 'Normal Fault' earthquake/i)).toBeInTheDocument();
-    expect(screen.getByText(/Shaded areas indicate COMPRESSION/i)).toBeInTheDocument();
-    expect(screen.getByText(/The 'P' \(Pressure\) axis shows the main direction of compression/i)).toBeInTheDocument();
+    // Check for new key phrases
+    expect(screen.getByText(/Shaded quadrants show where rock was compressed by the fault movement/i)).toBeInTheDocument();
+    expect(screen.getByText(/White quadrants show where rock was pulled apart \(dilatation\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/The 'P' \(Pressure\) axis points to the center of the compressional quadrants, indicating the main direction of squeezing/i)).toBeInTheDocument();
+    expect(screen.getByText(/The 'T' \(Tension\) axis points to the center of the dilatational quadrants, indicating the main direction of stretching/i)).toBeInTheDocument();
   });
 
   test('renders a generic caption if fault type is Unknown', () => {
