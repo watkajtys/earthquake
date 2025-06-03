@@ -215,7 +215,7 @@ const actionTypes = {
     SET_LOADING_MESSAGES: 'SET_LOADING_MESSAGES', // For setting initial messages
 };
 
-function earthquakeReducer(state, action) {
+function earthquakeReducer(state = initialState, action) { // Set initialState as default for state
     switch (action.type) {
         case actionTypes.SET_LOADING_FLAGS:
             return { ...state, ...action.payload };
@@ -564,4 +564,4 @@ export const useEarthquakeDataState = () => {
     return context;
 };
 
-export { EarthquakeDataContext };
+export { EarthquakeDataContext, initialState, actionTypes, earthquakeReducer };
