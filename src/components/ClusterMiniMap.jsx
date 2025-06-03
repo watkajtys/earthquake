@@ -104,6 +104,23 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
     }
   }, [containerRef, mapRef]); // mapRef added as dependency to re-run if it changes, though less likely
 
+  useEffect(() => {
+    if (mapRef.current) {
+      const handleZoomEnd = () => {
+        if (mapRef.current) {
+          mapRef.current.invalidateSize();
+        }
+      };
+      mapRef.current.on('zoomend', handleZoomEnd);
+
+      return () => {
+        if (mapRef.current) {
+          mapRef.current.off('zoomend', handleZoomEnd);
+        }
+      };
+    }
+  }, [mapRef]);
+
   if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
     return null;
   }
@@ -156,7 +173,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
         ])
       );
       // The initialZoom check above should be sufficient to prevent re-zooming pinpoint clusters.
-      mapRef.current.fitBounds(bounds, { padding: [0, 0] });
+      mapRef.current.fitBounds(bounds, { padding: [0, 0], maxZoom: 12 });
     }
     // For a single quake (initialZoom=10) or pinpoint cluster (initialZoom=13),
     // the view is already set by mapCenter and initialZoom on MapContainer.
@@ -177,7 +194,8 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
       style={{ height: '200px', width: '100%' }} // Width is 100% of its container
       scrollWheelZoom={false}
       ref={mapRef}
-      maxZoom={18}
+      zoomSnap={1}
+      maxZoom={13}
       // key={containerWidth} // Optionally, force remount if width changes drastically, though invalidateSize is preferred
     >
       <TileLayer
