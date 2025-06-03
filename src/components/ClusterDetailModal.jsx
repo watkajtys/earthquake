@@ -149,7 +149,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
 
                 {/* Cluster Mini Map */}
                 <div className="my-4"> {/* Added margin for spacing */}
-                    <ClusterMiniMap cluster={cluster} getMagnitudeColor={getMagnitudeColor} />
+                    <ClusterMiniMap cluster={cluster} getMagnitudeColor={getMagnitudeColor} containerRef={modalContentRef} />
                 </div>
 
                 {/* Individual Earthquakes List */}

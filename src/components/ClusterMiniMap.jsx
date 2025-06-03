@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, memo } from 'react'; // Added useEffect and useRef
+import React, { useEffect, useRef, memo, useState } from 'react'; // Added useEffect, useRef, useState
 import { MapContainer, TileLayer, GeoJSON, CircleMarker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Corrected path
@@ -43,10 +43,44 @@ const getTectonicPlateStyle = (feature) => {
  *   to have `id`, `geometry.coordinates` (lng, lat, depth), and `properties.mag` (magnitude) and `properties.place`.
  * @param {function} props.getMagnitudeColor - A function that takes an earthquake's magnitude
  *   and returns a color string for its marker.
+ * @param {object} props.containerRef - A React ref for the container element to observe for resizing.
  * @returns {JSX.Element | null} The rendered Leaflet map component or null if cluster data is invalid.
  */
-const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
+const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
   const mapRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    if (containerRef && containerRef.current) {
+      const resizeObserver = new ResizeObserver(entries => {
+        for (let entry of entries) {
+          if (entry.contentRect.width > 0) {
+            setContainerWidth(entry.contentRect.width);
+            // Invalidate map size when container width changes to ensure it rerenders correctly
+            if (mapRef.current) {
+              mapRef.current.invalidateSize();
+            }
+          }
+        }
+      });
+
+      resizeObserver.observe(containerRef.current);
+
+      // Initial check
+      const initialWidth = containerRef.current.getBoundingClientRect().width;
+      if (initialWidth > 0) {
+        setContainerWidth(initialWidth);
+      }
+
+
+      return () => {
+        if (containerRef.current) { // Check if ref still exists before trying to unobserve
+            resizeObserver.unobserve(containerRef.current);
+        }
+        resizeObserver.disconnect();
+      };
+    }
+  }, [containerRef, mapRef]); // mapRef added as dependency to re-run if it changes, though less likely
 
   if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
     return null;
@@ -91,7 +125,8 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
   useEffect(() => {
     // Call fitBounds only if originalQuakes.length > 1 AND initialZoom was NOT set to 13 (pinpoint)
     // or 10 (single quake). The initialZoom for spread out clusters is 7.
-    if (mapRef.current && originalQuakes.length > 1 && initialZoom === 7) {
+    // Also ensure containerWidth is available (map is visible and has size)
+    if (mapRef.current && originalQuakes.length > 1 && initialZoom === 7 && containerWidth > 0) {
       const bounds = L.latLngBounds(
         originalQuakes.map(quake => [
           quake.geometry.coordinates[1],
@@ -103,17 +138,25 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
     }
     // For a single quake (initialZoom=10) or pinpoint cluster (initialZoom=13),
     // the view is already set by mapCenter and initialZoom on MapContainer.
-  }, [originalQuakes, mapRef, initialZoom]); // Added initialZoom to dependency array as its value now determines effect behavior.
+  }, [originalQuakes, mapRef, initialZoom, containerWidth]); // Added initialZoom and containerWidth to dependency array.
                                  // originalQuakes is the primary data dependency.
+
+  // Render null or a placeholder if the container isn't ready (e.g., width is 0)
+  // This prevents Leaflet errors if it tries to initialize in a zero-size container.
+  if (containerWidth === 0 && originalQuakes.length > 0) { // Check originalQuakes to avoid flash when initially no cluster
+      return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map...</div>;
+  }
+
 
   return (
     <MapContainer
       center={mapCenter}
       zoom={initialZoom}
-      style={{ height: '200px', width: '100%' }}
+      style={{ height: '200px', width: '100%' }} // Width is 100% of its container
       scrollWheelZoom={false}
       ref={mapRef}
       maxZoom={18}
+      // key={containerWidth} // Optionally, force remount if width changes drastically, though invalidateSize is preferred
     >
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
