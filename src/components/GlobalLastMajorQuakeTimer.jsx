@@ -1,6 +1,7 @@
 // src/GlobalLastMajorQuakeTimer.jsx
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { getMagnitudeColor } from '../utils/utils.js';
 import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 import SkeletonText from './SkeletonText';
 
@@ -22,6 +23,8 @@ const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, formatTimeDuration, handleT
     const [timeSinceFormatted, setTimeSinceFormatted] = useState(<SkeletonText width="w-1/2 mx-auto" height="h-8" className="bg-slate-600"/>);
 
     const isClickable = handleTimerClick && lastMajorQuake;
+
+    const magnitudeColorValue = lastMajorQuake?.properties?.mag ? getMagnitudeColor(lastMajorQuake.properties.mag) : '#FB923C'; // Default to orange-400 hex
 
     useEffect(() => {
         if (!lastMajorQuake?.properties?.time) {
@@ -60,7 +63,7 @@ const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, formatTimeDuration, handleT
             style={{ cursor: isClickable ? 'pointer' : 'default' }}
         >
             <p className="text-[10px] sm:text-xs uppercase text-slate-400">Time Since Last Major (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) Quake Globally:</p>
-            <div className="text-xl sm:text-2xl font-bold text-orange-400 my-0.5">{timeSinceFormatted}</div>
+            <div className="text-xl sm:text-2xl font-bold my-0.5" style={{ color: magnitudeColorValue }}>{timeSinceFormatted}</div>
             {lastMajorQuake && lastMajorQuake.properties && (
                 <p className="text-[10px] sm:text-xs text-slate-300 truncate">
                     M{lastMajorQuake.properties.mag?.toFixed(1)} - {lastMajorQuake.properties.place}
