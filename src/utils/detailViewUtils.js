@@ -118,3 +118,110 @@ export const getBeachballPathsAndType = (rake, dip = 45) => {
     }
     return { shadedPaths, faultType, nodalPlanes };
 };
+
+/**
+ * Determines the fault type based on the rake angle.
+ * @param {number} rake - The rake angle in degrees.
+ * @returns {object} An object containing the fault name, icon, and description.
+ */
+export const getFaultType = (rake) => {
+  const defaultFault = {
+    name: "Unknown Fault Type",
+    icon: "❓",
+    description: "Fault movement details are unclear or rake angle is not provided.",
+  };
+
+  if (!isValidNumber(rake)) {
+    return defaultFault;
+  }
+
+  const r = parseFloat(rake);
+
+  // Normalize rake to -180 to 180 for simpler conditions if needed,
+  // but the provided ranges are mostly explicit.
+  // let normalizedRake = r;
+  // while (normalizedRake <= -180) normalizedRake += 360;
+  // while (normalizedRake > 180) normalizedRake -= 360;
+  // For this implementation, direct use of r with provided ranges.
+
+  // Normal Faults
+  if (r > -112.5 && r < -67.5) { // e.g., -90
+    return {
+      name: "Normal Fault",
+      icon: "⬇️⬆️", // Blocks move apart vertically, one drops down
+      description: "One block of earth moves down relative to the other, typically due to tensional forces.",
+    };
+  }
+  // Reverse/Thrust Faults
+  if (r > 67.5 && r < 112.5) { // e.g., 90
+    return {
+      name: "Reverse/Thrust Fault",
+      icon: "⬆️⬇️", // Blocks move towards each other vertically, one pushed up
+      description: "One block of earth is pushed up over the other, typically due to compressional forces.",
+    };
+  }
+
+  // Strike-Slip Faults
+  // Left-Lateral (sinistral)
+  if ((r >= -22.5 && r <= 22.5) || (r > -360 && r <= -337.5) || (r >= 337.5 && r < 360)) { // e.g., 0 or very close to it
+    return {
+      name: "Left-Lateral Strike-Slip Fault",
+      icon: "⬅️➡️", // Top block (opposite viewer) moves left
+      description: "Blocks slide past each other horizontally. The block opposite you moves to the left.",
+    };
+  }
+  // Right-Lateral (dextral)
+  // Note: USGS uses 180 +/- 20 for strike-slip, which is 160 to 200 (or -160 to -200)
+  // The prompt has (rake > 157.5 && rake < 202.5) OR (rake < -157.5 && rake > -202.5)
+  if ((r > 157.5 && r < 202.5) || (r < -157.5 && r > -202.5)) { // e.g., 180, -180
+    return {
+      name: "Right-Lateral Strike-Slip Fault",
+      icon: "➡️⬅️", // Top block (opposite viewer) moves right
+      description: "Blocks slide past each other horizontally. The block opposite you moves to the right.",
+    };
+  }
+
+  // Oblique-Normal Faults
+  // Left-Lateral Dominant Oblique-Normal (Normal component + Left-lateral strike-slip)
+  if (r >= -67.5 && r < -22.5) { // e.g., -45
+    return {
+      name: "Oblique Normal Fault (Left-Lateral component)",
+      icon: "↙️↗️", // Downward and leftward
+      description: "A combination of downward (normal) and leftward-horizontal (strike-slip) movement.",
+    };
+  }
+  // Right-Lateral Dominant Oblique-Normal (Normal component + Right-lateral strike-slip)
+  if (r <= -112.5 && r > -157.5) { // e.g., -135
+    return {
+      name: "Oblique Normal Fault (Right-Lateral component)",
+      icon: "↘️↖️", // Downward and rightward
+      description: "A combination of downward (normal) and rightward-horizontal (strike-slip) movement.",
+    };
+  }
+
+  // Oblique-Reverse/Thrust Faults
+  // Left-Lateral Dominant Oblique-Reverse (Reverse component + Left-lateral strike-slip)
+  if (r <= 67.5 && r > 22.5) { // e.g., 45
+    return {
+      name: "Oblique Reverse Fault (Left-Lateral component)",
+      icon: "↖️↘️", // Upward and leftward
+      description: "A combination of upward (reverse) and leftward-horizontal (strike-slip) movement.",
+    };
+  }
+  // Right-Lateral Dominant Oblique-Reverse (Reverse component + Right-lateral strike-slip)
+  if (r >= 112.5 && r < 157.5) { // e.g., 135
+    return {
+      name: "Oblique Reverse Fault (Right-Lateral component)",
+      icon: "↗️↙️", // Upward and rightward
+      description: "A combination of upward (reverse) and rightward-horizontal (strike-slip) movement.",
+    };
+  }
+
+  // If rake angle doesn't fit any category, return default.
+  // This can happen if rake is exactly on a boundary like -67.5, 22.5 etc. if not caught by >= or <=
+  // Or if it's an unexpected value.
+  return {
+      ...defaultFault,
+      description: `Fault movement details are unclear for rake angle: ${r}.`
+  };
+};

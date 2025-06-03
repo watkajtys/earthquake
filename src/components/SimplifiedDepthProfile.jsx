@@ -3,6 +3,39 @@ import React from 'react';
 import { getMagnitudeColor } from '../utils/utils.js';
 
 /**
+ * Generates a human-readable string comparing the earthquake depth to common references.
+ * @param {number} depthInKm - The depth of the earthquake in kilometers.
+ * @returns {string} A descriptive string about the earthquake's depth.
+ */
+function getDepthComparisonText(depthInKm) {
+  if (depthInKm === null || depthInKm === undefined || isNaN(parseFloat(depthInKm))) {
+    return "Depth information is not available for comparison.";
+  }
+
+  const depth = parseFloat(depthInKm);
+
+  if (depth < 1) {
+    return "This is very shallow, happening just beneath the surface.";
+  } else if (depth < 5) {
+    return "This occurred in the upper crust, comparable to the depth of the world's deepest mines.";
+  } else if (depth < 12) {
+    return "This is about as deep as the Mariana Trench, the deepest point in our oceans (around 11 km).";
+  } else if (depth < 35) {
+    return "This earthquake was within the Earth's crust. For comparison, Mount Everest is about 8.8 km tall.";
+  } else if (depth < 70) {
+    return "Occurred in the uppermost part of the Earth's mantle, just below the crust (typically 35-70km thick under continents).";
+  } else if (depth < 100) {
+    return "Located in the Earth's lithospheric mantle, the rigid outer part of the Earth.";
+  } else if (depth < 300) {
+    return "Deep into the Earth's upper mantle (asthenosphere).";
+  } else if (depth <= 700) {
+    return "Very deep within the Earth's mantle. Earthquakes this deep are less common and often occur in subduction zones.";
+  } else { // depth > 700
+    return "Extremely deep, well within the Earth's mantle.";
+  }
+}
+
+/**
  * Displays a simplified, illustrative vertical profile of Earth's layers
  * to visualize the depth of an earthquake's hypocenter.
  * Includes a pulsating marker at the event's depth and indicates the geological layer.
@@ -108,6 +141,9 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
       <p className="text-xs text-slate-600 mb-3">
         Illustrative depth of M<strong>{typeof magnitude === 'number' ? magnitude.toFixed(1) : 'N/A'}</strong> event at <strong>{depth?.toFixed(1)} km</strong>
         (approx. within {hypocenterLayerName}).
+      </p>
+      <p className="text-sm text-slate-700 my-2">
+        {getDepthComparisonText(depth)}
       </p>
 
       <div className="relative w-full bg-gray-100 rounded border border-gray-300 flex flex-col" style={{ height: `${diagramTotalRenderHeightPx}px` }}>

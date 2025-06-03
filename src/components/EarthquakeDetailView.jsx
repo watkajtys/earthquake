@@ -56,6 +56,7 @@ import EarthquakeMwwPanel from './earthquakeDetail/EarthquakeMwwPanel'; // Impor
 import EarthquakeMagnitudeComparisonPanel from './earthquakeDetail/EarthquakeMagnitudeComparisonPanel'; // Import the new magnitude comparison panel
 import EarthquakeStressAxesPanel from './earthquakeDetail/EarthquakeStressAxesPanel'; // Import the new stress axes panel
 import EarthquakeBeachballPanel from './earthquakeDetail/EarthquakeBeachballPanel'; // Import the new beachball panel
+import EarthquakeTectonicContextPanel from './earthquakeDetail/EarthquakeTectonicContextPanel'; // Import the new tectonic context panel
 import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfoPanel'; // Import the new further info panel
 
 /**
@@ -462,6 +463,14 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         exhibitTitleClass={exhibitTitleClass}
                         diagramContainerClass={diagramContainerClass}
                         captionClass={captionClass}
+                    />
+
+                    <EarthquakeTectonicContextPanel
+                        detailData={detailData}
+                        properties={properties}
+                        exhibitPanelClass={exhibitPanelClass}
+                        exhibitTitleClass={exhibitTitleClass}
+                        captionClass={captionClass} // captionClass might not be used by TectonicPanel, but passing for consistency
                     />
 
                     <EarthquakeFurtherInfoPanel
