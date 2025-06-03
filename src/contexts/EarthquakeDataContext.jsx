@@ -12,6 +12,7 @@ import {
     INITIAL_LOADING_MESSAGES,
     LOADING_MESSAGE_INTERVAL_MS
 } from '../constants/appConstants';
+import { getMagnitudeColor } from '../utils/utils.js'; // Added import
 
 const EarthquakeDataContext = createContext(null);
 
@@ -55,6 +56,32 @@ const consolidateMajorQuakesLogic = (currentLastMajor, currentPreviousMajor, new
     };
 };
 
+// Helper function for random sampling (Fisher-Yates shuffle)
+const sampleArray = (array, sampleSize) => {
+    if (!Array.isArray(array) || array.length === 0) return [];
+    if (sampleSize >= array.length) return [...array]; // Return a copy if sample size is larger or equal
+
+    const shuffled = [...array]; // Create a copy to avoid mutating the original array
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; // Swap elements
+    }
+    return shuffled.slice(0, sampleSize);
+};
+
+const SCATTER_PLOT_SAMPLING_THRESHOLD = 500;
+
+// Define magnitude ranges locally for pre-aggregation
+const MAGNITUDE_RANGES = [
+    {name: '<1', min: -Infinity, max: 0.99},
+    {name : '1-1.9', min : 1, max : 1.99},
+    {name: '2-2.9', min: 2, max: 2.99},
+    {name : '3-3.9', min : 3, max : 3.99},
+    {name: '4-4.9', min: 4, max: 4.99},
+    {name : '5-5.9', min : 5, max : 5.99},
+    {name: '6-6.9', min: 6, max: 6.99},
+    {name : '7+', min : 7, max : Infinity},
+];
 
 const initialState = {
     isLoadingDaily: true,
@@ -86,6 +113,12 @@ const initialState = {
     loadingMessageIndex: 0,
     currentLoadingMessages: INITIAL_LOADING_MESSAGES,
     hasAttemptedMonthlyLoad: false, // Added this from previous useState
+    dailyCounts14Days: [],
+    dailyCounts30Days: [],
+    sampledEarthquakesLast14Days: [],
+    sampledEarthquakesLast30Days: [],
+    magnitudeDistribution14Days: [],
+    magnitudeDistribution30Days: [],
 };
 
 const actionTypes = {
@@ -152,6 +185,80 @@ function earthquakeReducer(state, action) {
             const { features, fetchTime } = action.payload;
             const monthlyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
             const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, monthlyMajors);
+
+            // Helper to format date as 'MMM D' (e.g., "Oct 26")
+            const formatDateForTimeline = (timestamp) => {
+                const date = new Date(timestamp);
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            };
+
+            // Helper to generate initial daily counts array
+            const getInitialDailyCounts = (numDays, baseTime) => {
+                const counts = [];
+                for (let i = 0; i < numDays; i++) {
+                    const date = new Date(baseTime);
+                    date.setDate(date.getDate() - i);
+                    counts.push({ dateString: formatDateForTimeline(date.getTime()), count: 0 });
+                }
+                return counts.reverse(); // Ensure chronological order
+            };
+
+            const dailyCounts30Days = getInitialDailyCounts(30, fetchTime);
+            const dailyCounts14Days = getInitialDailyCounts(14, fetchTime);
+
+            // Filter earthquakes for the last 30 days from fetchTime
+            const thirtyDaysAgo = fetchTime - 30 * 24 * 3600 * 1000;
+            const fourteenDaysAgo = fetchTime - 14 * 24 * 3600 * 1000;
+
+            const currentEarthquakesLast30Days = filterMonthlyByTime(features, 30, 0, fetchTime);
+            const currentEarthquakesLast14Days = filterMonthlyByTime(features, 14, 0, fetchTime);
+
+            // Calculate Magnitude Distributions
+            const calculateMagnitudeDistribution = (earthquakes) => {
+                const distribution = MAGNITUDE_RANGES.map(range => ({
+                    name: range.name,
+                    count: 0,
+                    color: getMagnitudeColor(range.min === -Infinity ? 0 : range.min) // Use range.min for color, handle -Infinity
+                }));
+
+                earthquakes.forEach(quake => {
+                    const mag = quake.properties.mag;
+                    if (mag === null || typeof mag !== 'number') return;
+
+                    for (const range of distribution) {
+                        // Find the correct range from MAGNITUDE_RANGES to check min/max
+                        const rangeDetails = MAGNITUDE_RANGES.find(r => r.name === range.name);
+                        if (mag >= rangeDetails.min && mag <= rangeDetails.max) {
+                            range.count++;
+                            break;
+                        }
+                    }
+                });
+                return distribution;
+            };
+
+            const magnitudeDistribution30Days = calculateMagnitudeDistribution(currentEarthquakesLast30Days);
+            const magnitudeDistribution14Days = calculateMagnitudeDistribution(currentEarthquakesLast14Days);
+
+            features.forEach(quake => {
+                const quakeTime = quake.properties.time;
+                const dateString = formatDateForTimeline(quakeTime);
+
+                // Check if within 30 days
+                if (quakeTime >= thirtyDaysAgo && quakeTime <= fetchTime) {
+                    const dayEntry30 = dailyCounts30Days.find(d => d.dateString === dateString);
+                    if (dayEntry30) {
+                        dayEntry30.count += 1;
+                    }
+                }
+                // Check if within 14 days
+                if (quakeTime >= fourteenDaysAgo && quakeTime <= fetchTime) {
+                    const dayEntry14 = dailyCounts14Days.find(d => d.dateString === dateString);
+                    if (dayEntry14) {
+                        dayEntry14.count += 1;
+                    }
+                }
+            });
             
             return {
                 ...state,
@@ -159,8 +266,14 @@ function earthquakeReducer(state, action) {
                 hasAttemptedMonthlyLoad: true,
                 monthlyError: null, // Clear error on success
                 allEarthquakes: features,
-                earthquakesLast14Days: filterMonthlyByTime(features, 14, 0, fetchTime),
-                earthquakesLast30Days: filterMonthlyByTime(features, 30, 0, fetchTime),
+                earthquakesLast14Days: currentEarthquakesLast14Days,
+                earthquakesLast30Days: currentEarthquakesLast30Days,
+                sampledEarthquakesLast14Days: sampleArray(currentEarthquakesLast14Days, SCATTER_PLOT_SAMPLING_THRESHOLD),
+                sampledEarthquakesLast30Days: sampleArray(currentEarthquakesLast30Days, SCATTER_PLOT_SAMPLING_THRESHOLD),
+                dailyCounts14Days, // Add to state
+                dailyCounts30Days, // Add to state
+                magnitudeDistribution14Days, // Add to state
+                magnitudeDistribution30Days, // Add to state
                 prev7DayData: filterMonthlyByTime(features, 14, 7, fetchTime),
                 prev14DayData: filterMonthlyByTime(features, 28, 14, fetchTime),
                 ...majorQuakeUpdates,
@@ -350,6 +463,15 @@ export const EarthquakeDataProvider = ({ children }) => {
         significantQuakes7Days_ctx,
         feelableQuakes30Days_ctx,
         significantQuakes30Days_ctx,
+        // Add dailyCounts to context for direct access if needed, though they are in state
+        dailyCounts14Days: state.dailyCounts14Days,
+        dailyCounts30Days: state.dailyCounts30Days,
+        // Add sampled earthquake lists to context
+        sampledEarthquakesLast14Days: state.sampledEarthquakesLast14Days,
+        sampledEarthquakesLast30Days: state.sampledEarthquakesLast30Days,
+        // Add magnitude distributions to context
+        magnitudeDistribution14Days: state.magnitudeDistribution14Days,
+        magnitudeDistribution30Days: state.magnitudeDistribution30Days,
     }), [
         state, // Main state object from reducer
         isLoadingInitialData, 
