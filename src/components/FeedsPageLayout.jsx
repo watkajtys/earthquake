@@ -5,6 +5,8 @@ import { useUIState } from '../contexts/UIStateContext'; // Import context
 import SeoMetadata from './SeoMetadata';
 import SummaryStatisticsCard from './SummaryStatisticsCard';
 import PaginatedEarthquakeTable from './PaginatedEarthquakeTable';
+import FeedSelector from './FeedSelector';
+import LoadMoreDataButton from './LoadMoreDataButton'; // Import the new component
 import { FEELABLE_QUAKE_THRESHOLD, MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 
 /**
@@ -127,19 +129,14 @@ const FeedsPageLayout = ({
                 <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
                     Feeds & Details
                 </h2>
-                <div className="my-2 flex flex-wrap gap-2 pb-2">
-                    <button onClick={() => setActiveFeedPeriod('last_hour')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_hour' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last Hour</button>
-                    <button onClick={() => setActiveFeedPeriod('feelable_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'feelable_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Feelable (M{FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+)</button>
-                    <button onClick={() => setActiveFeedPeriod('significant_quakes')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'significant_quakes' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Significant (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)</button>
-                    <button onClick={() => setActiveFeedPeriod('last_24_hours')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_24_hours' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last 24hr</button>
-                    <button onClick={() => setActiveFeedPeriod('last_7_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_7_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>Last 7day</button>
-                    {(contextHasAttemptedMonthlyLoad && contextAllEarthquakes && contextAllEarthquakes.length > 0) && (
-                        <React.Fragment key="monthly-feed-buttons">
-                            <button onClick={() => setActiveFeedPeriod('last_14_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_14_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>14-Day</button>
-                            <button onClick={() => setActiveFeedPeriod('last_30_days')} className={`text-xs px-3 py-1.5 rounded whitespace-nowrap ${activeFeedPeriod === 'last_30_days' ? 'bg-indigo-500 text-white' : 'bg-slate-600 hover:bg-slate-500'}`}>30-Day</button>
-                        </React.Fragment>
-                    )}
-                </div>
+                <FeedSelector
+                    activeFeedPeriod={activeFeedPeriod}
+                    setActiveFeedPeriod={setActiveFeedPeriod}
+                    hasAttemptedMonthlyLoad={contextHasAttemptedMonthlyLoad}
+                    allEarthquakes={contextAllEarthquakes}
+                    FEELABLE_QUAKE_THRESHOLD={FEELABLE_QUAKE_THRESHOLD}
+                    MAJOR_QUAKE_THRESHOLD={MAJOR_QUAKE_THRESHOLD}
+                />
                 <SummaryStatisticsCard
                     title={`Statistics for ${currentFeedTitle.replace("Earthquakes ", "").replace("Quakes ", "")}`}
                     currentPeriodData={currentFeedData || []}
@@ -159,14 +156,11 @@ const FeedsPageLayout = ({
                     formatTimeAgo={formatTimeAgo}
                     formatDate={formatDate}
                 />
-                {!contextHasAttemptedMonthlyLoad && (
-                    <div className="text-center py-3 mt-3 border-t border-slate-700">
-                        <button onClick={loadMonthlyData} disabled={contextIsLoadingMonthly} className="w-full bg-teal-600 hover:bg-teal-500 p-2.5 rounded-md text-white font-semibold transition-colors text-xs shadow-md disabled:opacity-60">
-                            {contextIsLoadingMonthly ? 'Loading Extended Data...' : 'Load 14 & 30-Day Data'}
-                        </button>
-                    </div>
-                )}
-                {contextHasAttemptedMonthlyLoad && contextIsLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
+                <LoadMoreDataButton
+                    hasAttemptedMonthlyLoad={contextHasAttemptedMonthlyLoad}
+                    isLoadingMonthly={contextIsLoadingMonthly}
+                    loadMonthlyData={loadMonthlyData}
+                />
             </div>
         </>
     );
