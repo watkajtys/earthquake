@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import SkeletonText from './SkeletonText';
-import SkeletonBlock from './SkeletonBlock';
+import SkeletonText from './skeletons/SkeletonText';
+import SkeletonBlock from './skeletons/SkeletonBlock';
 import { FEELABLE_QUAKE_THRESHOLD } from '../constants/appConstants';
 
 /**
