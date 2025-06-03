@@ -5,6 +5,14 @@ import { isValidNumber } from '../../utils/utils.js';
 import tectonicBoundariesData from '../../assets/TectonicPlateBoundaries.json'; // Load the boundary data
 import { findClosestTectonicBoundary } from '../../utils/geometryUtils'; // Import the new utility
 
+// Import Fault Icons
+import NormalFaultIcon from '../icons/faults/NormalFaultIcon';
+import ReverseFaultIcon from '../icons/faults/ReverseFaultIcon';
+import StrikeSlipFaultIcon from '../icons/faults/StrikeSlipFaultIcon'; // Ensure this is here for fault types
+import ConvergentBoundaryIcon from '../icons/boundaries/ConvergentBoundaryIcon';
+import DivergentBoundaryIcon from '../icons/boundaries/DivergentBoundaryIcon';
+// Re-using StrikeSlipFaultIcon for Transform boundaries, so no separate import needed if already there for faults.
+
 // Helper function to calculate distance - placeholder for now
 // const calculateDistanceToBoundary = (epicenter, boundary) => {
 //   // Placeholder logic
@@ -69,6 +77,43 @@ const EarthquakeRegionalFaultsPanel = ({
     return type.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
   };
 
+  const getBoundaryIcon = (type) => {
+    if (!type) return null;
+    switch (type.toUpperCase()) {
+      case 'CONVERGENT':
+        return <ConvergentBoundaryIcon className="w-12 h-8 mr-2 text-slate-700" />;
+      case 'DIVERGENT':
+        return <DivergentBoundaryIcon className="w-12 h-8 mr-2 text-slate-700" />;
+      case 'TRANSFORM':
+        // Reusing StrikeSlipFaultIcon for Transform boundaries
+        return <StrikeSlipFaultIcon className="w-12 h-8 mr-2 text-slate-700" />;
+      // case 'UNKNOWN': // Example if we add an unknown icon
+      //   return <UnknownBoundaryIcon className="w-12 h-8 mr-2 text-slate-700" />;
+      default:
+        // For types like "Unknown" or any other not explicitly handled,
+        // we can return null or a generic placeholder icon.
+        // For now, returning null if no specific icon matches.
+        return null;
+    }
+  };
+
+  const getFaultIcon = (type) => {
+    if (!type) return null;
+    switch (type.toUpperCase()) {
+      case 'NORMAL':
+      case 'OBLIQUE_NORMAL': // Using NormalFaultIcon as base for Oblique-Normal
+        return <NormalFaultIcon className="w-12 h-8 mr-2 text-slate-700" />;
+      case 'REVERSE':
+      case 'OBLIQUE_REVERSE': // Using ReverseFaultIcon as base for Oblique-Reverse
+        return <ReverseFaultIcon className="w-12 h-8 mr-2 text-slate-700" />;
+      case 'STRIKE_SLIP':
+      case 'STRIKE_SLIP_LIKE': // Handling STRIKE_SLIP_LIKE as well
+        return <StrikeSlipFaultIcon className="w-12 h-8 mr-2 text-slate-700" />;
+      default:
+        return null;
+    }
+  };
+
   const getFaultTypeExplanation = (type) => {
     switch (type) {
       case 'NORMAL':
@@ -96,17 +141,22 @@ const EarthquakeRegionalFaultsPanel = ({
   return (
     <div className={exhibitPanelClass}>
       <h3 className={exhibitTitleClass}>Regional Tectonic Setting</h3>
-      <div className="space-y-3 text-sm"> {/* Increased space-y-3 for better separation */}
+      <div className="space-y-3 text-sm"> {/* Note: "Increased space-y-3 for better separation" comment is preserved if it was on this line, or removed if it was on the line below that gets modified. Adjusted to keep it simple. */}
         <div>
-          <p>
-            <strong>Likely Fault Type:</strong>{' '}
-            {faultTypeInfo && faultTypeInfo.faultType
-              ? formatFaultType(faultTypeInfo.faultType)
-              : 'Moment Tensor data not available'}
-            {isValidNumber(rakeValue) && preferredNodalPlane && (
-              <span className="text-xs text-slate-500"> (Rake: {rakeValue.toFixed(1)}° on {preferredNodalPlane})</span>
-            )}
-          </p>
+          <div className="flex items-center mb-1"> {/* Flex container for icon and title */}
+            {faultTypeInfo && faultTypeInfo.faultType && getFaultIcon(faultTypeInfo.faultType)}
+            <p className="font-semibold"> {/* Made "Likely Fault Type" part of the same paragraph for better alignment with icon */}
+              Likely Fault Type:{' '}
+              <span className="font-normal"> {/* Display type with normal weight */}
+                {faultTypeInfo && faultTypeInfo.faultType
+                  ? formatFaultType(faultTypeInfo.faultType)
+                  : 'Moment Tensor data not available'}
+              </span>
+              {isValidNumber(rakeValue) && preferredNodalPlane && (
+                <span className="text-xs text-slate-500 ml-1"> (Rake: {rakeValue.toFixed(1)}° on {preferredNodalPlane})</span>
+              )}
+            </p>
+          </div>
           {faultTypeInfo && faultTypeInfo.faultType && (
             <p className="text-xs text-slate-600 mt-1">
               {getFaultTypeExplanation(faultTypeInfo.faultType)}
@@ -121,17 +171,22 @@ const EarthquakeRegionalFaultsPanel = ({
              <p className="text-xs text-slate-600 mt-1">
               Moment tensor data, which helps determine fault type, is not available for this event. This is common for smaller earthquakes.
             </p>
-          )}
+           )}
         </div>
 
         {/* Nearby Tectonic Boundary Section */}
         <div>
-          <p>
-            <strong>Nearest Major Tectonic Feature:</strong>{' '}
-            {closestBoundaryDisplayInfo
-              ? `~${closestBoundaryDisplayInfo.distance} km to a ${formatBoundaryType(closestBoundaryDisplayInfo.type)} boundary.` // Simplified name part
-              : `No major plate boundary identified within ${MAX_DISTANCE_KM_FOR_BOUNDARY} km.`}
-          </p>
+          <div className="flex items-center mb-1"> {/* Flex container for icon and title */}
+            {closestBoundaryDisplayInfo && closestBoundaryDisplayInfo.type && getBoundaryIcon(closestBoundaryDisplayInfo.type)}
+            <p className="font-semibold"> {/* Made label part of the same paragraph for better alignment */}
+              Nearest Major Tectonic Feature:{' '}
+              <span className="font-normal">
+                {closestBoundaryDisplayInfo
+                  ? `~${closestBoundaryDisplayInfo.distance} km to a ${formatBoundaryType(closestBoundaryDisplayInfo.type)} boundary.`
+                  : `No major plate boundary identified within ${MAX_DISTANCE_KM_FOR_BOUNDARY} km.`}
+              </span>
+            </p>
+          </div>
           {closestBoundaryDisplayInfo && (
             <p className="text-xs text-slate-600 mt-1">
               This earthquake occurred in the vicinity of the boundary between tectonic plates. The interaction at these boundaries is a primary cause of seismic activity. The type of boundary ({formatBoundaryType(closestBoundaryDisplayInfo.type)}) influences the kinds of earthquakes experienced.
