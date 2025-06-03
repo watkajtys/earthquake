@@ -9,6 +9,19 @@ import { UIStateProvider } from '../contexts/UIStateContext.jsx'; // Import the 
 
 vi.mock('../utils/fetchUtils.js'); // Mock fetchDataCb
 
+// Attempt to directly mock usgsApiService as well
+vi.mock('../services/usgsApiService.js', async () => {
+  const actual = await vi.importActual('../services/usgsApiService.js');
+  return {
+    ...actual,
+    fetchUsgsData: vi.fn().mockResolvedValue({
+      // Provide a generic successful response structure
+      features: [{ id: 'mockedGlobalFetch', properties: {}, geometry: {} }],
+      metadata: { count: 1 }
+    }),
+  };
+});
+
 // Mock IntersectionObserver
 class IntersectionObserver {
   observe = vi.fn();

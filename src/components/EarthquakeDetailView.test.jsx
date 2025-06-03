@@ -241,6 +241,9 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     const localErrorMessage = 'Network error: Failed to fetch details';
     fetchSpy.mockRejectedValueOnce(new Error(localErrorMessage));
 
+    // Spy on console.error and silence it for this test
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     render(
       <EarthquakeDetailView
         detailUrl={mockDetailUrl}
@@ -259,6 +262,9 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     expect(screen.queryByText(baseMockDetailData.properties.title)).not.toBeInTheDocument();
     expect(screen.queryByText(`Magnitude: ${baseMockDetailData.properties.mag}`)).not.toBeInTheDocument();
     expect(screen.queryByTestId('mock-earthquake-map')).not.toBeInTheDocument();
+
+    // Restore console.error
+    consoleErrorSpy.mockRestore();
   });
 
   it('calls onDataLoadedForSeo with correct data when details are fetched', async () => {
@@ -569,6 +575,9 @@ describe('EarthquakeDetailView Accessibility', () => {
   it('should have no axe violations in error state', async () => {
     fetchSpy.mockRejectedValueOnce(new Error('Failed to fetch details for axe test'));
 
+    // Spy on console.error and silence it for this test
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     const { container } = render(
       <EarthquakeDetailView
         detailUrl={mockDetailUrl}
@@ -585,5 +594,8 @@ describe('EarthquakeDetailView Accessibility', () => {
     await screen.findByText(/Error Loading Details/i);
     const results = await axe(container); // axe should be available globally via setupTests.js
     expect(results).toHaveNoViolations();
+
+    // Restore console.error
+    consoleErrorSpy.mockRestore();
   });
 });
