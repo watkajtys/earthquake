@@ -152,7 +152,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
     <MapContainer
       center={mapCenter}
       zoom={initialZoom}
-      style={{ height: '200px', width: '100%' }} // Width is 100% of its container
+      style={{ height: '200px', width: containerWidth ? `${containerWidth}px` : '100%' }} // Width is 100% of its container
       scrollWheelZoom={false}
       ref={mapRef}
       maxZoom={18}
