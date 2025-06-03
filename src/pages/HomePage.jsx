@@ -797,96 +797,84 @@ function App() {
                     <ErrorBoundary>
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <Routes>
-                                <Route
-                                  path="/"
-                                  element={
-                                    <>
-                                      <SeoMetadata
-                                        title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
-                                        description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
-                                        keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
-                                        pageUrl="https://earthquakeslive.com/"
-                                        canonicalUrl="https://earthquakeslive.com/"
-                                        locale="en_US"
-                                        type="website"
-                                      />
-                                      <GlobeLayout
-                                        globeFocusLng={globeFocusLng}
-                                        handleQuakeClick={handleQuakeClick}
-                                        getMagnitudeColor={getMagnitudeColor} // Pass the function directly
-                                        coastlineData={coastlineData}
-                                        tectonicPlatesData={tectonicPlatesData}
-                                        activeClusters={activeClusters}
-                                        lastMajorQuake={lastMajorQuake}
-                                        formatTimeDuration={formatTimeDuration}
-                                        handleNotableQuakeSelect={handleNotableQuakeSelect}
-                                        keyStatsForGlobe={keyStatsForGlobe}
-                                      />
-                                    </>
-                                  }
-                                >
-                                  {/* Child routes for modals */}
-                                  <Route
-                                    path="quake/:detailUrlParam"
-                                    element={<EarthquakeDetailModalComponent
-                                        // Props are mostly from context or params
-                                    />}
-                                  />
-                                  <Route
-                                    path="cluster/:clusterId"
-                                    element={
-                                      <ClusterDetailModalWrapper
-                                        overviewClusters={overviewClusters}
-                                        formatDate={formatDate}
-                                        getMagnitudeColorStyle={getMagnitudeColorStyle}
-                                        onIndividualQuakeSelect={handleQuakeClick}
-                                      />
-                                    }
-                                  />
-                                </Route>
-                                <Route path="/overview" element={
-                                    <>
-                                        <SeoMetadata
-                                        title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
-                                        description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
-                                        keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
-                                        pageUrl="https://earthquakeslive.com/"
-                                        canonicalUrl="https://earthquakeslive.com/"
-                                        locale="en_US"
-                                        type="website"
+                              <Route
+                                path="/"
+                                element={
+                                  <>
+                                    <SeoMetadata
+                                      title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
+                                      description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
+                                      keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
+                                      pageUrl="https://earthquakeslive.com/"
+                                      canonicalUrl="https://earthquakeslive.com/"
+                                      locale="en_US"
+                                      type="website"
                                     />
-                            <OverviewPage
-                                // Props sourced from context in OverviewPage are removed here
-                                ALERT_LEVELS={ALERT_LEVELS}
-                                getMagnitudeColor={getMagnitudeColor}
-                                formatDate={formatDate}
-                                handleQuakeClick={handleQuakeClick}
-                                latestFeelableQuakesSnippet={latestFeelableQuakesSnippet} // Derived in HomePage
-                                formatTimeAgo={formatTimeAgo}
-                                formatTimeDuration={formatTimeDuration}
-                                getRegionForEarthquake={getRegionForEarthquake}
-                                calculateStats={calculateStats}
-                                overviewClusters={overviewClusters} // Derived in HomePage
-                                handleClusterSummaryClick={handleClusterSummaryClick}
-                                topActiveRegionsOverview={topActiveRegionsOverview} // Derived in HomePage
-                                REGIONS={REGIONS}
-                                navigate={navigate}
-                            />
-                        } />
-                        <Route path="/feeds" element={
-                            <FeedsPageLayoutComponent
-                                // Props sourced from context or derived internally in FeedsPageLayoutComponent are removed
-                                handleQuakeClick={handleQuakeClick}
-                                getFeedPageSeoInfo={getFeedPageSeoInfo}
-                                calculateStats={calculateStats}
-                                getMagnitudeColorStyle={getMagnitudeColorStyle}
-                                formatTimeAgo={formatTimeAgo}
-                                formatDate={formatDate}
-                            />
-                        } />
-                        <Route path="/learn" element={<LearnPage />} />
-                        {/* Modal routes are now nested under "/" route */}
-                    </Routes>
+                                    <GlobeLayout
+                                      globeFocusLng={globeFocusLng}
+                                      handleQuakeClick={handleQuakeClick}
+                                      getMagnitudeColor={getMagnitudeColor}
+                                      coastlineData={coastlineData}
+                                      tectonicPlatesData={tectonicPlatesData}
+                                      activeClusters={activeClusters}
+                                      lastMajorQuake={lastMajorQuake}
+                                      formatTimeDuration={formatTimeDuration}
+                                      handleNotableQuakeSelect={handleNotableQuakeSelect}
+                                      keyStatsForGlobe={keyStatsForGlobe}
+                                    />
+                                  </>
+                                }
+                              >
+                                {/* Child routes for modals correctly nested HERE */}
+                                <Route
+                                  path="quake/:detailUrlParam"
+                                  element={<EarthquakeDetailModalComponent />}
+                                />
+                                <Route
+                                  path="cluster/:clusterId"
+                                  element={
+                                    <ClusterDetailModalWrapper
+                                      overviewClusters={overviewClusters}
+                                      formatDate={formatDate}
+                                      getMagnitudeColorStyle={getMagnitudeColorStyle}
+                                      onIndividualQuakeSelect={handleQuakeClick}
+                                    />
+                                  }
+                                />
+                              </Route> {/* End of main "/" route and its children */}
+
+                              {/* Other top-level routes as siblings */}
+                              <Route path="/overview" element={
+                                  <OverviewPage
+                                    ALERT_LEVELS={ALERT_LEVELS}
+                                    getMagnitudeColor={getMagnitudeColor}
+                                    formatDate={formatDate}
+                                    handleQuakeClick={handleQuakeClick}
+                                    latestFeelableQuakesSnippet={latestFeelableQuakesSnippet}
+                                    formatTimeAgo={formatTimeAgo}
+                                    formatTimeDuration={formatTimeDuration}
+                                    getRegionForEarthquake={getRegionForEarthquake}
+                                    calculateStats={calculateStats}
+                                    overviewClusters={overviewClusters}
+                                    handleClusterSummaryClick={handleClusterSummaryClick}
+                                    topActiveRegionsOverview={topActiveRegionsOverview}
+                                    REGIONS={REGIONS}
+                                    navigate={navigate}
+                                  />
+                              } />
+                              <Route path="/feeds" element={
+                                  <FeedsPageLayoutComponent
+                                    handleQuakeClick={handleQuakeClick}
+                                    getFeedPageSeoInfo={getFeedPageSeoInfo}
+                                    calculateStats={calculateStats}
+                                    getMagnitudeColorStyle={getMagnitudeColorStyle}
+                                    formatTimeAgo={formatTimeAgo}
+                                    formatDate={formatDate}
+                                  />
+                              } />
+                              <Route path="/learn" element={<LearnPage />} />
+
+                            </Routes>
                 </Suspense>
             </ErrorBoundary>
                 </main>
