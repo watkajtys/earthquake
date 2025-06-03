@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import SkeletonText from './SkeletonText';
-import SkeletonTableRow from './SkeletonTableRow';
+import SkeletonText from './skeletons/SkeletonText';
+import SkeletonTableRow from './skeletons/SkeletonTableRow';
 
 /**
  * A React component that displays a paginated and sortable table of earthquake data.
