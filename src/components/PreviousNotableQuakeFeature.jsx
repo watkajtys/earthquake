@@ -82,7 +82,7 @@ const PreviousNotableQuakeFeature = ({
             </p>
             <button
                 onClick={() => onNotableQuakeSelect(displayQuake.originalQuake)}
-                className="text-[10px] bg-sky-600 hover:bg-sky-500 text-white font-semibold py-1 px-1.5 rounded w-full transition-colors mt-0.5" // Slightly different button color
+                className="text-xs bg-slate-600 hover:bg-slate-500 focus:bg-slate-700 text-white font-medium py-1.5 px-3 rounded-md w-full transition-colors mt-0.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" // Slightly different button color
             >
                 {(displayQuake.url) ? 'View Details' : 'More Info'}
             </button>
