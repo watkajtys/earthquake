@@ -12,6 +12,7 @@ import {
     INITIAL_LOADING_MESSAGES,
     LOADING_MESSAGE_INTERVAL_MS
 } from '../constants/appConstants';
+import { getMagnitudeColor } from '../utils/utils.js'; // Added import
 
 const EarthquakeDataContext = createContext(null);
 
@@ -55,6 +56,112 @@ const consolidateMajorQuakesLogic = (currentLastMajor, currentPreviousMajor, new
     };
 };
 
+// Helper function for random sampling (Fisher-Yates shuffle)
+const sampleArray = (array, sampleSize) => {
+    if (!Array.isArray(array) || array.length === 0) return [];
+    if (sampleSize >= array.length) return [...array]; // Return a copy if sample size is larger or equal
+
+    const shuffled = [...array]; // Create a copy to avoid mutating the original array
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; // Swap elements
+    }
+    return shuffled.slice(0, sampleSize);
+};
+
+// Helper function for sampling with priority for significant earthquakes
+function sampleArrayWithPriority(fullArray, sampleSize, priorityMagnitudeThreshold) {
+    if (!fullArray || fullArray.length === 0) {
+        return [];
+    }
+    if (sampleSize <= 0) {
+        return [];
+    }
+
+    const priorityQuakes = fullArray.filter(
+        q => q.properties && typeof q.properties.mag === 'number' && q.properties.mag >= priorityMagnitudeThreshold
+    );
+
+    const otherQuakes = fullArray.filter(
+        q => !q.properties || typeof q.properties.mag !== 'number' || q.properties.mag < priorityMagnitudeThreshold
+    );
+
+    if (priorityQuakes.length >= sampleSize) {
+        // If priority quakes alone meet or exceed sample size, sample from them
+        return sampleArray(priorityQuakes, sampleSize);
+    } else {
+        // All priority quakes are included
+        const remainingSlots = sampleSize - priorityQuakes.length;
+        // The check 'remainingSlots <= 0' is theoretically redundant here if priorityQuakes.length < sampleSize,
+        // but kept for robustness, though it implies sampleSize was already filled by priorityQuakes.
+        // If remainingSlots is 0 or less, means priorityQuakes filled or exceeded sampleSize.
+        // However, the outer 'if' handles priorityQuakes.length >= sampleSize.
+        // This path means priorityQuakes.length < sampleSize, so remainingSlots > 0.
+
+        // Sample from otherQuakes to fill remaining slots
+        const sampledOtherQuakes = sampleArray(otherQuakes, remainingSlots);
+
+        return [...priorityQuakes, ...sampledOtherQuakes];
+    }
+}
+
+// const SCATTER_PLOT_SAMPLING_THRESHOLD = 500; // Commented out old threshold
+const SCATTER_SAMPLING_THRESHOLD_7_DAYS = 300;
+const SCATTER_SAMPLING_THRESHOLD_14_DAYS = 500;
+const SCATTER_SAMPLING_THRESHOLD_30_DAYS = 700;
+
+// Define magnitude ranges locally for pre-aggregation
+const MAGNITUDE_RANGES = [
+    {name: '<1', min: -Infinity, max: 0.99},
+    {name : '1-1.9', min : 1, max : 1.99},
+    {name: '2-2.9', min: 2, max: 2.99},
+    {name : '3-3.9', min : 3, max : 3.99},
+    {name: '4-4.9', min: 4, max: 4.99},
+    {name : '5-5.9', min : 5, max : 5.99},
+    {name: '6-6.9', min: 6, max: 6.99},
+    {name : '7+', min : 7, max : Infinity},
+];
+
+// Helper to format date as 'MMM D' (e.g., "Oct 26") - Moved to global scope
+const formatDateForTimeline = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+// Helper to generate initial daily counts array - Moved to global scope
+const getInitialDailyCounts = (numDays, baseTime) => {
+    const counts = [];
+    for (let i = 0; i < numDays; i++) {
+        const date = new Date(baseTime);
+        date.setDate(date.getDate() - i);
+        counts.push({ dateString: formatDateForTimeline(date.getTime()), count: 0 });
+    }
+    return counts.reverse(); // Ensure chronological order
+};
+
+// Helper to calculate Magnitude Distributions - Moved to global scope
+const calculateMagnitudeDistribution = (earthquakes) => {
+    const distribution = MAGNITUDE_RANGES.map(range => ({
+        name: range.name,
+        count: 0,
+        color: getMagnitudeColor(range.min === -Infinity ? 0 : range.min) // Use range.min for color, handle -Infinity
+    }));
+
+    earthquakes.forEach(quake => {
+        const mag = quake.properties.mag;
+        if (mag === null || typeof mag !== 'number') return;
+
+        for (const range of distribution) {
+            // Find the correct range from MAGNITUDE_RANGES to check min/max
+            const rangeDetails = MAGNITUDE_RANGES.find(r => r.name === range.name);
+            if (mag >= rangeDetails.min && mag <= rangeDetails.max) {
+                range.count++;
+                break;
+            }
+        }
+    });
+    return distribution;
+};
 
 const initialState = {
     isLoadingDaily: true,
@@ -86,6 +193,15 @@ const initialState = {
     loadingMessageIndex: 0,
     currentLoadingMessages: INITIAL_LOADING_MESSAGES,
     hasAttemptedMonthlyLoad: false, // Added this from previous useState
+    dailyCounts14Days: [],
+    dailyCounts30Days: [],
+    sampledEarthquakesLast14Days: [],
+    sampledEarthquakesLast30Days: [],
+    magnitudeDistribution14Days: [],
+    magnitudeDistribution30Days: [],
+    dailyCounts7Days: [],
+    sampledEarthquakesLast7Days: [],
+    magnitudeDistribution7Days: [],
 };
 
 const actionTypes = {
@@ -129,22 +245,44 @@ function earthquakeReducer(state, action) {
             };
         }
         case actionTypes.WEEKLY_DATA_PROCESSED: {
-            const { features, fetchTime } = action.payload; // Assuming fetchTime might be useful, though not directly used for weekly state here
+            const { features, fetchTime } = action.payload;
             const last72HoursData = filterByTime(features, 72, 0, fetchTime);
-            
+            const currentEarthquakesLast7Days = filterByTime(features, 7 * 24, 0, fetchTime);
+
             const weeklyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
-            // Pass dailyMajors from state if available and recent, or an empty array.
-            // For simplicity here, we'll assume weekly can consolidate its own, or daily has already run.
-            // A more robust solution might involve passing daily fetched majors if they are newer than state's.
             const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, weeklyMajors);
+
+            // Calculate dailyCounts7Days
+            const dailyCounts7Days = getInitialDailyCounts(7, fetchTime);
+            const sevenDaysAgo = fetchTime - 7 * 24 * 3600 * 1000;
+            currentEarthquakesLast7Days.forEach(quake => {
+                const quakeTime = quake.properties.time;
+                // Ensure quake is within the 7-day window for daily counts (already filtered by currentEarthquakesLast7Days, but good for sanity)
+                if (quakeTime >= sevenDaysAgo && quakeTime <= fetchTime) {
+                    const dateString = formatDateForTimeline(quakeTime);
+                    const dayEntry = dailyCounts7Days.find(d => d.dateString === dateString);
+                    if (dayEntry) {
+                        dayEntry.count += 1;
+                    }
+                }
+            });
+
+            // Calculate sampledEarthquakesLast7Days
+            const sampledEarthquakesLast7Days = sampleArrayWithPriority(currentEarthquakesLast7Days, SCATTER_SAMPLING_THRESHOLD_7_DAYS, MAJOR_QUAKE_THRESHOLD);
+
+            // Calculate magnitudeDistribution7Days
+            const magnitudeDistribution7Days = calculateMagnitudeDistribution(currentEarthquakesLast7Days);
 
             return {
                 ...state,
                 isLoadingWeekly: false,
                 earthquakesLast72Hours: last72HoursData,
                 prev24HourData: filterByTime(features, 48, 24, fetchTime),
-                earthquakesLast7Days: filterByTime(features, 7 * 24, 0, fetchTime),
+                earthquakesLast7Days: currentEarthquakesLast7Days,
                 globeEarthquakes: [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900),
+                dailyCounts7Days,
+                sampledEarthquakesLast7Days,
+                magnitudeDistribution7Days,
                 ...majorQuakeUpdates,
             };
         }
@@ -152,6 +290,39 @@ function earthquakeReducer(state, action) {
             const { features, fetchTime } = action.payload;
             const monthlyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
             const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, monthlyMajors);
+
+            const dailyCounts30Days = getInitialDailyCounts(30, fetchTime);
+            const dailyCounts14Days = getInitialDailyCounts(14, fetchTime);
+
+            // Filter earthquakes for the last 30 days from fetchTime
+            const thirtyDaysAgo = fetchTime - 30 * 24 * 3600 * 1000;
+            const fourteenDaysAgo = fetchTime - 14 * 24 * 3600 * 1000;
+
+            const currentEarthquakesLast30Days = filterMonthlyByTime(features, 30, 0, fetchTime);
+            const currentEarthquakesLast14Days = filterMonthlyByTime(features, 14, 0, fetchTime);
+
+            const magnitudeDistribution30Days = calculateMagnitudeDistribution(currentEarthquakesLast30Days);
+            const magnitudeDistribution14Days = calculateMagnitudeDistribution(currentEarthquakesLast14Days);
+
+            features.forEach(quake => {
+                const quakeTime = quake.properties.time;
+                const dateString = formatDateForTimeline(quakeTime);
+
+                // Check if within 30 days
+                if (quakeTime >= thirtyDaysAgo && quakeTime <= fetchTime) {
+                    const dayEntry30 = dailyCounts30Days.find(d => d.dateString === dateString);
+                    if (dayEntry30) {
+                        dayEntry30.count += 1;
+                    }
+                }
+                // Check if within 14 days
+                if (quakeTime >= fourteenDaysAgo && quakeTime <= fetchTime) {
+                    const dayEntry14 = dailyCounts14Days.find(d => d.dateString === dateString);
+                    if (dayEntry14) {
+                        dayEntry14.count += 1;
+                    }
+                }
+            });
             
             return {
                 ...state,
@@ -159,8 +330,14 @@ function earthquakeReducer(state, action) {
                 hasAttemptedMonthlyLoad: true,
                 monthlyError: null, // Clear error on success
                 allEarthquakes: features,
-                earthquakesLast14Days: filterMonthlyByTime(features, 14, 0, fetchTime),
-                earthquakesLast30Days: filterMonthlyByTime(features, 30, 0, fetchTime),
+                earthquakesLast14Days: currentEarthquakesLast14Days,
+                earthquakesLast30Days: currentEarthquakesLast30Days,
+                sampledEarthquakesLast14Days: sampleArrayWithPriority(currentEarthquakesLast14Days, SCATTER_SAMPLING_THRESHOLD_14_DAYS, MAJOR_QUAKE_THRESHOLD),
+                sampledEarthquakesLast30Days: sampleArrayWithPriority(currentEarthquakesLast30Days, SCATTER_SAMPLING_THRESHOLD_30_DAYS, MAJOR_QUAKE_THRESHOLD),
+                dailyCounts14Days, // Add to state
+                dailyCounts30Days, // Add to state
+                magnitudeDistribution14Days, // Add to state
+                magnitudeDistribution30Days, // Add to state
                 prev7DayData: filterMonthlyByTime(features, 14, 7, fetchTime),
                 prev14DayData: filterMonthlyByTime(features, 28, 14, fetchTime),
                 ...majorQuakeUpdates,
@@ -350,6 +527,19 @@ export const EarthquakeDataProvider = ({ children }) => {
         significantQuakes7Days_ctx,
         feelableQuakes30Days_ctx,
         significantQuakes30Days_ctx,
+        // Add dailyCounts to context for direct access if needed, though they are in state
+        dailyCounts14Days: state.dailyCounts14Days,
+        dailyCounts30Days: state.dailyCounts30Days,
+        // Add sampled earthquake lists to context
+        sampledEarthquakesLast14Days: state.sampledEarthquakesLast14Days,
+        sampledEarthquakesLast30Days: state.sampledEarthquakesLast30Days,
+        // Add magnitude distributions to context
+        magnitudeDistribution14Days: state.magnitudeDistribution14Days,
+        magnitudeDistribution30Days: state.magnitudeDistribution30Days,
+        // Add 7-day aggregated data to context
+        dailyCounts7Days: state.dailyCounts7Days,
+        sampledEarthquakesLast7Days: state.sampledEarthquakesLast7Days,
+        magnitudeDistribution7Days: state.magnitudeDistribution7Days,
     }), [
         state, // Main state object from reducer
         isLoadingInitialData, 
