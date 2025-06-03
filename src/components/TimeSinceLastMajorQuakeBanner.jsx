@@ -83,7 +83,8 @@ if (!lastMajorQuake && !isLoadingInitialData && !isEffectivelyLoadingMonthly) {
     return (<div className="bg-slate-700 p-4 rounded-lg border border-slate-600 text-center text-slate-200">
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">IT HAS BEEN:</p>
 <div
-    className="text-2xl md:text-3xl font-bold text-indigo-400 tracking-tight mb-2 min-h-[36px] md:min-h-[44px] flex items-center justify-center cursor-pointer hover:underline"
+    className="text-2xl md:text-3xl font-bold tracking-tight mb-2 min-h-[36px] md:min-h-[44px] flex items-center justify-center cursor-pointer hover:underline"
+    style={{ color: magColor }}
     onClick={() => {
         if (lastMajorQuake && handleQuakeClick) {
             handleQuakeClick(lastMajorQuake);
