@@ -111,7 +111,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
     return (
         <div
             className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-40 p-4 transition-opacity duration-300 ease-in-out"
-            // onClick={onClose} // Removed backdrop click to close, rely on Esc key and close button
+            onClick={onClose} // Removed backdrop click to close, rely on Esc key and close button
             role="dialog"
             aria-modal="true"
             aria-labelledby="cluster-detail-title"
