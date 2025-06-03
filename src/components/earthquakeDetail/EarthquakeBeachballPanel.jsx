@@ -1,4 +1,5 @@
 import React, { memo } from 'react';
+
 import { isValidNumber, getBeachballPathsAndType, getFaultType } from '../../utils/detailViewUtils.js';
 import SimpleFaultBlockDiagram from './SimpleFaultBlockDiagram.jsx';
 
@@ -66,7 +67,7 @@ function EarthquakeBeachballPanel({
                             );
                         }
                         
-                        const { shadedPaths: canonicalShadedPaths, nodalPlanes: canonicalNodalPlanes } = getBeachballPathsAndType(rake, dip);
+                        const { shadedPaths: canonicalShadedPaths, nodalPlanes: canonicalNodalPlanes } = getBeachballPathsAndType(rake); // dip argument removed
 
                         return (
                             <g transform={`rotate(${orientationStrike}, 60, 60)`}>

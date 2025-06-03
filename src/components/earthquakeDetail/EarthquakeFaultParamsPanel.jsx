@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import InfoSnippet from '../InfoSnippet.jsx';
-import { isValidNumber, formatNumber } from '../../utils/detailViewUtils.js';
+import { isValidNumber, formatNumber } from '../../utils/utils.js';
 
 function EarthquakeFaultParamsPanel({
     selectedFaultPlaneKey,

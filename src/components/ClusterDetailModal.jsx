@@ -110,8 +110,8 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
 
     return (
         <div
-            className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-40 p-4 transition-opacity duration-300 ease-in-out"
-            // onClick={onClose} // Removed backdrop click to close, rely on Esc key and close button
+            className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[51] p-4 transition-opacity duration-300 ease-in-out"
+            onClick={onClose} // Removed backdrop click to close, rely on Esc key and close button
             role="dialog"
             aria-modal="true"
             aria-labelledby="cluster-detail-title"
@@ -119,7 +119,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
             <div
                 ref={modalContentRef}
                 tabIndex="-1" // Make modal container focusable for trap if no inner elements are
-                className="bg-slate-800 p-4 sm:p-6 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-700 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700"
+                className="bg-slate-800 p-4 sm:p-6 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90svh] flex flex-col border border-slate-700 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700"
                 onClick={e => e.stopPropagation()} // Prevent backdrop click from triggering inside modal
             >
                 {/* Header */}
@@ -149,7 +149,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
 
                 {/* Cluster Mini Map */}
                 <div className="my-4"> {/* Added margin for spacing */}
-                    <ClusterMiniMap cluster={cluster} getMagnitudeColor={getMagnitudeColor} />
+                    <ClusterMiniMap cluster={cluster} getMagnitudeColor={getMagnitudeColor} containerRef={modalContentRef} />
                 </div>
 
                 {/* Individual Earthquakes List */}

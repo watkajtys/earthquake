@@ -1,5 +1,5 @@
 import React from 'react';
-import { isValuePresent, isValidNumber, isValidString } from '../../utils/detailViewUtils.js';
+import { isValuePresent, isValidNumber, isValidString } from '../../utils/utils.js';
 
 function EarthquakeCitizenSciencePanel({
     properties,

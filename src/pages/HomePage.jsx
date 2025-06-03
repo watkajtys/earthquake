@@ -1,5 +1,5 @@
 // src/pages/HomePage.jsx
-import React, { useEffect, useMemo, useCallback, useRef, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime
+import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime, removed useRef
 import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
@@ -82,7 +82,7 @@ const GlobeLayout = (props) => {
   } = props;
 
   return (
-    <div className="lg:block h-full w-full"> {/* Base container for the globe and its fixed UI elements */}
+    <div className="block h-full w-full"> {/* Base container for the globe and its fixed UI elements */}
       <InteractiveGlobeView
         defaultFocusLat={20}
         defaultFocusLng={globeFocusLng}
@@ -196,9 +196,9 @@ function App() {
     // Use the UIStateContext for sidebar view management and other UI states
     const { 
         activeSidebarView, setActiveSidebarView,
-        activeFeedPeriod, setActiveFeedPeriod, // from UIStateContext
+        activeFeedPeriod, // setActiveFeedPeriod removed
         globeFocusLng, setGlobeFocusLng,       // from UIStateContext
-        focusedNotableQuake, setFocusedNotableQuake // from UIStateContext
+        setFocusedNotableQuake // focusedNotableQuake removed
     } = useUIState(); // Use the context hook
 
     // appRenderTrigger removed (unused)
@@ -349,13 +349,13 @@ function App() {
         earthquakesLast72Hours,
         earthquakesLast7Days,
         prev24HourData,
-        globeEarthquakes, // This will be used by InteractiveGlobeView via its own context consumption
+        // globeEarthquakes, // Removed, used by context in InteractiveGlobeView
         hasRecentTsunamiWarning,
         highestRecentAlert,
         activeAlertTriggeringQuakes,
         lastMajorQuake, // Setters (setLastMajorQuake, etc.) are managed by context
-        previousMajorQuake,
-        timeBetweenPreviousMajorQuakes,
+        // previousMajorQuake, // Removed, used by context in TimeSinceLastMajorQuakeBanner
+        // timeBetweenPreviousMajorQuakes, // Removed, used by context in TimeSinceLastMajorQuakeBanner
         currentLoadingMessage,
         isInitialAppLoad,
         isLoadingMonthly,
@@ -374,6 +374,7 @@ function App() {
         significantQuakes30Days_ctx
     } = useEarthquakeDataState();
 
+    // Unused currentFeedTitle, currentFeedisLoading, previousDataForCurrentFeed useMemo hooks will be removed below
 
     const latestFeelableQuakesSnippet = useMemo(() => {
         if (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0) return [];
@@ -407,45 +408,45 @@ function App() {
         feelableQuakes30Days_ctx, significantQuakes30Days_ctx
     ]);
 
-    const currentFeedTitle = useMemo(() => {
-        const filterPeriodSuffix = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? "(Last 30 Days)" : "(Last 7 Days)";
-        switch (activeFeedPeriod) {
-            case 'last_hour': return "Earthquakes (Last Hour)";
-            case 'last_24_hours': return "Earthquakes (Last 24 Hours)";
-            case 'last_7_days': return "Earthquakes (Last 7 Days)";
-            case 'last_14_days': return "Earthquakes (Last 14 Days)";
-            case 'last_30_days': return "Earthquakes (Last 30 Days)";
-            case 'feelable_quakes': return `Feelable Quakes (M${FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+) ${filterPeriodSuffix}`;
-            case 'significant_quakes': return `Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) ${filterPeriodSuffix}`;
-            default: return "Earthquakes (Last 24 Hours)";
-        }
-    }, [activeFeedPeriod, hasAttemptedMonthlyLoad, allEarthquakes]);
+    // const currentFeedTitle = useMemo(() => { // Unused variable
+    //     const filterPeriodSuffix = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? "(Last 30 Days)" : "(Last 7 Days)";
+    //     switch (activeFeedPeriod) {
+    //         case 'last_hour': return "Earthquakes (Last Hour)";
+    //         case 'last_24_hours': return "Earthquakes (Last 24 Hours)";
+    //         case 'last_7_days': return "Earthquakes (Last 7 Days)";
+    //         case 'last_14_days': return "Earthquakes (Last 14 Days)";
+    //         case 'last_30_days': return "Earthquakes (Last 30 Days)";
+    //         case 'feelable_quakes': return `Feelable Quakes (M${FEELABLE_QUAKE_THRESHOLD.toFixed(1)}+) ${filterPeriodSuffix}`;
+    //         case 'significant_quakes': return `Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) ${filterPeriodSuffix}`;
+    //         default: return "Earthquakes (Last 24 Hours)";
+    //     }
+    // }, [activeFeedPeriod, hasAttemptedMonthlyLoad, allEarthquakes]);
 
-    const currentFeedisLoading = useMemo(() => {
-        if (activeFeedPeriod === 'last_hour') return isLoadingDaily && (!earthquakesLastHour || earthquakesLastHour.length === 0);
-        if (activeFeedPeriod === 'last_24_hours') return isLoadingDaily && (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0);
-        if (activeFeedPeriod === 'last_7_days') return isLoadingWeekly && (!earthquakesLast7Days || earthquakesLast7Days.length === 0);
-        if (activeFeedPeriod === 'feelable_quakes' || activeFeedPeriod === 'significant_quakes') {
-            if (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) return isLoadingMonthly && allEarthquakes.length === 0;
-            return isLoadingWeekly && (!earthquakesLast7Days || earthquakesLast7Days.length === 0);
-        }
-        if ((activeFeedPeriod === 'last_14_days' || activeFeedPeriod === 'last_30_days')) {
-            return isLoadingMonthly && (!allEarthquakes || allEarthquakes.length === 0);
-        }
-        return currentFeedData === null;
-    }, [activeFeedPeriod, isLoadingDaily, isLoadingWeekly, isLoadingMonthly,
-        earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
-        allEarthquakes, hasAttemptedMonthlyLoad, currentFeedData]);
+    // const currentFeedisLoading = useMemo(() => { // Unused variable
+    //     if (activeFeedPeriod === 'last_hour') return isLoadingDaily && (!earthquakesLastHour || earthquakesLastHour.length === 0);
+    //     if (activeFeedPeriod === 'last_24_hours') return isLoadingDaily && (!earthquakesLast24Hours || earthquakesLast24Hours.length === 0);
+    //     if (activeFeedPeriod === 'last_7_days') return isLoadingWeekly && (!earthquakesLast7Days || earthquakesLast7Days.length === 0);
+    //     if (activeFeedPeriod === 'feelable_quakes' || activeFeedPeriod === 'significant_quakes') {
+    //         if (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) return isLoadingMonthly && allEarthquakes.length === 0;
+    //         return isLoadingWeekly && (!earthquakesLast7Days || earthquakesLast7Days.length === 0);
+    //     }
+    //     if ((activeFeedPeriod === 'last_14_days' || activeFeedPeriod === 'last_30_days')) {
+    //         return isLoadingMonthly && (!allEarthquakes || allEarthquakes.length === 0);
+    //     }
+    //     return currentFeedData === null;
+    // }, [activeFeedPeriod, isLoadingDaily, isLoadingWeekly, isLoadingMonthly,
+    //     earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
+    //     allEarthquakes, hasAttemptedMonthlyLoad, currentFeedData]);
 
-    const previousDataForCurrentFeed = useMemo(() => {
-        switch (activeFeedPeriod) {
-            case 'last_hour': return earthquakesPriorHour;
-            case 'last_24_hours': return prev24HourData; // from useEarthquakeData
-            case 'last_7_days': return prev7DayData;     // from useMonthlyEarthquakeData
-            case 'last_14_days': return prev14DayData;   // from useMonthlyEarthquakeData
-            default: return null;
-        }
-    }, [activeFeedPeriod, earthquakesPriorHour, prev24HourData, prev7DayData, prev14DayData]);
+    // const previousDataForCurrentFeed = useMemo(() => { // Unused variable
+    //     switch (activeFeedPeriod) {
+    //         case 'last_hour': return earthquakesPriorHour;
+    //         case 'last_24_hours': return prev24HourData; // from useEarthquakeData
+    //         case 'last_7_days': return prev7DayData;     // from useMonthlyEarthquakeData
+    //         case 'last_14_days': return prev14DayData;   // from useMonthlyEarthquakeData
+    //         default: return null;
+    //     }
+    // }, [activeFeedPeriod, earthquakesPriorHour, prev24HourData, prev7DayData, prev14DayData]);
 
     // Old handleLoadMonthlyData is removed. `loadMonthlyData` from the hook is used instead.
 

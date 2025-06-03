@@ -1,53 +1,15 @@
 // Helper Functions
 
 // This function is used by getBeachballPathsAndType
-const isValidNumber = (num) => {
-    const parsedNum = parseFloat(num);
-    return typeof parsedNum === 'number' && !isNaN(parsedNum);
-};
+// isValidNumber was moved to utils.js
+import { isValidNumber } from './utils.js';
 
-export const formatDate = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    return new Date(timestamp).toLocaleString([], { dateStyle: 'full', timeStyle: 'long' });
-};
 
-export { isValidNumber }; // Exporting it separately as it's used by another function in this file
-
-export const isValidString = (str) => {
-    return typeof str === 'string' && str.trim() !== '';
-};
-
-export const isValuePresent = (value) => {
-    return value !== null && value !== undefined;
-};
-
-export const formatNumber = (num, precision = 1) => {
-    const number = parseFloat(num);
-    if (Number.isNaN(number)) return 'N/A';
-    return number.toFixed(precision);
-};
-
-export const formatLargeNumber = (num) => {
-    if (!isValidNumber(num)) return 'N/A'; // Uses local isValidNumber
-    if (num === 0) return '0';
-    const numAbs = Math.abs(num);
-    let value; let suffix = '';
-    if (numAbs < 1e3) { value = num.toLocaleString(undefined, { maximumFractionDigits: 2 }); }
-    else if (numAbs < 1e6) { value = (num / 1e3).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' thousand'; }
-    else if (numAbs < 1e9) { value = (num / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' million'; }
-    else if (numAbs < 1e12) { value = (num / 1e9).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' billion'; }
-    else if (numAbs < 1e15) { value = (num / 1e12).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' trillion'; }
-    else if (numAbs < 1e18) { value = (num / 1e15).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' quadrillion';}
-    else if (numAbs < 1e21) { value = (num / 1e18).toLocaleString(undefined, { maximumFractionDigits: 2 }); suffix = ' quintillion';}
-    else { const expFormat = num.toExponential(2); const parts = expFormat.split('e+'); return parts.length === 2 ? `${parts[0]} x 10^${parts[1]}` : expFormat; }
-    return value + suffix;
-};
-
-export const getBeachballPathsAndType = (rake, dip = 45) => {
+export const getBeachballPathsAndType = (rake) => { // dip parameter removed
     let faultType = 'UNKNOWN';
     const r = parseFloat(rake);
 
-    if (!isValidNumber(r)) return { shadedPaths: [], faultType, nodalPlanes: [] }; // Uses local isValidNumber
+    if (!isValidNumber(r)) return { shadedPaths: [], faultType, nodalPlanes: [] }; // Uses imported isValidNumber
 
     if ((r >= -22.5 && r <= 22.5) || r > 157.5 || r < -157.5) {
         faultType = 'STRIKE_SLIP';

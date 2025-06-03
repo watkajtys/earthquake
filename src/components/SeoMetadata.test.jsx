@@ -162,7 +162,7 @@ describe('SeoMetadata Component', () => {
   test('website JSON-LD script persists on unmount', () => {
     const { unmount } = render(<SeoMetadata {...defaultProps} />);
     expect(getWebsiteJsonLdScript()).not.toBeNull();
-    const websiteContent = getWebsiteJsonLdScript().textContent;
+    // const websiteContent = getWebsiteJsonLdScript().textContent; // Unused variable removed
 
     unmount();
 

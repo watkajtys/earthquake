@@ -215,7 +215,7 @@ const actionTypes = {
     SET_LOADING_MESSAGES: 'SET_LOADING_MESSAGES', // For setting initial messages
 };
 
-function earthquakeReducer(state, action) {
+function earthquakeReducer(state = initialState, action) { // Set initialState as default for state
     switch (action.type) {
         case actionTypes.SET_LOADING_FLAGS:
             return { ...state, ...action.payload };
@@ -247,6 +247,17 @@ function earthquakeReducer(state, action) {
         case actionTypes.WEEKLY_DATA_PROCESSED: {
             const { features, fetchTime } = action.payload;
             const last72HoursData = filterByTime(features, 72, 0, fetchTime);
+
+            // Deduplication step
+            const uniqueEarthquakeIds = new Set();
+            const deduplicatedLast72HoursData = last72HoursData.filter(quake => {
+                if (!uniqueEarthquakeIds.has(quake.id)) {
+                    uniqueEarthquakeIds.add(quake.id);
+                    return true;
+                }
+                return false;
+            });
+
             const currentEarthquakesLast7Days = filterByTime(features, 7 * 24, 0, fetchTime);
 
             const weeklyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
@@ -276,10 +287,10 @@ function earthquakeReducer(state, action) {
             return {
                 ...state,
                 isLoadingWeekly: false,
-                earthquakesLast72Hours: last72HoursData,
+                earthquakesLast72Hours: deduplicatedLast72HoursData, // Use deduplicated data
                 prev24HourData: filterByTime(features, 48, 24, fetchTime),
                 earthquakesLast7Days: currentEarthquakesLast7Days,
-                globeEarthquakes: [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900),
+                globeEarthquakes: [...deduplicatedLast72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900),
                 dailyCounts7Days,
                 sampledEarthquakesLast7Days,
                 magnitudeDistribution7Days,
@@ -564,4 +575,4 @@ export const useEarthquakeDataState = () => {
     return context;
 };
 
-export { EarthquakeDataContext };
+export { EarthquakeDataContext, initialState, actionTypes, earthquakeReducer };
