@@ -143,11 +143,11 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
 
   // Render null or a placeholder if the container isn't ready (e.g., width is 0)
   // This prevents Leaflet errors if it tries to initialize in a zero-size container.
-  if (containerWidth === 0 && originalQuakes.length > 0) { // Check originalQuakes to avoid flash when initially no cluster
+  if (containerWidth === 0) {
       return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map...</div>;
   }
 
-
+  // Only render MapContainer if containerWidth > 0
   return (
     <MapContainer
       center={mapCenter}
