@@ -30,7 +30,10 @@ describe('GlobalLastMajorQuakeTimer', () => {
     });
 
     afterEach(() => {
-        vi.runOnlyPendingTimers();
+        // Ensure any pending timers that might update state are flushed within act
+        act(() => {
+            vi.runOnlyPendingTimers();
+        });
         vi.useRealTimers();
     });
 

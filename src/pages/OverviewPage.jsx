@@ -1,10 +1,15 @@
 // src/pages/OverviewPage.jsx
 import React from 'react';
 import SeoMetadata from '../components/SeoMetadata';
+import AlertDisplay from '../components/AlertDisplay';
+import LatestEvent from '../components/LatestEvent';
+import ActivityList from '../components/ActivityList';
+import ActiveRegionDisplay from '../components/ActiveRegionDisplay';
+import QuickFact from '../components/QuickFact'; // Import the new component
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 import RegionalDistributionList from '../components/RegionalDistributionList';
-import InfoSnippet from '../components/InfoSnippet';
+// InfoSnippet is now imported in QuickFact.jsx
 import ClusterSummaryItem from '../components/ClusterSummaryItem'; // Assuming this is used here
 // Import any other components specific to the previous inline overview content if needed
 
@@ -82,82 +87,29 @@ const OverviewPage = ({
                     Overview
                 </h2>
 
-                {/* Example of how one of the components would be used with passed props */}
-                {currentAlertConfig && (
-                    <div className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}>
-                        <p className="font-bold text-sm mb-1">Active USGS Alert: {currentAlertConfig.text}</p>
-                        <p className="text-xs">{currentAlertConfig.description}</p>
-                    </div>
-                )}
+                {/* Render the AlertDisplay component */}
+                <AlertDisplay
+                    currentAlertConfig={currentAlertConfig}
+                    hasRecentTsunamiWarning={hasRecentTsunamiWarning}
+                    ALERT_LEVELS={ALERT_LEVELS}
+                />
 
-                {hasRecentTsunamiWarning && !currentAlertConfig && (
-                     <div className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs" role="alert">
-                        <p className="font-bold mb-1">Tsunami Information</p>
-                        <p className="text-xs">Recent quakes may indicate tsunami activity. Please check official channels for alerts.</p>
-                    </div>
-                )}
+                {/* Render the LatestEvent component */}
+                <LatestEvent
+                    lastMajorQuake={lastMajorQuake}
+                    getMagnitudeColor={getMagnitudeColor}
+                    formatDate={formatDate}
+                    handleQuakeClick={handleQuakeClick}
+                />
 
-                {/* Last Major Quake section */}
-                {lastMajorQuake && (
-                    <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md">
-                        <h3 className="text-sm font-semibold text-indigo-300 mb-1">Latest Significant Event</h3>
-                        <p className="text-lg font-bold" style={{ color: getMagnitudeColor(lastMajorQuake.properties.mag) }}>
-                            M {lastMajorQuake.properties.mag?.toFixed(1)}
-                        </p>
-                        <p className="text-sm text-slate-300 truncate" title={lastMajorQuake.properties.place}>
-                            {lastMajorQuake.properties.place || "Location details pending..."}
-                        </p>
-                        <p className="text-xs text-slate-300"> {/* Changed from text-slate-400 */}
-                           {formatDate(lastMajorQuake.properties.time)}
-                            {lastMajorQuake.geometry?.coordinates?.[2] !== undefined && `, Depth: ${lastMajorQuake.geometry.coordinates[2].toFixed(1)} km`}
-                        </p>
-                        <button
-                            onClick={() => handleQuakeClick(lastMajorQuake)}
-                            className="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
-                        >
-                            View Details
-                        </button>
-                   </div>
-                )}
-
-                {/* Latest Feelable Quakes */}
-                {latestFeelableQuakesSnippet && latestFeelableQuakesSnippet.length > 0 && (
-                    <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md">
-                        <h3 className="text-sm font-semibold text-indigo-300 mb-2">Latest Activity</h3>
-                        <ul className="space-y-2">
-                            {latestFeelableQuakesSnippet.map(quake => (
-                                <li
-                                    key={`snippet-${quake.id}`}
-                                    className="text-xs border-b border-slate-600 last:border-b-0 rounded"
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={() => handleQuakeClick(quake)}
-                                        className="w-full text-left p-2 hover:bg-slate-600 focus:bg-slate-500 transition-colors rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                                    >
-                                        <div className="flex justify-between items-center">
-                                            <span className="font-semibold" style={{ color: getMagnitudeColor(quake.properties.mag) }}>
-                                            M {quake.properties.mag?.toFixed(1)}
-                                        </span>
-                                        <span className="text-slate-300"> {/* Changed from text-slate-400 */}
-                                                {formatTimeAgo(Date.now() - quake.properties.time)}
-                                            </span>
-                                        </div>
-                                        <p className="text-slate-300 truncate text-[11px]" title={quake.properties.place}>
-                                            {quake.properties.place || "Location details pending..."}
-                                        </p>
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                        <button
-                            onClick={() => navigate('/feeds?activeFeedPeriod=last_24_hours')} // Example navigation
-                            className="mt-3 w-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
-                        >
-                            View All Recent Activity
-                        </button>
-                    </div>
-                )}
+                {/* Render the ActivityList component */}
+                <ActivityList
+                    latestFeelableQuakesSnippet={latestFeelableQuakesSnippet}
+                    getMagnitudeColor={getMagnitudeColor}
+                    formatTimeAgo={formatTimeAgo}
+                    handleQuakeClick={handleQuakeClick}
+                    navigate={navigate}
+                />
 
                 <TimeSinceLastMajorQuakeBanner
                     lastMajorQuake={lastMajorQuake}
@@ -200,41 +152,16 @@ const OverviewPage = ({
                     )}
                 </div>
 
-                {/* Most Active Region */}
-                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
-                    <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
-                    {isLoadingDaily && !earthquakesLast24Hours ? (
-                        <p>Loading...</p>
-                    ) : (
-                        topActiveRegionsOverview && topActiveRegionsOverview.length > 0 ? (
-                            topActiveRegionsOverview.map((region, index) => {
-                                const regionColor = REGIONS.find(r => r.name === region.name)?.color || '#9CA3AF';
-                                return (
-                                    <p key={region.name} className={`text-slate-300 ${index > 0 ? 'mt-0.5' : ''}`}>
-                                        <span className="font-semibold" style={{color: regionColor}}>
-                                            {index + 1}. {region.name}
-                                        </span>
-                                        {region.count > 0 ? ` - ${region.count} events` : ''}
-                                    </p>
-                                );
-                            })
-                        ) : (
-                            <p className="text-slate-300 text-xs">(No significant regional activity in the last 24 hours)</p>
-                        )
-                    )}
-                </div>
+                {/* Render the ActiveRegionDisplay component */}
+                <ActiveRegionDisplay
+                    topActiveRegionsOverview={topActiveRegionsOverview}
+                    REGIONS={REGIONS}
+                    isLoadingDaily={isLoadingDaily}
+                    earthquakesLast24Hours={earthquakesLast24Hours}
+                />
 
-                {/* Quick Fact & Learn More */}
-                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
-                    <h3 className="text-md font-semibold mb-1 text-indigo-400">Quick Fact</h3>
-                    <InfoSnippet topic="magnitude" />
-                    <button
-                        onClick={() => navigate('/learn')}
-                        className="mt-2 w-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold py-1.5 px-3 rounded transition-colors"
-                    >
-                        Learn More About Earthquakes
-                    </button>
-                </div>
+                {/* Render the QuickFact component */}
+                <QuickFact navigate={navigate} />
                 {/* ... other content from /overview route ... */}
             </div>
         </>
