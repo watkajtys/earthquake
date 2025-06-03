@@ -51,6 +51,25 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
   const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
+    const currentModalContent = containerRef.current;
+    const handleTransitionEnd = (event) => {
+      if (event.propertyName === 'opacity' && mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    };
+
+    if (currentModalContent) {
+      currentModalContent.addEventListener('transitionend', handleTransitionEnd);
+    }
+
+    return () => {
+      if (currentModalContent) {
+        currentModalContent.removeEventListener('transitionend', handleTransitionEnd);
+      }
+    };
+  }, [containerRef, mapRef]);
+
+  useEffect(() => {
     if (containerRef && containerRef.current) {
       const resizeObserver = new ResizeObserver(entries => {
         for (let entry of entries) {
@@ -58,7 +77,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
             setContainerWidth(entry.contentRect.width);
             // Invalidate map size when container width changes to ensure it rerenders correctly
             if (mapRef.current) {
-              mapRef.current.invalidateSize();
+              requestAnimationFrame(() => { if (mapRef.current) { mapRef.current.invalidateSize(); } });
             }
           }
         }
@@ -70,6 +89,9 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
       const initialWidth = containerRef.current.getBoundingClientRect().width;
       if (initialWidth > 0) {
         setContainerWidth(initialWidth);
+        if (mapRef.current) {
+          requestAnimationFrame(() => { if (mapRef.current) { mapRef.current.invalidateSize(); } });
+        }
       }
 
 
