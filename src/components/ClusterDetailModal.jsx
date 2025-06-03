@@ -91,11 +91,11 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
     }
 
     const {
-        locationName,
-        quakeCount,
-        maxMagnitude,
-        timeRange,
-        originalQuakes = [] // Default to empty array if not provided
+        locationName = 'Unknown Location',
+        quakeCount = 0,
+        maxMagnitude, // Handled in JSX
+        timeRange = 'N/A',
+        originalQuakes = []
     } = cluster;
 
     // Sort quakes by time (most recent first)
@@ -152,9 +152,9 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
 
                 {/* Summary Statistics */}
                 <div className="mb-4 text-xs sm:text-sm space-y-1 text-slate-300">
-                    <p><strong>Total Earthquakes:</strong> <span className="text-slate-100">{quakeCount}</span></p>
-                    <p><strong>Maximum Magnitude:</strong> <span className="text-slate-100">M {maxMagnitude?.toFixed(1)}</span></p>
-                    <p><strong>Active Period:</strong> <span className="text-slate-100">{timeRange}</span></p>
+                    <p><strong>Total Earthquakes:</strong> <span className="text-slate-100">{quakeCount ?? 0}</span></p>
+                    <p><strong>Maximum Magnitude:</strong> <span className="text-slate-100">M {typeof maxMagnitude === 'number' ? maxMagnitude.toFixed(1) : 'N/A'}</span></p>
+                    <p><strong>Active Period:</strong> <span className="text-slate-100">{timeRange || 'N/A'}</span></p>
                     <p><strong>Depth Range:</strong> <span className="text-slate-100">{depthRangeStr}</span></p>
                 </div>
 
@@ -203,15 +203,15 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                                 </p>
                                 <div className="text-xxs text-slate-400 mt-1 flex justify-between">
                                     <span>
-                                        {formatDate ? formatDate(quake.properties?.time) : new Date(quake.properties?.time).toLocaleString() || 'N/A'}
+                                        {quake.properties?.time ? (formatDate ? formatDate(quake.properties.time) : new Date(quake.properties.time).toLocaleString()) : 'N/A'}
                                     </span>
                                     <span>
                                         Depth: {quake.geometry?.coordinates?.[2]?.toFixed(1) || 'N/A'} km
                                     </span>
                                 </div>
                             </div>
-                        ); // Restored semicolon for return
-                    }) // Restored closing brace for map callback
+                        );
+                    })
                     ) : (
                         <p className="text-slate-400 text-sm text-center py-4">No individual earthquake data available for this cluster.</p>
                     )}
