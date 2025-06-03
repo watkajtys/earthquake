@@ -30,7 +30,7 @@ export const UIStateProvider = ({ children }) => {
         if (currentQueryParam && currentQueryParam !== activeSidebarView) {
             setActiveSidebarView_internal(currentQueryParam);
         }
-    }, [searchParams, activeSidebarView]);
+    }, [searchParams]); // Removed activeSidebarView from dependencies
 
     const changeSidebarView = useCallback((view) => {
         const newView = view || 'overview_panel';
@@ -51,7 +51,7 @@ export const UIStateProvider = ({ children }) => {
         if (currentQueryParam && currentQueryParam !== activeFeedPeriod) {
             setActiveFeedPeriod_internal(currentQueryParam);
         }
-    }, [searchParams, activeFeedPeriod]);
+    }, [searchParams]); // Removed activeFeedPeriod from dependencies
 
     const changeActiveFeedPeriod = useCallback((period) => {
         const newPeriod = period || 'last_24_hours'; // Default if null/empty
