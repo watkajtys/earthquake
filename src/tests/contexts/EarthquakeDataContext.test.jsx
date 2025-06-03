@@ -62,24 +62,56 @@ describe('EarthquakeDataContext Reducer', () => {
   describe('WEEKLY_DATA_PROCESSED action', () => {
     const mockFetchTime = Date.now();
     const createMockQuake = (id, timeOffsetHours, mag) => ({ id, properties: { mag, time: mockFetchTime - timeOffsetHours * 36e5 } });
+    // Modified mockFeaturesWeekly with duplicate IDs
     const mockFeaturesWeekly = [
-      createMockQuake('w_quake1', 10, 2.5), createMockQuake('w_quake2', 50, 3.0),
-      createMockQuake('w_quake3', 80, 4.5), createMockQuake('w_quakeMajor', 60, 5.8),
-      ...Array.from({ length: 5 }, (_, i) => createMockQuake(`w_extra${i}`, 24 * (i + 1) , 3.0 + i * 0.1))
+      createMockQuake('w_quake1', 10, 2.5),
+      createMockQuake('w_quake2', 50, 3.0),
+      createMockQuake('w_quake3', 80, 4.5), // This one is > 72h, will be filtered out by filterByTime
+      createMockQuake('w_quakeMajor', 60, 5.8), // Original major quake
+      createMockQuake('w_quakeMajor', 61, 5.7), // Duplicate ID, slightly different time & mag, within 72h
+      createMockQuake('w_anotherMajor', 30, 5.9),
+      createMockQuake('w_anotherMajor', 31, 5.85), // Duplicate ID for another major quake, within 72h
+      createMockQuake('w_highMagDup', 20, 6.0), // High magnitude quake
+      createMockQuake('w_highMagDup', 22, 5.9), // Duplicate ID for high magnitude quake
+      ...Array.from({ length: 5 }, (_, i) => createMockQuake(`w_extra${i}`, 24 * (i + 1) , 3.0 + i * 0.1)) // Keep some other quakes (some > 72h)
     ];
     const action = { type: actionTypes.WEEKLY_DATA_PROCESSED, payload: { features: mockFeaturesWeekly, fetchTime: mockFetchTime } };
     const updatedState = earthquakeReducer(initialState, action);
 
     it('should set isLoadingWeekly to false', () => expect(updatedState.isLoadingWeekly).toBe(false));
-    it('should filter earthquakes for last 72 hours and last 7 days', () => {
-      const expectedIn72Hours = mockFeaturesWeekly.filter(q => (mockFetchTime - q.properties.time) <= 72 * 36e5);
-      expect(updatedState.earthquakesLast72Hours.map(q=>q.id).sort()).toEqual(expectedIn72Hours.map(q=>q.id).sort());
+    it('should filter earthquakes for last 72 hours (deduplicated) and last 7 days', () => {
+      // Test earthquakesLast72Hours (which should be deduplicated by the reducer)
+      const expectedIn72HoursRaw = mockFeaturesWeekly.filter(q => (mockFetchTime - q.properties.time) <= 72 * 36e5);
+      const uniqueIds72h = new Set();
+      const expectedDeduplicatedIn72Hours = expectedIn72HoursRaw.filter(quake => {
+          if (!uniqueIds72h.has(quake.id)) {
+              uniqueIds72h.add(quake.id);
+              return true;
+          }
+          return false;
+      });
+      expect(updatedState.earthquakesLast72Hours.map(q=>q.id).sort()).toEqual(expectedDeduplicatedIn72Hours.map(q=>q.id).sort());
+      expect(updatedState.earthquakesLast72Hours.length).toEqual(expectedDeduplicatedIn72Hours.length);
+      // Test earthquakesLast7Days (no deduplication applied here in the reducer)
       expect(updatedState.earthquakesLast7Days.length).toBe(mockFeaturesWeekly.length);
     });
-    it('should populate globeEarthquakes (sorted subset of last 72 hours)', () => {
+    it('should populate globeEarthquakes (sorted subset of last 72 hours, deduplicated)', () => {
         const last72HoursData = filterByTime(mockFeaturesWeekly, 72, 0, mockFetchTime);
-        const expectedGlobeQuakes = [...last72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900);
+
+        // Deduplication step for the test's expectation
+        const uniqueEarthquakeIds = new Set();
+        const deduplicatedLast72HoursData = last72HoursData.filter(quake => {
+            if (!uniqueEarthquakeIds.has(quake.id)) {
+                uniqueEarthquakeIds.add(quake.id);
+                return true;
+            }
+            return false;
+        });
+
+        const expectedGlobeQuakes = [...deduplicatedLast72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900);
         expect(updatedState.globeEarthquakes.map(q=>q.id).sort()).toEqual(expectedGlobeQuakes.map(q=>q.id).sort());
+        // Also check that the count is as expected after deduplication
+        expect(updatedState.globeEarthquakes.length).toEqual(expectedGlobeQuakes.length);
     });
     it('should filter prev24HourData (48h to 24h ago)', () => {
         const expectedPrev24 = filterByTime(mockFeaturesWeekly, 48, 24, mockFetchTime);
