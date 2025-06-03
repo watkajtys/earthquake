@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 const LatestEvent = ({ lastMajorQuake, getMagnitudeColor, formatDate, handleQuakeClick }) => {
   // Logic for displaying the latest event will be added here
@@ -29,4 +29,4 @@ const LatestEvent = ({ lastMajorQuake, getMagnitudeColor, formatDate, handleQuak
   );
 };
 
-export default LatestEvent;
+export default memo(LatestEvent);

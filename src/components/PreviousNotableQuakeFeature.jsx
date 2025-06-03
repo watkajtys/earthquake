@@ -1,5 +1,5 @@
 // src/PreviousNotableQuakeFeature.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { getMagnitudeColor as getMagnitudeColorUtil } from '../utils/utils.js'; // Renamed to avoid conflict
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 
@@ -90,4 +90,4 @@ const PreviousNotableQuakeFeature = ({
     );
 };
 
-export default PreviousNotableQuakeFeature;
+export default memo(PreviousNotableQuakeFeature);

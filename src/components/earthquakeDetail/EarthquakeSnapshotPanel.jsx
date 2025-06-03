@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import {
     isValidString,
     isValuePresent,
@@ -88,4 +88,4 @@ function EarthquakeSnapshotPanel({
     );
 }
 
-export default EarthquakeSnapshotPanel;
+export default memo(EarthquakeSnapshotPanel);

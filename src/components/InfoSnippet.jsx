@@ -1,5 +1,5 @@
 // src/InfoSnippet.jsx
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 
 /**
  * @const {Object.<string, {title: string, content: string, icon: string}>} infoData
@@ -106,4 +106,4 @@ const InfoSnippet = ({ topic }) => {
         </div>
     );
 };
-export default InfoSnippet;
+export default memo(InfoSnippet);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 /**
  * A skeleton loader component for text.
@@ -10,4 +10,4 @@ import React from 'react';
  */
 const SkeletonText = ({ width = 'w-3/4', height = 'h-4', className = '' }) => <div className={`bg-gray-300 rounded ${width} ${height} animate-pulse mb-2 ${className}`}></div>;
 
-export default SkeletonText;
+export default memo(SkeletonText);

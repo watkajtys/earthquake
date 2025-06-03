@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'; // Added useEffect and useRef
+import React, { useEffect, useRef, memo } from 'react'; // Added useEffect and useRef
 import { MapContainer, TileLayer, GeoJSON, CircleMarker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Corrected path
@@ -145,4 +145,4 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
   );
 };
 
-export default ClusterMiniMap;
+export default memo(ClusterMiniMap);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 function EarthquakeSeismicWavesPanel({
     exhibitPanelClass,
@@ -36,4 +36,4 @@ function EarthquakeSeismicWavesPanel({
     );
 }
 
-export default EarthquakeSeismicWavesPanel;
+export default memo(EarthquakeSeismicWavesPanel);
