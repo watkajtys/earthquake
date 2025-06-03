@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { isValidString } from '../../utils/detailViewUtils.js';
+import { isValidString } from '../../utils/utils.js';
 
 // Assuming isValidString will be passed as a prop or defined/imported here
 // For now, let's assume it's passed as a prop as per instructions.

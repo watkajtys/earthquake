@@ -81,12 +81,12 @@ const PaginatedEarthquakeTable = React.memo(({
         }
     };
 
-    const handleRowKeyDown = (event, quake) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-            onQuakeClick(quake);
-            event.preventDefault(); // Prevent scrolling if space is pressed
-        }
-    };
+    // const handleRowKeyDown = (event, quake) => { // Unused function removed
+    //     if (event.key === 'Enter' || event.key === ' ') {
+    //         onQuakeClick(quake);
+    //         event.preventDefault(); // Prevent scrolling if space is pressed
+    //     }
+    // };
 
     const getSortIndicator = (key) => (sortConfig.key === key ? (sortConfig.direction === 'ascending' ? ' ▲' : ' ▼') : <span className="text-slate-500"> ◇</span>);
 

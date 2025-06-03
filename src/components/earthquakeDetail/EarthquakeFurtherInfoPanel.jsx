@@ -1,5 +1,5 @@
 import React from 'react';
-import { isValidString } from '../../utils/detailViewUtils.js';
+import { isValidString } from '../../utils/utils.js'; // Assuming this path is correct
 
 function EarthquakeFurtherInfoPanel({
     properties,

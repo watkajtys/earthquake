@@ -22,12 +22,12 @@ vi.mock('./EarthquakeMap', () => ({
   )
 }));
 
-// Mock calculateDistance from utils.js
-vi.mock('./utils', async () => {
-  const actualUtils = await vi.importActual('./utils');
+// Mock utils.js
+vi.mock('../utils/utils.js', async (importOriginal) => { // Corrected path and added importOriginal
+  const actual = await importOriginal(); // Use importOriginal as per Vitest docs
   return {
-    ...actualUtils, // Import and retain other utils
-    calculateDistance: vi.fn(), // Mock calculateDistance specifically
+    ...actual, // Spread the actual module
+    calculateDistance: vi.fn(), // Override specific mock
   };
 });
 
@@ -355,7 +355,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
     try {
       await screen.findAllByText(currentMockData.properties.title, {}, {timeout: 1000});
-    } catch (e) {
+    } catch (UNUSED_ERROR_E) {
       // Error in SimplifiedDepthProfile might prevent title from rendering as expected.
     }
     expect(screen.queryByText(/Magnitude \(.*?\)/i)).not.toBeInTheDocument();

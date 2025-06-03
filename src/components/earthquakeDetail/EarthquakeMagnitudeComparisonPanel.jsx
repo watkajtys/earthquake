@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { isValidNumber, formatNumber } from '../../utils/detailViewUtils.js';
+import { isValidNumber, formatNumber } from '../../utils/utils.js'; // Assuming this path is correct
 
 function EarthquakeMagnitudeComparisonPanel({
     properties,

@@ -21,7 +21,7 @@ const TimeSinceLastMajorQuakeBanner = React.memo(({
     // isLoadingInitial,
     // isLoadingMonthly,
     formatTimeDuration,
-    getRegionForEarthquake, // Still passed if needed by internal logic not shown, or can be removed if truly unused
+    // getRegionForEarthquake, // Removed as it's unused
     handleQuakeClick,
     getMagnitudeColor
 }) => {
@@ -132,7 +132,7 @@ TimeSinceLastMajorQuakeBanner.propTypes = {
     // isLoadingInitial: PropTypes.bool, // From context (isLoadingInitialData)
     // isLoadingMonthly: PropTypes.bool, // From context (contextIsLoadingMonthly & hasAttemptedMonthlyLoad)
     formatTimeDuration: PropTypes.func.isRequired,
-    getRegionForEarthquake: PropTypes.func, 
+    // getRegionForEarthquake: PropTypes.func, // Removed as it's unused
     handleQuakeClick: PropTypes.func.isRequired,
     getMagnitudeColor: PropTypes.func.isRequired,
 };

@@ -6,7 +6,7 @@ import {
     formatDate,
     formatNumber,
     formatLargeNumber
-} from '../../utils/detailViewUtils.js';
+} from '../../utils/utils.js';
 
 function EarthquakeSnapshotPanel({
     properties,
