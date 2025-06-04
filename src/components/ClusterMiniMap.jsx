@@ -20,7 +20,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
   const [initialCenter, setInitialCenter] = useState(null);
   const [initialZoomVal, setInitialZoomVal] = useState(null);
 
-  // Effect 1: Determine map center and zoom based on cluster data
+  // Effect 1: Determine map center and zoom based on cluster data (Unchanged)
   useEffect(() => {
     if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
       setInitialCenter(null);
@@ -55,119 +55,105 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
     setInitialZoomVal(calculatedZoom);
   }, [cluster]);
 
-  // Effect 2: Setup ResizeObserver and perform initial width check
+  // Effect 2: Setup ResizeObserver (MODIFIED - No immediate getBoundingClientRect for width)
   useEffect(() => {
     if (!mapContainerParentRef.current) return;
 
     const observer = new ResizeObserver(entries => {
       for (let entry of entries) {
-        if (entry.contentRect.width > 0) {
-          setContainerWidth(entry.contentRect.width);
-        } else {
-          // If width becomes 0 (e.g. modal closes, element hidden), reset
-          setContainerWidth(0);
-        }
+        // Set width from observer entry. If it's 0 or less, set to 0.
+        const newWidth = entry.contentRect.width > 0 ? entry.contentRect.width : 0;
+        setContainerWidth(newWidth);
       }
     });
     observer.observe(mapContainerParentRef.current);
 
-    // Initial width check
-    const currentWidth = mapContainerParentRef.current.getBoundingClientRect().width;
-    if (currentWidth > 0) {
-      setContainerWidth(currentWidth);
-    }
-
     return () => {
-      // Important: Check if ref.current exists before unobserving
       if (mapContainerParentRef.current) {
         observer.unobserve(mapContainerParentRef.current);
       }
-      observer.disconnect(); // Disconnect observer on cleanup
+      observer.disconnect();
     };
-  }, []); // No dependencies, runs once on mount and cleans up on unmount
+  }, []); // Runs once on mount
 
-  // Effect 3: Invalidate map size when containerWidth changes and map is ready
+  // Effect 3: Invalidate map size when containerWidth changes and map is ready (Unchanged)
   useEffect(() => {
     if (containerWidth > 0 && mapRef.current) {
       mapRef.current.invalidateSize();
     }
-  }, [containerWidth, mapRef]); // mapRef dependency is fine, it's the ref object
+  }, [containerWidth, mapRef]);
 
-  // Effect 4: Fit bounds when map is ready and relevant props change
+  // Effect 4: Fit bounds when map is ready and relevant props change (Unchanged)
    useEffect(() => {
-    if (mapRef.current && initialCenter && initialZoomVal !== null && containerWidth > 0) { // Ensure map is ready and container has width
-      if (cluster && cluster.originalQuakes && cluster.originalQuakes.length > 1 && initialZoomVal === 7) { // Only fitBounds for multi-quake, spread-out clusters
+    if (mapRef.current && initialCenter && initialZoomVal !== null && containerWidth > 0) {
+      if (cluster && cluster.originalQuakes && cluster.originalQuakes.length > 1 && initialZoomVal === 7) {
         const bounds = L.latLngBounds(
           cluster.originalQuakes.map(quake => [
             quake.geometry.coordinates[1],
             quake.geometry.coordinates[0],
           ])
         );
-        if (!bounds.getSouthWest().equals(bounds.getNorthEast())) { // Additional check to prevent fitting to a point
-             mapRef.current.fitBounds(bounds, { padding: [0, 0] }); // Reduced padding
+        if (!bounds.getSouthWest().equals(bounds.getNorthEast())) {
+             mapRef.current.fitBounds(bounds, { padding: [0, 0] });
         } else {
-            // If bounds are a single point but initialZoomVal was 7 (unexpected), set view directly
-            mapRef.current.setView(initialCenter, 10); // Fallback zoom for point-like bounds
+            mapRef.current.setView(initialCenter, 10);
         }
       } else if (initialCenter && initialZoomVal !== null) {
-        // For single quakes or pre-zoomed clusters, just set the view
-        // This also covers the case where fitBounds was not applicable
         mapRef.current.setView(initialCenter, initialZoomVal);
       }
     }
-  }, [cluster, initialCenter, initialZoomVal, mapRef, containerWidth]); // Added containerWidth
+  }, [cluster, initialCenter, initialZoomVal, mapRef, containerWidth]);
 
-  // Render conditions
-  if (!initialCenter || initialZoomVal === null) { // If cluster data is not processed yet
-    return <div style={{ height: '350px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Initializing map parameters...</div>;
+  // Render conditions (Heights are 350px)
+  const placeholderStyle = { height: '350px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' };
+
+  if (!initialCenter || initialZoomVal === null) {
+    return <div style={placeholderStyle} className="text-slate-400">Initializing map parameters...</div>;
   }
 
-  if (containerWidth === 0 && cluster && cluster.originalQuakes && cluster.originalQuakes.length > 0) {
-    return <div style={{ height: '350px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map...</div>;
-  }
-
-  // Do not render MapContainer if containerWidth is 0, to prevent Leaflet errors
-  if (containerWidth === 0) {
-      // This case might be hit if originalQuakes is empty initially, then the above "Loading map..." isn't shown.
-      // Or if the parent div genuinely has no width for some reason.
-      return <div ref={mapContainerParentRef} style={{ width: '100%', height: '350px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Awaiting dimensions...</div>;
-  }
-
+  // Render MapContainer only if containerWidth is determined and positive
+  // The mapContainerParentRef div is always rendered to be observed.
   return (
     <div ref={mapContainerParentRef} style={{ width: '100%', height: '350px' }}>
-      <MapContainer
-        center={initialCenter}
-        zoom={initialZoomVal}
-        style={{ height: '100%', width: '100%' }}
-        scrollWheelZoom={false}
-        ref={mapRef}
-        maxZoom={18}
-        // key={containerWidth} // Avoid using key if invalidateSize is handled properly
-      >
-        <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-        />
-        <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
-        {cluster && cluster.originalQuakes && cluster.originalQuakes.map((quake) => (
-          <CircleMarker
-            key={quake.id}
-            center={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
-            pathOptions={{
-              fillColor: getMagnitudeColor(quake.properties.mag),
-              color: '#000',
-              weight: 1,
-              opacity: 1,
-              fillOpacity: 0.7,
-            }}
-            radius={5 + quake.properties.mag / 2}
-          >
-            <Tooltip>
-              M {quake.properties.mag.toFixed(1)} - {quake.properties.place}
-            </Tooltip>
-          </CircleMarker>
-        ))}
-      </MapContainer>
+      {containerWidth > 0 ? (
+        <MapContainer
+          center={initialCenter}
+          zoom={initialZoomVal}
+          style={{ height: '100%', width: '100%' }}
+          scrollWheelZoom={false}
+          ref={mapRef}
+          maxZoom={18}
+        >
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+          />
+          <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
+          {cluster && cluster.originalQuakes && cluster.originalQuakes.map((quake) => (
+            <CircleMarker
+              key={quake.id}
+              center={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
+              pathOptions={{
+                fillColor: getMagnitudeColor(quake.properties.mag),
+                color: '#000',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.7,
+              }}
+              radius={5 + quake.properties.mag / 2}
+            >
+              <Tooltip>
+                M {quake.properties.mag.toFixed(1)} - {quake.properties.place}
+              </Tooltip>
+            </CircleMarker>
+          ))}
+        </MapContainer>
+      ) : (
+        // Show "Loading map..." or "Awaiting dimensions..." based on data presence
+        cluster && cluster.originalQuakes && cluster.originalQuakes.length > 0 ?
+          <div style={placeholderStyle} className="text-slate-400">Loading map...</div> :
+          <div style={placeholderStyle} className="text-slate-400">Awaiting dimensions...</div>
+      )}
     </div>
   );
 };
