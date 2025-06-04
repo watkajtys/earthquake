@@ -1,191 +1,172 @@
-import React, { useEffect, useRef, memo, useState } from 'react'; // Added useEffect, useRef, useState
+import React, { useEffect, useRef, memo, useState } from 'react';
 import { MapContainer, TileLayer, GeoJSON, CircleMarker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
-import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Corrected path
-// Assuming getMagnitudeColor will be provided as a prop or imported if generalized
-// import { getMagnitudeColor } from './utils';
+import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json';
 
-// Style function for Tectonic Plates
-/**
- * Determines the style for tectonic plate boundary features on the map.
- * Color varies based on the boundary type (Convergent, Divergent, Transform).
- * @param {object} feature - The GeoJSON feature representing a tectonic plate boundary.
- * @returns {object} Leaflet path style options for the feature.
- */
+// Style function for Tectonic Plates (getTectonicPlateStyle - unchanged)
 const getTectonicPlateStyle = (feature) => {
-  let color = 'rgba(255, 165, 0, 0.8)'; // Default: Orange
+  let color = 'rgba(255, 165, 0, 0.8)';
   const boundaryType = feature?.properties?.Boundary_Type;
-
-  if (boundaryType === 'Convergent') {
-    color = 'rgba(220, 20, 60, 0.8)'; // Crimson
-  } else if (boundaryType === 'Divergent') {
-    color = 'rgba(60, 179, 113, 0.8)'; // MediumSeaGreen
-  } else if (boundaryType === 'Transform') {
-    color = 'rgba(70, 130, 180, 0.8)'; // SteelBlue
-  }
-
-  return {
-    color: color,
-    weight: 1, // Adjusted weight
-    opacity: 1, // Opacity is handled by the RGBA color string, so path opacity is 1
-  };
+  if (boundaryType === 'Convergent') color = 'rgba(220, 20, 60, 0.8)';
+  else if (boundaryType === 'Divergent') color = 'rgba(60, 179, 113, 0.8)';
+  else if (boundaryType === 'Transform') color = 'rgba(70, 130, 180, 0.8)';
+  return { color: color, weight: 1, opacity: 1 };
 };
 
-/**
- * Renders a small Leaflet map to visualize the geographic distribution of earthquakes within a cluster.
- * It displays each earthquake as a CircleMarker, sized and colored by its magnitude,
- * and shows tectonic plate boundaries. The map automatically adjusts its center and zoom level
- * based on the spread of the earthquakes in the cluster.
- *
- * @param {object} props - The component's props.
- * @param {object} props.cluster - The cluster data. Must contain an `originalQuakes` array.
- * @param {Array<object>} props.cluster.originalQuakes - An array of earthquake objects. Each object is expected
- *   to have `id`, `geometry.coordinates` (lng, lat, depth), and `properties.mag` (magnitude) and `properties.place`.
- * @param {function} props.getMagnitudeColor - A function that takes an earthquake's magnitude
- *   and returns a color string for its marker.
- * @returns {JSX.Element | null} The rendered Leaflet map component or null if cluster data is invalid.
- */
 const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
-  const mapRef = useRef(null);
-  const mapContainerParentRef = useRef(null); // New ref for the MapContainer's parent div
+  const mapRef = useRef(null); // For Leaflet map instance
+  const mapContainerParentRef = useRef(null); // For the div wrapping MapContainer
   const [containerWidth, setContainerWidth] = useState(0);
+  const [initialCenter, setInitialCenter] = useState(null);
+  const [initialZoomVal, setInitialZoomVal] = useState(null);
 
+  // Effect 1: Determine map center and zoom based on cluster data
   useEffect(() => {
-    // Observe the new parent div for size changes
-    if (mapContainerParentRef && mapContainerParentRef.current) {
-      const resizeObserver = new ResizeObserver(entries => {
-        for (let entry of entries) {
-          if (entry.contentRect.width > 0) {
-            setContainerWidth(entry.contentRect.width);
-            if (mapRef.current) {
-              mapRef.current.invalidateSize();
-            }
-          }
-        }
-      });
-
-      resizeObserver.observe(mapContainerParentRef.current);
-
-      // Initial check for width
-      const initialWidth = mapContainerParentRef.current.getBoundingClientRect().width;
-      if (initialWidth > 0) {
-        setContainerWidth(initialWidth);
-      }
-
-      return () => {
-        // Check if ref still exists before trying to unobserve
-        if (mapContainerParentRef.current) {
-            resizeObserver.unobserve(mapContainerParentRef.current);
-        }
-        resizeObserver.disconnect();
-      };
+    if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
+      setInitialCenter(null);
+      setInitialZoomVal(null);
+      return;
     }
-  }, [mapContainerParentRef, mapRef]); // Dependencies updated to new ref
+    const { originalQuakes } = cluster;
+    let calculatedCenter;
+    let calculatedZoom;
 
-  if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
-    return null;
-  }
-
-  const { originalQuakes } = cluster;
-
-  let mapCenter;
-  let initialZoom;
-
-  if (originalQuakes.length === 1) {
-    const singleQuake = originalQuakes[0];
-    mapCenter = [singleQuake.geometry.coordinates[1], singleQuake.geometry.coordinates[0]];
-    initialZoom = 10; // Zoom level for a single quake
-  } else {
-    // Calculate map center for multiple quakes (average lat/lng)
-    const latitudes = originalQuakes.map(quake => quake.geometry.coordinates[1]);
-    const longitudes = originalQuakes.map(quake => quake.geometry.coordinates[0]);
-    const avgLat = latitudes.reduce((sum, lat) => sum + lat, 0) / latitudes.length;
-    const avgLng = longitudes.reduce((sum, lng) => sum + lng, 0) / longitudes.length;
-    mapCenter = [avgLat, avgLng]; // This center is fine for concentrated points too.
-
-    // Calculate bounds to check for very concentrated clusters
-    const bounds = L.latLngBounds(
-      originalQuakes.map(quake => [
-        quake.geometry.coordinates[1],
-        quake.geometry.coordinates[0],
-      ])
-    );
-
-    if (
-      bounds.getSouthWest().equals(bounds.getNorthEast()) ||
-      (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.001 && // Refined threshold
-       Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.001)  // Refined threshold
-    ) {
-      initialZoom = 10; // Increased zoom for pinpoint clusters
+    if (originalQuakes.length === 1) {
+      const singleQuake = originalQuakes[0];
+      calculatedCenter = [singleQuake.geometry.coordinates[1], singleQuake.geometry.coordinates[0]];
+      calculatedZoom = 10;
     } else {
-      initialZoom = 7; // Fallback zoom, fitBounds will adjust this for spread out clusters
-    }
-  }
+      const latitudes = originalQuakes.map(quake => quake.geometry.coordinates[1]);
+      const longitudes = originalQuakes.map(quake => quake.geometry.coordinates[0]);
+      const avgLat = latitudes.reduce((sum, lat) => sum + lat, 0) / latitudes.length;
+      const avgLng = longitudes.reduce((sum, lng) => sum + lng, 0) / longitudes.length;
+      calculatedCenter = [avgLat, avgLng];
 
+      const bounds = L.latLngBounds(originalQuakes.map(quake => [quake.geometry.coordinates[1], quake.geometry.coordinates[0]]));
+      if (bounds.getSouthWest().equals(bounds.getNorthEast()) ||
+          (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.001 &&
+           Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.001)) {
+        calculatedZoom = 10;
+      } else {
+        calculatedZoom = 7; // fitBounds will adjust this later if needed
+      }
+    }
+    setInitialCenter(calculatedCenter);
+    setInitialZoomVal(calculatedZoom);
+  }, [cluster]);
+
+  // Effect 2: Setup ResizeObserver and perform initial width check
   useEffect(() => {
-    // Call fitBounds only if originalQuakes.length > 1 AND initialZoom was NOT set to 13 (pinpoint)
-    // or 10 (single quake). The initialZoom for spread out clusters is 7.
-    // Also ensure containerWidth is available (map is visible and has size)
-    if (mapRef.current && originalQuakes.length > 1 && initialZoom === 7 && containerWidth > 0) {
-      const bounds = L.latLngBounds(
-        originalQuakes.map(quake => [
-          quake.geometry.coordinates[1],
-          quake.geometry.coordinates[0],
-        ])
-      );
-      // The initialZoom check above should be sufficient to prevent re-zooming pinpoint clusters.
-      mapRef.current.fitBounds(bounds, { padding: [0, 0] });
-    }
-    // For a single quake (initialZoom=10) or pinpoint cluster (initialZoom=13),
-    // the view is already set by mapCenter and initialZoom on MapContainer.
-  }, [originalQuakes, mapRef, initialZoom, containerWidth]); // Added initialZoom and containerWidth to dependency array.
-                                 // originalQuakes is the primary data dependency.
+    if (!mapContainerParentRef.current) return;
 
-  // Render null or a placeholder if the container isn't ready (e.g., width is 0)
-  // This prevents Leaflet errors if it tries to initialize in a zero-size container.
-  // Logic for "Loading map..." now correctly keys off the width of mapContainerParentRef via containerWidth state
-  if (containerWidth === 0 && originalQuakes.length > 0) {
-      return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map...</div>;
+    const observer = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        if (entry.contentRect.width > 0) {
+          setContainerWidth(entry.contentRect.width);
+        } else {
+          // If width becomes 0 (e.g. modal closes, element hidden), reset
+          setContainerWidth(0);
+        }
+      }
+    });
+    observer.observe(mapContainerParentRef.current);
+
+    // Initial width check
+    const currentWidth = mapContainerParentRef.current.getBoundingClientRect().width;
+    if (currentWidth > 0) {
+      setContainerWidth(currentWidth);
+    }
+
+    return () => {
+      // Important: Check if ref.current exists before unobserving
+      if (mapContainerParentRef.current) {
+        observer.unobserve(mapContainerParentRef.current);
+      }
+      observer.disconnect(); // Disconnect observer on cleanup
+    };
+  }, []); // No dependencies, runs once on mount and cleans up on unmount
+
+  // Effect 3: Invalidate map size when containerWidth changes and map is ready
+  useEffect(() => {
+    if (containerWidth > 0 && mapRef.current) {
+      mapRef.current.invalidateSize();
+    }
+  }, [containerWidth, mapRef]); // mapRef dependency is fine, it's the ref object
+
+  // Effect 4: Fit bounds when map is ready and relevant props change
+   useEffect(() => {
+    if (mapRef.current && initialCenter && initialZoomVal !== null && containerWidth > 0) { // Ensure map is ready and container has width
+      if (cluster && cluster.originalQuakes && cluster.originalQuakes.length > 1 && initialZoomVal === 7) { // Only fitBounds for multi-quake, spread-out clusters
+        const bounds = L.latLngBounds(
+          cluster.originalQuakes.map(quake => [
+            quake.geometry.coordinates[1],
+            quake.geometry.coordinates[0],
+          ])
+        );
+        if (!bounds.getSouthWest().equals(bounds.getNorthEast())) { // Additional check to prevent fitting to a point
+             mapRef.current.fitBounds(bounds, { padding: [0, 0] }); // Reduced padding
+        } else {
+            // If bounds are a single point but initialZoomVal was 7 (unexpected), set view directly
+            mapRef.current.setView(initialCenter, 10); // Fallback zoom for point-like bounds
+        }
+      } else if (initialCenter && initialZoomVal !== null) {
+        // For single quakes or pre-zoomed clusters, just set the view
+        // This also covers the case where fitBounds was not applicable
+        mapRef.current.setView(initialCenter, initialZoomVal);
+      }
+    }
+  }, [cluster, initialCenter, initialZoomVal, mapRef, containerWidth]); // Added containerWidth
+
+  // Render conditions
+  if (!initialCenter || initialZoomVal === null) { // If cluster data is not processed yet
+    return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Initializing map parameters...</div>;
   }
 
+  if (containerWidth === 0 && cluster && cluster.originalQuakes && cluster.originalQuakes.length > 0) {
+    return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map...</div>;
+  }
+
+  // Do not render MapContainer if containerWidth is 0, to prevent Leaflet errors
+  if (containerWidth === 0) {
+      // This case might be hit if originalQuakes is empty initially, then the above "Loading map..." isn't shown.
+      // Or if the parent div genuinely has no width for some reason.
+      return <div ref={mapContainerParentRef} style={{ width: '100%', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Awaiting dimensions...</div>;
+  }
 
   return (
-    // New parent div that wraps MapContainer
     <div ref={mapContainerParentRef} style={{ width: '100%', height: '200px' }}>
       <MapContainer
-        center={mapCenter}
-        zoom={initialZoom}
-        style={{ height: '100%', width: '100%' }} // MapContainer fills its new parent
+        center={initialCenter}
+        zoom={initialZoomVal}
+        style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={false}
         ref={mapRef}
         maxZoom={18}
+        // key={containerWidth} // Avoid using key if invalidateSize is handled properly
       >
         <TileLayer
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-      />
-      <GeoJSON
-        data={tectonicPlatesData}
-        style={getTectonicPlateStyle}
-      />
-      {originalQuakes.map((quake) => (
-        <CircleMarker
-          key={quake.id}
-          center={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
-          pathOptions={{
-            fillColor: getMagnitudeColor(quake.properties.mag),
-            color: '#000', // Border color
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.7,
-          }}
-          radius={5 + quake.properties.mag / 2} // Radius proportional to magnitude
-        >
-          <Tooltip>
-            M {quake.properties.mag.toFixed(1)} - {quake.properties.place}
-          </Tooltip>
-        </CircleMarker>
-      ))}
+          attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        />
+        <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
+        {cluster && cluster.originalQuakes && cluster.originalQuakes.map((quake) => (
+          <CircleMarker
+            key={quake.id}
+            center={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
+            pathOptions={{
+              fillColor: getMagnitudeColor(quake.properties.mag),
+              color: '#000',
+              weight: 1,
+              opacity: 1,
+              fillOpacity: 0.7,
+            }}
+            radius={5 + quake.properties.mag / 2}
+          >
+            <Tooltip>
+              M {quake.properties.mag.toFixed(1)} - {quake.properties.place}
+            </Tooltip>
+          </CircleMarker>
+        ))}
       </MapContainer>
     </div>
   );
