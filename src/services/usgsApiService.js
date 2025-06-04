@@ -2,7 +2,8 @@
 
 export const fetchUsgsData = async (apiUrl) => {
   try {
-    const response = await fetch(apiUrl);
+    const proxyUrl = `/api/usgs-proxy?apiUrl=${encodeURIComponent(apiUrl)}`;
+    const response = await fetch(proxyUrl);
     if (!response.ok) {
       throw { message: `HTTP error! status: ${response.status}`, status: response.status };
     }
