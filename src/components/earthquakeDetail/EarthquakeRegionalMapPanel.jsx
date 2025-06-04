@@ -11,6 +11,9 @@ function EarthquakeRegionalMapPanel({
     exhibitPanelClass,
     exhibitTitleClass
 }) {
+    console.log('[EarthquakeRegionalMapPanel] Received geometry:', JSON.stringify(geometry, null, 2));
+    console.log('[EarthquakeRegionalMapPanel] Received properties:', JSON.stringify(properties, null, 2));
+
     // Main Guard for Centering: Ensure valid coordinates for the map center.
     if (!geometry || !geometry.coordinates ||
         !isValidNumber(geometry.coordinates[1]) ||
@@ -29,6 +32,7 @@ function EarthquakeRegionalMapPanel({
 
     const mapCenterLat = geometry.coordinates[1];
     const mapCenterLng = geometry.coordinates[0];
+    console.log('[EarthquakeRegionalMapPanel] Derived mapCenterLat:', mapCenterLat, 'mapCenterLng:', mapCenterLng);
 
     // Conditional Highlight Props:
     // Prepare props for the highlighted quake only if its magnitude is valid.
@@ -43,6 +47,7 @@ function EarthquakeRegionalMapPanel({
             // Ensure a fallback title if properties.title or properties.place is not available.
             highlightQuakeTitle: properties.title || properties.place || 'Earthquake Event',
         };
+        console.log('[EarthquakeRegionalMapPanel] Derived highlightProps:', JSON.stringify(highlightProps, null, 2));
     } else {
         // Log a warning if properties or magnitude are missing/invalid, as a highlight was likely intended.
         console.warn("EarthquakeRegionalMapPanel: Invalid or missing magnitude for highlighting. No highlight marker will be shown.", properties);
@@ -53,16 +58,24 @@ function EarthquakeRegionalMapPanel({
             <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
             <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
                 <EarthquakeMap
-                    mapCenterLatitude={mapCenterLat}
-                    mapCenterLongitude={mapCenterLng}
-                    {...highlightProps} // Spread highlight-related props; will be empty if mag was invalid
-                    shakeMapUrl={shakemapIntensityImageUrl}
-                    nearbyQuakes={regionalQuakes}
-                    mainQuakeDetailUrl={detailUrl}
-                    // Fit bounds if there are regional quakes to show alongside the main one.
-                    // If no regional quakes, EarthquakeMap's default for fitMapToBounds (false) will apply,
-                    // resulting in using defaultZoom centered on mapCenterLat/Lng.
-                    fitMapToBounds={regionalQuakes && regionalQuakes.length > 0}
+                    // Dynamic props commented out for debugging:
+                    // mapCenterLatitude={mapCenterLat}
+                    // mapCenterLongitude={mapCenterLng}
+                    // {...highlightProps}
+                    // shakeMapUrl={shakemapIntensityImageUrl}
+                    // nearbyQuakes={regionalQuakes}
+                    // mainQuakeDetailUrl={detailUrl}
+                    // fitMapToBounds={regionalQuakes && regionalQuakes.length > 0}
+
+                    // Hardcoded props for testing basic rendering:
+                    mapCenterLatitude={34.0522}     // Los Angeles latitude
+                    mapCenterLongitude={-118.2437}  // Los Angeles longitude
+                    highlightQuakeLatitude={34.0522}
+                    highlightQuakeLongitude={-118.2437}
+                    highlightQuakeMagnitude={5.0}
+                    highlightQuakeTitle="Hardcoded Test Quake"
+                    // Other props like nearbyQuakes, fitMapToBounds, defaultZoom, etc.,
+                    // will use defaults defined in EarthquakeMap component signature.
                 />
             </div>
         </div>
