@@ -33,6 +33,7 @@ const SVG_HEIGHT = 400; // Increased height for text and better visual
 const EARTH_RADIUS_SVG = SVG_WIDTH / 2 * 0.8; // Scaled Earth radius for SVG
 const MAX_DEPTH_SVG = EARTH_RADIUS_SVG * 0.5; // Max depth visualization exaggerated
 const MAX_ANIMATION_SECONDS = 300; // Loop duration: increased for debugging visibility
+const VISUAL_SPEED_MULTIPLIER = 2.0; // Makes the animation appear twice as fast
 
 // Component
 const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'average' }) => {
@@ -109,16 +110,18 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
     if (!startTimeRef.current) {
       startTimeRef.current = timestamp;
     }
-    let elapsedMilliseconds = timestamp - startTimeRef.current;
-    let newAnimationTime = elapsedMilliseconds / 1000; // Convert to seconds
+    const elapsedRealTimeSeconds = (timestamp - startTimeRef.current) / 1000;
+
+    // newAnimationTime now represents the simulated seismic time, progressing faster
+    let newAnimationTime = elapsedRealTimeSeconds * VISUAL_SPEED_MULTIPLIER;
 
     if (newAnimationTime > MAX_ANIMATION_SECONDS) {
-      newAnimationTime = 0; // Reset animation time to loop
-      startTimeRef.current = timestamp; // Reset start time for the new loop
-      // Station arrival indicators are derived directly in render, so no explicit reset here is needed for them.
+      // Reset to 0 to loop the full MAX_ANIMATION_SECONDS of simulated seismic time
+      newAnimationTime = 0;
+      startTimeRef.current = timestamp; // Restart the "real time" counter for the new visual loop
     }
 
-    setAnimationTime(newAnimationTime);
+    setAnimationTime(newAnimationTime); // This is the simulated seismic time
 
     // Continue animation as long as component is mounted and data is available
     if (stationCalcs.length > 0) { // Ensure there are stations to animate for
@@ -225,6 +228,13 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
             <stop offset="70%" stopColor={`rgba(${S_WAVE_BASE_COLOR}, 0.2)`} />
             <stop offset="100%" stopColor={`rgba(${S_WAVE_BASE_COLOR}, 0.05)`} />
           </radialGradient>
+          <clipPath id="earthClipPath">
+            <path
+              d={`M ${svgCenterX - EARTH_RADIUS_SVG},${svgCenterY}
+                  A ${EARTH_RADIUS_SVG},${EARTH_RADIUS_SVG} 0 0 1 ${svgCenterX + EARTH_RADIUS_SVG},${svgCenterY}
+                  L ${svgCenterX - EARTH_RADIUS_SVG},${svgCenterY} Z`}
+            />
+          </clipPath>
         </defs>
 
         {/* Earth's surface (semicircle) */}
@@ -252,7 +262,8 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
               r: pWaveRadiusSVG,
               fill: "url(#pWaveGradient)",
               stroke: `rgba(${P_WAVE_BASE_COLOR}, 0.8)`,
-              strokeWidth: "3" // Increased for debugging visibility
+              strokeWidth: "3", // Increased for debugging visibility
+              clipPath: "url(#earthClipPath)"
             };
             // console.log("P-Wave props:", pWaveProps); // DEBUGGING CONSOLE LOGS - Step 2
             return <circle {...pWaveProps} />;
@@ -268,7 +279,8 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
               r: sWaveRadiusSVG,
               fill: "url(#sWaveGradient)",
               stroke: `rgba(${S_WAVE_BASE_COLOR}, 0.8)`,
-              strokeWidth: "3" // Increased for debugging visibility
+              strokeWidth: "3", // Increased for debugging visibility
+              clipPath: "url(#earthClipPath)"
             };
             // console.log("S-Wave props:", sWaveProps); // DEBUGGING CONSOLE LOGS - Step 2
             return <circle {...sWaveProps} />;

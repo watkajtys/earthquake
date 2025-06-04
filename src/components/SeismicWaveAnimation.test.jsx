@@ -196,13 +196,17 @@ describe('SeismicWaveAnimation', () => {
     expect(screen.getByText(/Mode: Illustrative Variable Speeds/i)).toBeInTheDocument();
   });
 
-  test('renders SVG definitions for wave gradients when data is available', () => {
+  test('renders SVG definitions for gradients and clipPath when data is available', () => {
     mockedUseEarthquakeDataState.mockReturnValue({ lastMajorQuake: null });
     const { container } = render(<SeismicWaveAnimation earthquake={mockEarthquake} />);
 
-    const defs = container.querySelector('svg defs');
+    const svgElement = container.querySelector('svg');
+    expect(svgElement).toBeInTheDocument();
+
+    const defs = svgElement.querySelector('defs');
     expect(defs).toBeInTheDocument();
 
+    // Check for gradients
     const pWaveGradient = defs.querySelector('#pWaveGradient');
     expect(pWaveGradient).toBeInTheDocument();
     expect(pWaveGradient.tagName.toLowerCase()).toBe('radialgradient');
@@ -210,6 +214,18 @@ describe('SeismicWaveAnimation', () => {
     const sWaveGradient = defs.querySelector('#sWaveGradient');
     expect(sWaveGradient).toBeInTheDocument();
     expect(sWaveGradient.tagName.toLowerCase()).toBe('radialgradient');
+
+    // Check for clipPath
+    const clipPath = defs.querySelector('#earthClipPath');
+    expect(clipPath).toBeInTheDocument();
+    expect(clipPath.tagName.toLowerCase()).toBe('clippath');
+
+    const clipPathPath = clipPath.querySelector('path');
+    expect(clipPathPath).toBeInTheDocument();
+    // Check if the d attribute of the path in clipPath is a non-empty string (basic check)
+    expect(clipPathPath.getAttribute('d')).toBeTruthy();
+    expect(clipPathPath.getAttribute('d').includes('A')).toBeTruthy(); // Should contain an Arc command
+    expect(clipPathPath.getAttribute('d').endsWith('Z')).toBeTruthy(); // Should be a closed path
   });
 
   test('station markers have default appearance on initial render', async () => {
