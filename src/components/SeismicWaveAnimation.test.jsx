@@ -40,11 +40,11 @@ const mockEarthquake = {
 };
 
 // Renamed and using names to align with component's VIRTUAL_STATIONS for clarity in tests
-const VIRTUAL_STATIONS_FOR_TEST = [
-    { name: "Station Alpha", lat: 5, lon: 5 }, // Coords match component for consistency if mock uses them
-    { name: "Station Bravo", lat: -7, lon: 9 },
-    { name: "Station Charlie", lat: 10, lon: -5 },
-    { name: "Station Delta", lat: -3, lon: -4 }
+const VIRTUAL_STATIONS_FOR_TEST = [ // These lat/lon must match component's VIRTUAL_STATIONS
+    { name: "Station Alpha", lat: 2.46, lon: 0.0 },
+    { name: "Station Bravo", lat: 0.0, lon: 4.5 },
+    { name: "Station Charlie", lat: -6.3, lon: 0.0 },
+    { name: "Station Delta", lat: 7.38, lon: 0.0 }
 ];
 
 
@@ -55,18 +55,16 @@ describe('SeismicWaveAnimation', () => {
     mockSeismicUtils.calculatePWaveTravelTime.mockClear();
     mockSeismicUtils.calculateSWaveTravelTime.mockClear();
 
-    // Mock distances based on station name for predictability
+    // Mock distances based on station name for predictability, using actual calculated hypocentral distances
     mockSeismicUtils.calculateHypocentralDistance.mockImplementation((earthquake, stationLat, stationLon) => {
-      // Find station by lat/lon to simulate component's behavior if it were to pass varied lat/lon
-      // For robust testing, we key off the name which is constant in our VIRTUAL_STATIONS_FOR_TEST
       const stationDetails = VIRTUAL_STATIONS_FOR_TEST.find(s => s.lat === stationLat && s.lon === stationLon);
       if (stationDetails) {
-        if (stationDetails.name === "Station Alpha") return 110; // New test distance
-        if (stationDetails.name === "Station Bravo") return 220; // New test distance
-        if (stationDetails.name === "Station Charlie") return 330; // New test distance
-        if (stationDetails.name === "Station Delta") return 440; // New test distance
+        if (stationDetails.name === "Station Alpha") return 275.22;
+        if (stationDetails.name === "Station Bravo") return 501.31;
+        if (stationDetails.name === "Station Charlie") return 700.59;
+        if (stationDetails.name === "Station Delta") return 820.49;
       }
-      return 150; // Default fallback
+      return 150; // Default fallback (should not be hit if all stations are covered)
     });
 
     // For the travel time functions in seismicUtils, they are less critical for 'variable'
@@ -131,15 +129,15 @@ describe('SeismicWaveAnimation', () => {
     }
 
     // For average scenario, the component calculates times internally using AVERAGE speeds.
-    // Station Alpha: dist = 110km (from new mock)
-    // P-time = 110 / 6.5 = 16.92 => "16.9s"
-    // S-time = 110 / 3.75 = 29.33 => "29.3s"
-    await screen.findByText(/P: 16.9s, S: 29.3s/i);
+    // Station Alpha: dist = 275.22 km
+    // P-time = 275.22 / 6.5 = 42.34 => "42.3s"
+    // S-time = 275.22 / 3.75 = 73.39 => "73.4s"
+    await screen.findByText(/P: 42.3s, S: 73.4s/i);
 
-    // Station Bravo: dist = 220km (from new mock)
-    // P-time = 220 / 6.5 = 33.84 => "33.8s"
-    // S-time = 220 / 3.75 = 58.66 => "58.7s"
-    await screen.findByText(/P: 33.8s, S: 58.7s/i);
+    // Station Bravo: dist = 501.31 km
+    // P-time = 501.31 / 6.5 = 77.12 => "77.1s"
+    // S-time = 501.31 / 3.75 = 133.68 => "133.7s"
+    await screen.findByText(/P: 77.1s, S: 133.7s/i);
 
     expect(screen.getByText(/Mode: Illustrative Average Speeds/i)).toBeInTheDocument();
   });
@@ -149,8 +147,11 @@ describe('SeismicWaveAnimation', () => {
 
     mockSeismicUtils.calculateHypocentralDistance.mockImplementation((earthquake, stationLat, stationLon) => {
       const stationDetails = VIRTUAL_STATIONS_FOR_TEST.find(s => s.lat === stationLat && s.lon === stationLon);
-      if (stationDetails && stationDetails.name === "Station Delta") return NaN;
-      if (stationDetails && stationDetails.name === "Station Alpha") return 110; // For the other assertion
+      if (stationDetails && stationDetails.name === "Station Delta") return NaN; // Station Delta returns NaN
+      if (stationDetails && stationDetails.name === "Station Alpha") return 275.22; // For the other assertion
+      // Provide default for Bravo and Charlie if they were to be rendered in this specific test configuration
+      if (stationDetails && stationDetails.name === "Station Bravo") return 501.31;
+      if (stationDetails && stationDetails.name === "Station Charlie") return 700.59;
       return 150;
     });
 
@@ -162,33 +163,37 @@ describe('SeismicWaveAnimation', () => {
     expect(parentOfStationName).toHaveTextContent(/P: N\/As, S: N\/As/i);
 
     // Ensure other stations still get their numbers
-    // Station Alpha: dist = 110km. P-time = 110 / 6.5 = 16.9s, S-time = 110 / 3.75 = 29.3s
+    // Station Alpha: dist = 275.22km. P-time = 275.22 / 6.5 = 42.3s, S-time = 275.22 / 3.75 = 73.4s
     const stationAlphaText = await screen.findByText(/Station Alpha/i);
     const parentOfStationAlpha = stationAlphaText.closest('g');
-    expect(parentOfStationAlpha).toHaveTextContent(/P: 16.9s, S: 29.3s/i);
+    expect(parentOfStationAlpha).toHaveTextContent(/P: 42.3s, S: 73.4s/i);
   });
 
   test('calculates and displays variable travel times with speedScenario="variable"', async () => {
     mockedUseEarthquakeDataState.mockReturnValue({ lastMajorQuake: null });
-    // Using distances from default mock in beforeEach: Alpha=110, Bravo=220, Charlie=330, Delta=440
+    // Using distances from default mock in beforeEach: Alpha=275.22, Bravo=501.31, Charlie=700.59, Delta=820.49
 
     render(<SeismicWaveAnimation earthquake={mockEarthquake} speedScenario="variable" />);
 
     // Station Alpha (index 0) uses FAST speeds: P_WAVE_FAST_KM_S (7.5), S_WAVE_FAST_KM_S (4.3)
-    // Dist = 110 km. P-time = 110 / 7.5 = 14.66 => "14.7s". S-time = 110 / 4.3 = 25.58 => "25.6s"
-    await screen.findByText(/P: 14.7s, S: 25.6s/i);
+    // Dist = 275.22 km. P-time = 275.22 / 7.5 = 36.696 => "36.7s". S-time = 275.22 / 4.3 = 64.00 => "64.0s"
+    await screen.findByText(/P: 36.7s, S: 64.0s/i);
 
     // Station Bravo (index 1) uses SLOW speeds: P_WAVE_SLOW_KM_S (5.5), S_WAVE_SLOW_KM_S (3.2)
-    // Dist = 220 km. P-time = 220 / 5.5 = 40.0 => "40.0s". S-time = 220 / 3.2 = 68.75 => "68.8s"
-    await screen.findByText(/P: 40.0s, S: 68.8s/i);
+    // Dist = 501.31 km. P-time = 501.31 / 5.5 = 91.147 => "91.1s". S-time = 501.31 / 3.2 = 156.659 => "156.7s"
+    // Note: previous report had 91.2 for P-Slow, 156.7 for S-Slow. Rounding of .toFixed(1) matters.
+    // 91.147 -> "91.1"
+    // 156.659 -> "156.7"
+    await screen.findByText(/P: 91.1s, S: 156.7s/i);
+
 
     // Station Charlie (index 2) uses AVERAGE speeds: AVERAGE_P_WAVE_VELOCITY_KM_S (6.5), AVERAGE_S_WAVE_VELOCITY_KM_S (3.75)
-    // Dist = 330 km. P-time = 330 / 6.5 = 50.76 => "50.8s". S-time = 330 / 3.75 = 88.0 => "88.0s"
-    await screen.findByText(/P: 50.8s, S: 88.0s/i);
+    // Dist = 700.59 km. P-time = 700.59 / 6.5 = 107.78 => "107.8s". S-time = 700.59 / 3.75 = 186.824 => "186.8s"
+    await screen.findByText(/P: 107.8s, S: 186.8s/i);
 
     // Station Delta (index 3) uses AVERAGE speeds
-    // Dist = 440 km. P-time = 440 / 6.5 = 67.69 => "67.7s". S-time = 440 / 3.75 = 117.33 => "117.3s"
-    await screen.findByText(/P: 67.7s, S: 117.3s/i);
+    // Dist = 820.49 km. P-time = 820.49 / 6.5 = 126.229 => "126.2s". S-time = 820.49 / 3.75 = 218.797 => "218.8s"
+    await screen.findByText(/P: 126.2s, S: 218.8s/i);
 
     expect(screen.getByText(/Mode: Illustrative Variable Speeds/i)).toBeInTheDocument();
   });

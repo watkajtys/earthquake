@@ -16,10 +16,10 @@ import {
 
 // Constants
 const VIRTUAL_STATIONS = [
-  { name: "Station Alpha", lat: 5, lon: 5 },       // Approx 781km from (0,0) thirty km deep, P-time (at 5.5km/s) ~142s
-  { name: "Station Bravo", lat: -7, lon: 9 },      // Approx 1240km, P-time ~226s
-  { name: "Station Charlie", lat: 10, lon: -5 },   // Approx 1227km, P-time ~223s
-  { name: "Station Delta", lat: -3, lon: -4 }    // Approx 551km, P-time ~100s
+    { name: "Station Alpha", lat: 2.46, lon: 0.0 }, // Approx P-time: 50s (slowest speed of 5.5km/s, for epicenter 0,0, depth 30km)
+    { name: "Station Bravo", lat: 0.0, lon: 4.5 },   // Approx P-time: 91s (slowest)
+    { name: "Station Charlie", lat: -6.3, lon: 0.0 }, // Approx P-time: 127s (slowest)
+    { name: "Station Delta", lat: 7.38, lon: 0.0 }  // Approx P-time: 149s (slowest)
 ];
 
 const P_WAVE_BASE_COLOR = "0, 0, 255"; // RGB for blue
