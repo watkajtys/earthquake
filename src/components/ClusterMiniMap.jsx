@@ -58,7 +58,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
             setContainerWidth(entry.contentRect.width);
             // Invalidate map size when container width changes to ensure it rerenders correctly
             if (mapRef.current) {
-              mapRef.current.invalidateSize();
+              setTimeout(() => { if (mapRef.current) { mapRef.current.invalidateSize(); } }, 0);
             }
           }
         }
@@ -134,7 +134,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
         ])
       );
       // The initialZoom check above should be sufficient to prevent re-zooming pinpoint clusters.
-      mapRef.current.fitBounds(bounds, { padding: [0, 0] });
+      mapRef.current.fitBounds(bounds, { padding: [10, 10] });
     }
     // For a single quake (initialZoom=10) or pinpoint cluster (initialZoom=13),
     // the view is already set by mapCenter and initialZoom on MapContainer.
@@ -152,7 +152,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
     <MapContainer
       center={mapCenter}
       zoom={initialZoom}
-      style={{ height: '200px', width: '100%' }} // Width is 100% of its container
+      style={{ height: '200px', width: containerWidth ? `${containerWidth}px` : '100%' }} // Width is 100% of its container
       scrollWheelZoom={false}
       ref={mapRef}
       maxZoom={18}
