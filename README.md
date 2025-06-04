@@ -39,6 +39,16 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * **Vite**: Frontend build tool.
 * **JavaScript (ES6+)**
 
+## Backend Services / Cloudflare Workers
+
+### USGS Proxy Worker (`functions/api/usgs-proxy.js`)
+Acts as a caching proxy for requests to the USGS API to improve performance and reduce load on the USGS servers.
+Key features: Caches responses based on the `apiUrl` query parameter. Cache duration is configurable via the `WORKER_CACHE_DURATION_SECONDS` environment variable.
+
+### Earthquake Summary Worker (`functions/api/earthquake-summary.js`)
+Provides a summarized view of recent earthquake activity by fetching and combining data from multiple USGS GeoJSON feeds.
+Key features: Fetches data from the 'significant earthquakes in the past day' and 'all earthquakes in the past hour' feeds. Aggregates counts and metadata. Caches the combined summary. Cache duration is configurable via the `EARTHQUAKE_SUMMARY_CACHE_SECONDS` environment variable.
+
 ## Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
 
 This Global Seismic Activity Monitor was brought to life through a dynamic and iterative development process, affectionately termed "vibe-coding." The project was conceptualized and significantly shaped within Gemini Canvas, leveraging a conversational AI-assisted development workflow.
