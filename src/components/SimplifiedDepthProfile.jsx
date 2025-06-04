@@ -43,10 +43,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
   }
   const depth = parseFloat(earthquakeDepth);
 
-  // Helper function for dynamic contextual comparisons
-  const contextualMessages = getDynamicContextualComparisons(depth, DEPTH_COMPARISONS);
-
-  const layers = [
+  const layers = [ // Define layers before it's used by getDynamicContextualComparisons
     // Surface is handled separately in terms of drawing height calculation
     { name: "Surface", startDepth: 0, endDepth: 0, color: "bg-lime-200", textColor: "text-lime-800", zIndex: 10 },
     { name: "Sedimentary/Upper Crust", startDepth: 0, endDepth: 10, color: "bg-stone-300", textColor: "text-stone-800", zIndex: 4 },
@@ -54,6 +51,9 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
     { name: "Lithospheric Mantle", startDepth: 35, endDepth: 100, color: "bg-slate-500", textColor: "text-slate-100", zIndex: 2 },
     { name: "Asthenosphere (Upper Mantle)", startDepth: 100, endDepth: 700, color: "bg-indigo-800", textColor: "text-indigo-100", zIndex: 1 },
   ];
+  // Helper function for dynamic contextual comparisons
+  // Pass layers to the helper function
+  const contextualMessages = getDynamicContextualComparisons(depth, DEPTH_COMPARISONS, layers);
 
   const diagramTotalRealDepthKm = 700; // Max real depth the diagram represents for scaling layers
 
@@ -103,20 +103,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
     hypocenterLineHeightPx = Math.min(hypocenterLineHeightPx, availableDrawingPx); // Cap at max drawing height
   }
 
-  const getComparisonDepthLineHeightPx = (comparisonDepthKm) => {
-    if (comparisonDepthKm < 0) return 0; // Should not happen with current data
-
-    let lineHeightPx = 0;
-    if (comparisonDepthKm <= segment1MaxDepthKm) {
-      lineHeightPx = (comparisonDepthKm / segment1MaxDepthKm) * segment1VisualPx;
-    } else if (comparisonDepthKm <= diagramTotalRealDepthKm) {
-      lineHeightPx = segment1VisualPx +
-        ((comparisonDepthKm - segment1MaxDepthKm) / segment2RealDepthKm) * segment2VisualPx;
-    } else { // Deeper than our diagram's max real depth
-      lineHeightPx = availableDrawingPx; // Line goes to bottom
-    }
-    return Math.min(lineHeightPx, availableDrawingPx); // Cap at max drawing height
-  };
+  // getComparisonDepthLineHeightPx is no longer needed as comparison markers are removed.
 
   let hypocenterLayerName = "Unknown";
   // Find containing layer (excluding Surface)
@@ -157,22 +144,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
         </div>
       )}
 
-      <details className="my-3 group" data-testid="static-comparison-list-details">
-        <summary className="p-2 rounded bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 group-open:rounded-b-none">
-          <h4 className="text-xs font-semibold text-slate-600 inline">Real-World Depth & Height Comparisons</h4>
-          <span className="text-xs text-slate-500 ml-1 group-open:hidden">(Click to expand)</span>
-          <span className="text-xs text-slate-500 ml-1 hidden group-open:inline">(Click to collapse)</span>
-        </summary>
-        <div className="p-2 rounded-b bg-slate-50 border border-t-0 border-slate-200" data-testid="comparison-text-list-container">
-          <ul className="list-disc list-inside text-xs text-slate-500 md:grid md:grid-cols-2 md:gap-x-4" data-testid="comparison-text-list">
-            {DEPTH_COMPARISONS.map(comp => (
-              <li key={comp.name} data-testid={`comparison-text-item-${comp.name.replace(/\s+/g, '-').toLowerCase()}`}>
-                {comp.name}: {comp.depth.toFixed(1)} km{comp.isHeight ? ' (Height)' : ''}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </details>
+      {/* Static list of comparisons and its container have been removed. */}
 
       <div className="relative w-full bg-gray-100 rounded border border-gray-300 flex flex-col" style={{ height: `${diagramTotalRenderHeightPx}px` }} data-testid="depth-profile-chart">
         {/* Render Surface Band */}
@@ -306,67 +278,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
             </div>
         )}
 
-        {/* Real-World Depth Comparison Markers */}
-        {DEPTH_COMPARISONS.map((comp) => {
-          // For items marked as height, their 'depth' for calculation will be 0, placing them at the surface.
-          // Otherwise, use the actual depth.
-          const effectiveDepthForCalc = comp.isHeight ? 0 : comp.depth;
-
-          const comparisonLineHeightPx = getComparisonDepthLineHeightPx(effectiveDepthForCalc);
-
-          // Determine the top position for the line's visual start
-          const lineVisualTopPx = surfaceBandHeightPx;
-
-          // Determine the visual height of the line
-          // If effective depth is 0 (either actual 0 depth or an item treated as height), line is 1px.
-          const lineVisualHeightPx = (effectiveDepthForCalc === 0) ? 1 : comparisonLineHeightPx;
-
-          // Determine the anchor point for the label vertically using the calculated line height
-          const labelAnchorVerticalPx = surfaceBandHeightPx + comparisonLineHeightPx;
-
-          let labelTopPositionPx;
-          if (effectiveDepthForCalc === 0) { // Covers both actual 0-depth items and isHeight items
-            labelTopPositionPx = surfaceBandHeightPx + 2; // Position label just below surface band text
-          } else {
-            labelTopPositionPx = labelAnchorVerticalPx - 7; // Try to center label (approx label height 14px / 2 = 7)
-            // Clamp label position
-            if (labelTopPositionPx < surfaceBandHeightPx + 2) {
-                labelTopPositionPx = surfaceBandHeightPx + 2;
-            }
-            if (labelTopPositionPx > diagramTotalRenderHeightPx - 16) { // 16px approx height of label box
-                labelTopPositionPx = diagramTotalRenderHeightPx - 16;
-            }
-          }
-
-          return (
-            <React.Fragment key={`comp-${comp.name}`}>
-              {/* Comparison Line - render if it has some height or is a zero-depth/height marker */}
-              {(lineVisualHeightPx > 0 || effectiveDepthForCalc === 0) && (
-                <div
-                  className="absolute right-1/4 w-0.5 bg-sky-500" // Blueish line
-                  style={{
-                    top: `${lineVisualTopPx}px`,
-                    height: `${lineVisualHeightPx}px`,
-                    zIndex: 18,
-                  }}
-                />
-              )}
-              {/* Comparison Label */}
-              <div
-                className="absolute text-xs text-sky-700 font-medium bg-white bg-opacity-80 px-1 py-0.5 rounded shadow-sm"
-                style={{
-                  top: `${labelTopPositionPx}px`,
-                  left: `calc(75% + 8px)`,
-                  zIndex: 19,
-                }}
-                title={`${comp.name}: ${comp.depth.toFixed(1)} km${comp.isHeight ? ' (Height)' : ''}`}
-                data-testid={`comparison-visual-label-${comp.name.replace(/\s+/g, '-').toLowerCase()}`}
-              >
-                {comp.name.substring(0, 18)}{comp.name.length > 18 ? '...' : ''} ({comp.depth.toFixed(1)} km{comp.isHeight ? ' H' : ''})
-              </div>
-            </React.Fragment>
-          );
-        })}
+        {/* Real-World Depth Comparison Markers have been removed. */}
       </div>
       <p className="text-xs text-slate-500 mt-2 text-center">
         Note: Diagram is illustrative. Layer depths are approximate. Top 100km expanded for detail.
@@ -375,8 +287,15 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
   );
 }
 
+  // Helper function for dynamic contextual comparisons
+  // Pass layers to the helper function
+  // const contextualMessages = getDynamicContextualComparisons(depth, DEPTH_COMPARISONS, layers);
+  // This call is already moved up before 'layers' was used by it, so this comment is slightly misplaced in search.
+  // The actual call to getDynamicContextualComparisons is correctly placed higher now.
+
+
 // Helper function implementation (outside the component for clarity)
-function getDynamicContextualComparisons(currentDepth, comparisonsList) {
+function getDynamicContextualComparisons(currentDepth, comparisonsList, earthLayers) {
   const messages = [];
   const depthComparisons = comparisonsList
     .filter(c => !c.isHeight)
@@ -424,20 +343,41 @@ function getDynamicContextualComparisons(currentDepth, comparisonsList) {
 
   if (closestDeeper) {
     messages.push(`It is shallower than the ${closestDeeper.name} (${closestDeeper.depth.toFixed(1)} km).`);
-  } else if (closestShallower) { // Only add this if there was a shallower one, but no deeper ones
-    // Current depth is deeper than all benchmarks
-    messages.push(`This depth of ${currentDepth.toFixed(1)} km is deeper than all listed depth benchmarks, including the ${closestShallower.name} (${closestShallower.depth.toFixed(1)} km).`);
-     // If we are deeper than all, the first message about being deeper than closestShallower is good,
-     // and this specific one might be redundant or could replace it.
-     // Let's refine: if deeper than all, the first message already states it's "deeper than X (deepest one)".
-     // So, if closestDeeper is null AND closestShallower is the last item in depthComparisons.
-     if (closestShallower === depthComparisons[depthComparisons.length -1]) {
-        messages.pop(); // Remove the "deeper than X"
-        messages.push(`This depth of ${currentDepth.toFixed(1)} km is beyond our deepest benchmark, the ${closestShallower.name} (${closestShallower.depth.toFixed(1)} km).`);
-     }
+  } else if (closestShallower) {
+    // Current depth is deeper than all benchmarks in comparisonsList
+    const deepestBenchmark = closestShallower; // This is the deepest one from comparisonsList
+    const significantlyDeeperThreshold = deepestBenchmark.depth + 50; // e.g., 50km deeper
+
+    if (currentDepth > significantlyDeeperThreshold) {
+      let foundLayer = null;
+      // Find the geological layer for this very deep earthquake (ignoring Surface layer for this context)
+      for (const layer of earthLayers.slice(1).sort((a,b) => a.startDepth - b.startDepth)) {
+        if (currentDepth >= layer.startDepth && currentDepth < layer.endDepth) {
+          foundLayer = layer;
+          break;
+        }
+      }
+      // Check if deeper than the deepest defined layer
+      const maxLayerDepth = Math.max(...earthLayers.map(l => l.endDepth));
+
+      messages.pop(); // Remove the previous "deeper than X" message
+      if (foundLayer) {
+        messages.push(`At ${currentDepth.toFixed(0)} km, this earthquake originated deep within the Earth's ${foundLayer.name}.`);
+      } else if (currentDepth >= maxLayerDepth) {
+         messages.push(`At ${currentDepth.toFixed(0)} km, this earthquake occurred at an exceptionally profound depth within the Earth, below the typically mapped Asthenosphere.`);
+      } else {
+        // Fallback if it's significantly deep but somehow not in a defined layer (shouldn't happen with current data)
+        messages.push(`This earthquake's depth of ${currentDepth.toFixed(0)} km is exceptionally profound, far exceeding common benchmarks.`);
+      }
+    } else {
+      // Deeper than all benchmarks, but not "significantly" deeper by the new threshold
+      // Refine the existing message
+      messages.pop(); // Remove the "deeper than X"
+      messages.push(`This depth of ${currentDepth.toFixed(1)} km is beyond our deepest listed benchmark, the ${deepestBenchmark.name} (${deepestBenchmark.depth.toFixed(1)} km).`);
+    }
   }
 
-  // Ensure we return max 2 messages as per initial thought, though current logic might give more if not careful
+  // Ensure we return max 2 messages, though current logic often results in 1 specific message.
   // The logic above already tries to be concise. If "very close" is found, it returns 1.
   // Otherwise, it aims for 1 or 2 (e.g. shallower than all, or between two points).
   // If it's shallower than all, it returns 1 message.
