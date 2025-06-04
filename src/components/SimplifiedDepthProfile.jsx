@@ -2,6 +2,27 @@
 import React from 'react';
 import { getMagnitudeColor } from '../utils/utils.js';
 
+const DEPTH_COMPARISONS = [
+  { name: "Burj Khalifa", depth: 0.828 },
+  { name: "Krubera Cave (deepest cave)", depth: 2.197 },
+  { name: "Grand Canyon (average depth)", depth: 1.83 },
+  { name: "Challenger Deep (ocean deepest)", depth: 10.935 },
+  { name: "Average Continental Crust", depth: 35 },
+  { name: "Height of Mount Everest", depth: 8.848, isHeight: true },
+  { name: "Typical Commercial Flight Altitude", depth: 10.6, isHeight: true },
+  { name: "Depth of Titanic Wreckage", depth: 3.8 },
+  { name: "Deepest Gold Mine (Mponeng, South Africa)", depth: 4.0 },
+  { name: "Average Ocean Depth", depth: 3.7 },
+  { name: "Kola Superdeep Borehole (deepest artificial point)", depth: 12.262 },
+  { name: "Deepest Point in the Arctic Ocean (Molloy Deep)", depth: 5.55 },
+  { name: "Deepest Point in the Atlantic Ocean (Puerto Rico Trench)", depth: 8.376 },
+  { name: "Deepest Point in the Indian Ocean (Java Trench)", depth: 7.725 },
+  { name: "Typical Geothermal Well Depth", depth: 2.0 },
+  { name: "Depth of Lake Baikal (deepest lake)", depth: 1.642 },
+  { name: "Panama Canal Max Depth", depth: 0.018 },
+  { name: "Suez Canal Max Depth", depth: 0.024 },
+];
+
 /**
  * Displays a simplified, illustrative vertical profile of Earth's layers
  * to visualize the depth of an earthquake's hypocenter.
@@ -79,6 +100,20 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
     hypocenterLineHeightPx = Math.min(hypocenterLineHeightPx, availableDrawingPx); // Cap at max drawing height
   }
 
+  const getComparisonDepthLineHeightPx = (comparisonDepthKm) => {
+    if (comparisonDepthKm < 0) return 0; // Should not happen with current data
+
+    let lineHeightPx = 0;
+    if (comparisonDepthKm <= segment1MaxDepthKm) {
+      lineHeightPx = (comparisonDepthKm / segment1MaxDepthKm) * segment1VisualPx;
+    } else if (comparisonDepthKm <= diagramTotalRealDepthKm) {
+      lineHeightPx = segment1VisualPx +
+        ((comparisonDepthKm - segment1MaxDepthKm) / segment2RealDepthKm) * segment2VisualPx;
+    } else { // Deeper than our diagram's max real depth
+      lineHeightPx = availableDrawingPx; // Line goes to bottom
+    }
+    return Math.min(lineHeightPx, availableDrawingPx); // Cap at max drawing height
+  };
 
   let hypocenterLayerName = "Unknown";
   // Find containing layer (excluding Surface)
@@ -110,7 +145,18 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
         (approx. within {hypocenterLayerName}).
       </p>
 
-      <div className="relative w-full bg-gray-100 rounded border border-gray-300 flex flex-col" style={{ height: `${diagramTotalRenderHeightPx}px` }}>
+      <div className="my-3 p-2 rounded bg-slate-50 border border-slate-200" data-testid="comparison-text-list-container">
+        <h4 className="text-xs font-semibold text-slate-600 mb-1">Real-World Depth & Height Comparisons:</h4>
+        <ul className="list-disc list-inside text-xs text-slate-500 md:grid md:grid-cols-2 md:gap-x-4" data-testid="comparison-text-list">
+          {DEPTH_COMPARISONS.map(comp => (
+            <li key={comp.name} data-testid={`comparison-text-item-${comp.name.replace(/\s+/g, '-').toLowerCase()}`}>
+              {comp.name}: {comp.depth.toFixed(1)} km{comp.isHeight ? ' (Height)' : ''}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="relative w-full bg-gray-100 rounded border border-gray-300 flex flex-col" style={{ height: `${diagramTotalRenderHeightPx}px` }} data-testid="depth-profile-chart">
         {/* Render Surface Band */}
         <div
             key={layers[0].name}
@@ -240,6 +286,68 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
                 {depth?.toFixed(1)} km
             </div>
         )}
+
+        {/* Real-World Depth Comparison Markers */}
+        {DEPTH_COMPARISONS.map((comp) => {
+          // For items marked as height, their 'depth' for calculation will be 0, placing them at the surface.
+          // Otherwise, use the actual depth.
+          const effectiveDepthForCalc = comp.isHeight ? 0 : comp.depth;
+
+          const comparisonLineHeightPx = getComparisonDepthLineHeightPx(effectiveDepthForCalc);
+
+          // Determine the top position for the line's visual start
+          const lineVisualTopPx = surfaceBandHeightPx;
+
+          // Determine the visual height of the line
+          // If effective depth is 0 (either actual 0 depth or an item treated as height), line is 1px.
+          const lineVisualHeightPx = (effectiveDepthForCalc === 0) ? 1 : comparisonLineHeightPx;
+
+          // Determine the anchor point for the label vertically using the calculated line height
+          const labelAnchorVerticalPx = surfaceBandHeightPx + comparisonLineHeightPx;
+
+          let labelTopPositionPx;
+          if (effectiveDepthForCalc === 0) { // Covers both actual 0-depth items and isHeight items
+            labelTopPositionPx = surfaceBandHeightPx + 2; // Position label just below surface band text
+          } else {
+            labelTopPositionPx = labelAnchorVerticalPx - 7; // Try to center label (approx label height 14px / 2 = 7)
+            // Clamp label position
+            if (labelTopPositionPx < surfaceBandHeightPx + 2) {
+                labelTopPositionPx = surfaceBandHeightPx + 2;
+            }
+            if (labelTopPositionPx > diagramTotalRenderHeightPx - 16) { // 16px approx height of label box
+                labelTopPositionPx = diagramTotalRenderHeightPx - 16;
+            }
+          }
+
+          return (
+            <React.Fragment key={`comp-${comp.name}`}>
+              {/* Comparison Line - render if it has some height or is a zero-depth/height marker */}
+              {(lineVisualHeightPx > 0 || effectiveDepthForCalc === 0) && (
+                <div
+                  className="absolute right-1/4 w-0.5 bg-sky-500" // Blueish line
+                  style={{
+                    top: `${lineVisualTopPx}px`,
+                    height: `${lineVisualHeightPx}px`,
+                    zIndex: 18,
+                  }}
+                />
+              )}
+              {/* Comparison Label */}
+              <div
+                className="absolute text-xs text-sky-700 font-medium bg-white bg-opacity-80 px-1 py-0.5 rounded shadow-sm"
+                style={{
+                  top: `${labelTopPositionPx}px`,
+                  left: `calc(75% + 8px)`,
+                  zIndex: 19,
+                }}
+                title={`${comp.name}: ${comp.depth.toFixed(1)} km${comp.isHeight ? ' (Height)' : ''}`}
+                data-testid={`comparison-visual-label-${comp.name.replace(/\s+/g, '-').toLowerCase()}`}
+              >
+                {comp.name.substring(0, 18)}{comp.name.length > 18 ? '...' : ''} ({comp.depth.toFixed(1)} km{comp.isHeight ? ' H' : ''})
+              </div>
+            </React.Fragment>
+          );
+        })}
       </div>
       <p className="text-xs text-slate-500 mt-2 text-center">
         Note: Diagram is illustrative. Layer depths are approximate. Top 100km expanded for detail.
