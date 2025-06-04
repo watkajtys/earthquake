@@ -74,20 +74,23 @@ const makeColorDuller = (colorString, opacityFactor) => {
  * @param {number} [props.globeAutoRotateSpeed=0.1] - Speed of the auto-rotation.
  * @param {string} [props.highlightedQuakeId] - The ID of an earthquake to be visually highlighted on the globe.
  * @param {function(object):void} props.onQuakeClick - Callback function triggered when an earthquake point is clicked. Receives the quake data object.
+ * @param {function(object, MouseEvent, { lat: number, lng: number, altitude: number }):void} [props.onPathClick] - Callback for path clicks.
+ * @param {function(object):string} [props.pathColor] - Function to determine color of a path.
  * @param {object} [props.tectonicPlatesGeoJson] - GeoJSON data for rendering tectonic plate boundaries.
  * @returns {JSX.Element} The rendered InteractiveGlobeView component.
  */
 const InteractiveGlobeView = ({
                                   onQuakeClick,
+                                  onPathClick,
+                                  pathColor, // Added pathColor prop
                                   getMagnitudeColorFunc,
                                   coastlineGeoJson,
                                   tectonicPlatesGeoJson,
                                   highlightedQuakeId,
-                                  activeClusters = [], // <-- New prop with default
+                                  activeClusters = [],
                                   atmosphereColor = "rgba(100,100,255,0.3)",
                                   defaultFocusLat = 20,
                                   defaultFocusLng = 0,
-                                  // initialLongitude = null, // Removed prop
                                   defaultFocusAltitude = 2.5,
                                   allowUserDragRotation = true,
                                   enableAutoRotation = true,
@@ -580,8 +583,10 @@ const InteractiveGlobeView = ({
 
                     pathsData={paths}
                     pathPoints="coords" pathPointLat={p => p[1]} pathPointLng={p => p[0]}
-                    pathColor={path => path.color} pathStroke={path => path.stroke}
+                    pathColor={pathColor || (path => path.color)} // Use provided pathColor function, fallback to internal
+                    pathStroke={path => path.stroke}
                     pathLabel={path => path.label} pathTransitionDuration={0}
+                    onPathClick={onPathClick}
 
                     ringsData={ringsData}
                     ringLat="lat"
