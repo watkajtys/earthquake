@@ -1,6 +1,6 @@
 // src/ClusterDetailModal.jsx
 import React from 'react';
-import ClusterMiniMap from './ClusterMiniMap'; // Added import for the mini-map
+import EarthquakeMap from './EarthquakeMap'; // Import EarthquakeMap
 import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor
 
 /**
@@ -94,6 +94,46 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
         return timeB - timeA; // Descending order
     });
 
+    // Refined Main Quake Selection and Props Preparation
+    let mainDisplayQuake = null;
+    let nearbyQuakesForMap = [];
+    let mainQuakeLatitude = 0;
+    let mainQuakeLongitude = 0;
+    let mainQuakeMagnitude = 0;
+    let mainQuakeTitle = "Cluster Map";
+    let mainQuakeDetailUrl = undefined;
+
+    if (sortedQuakes.length > 0) {
+        // Find quake with the highest magnitude. If ties, most recent (first in sortedQuakes) wins.
+        mainDisplayQuake = sortedQuakes.reduce((maxMagQuake, currentQuake) => {
+            const currentMag = currentQuake.properties?.mag ?? -Infinity;
+            const maxKnownMag = maxMagQuake.properties?.mag ?? -Infinity;
+            return currentMag > maxKnownMag ? currentQuake : maxMagQuake;
+        }, sortedQuakes[0]); // Initialize with the first quake
+
+        if (mainDisplayQuake) {
+            mainQuakeLatitude = mainDisplayQuake.geometry?.coordinates?.[1] ?? 0;
+            mainQuakeLongitude = mainDisplayQuake.geometry?.coordinates?.[0] ?? 0;
+            mainQuakeMagnitude = mainDisplayQuake.properties?.mag ?? 0;
+            mainQuakeTitle = mainDisplayQuake.properties?.place || mainDisplayQuake.properties?.title || "Selected Earthquake";
+            if (mainDisplayQuake.id) {
+                mainQuakeDetailUrl = `/quake/${encodeURIComponent(mainDisplayQuake.id)}`;
+            }
+
+            nearbyQuakesForMap = sortedQuakes.filter(quake => quake.id !== mainDisplayQuake.id);
+        } else {
+            // This else block might be redundant if sortedQuakes[0] guarantees mainDisplayQuake is set
+            // but kept for safety for now, or if mainDisplayQuake could somehow be null after reduce.
+            // Default values assigned before this if-block will be used.
+             mainQuakeTitle = "Cluster Map (No Quake Data)"; // More specific title
+        }
+    } else {
+        // No quakes in the cluster, use default values set above.
+        // mainQuakeTitle could be updated to reflect no data, e.g., "Cluster Map (No Quakes)"
+        mainQuakeTitle = "Cluster Map (No Quakes)";
+    }
+
+
     // Calculate Depth Range (Optional, as designed)
     let minDepth = Infinity;
     let maxDepth = -Infinity;
@@ -147,9 +187,17 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                     <p><strong>Depth Range:</strong> <span className="text-slate-100">{depthRangeStr}</span></p>
                 </div>
 
-                {/* Cluster Mini Map */}
-                <div className="my-4"> {/* Added margin for spacing */}
-                    <ClusterMiniMap cluster={cluster} getMagnitudeColor={getMagnitudeColor} containerRef={modalContentRef} />
+                {/* Earthquake Map */}
+                <div style={{ height: '200px', width: '100%' }} className="my-4">
+                    <EarthquakeMap
+                        latitude={mainQuakeLatitude}
+                        longitude={mainQuakeLongitude}
+                        magnitude={mainQuakeMagnitude}
+                        title={mainQuakeTitle}
+                        nearbyQuakes={nearbyQuakesForMap}
+                        mainQuakeDetailUrl={mainQuakeDetailUrl}
+                        zoom={10}
+                    />
                 </div>
 
                 {/* Individual Earthquakes List */}
