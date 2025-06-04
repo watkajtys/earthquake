@@ -2,6 +2,27 @@
 import React from 'react';
 import { getMagnitudeColor } from '../utils/utils.js';
 
+export const DEPTH_COMPARISONS = [ // Added export
+  { name: "Burj Khalifa", depth: 0.828 },
+  { name: "Krubera Cave (deepest cave)", depth: 2.197 },
+  { name: "Grand Canyon (average depth)", depth: 1.83 },
+  { name: "Challenger Deep (ocean deepest)", depth: 10.935 },
+  { name: "Average Continental Crust", depth: 35 },
+  { name: "Height of Mount Everest", depth: 8.848, isHeight: true },
+  { name: "Typical Commercial Flight Altitude", depth: 10.6, isHeight: true },
+  { name: "Depth of Titanic Wreckage", depth: 3.8 },
+  { name: "Deepest Gold Mine (Mponeng, South Africa)", depth: 4.0 },
+  { name: "Average Ocean Depth", depth: 3.7 },
+  { name: "Kola Superdeep Borehole (deepest artificial point)", depth: 12.262 },
+  { name: "Deepest Point in the Arctic Ocean (Molloy Deep)", depth: 5.55 },
+  { name: "Deepest Point in the Atlantic Ocean (Puerto Rico Trench)", depth: 8.376 },
+  { name: "Deepest Point in the Indian Ocean (Java Trench)", depth: 7.725 },
+  { name: "Typical Geothermal Well Depth", depth: 2.0 },
+  { name: "Depth of Lake Baikal (deepest lake)", depth: 1.642 },
+  { name: "Panama Canal Max Depth", depth: 0.018 },
+  { name: "Suez Canal Max Depth", depth: 0.024 },
+];
+
 /**
  * Displays a simplified, illustrative vertical profile of Earth's layers
  * to visualize the depth of an earthquake's hypocenter.
@@ -22,7 +43,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
   }
   const depth = parseFloat(earthquakeDepth);
 
-  const layers = [
+  const layers = [ // Define layers before it's used by getDynamicContextualComparisons
     // Surface is handled separately in terms of drawing height calculation
     { name: "Surface", startDepth: 0, endDepth: 0, color: "bg-lime-200", textColor: "text-lime-800", zIndex: 10 },
     { name: "Sedimentary/Upper Crust", startDepth: 0, endDepth: 10, color: "bg-stone-300", textColor: "text-stone-800", zIndex: 4 },
@@ -30,6 +51,9 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
     { name: "Lithospheric Mantle", startDepth: 35, endDepth: 100, color: "bg-slate-500", textColor: "text-slate-100", zIndex: 2 },
     { name: "Asthenosphere (Upper Mantle)", startDepth: 100, endDepth: 700, color: "bg-indigo-800", textColor: "text-indigo-100", zIndex: 1 },
   ];
+  // Helper function for dynamic contextual comparisons
+  // Pass layers to the helper function
+  const contextualMessages = getDynamicContextualComparisons(depth, DEPTH_COMPARISONS, layers);
 
   const diagramTotalRealDepthKm = 700; // Max real depth the diagram represents for scaling layers
 
@@ -79,6 +103,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
     hypocenterLineHeightPx = Math.min(hypocenterLineHeightPx, availableDrawingPx); // Cap at max drawing height
   }
 
+  // getComparisonDepthLineHeightPx is no longer needed as comparison markers are removed.
 
   let hypocenterLayerName = "Unknown";
   // Find containing layer (excluding Surface)
@@ -110,7 +135,18 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
         (approx. within {hypocenterLayerName}).
       </p>
 
-      <div className="relative w-full bg-gray-100 rounded border border-gray-300 flex flex-col" style={{ height: `${diagramTotalRenderHeightPx}px` }}>
+      {contextualMessages.length > 0 && (
+        <div className="my-3 p-2 rounded bg-sky-50 border border-sky-200 text-sky-700" data-testid="contextual-insights-container">
+          <h4 className="text-xs font-semibold text-sky-800 mb-1">Contextual Depth Insights:</h4>
+          {contextualMessages.map((msg, index) => (
+            <p key={index} className="text-xs mb-0.5">{msg}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Static list of comparisons and its container have been removed. */}
+
+      <div className="relative w-full bg-gray-100 rounded border border-gray-300 flex flex-col" style={{ height: `${diagramTotalRenderHeightPx}px` }} data-testid="depth-profile-chart">
         {/* Render Surface Band */}
         <div
             key={layers[0].name}
@@ -236,16 +272,118 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
                     zIndex: 21, // Ensure label is above the line/marker
                     display: depth < 1 && depth > 0 ? 'none' : 'block'
                 }}
+                data-testid="earthquake-depth-label" // Added data-testid
             >
                 {depth?.toFixed(1)} km
             </div>
         )}
+
+        {/* Real-World Depth Comparison Markers have been removed. */}
       </div>
       <p className="text-xs text-slate-500 mt-2 text-center">
         Note: Diagram is illustrative. Layer depths are approximate. Top 100km expanded for detail.
       </p>
     </div>
   );
+}
+
+  // Helper function for dynamic contextual comparisons
+  // Pass layers to the helper function
+  // const contextualMessages = getDynamicContextualComparisons(depth, DEPTH_COMPARISONS, layers);
+  // This call is already moved up before 'layers' was used by it, so this comment is slightly misplaced in search.
+  // The actual call to getDynamicContextualComparisons is correctly placed higher now.
+
+
+// Helper function implementation (outside the component for clarity)
+function getDynamicContextualComparisons(currentDepth, comparisonsList, earthLayers) {
+  const messages = [];
+  const depthComparisons = comparisonsList
+    .filter(c => !c.isHeight)
+    .sort((a, b) => a.depth - b.depth);
+
+  if (depthComparisons.length === 0) {
+    return []; // No depth benchmarks to compare against
+  }
+
+  // Check for "very close" comparisons
+  for (const comp of depthComparisons) {
+    const fivePercent = comp.depth * 0.05;
+    if (Math.abs(currentDepth - comp.depth) <= fivePercent) {
+      messages.push(`This depth of ${currentDepth.toFixed(1)} km is very similar to the ${comp.name} (${comp.depth.toFixed(1)} km).`);
+      // If one very close match is found, we can return early or add more context.
+      // For now, let's return just this one to keep it concise. If more needed, this logic can be expanded.
+      return messages;
+    }
+  }
+
+  // If not "very close", find closest shallower and deeper
+  let closestShallower = null;
+  let closestDeeper = null;
+
+  for (const comp of depthComparisons) {
+    if (comp.depth < currentDepth) {
+      if (!closestShallower || comp.depth > closestShallower.depth) {
+        closestShallower = comp;
+      }
+    } else if (comp.depth > currentDepth) {
+      if (!closestDeeper || comp.depth < closestDeeper.depth) {
+        closestDeeper = comp;
+      }
+    }
+    // If comp.depth === currentDepth, it would have been caught by "very close" or could be handled here.
+  }
+
+  if (closestShallower) {
+    messages.push(`At ${currentDepth.toFixed(1)} km, this event is deeper than the ${closestShallower.name} (${closestShallower.depth.toFixed(1)} km).`);
+  } else {
+    // Current depth is shallower than all benchmarks
+    messages.push(`This depth of ${currentDepth.toFixed(1)} km is shallower than all listed depth benchmarks, starting with the ${depthComparisons[0].name} (${depthComparisons[0].depth.toFixed(1)} km).`);
+    return messages; // Return only this message
+  }
+
+  if (closestDeeper) {
+    messages.push(`It is shallower than the ${closestDeeper.name} (${closestDeeper.depth.toFixed(1)} km).`);
+  } else if (closestShallower) {
+    // Current depth is deeper than all benchmarks in comparisonsList
+    const deepestBenchmark = closestShallower; // This is the deepest one from comparisonsList
+    const significantlyDeeperThreshold = deepestBenchmark.depth + 50; // e.g., 50km deeper
+
+    if (currentDepth > significantlyDeeperThreshold) {
+      let foundLayer = null;
+      // Find the geological layer for this very deep earthquake (ignoring Surface layer for this context)
+      for (const layer of earthLayers.slice(1).sort((a,b) => a.startDepth - b.startDepth)) {
+        if (currentDepth >= layer.startDepth && currentDepth < layer.endDepth) {
+          foundLayer = layer;
+          break;
+        }
+      }
+      // Check if deeper than the deepest defined layer
+      const maxLayerDepth = Math.max(...earthLayers.map(l => l.endDepth));
+
+      messages.pop(); // Remove the previous "deeper than X" message
+      if (foundLayer) {
+        messages.push(`At ${currentDepth.toFixed(0)} km, this earthquake originated deep within the Earth's ${foundLayer.name}.`);
+      } else if (currentDepth >= maxLayerDepth) {
+         messages.push(`At ${currentDepth.toFixed(0)} km, this earthquake occurred at an exceptionally profound depth within the Earth, below the typically mapped Asthenosphere.`);
+      } else {
+        // Fallback if it's significantly deep but somehow not in a defined layer (shouldn't happen with current data)
+        messages.push(`This earthquake's depth of ${currentDepth.toFixed(0)} km is exceptionally profound, far exceeding common benchmarks.`);
+      }
+    } else {
+      // Deeper than all benchmarks, but not "significantly" deeper by the new threshold
+      // Refine the existing message
+      messages.pop(); // Remove the "deeper than X"
+      messages.push(`This depth of ${currentDepth.toFixed(1)} km is beyond our deepest listed benchmark, the ${deepestBenchmark.name} (${deepestBenchmark.depth.toFixed(1)} km).`);
+    }
+  }
+
+  // Ensure we return max 2 messages, though current logic often results in 1 specific message.
+  // The logic above already tries to be concise. If "very close" is found, it returns 1.
+  // Otherwise, it aims for 1 or 2 (e.g. shallower than all, or between two points).
+  // If it's shallower than all, it returns 1 message.
+  // If it's deeper than all, it returns 1 refined message.
+  // If it's between two, it can return 2 messages. Let's cap at 2.
+  return messages.slice(0, 2);
 }
 
 export default SimplifiedDepthProfile;
