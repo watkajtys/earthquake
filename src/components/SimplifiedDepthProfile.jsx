@@ -21,6 +21,9 @@ export const DEPTH_COMPARISONS = [ // Added export
   { name: "Depth of Lake Baikal (deepest lake)", depth: 1.642 },
   { name: "Panama Canal Max Depth", depth: 0.018 },
   { name: "Suez Canal Max Depth", depth: 0.024 },
+  { name: "Shallow Focus Earthquakes (Upper Limit)", depth: 70 },
+  { name: "Intermediate Focus Earthquakes (Upper Limit)", depth: 300 },
+  { name: "Deep Focus Earthquakes (Upper Limit)", depth: 700 },
 ];
 
 /**
@@ -295,95 +298,108 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
 
 
 // Helper function implementation (outside the component for clarity)
-function getDynamicContextualComparisons(currentDepth, comparisonsList, earthLayers) {
-  const messages = [];
-  const depthComparisons = comparisonsList
-    .filter(c => !c.isHeight)
+function getDynamicContextualComparisons(currentDepth, comparisonsList) {
+  // EarthLayers parameter removed as per new requirements
+
+  const RELATABLE_OBJECTS = [
+    { name: "Eiffel Towers", height: 0.3, singular: "Eiffel Tower" },
+    // Burj Khalifa is in comparisonsList, so we can use its data directly.
+    // Mount Everest is in comparisonsList (isHeight: true), use its data.
+  ];
+
+  const depth = parseFloat(currentDepth);
+  if (isNaN(depth)) { // Should have been caught before, but good to be safe.
+    return ["Depth information is currently unavailable."];
+  }
+
+  const userFriendlyBenchmarks = comparisonsList
+    .filter(c => !c.isHeight && !c.name.includes("Focus Earthquakes"))
     .sort((a, b) => a.depth - b.depth);
 
-  if (depthComparisons.length === 0) {
-    return []; // No depth benchmarks to compare against
-  }
+  // 1. Check for "very close" match to any user-friendly benchmark
+  for (const benchmark of userFriendlyBenchmarks) {
+    const difference = Math.abs(depth - benchmark.depth);
+    let isClose = false;
+    if (benchmark.depth > 1) { // Use percentage for larger benchmarks
+      isClose = difference <= benchmark.depth * 0.10; // 10% threshold for "nearly as deep"
+    } else { // Use absolute for smaller benchmarks (e.g. canals, Burj)
+      isClose = difference <= 0.1; // 100m absolute difference
+    }
 
-  // Check for "very close" comparisons
-  for (const comp of depthComparisons) {
-    const fivePercent = comp.depth * 0.05;
-    if (Math.abs(currentDepth - comp.depth) <= fivePercent) {
-      messages.push(`This depth of ${currentDepth.toFixed(1)} km is very similar to the ${comp.name} (${comp.depth.toFixed(1)} km).`);
-      // If one very close match is found, we can return early or add more context.
-      // For now, let's return just this one to keep it concise. If more needed, this logic can be expanded.
-      return messages;
+    if (isClose) {
+      return [`${depth.toFixed(1)} km is nearly as deep as the ${benchmark.name} (${benchmark.depth.toFixed(1)} km)!`];
     }
   }
 
-  // If not "very close", find closest shallower and deeper
-  let closestShallower = null;
-  let closestDeeper = null;
+  // 2. Check if "even further down than" a significant, well-known benchmark
+  // Prioritize deeper, more impressive benchmarks for this message.
+  // Select a few well-known items that are good for this "further down than" comparison.
+  const significantBenchmarks = userFriendlyBenchmarks.filter(b =>
+    b.name === "Kola Superdeep Borehole (deepest artificial point)" ||
+    b.name === "Challenger Deep (ocean deepest)" ||
+    b.name === "Average Continental Crust" || // Good mid-range geological feature
+    b.name === "Deepest Gold Mine (Mponeng, South Africa)"
+  ).sort((a, b) => b.depth - a.depth); // Sort deepest first
 
-  for (const comp of depthComparisons) {
-    if (comp.depth < currentDepth) {
-      if (!closestShallower || comp.depth > closestShallower.depth) {
-        closestShallower = comp;
-      }
-    } else if (comp.depth > currentDepth) {
-      if (!closestDeeper || comp.depth < closestDeeper.depth) {
-        closestDeeper = comp;
-      }
-    }
-    // If comp.depth === currentDepth, it would have been caught by "very close" or could be handled here.
-  }
-
-  if (closestShallower) {
-    messages.push(`At ${currentDepth.toFixed(1)} km, this event is deeper than the ${closestShallower.name} (${closestShallower.depth.toFixed(1)} km).`);
-  } else {
-    // Current depth is shallower than all benchmarks
-    messages.push(`This depth of ${currentDepth.toFixed(1)} km is shallower than all listed depth benchmarks, starting with the ${depthComparisons[0].name} (${depthComparisons[0].depth.toFixed(1)} km).`);
-    return messages; // Return only this message
-  }
-
-  if (closestDeeper) {
-    messages.push(`It is shallower than the ${closestDeeper.name} (${closestDeeper.depth.toFixed(1)} km).`);
-  } else if (closestShallower) {
-    // Current depth is deeper than all benchmarks in comparisonsList
-    const deepestBenchmark = closestShallower; // This is the deepest one from comparisonsList
-    const significantlyDeeperThreshold = deepestBenchmark.depth + 50; // e.g., 50km deeper
-
-    if (currentDepth > significantlyDeeperThreshold) {
-      let foundLayer = null;
-      // Find the geological layer for this very deep earthquake (ignoring Surface layer for this context)
-      for (const layer of earthLayers.slice(1).sort((a,b) => a.startDepth - b.startDepth)) {
-        if (currentDepth >= layer.startDepth && currentDepth < layer.endDepth) {
-          foundLayer = layer;
-          break;
-        }
-      }
-      // Check if deeper than the deepest defined layer
-      const maxLayerDepth = Math.max(...earthLayers.map(l => l.endDepth));
-
-      messages.pop(); // Remove the previous "deeper than X" message
-      if (foundLayer) {
-        messages.push(`At ${currentDepth.toFixed(0)} km, this earthquake originated deep within the Earth's ${foundLayer.name}.`);
-      } else if (currentDepth >= maxLayerDepth) {
-         messages.push(`At ${currentDepth.toFixed(0)} km, this earthquake occurred at an exceptionally profound depth within the Earth, below the typically mapped Asthenosphere.`);
-      } else {
-        // Fallback if it's significantly deep but somehow not in a defined layer (shouldn't happen with current data)
-        messages.push(`This earthquake's depth of ${currentDepth.toFixed(0)} km is exceptionally profound, far exceeding common benchmarks.`);
-      }
-    } else {
-      // Deeper than all benchmarks, but not "significantly" deeper by the new threshold
-      // Refine the existing message
-      messages.pop(); // Remove the "deeper than X"
-      messages.push(`This depth of ${currentDepth.toFixed(1)} km is beyond our deepest listed benchmark, the ${deepestBenchmark.name} (${deepestBenchmark.depth.toFixed(1)} km).`);
+  for (const benchmark of significantBenchmarks) {
+    if (depth > benchmark.depth && depth < benchmark.depth * 3) { // If deeper, but not astronomically deeper
+      return [`That's incredibly deep! It's even further down than the ${benchmark.name} (${benchmark.depth.toFixed(1)} km)!`];
     }
   }
 
-  // Ensure we return max 2 messages, though current logic often results in 1 specific message.
-  // The logic above already tries to be concise. If "very close" is found, it returns 1.
-  // Otherwise, it aims for 1 or 2 (e.g. shallower than all, or between two points).
-  // If it's shallower than all, it returns 1 message.
-  // If it's deeper than all, it returns 1 refined message.
-  // If it's between two, it can return 2 messages. Let's cap at 2.
-  return messages.slice(0, 2);
+  // 3. Use a relatable analogy for very significant depths
+  let analogyMessage = "";
+
+  const mountEverest = comparisonsList.find(c => c.name === "Height of Mount Everest"); // isHeight = true
+  const burjKhalifa = comparisonsList.find(c => c.name === "Burj Khalifa");
+
+  if (depth > 5 && mountEverest) { // Use Mount Everest for reasonably large depths
+      const numObjects = Math.round(depth / mountEverest.depth);
+      if (numObjects > 1) {
+        analogyMessage = `Wow, ${depth.toFixed(1)} km is a long way down – that's like stacking about ${numObjects} Mount Everests on top of each other!`;
+      } else if (numObjects === 1) {
+        analogyMessage = `Wow, ${depth.toFixed(1)} km is a long way down – that's about as deep as Mount Everest is tall!`;
+      }
+  } else if (depth > 1 && burjKhalifa) { // Use Burj Khalifa for moderate depths
+      const numObjects = Math.round(depth / burjKhalifa.depth);
+       if (numObjects > 1) {
+        analogyMessage = `That's quite deep! ${depth.toFixed(1)} km is like stacking about ${numObjects} Burj Khalifas!`;
+      } else if (numObjects === 1 && depth > burjKhalifa.depth * 1.1) { // Only if significantly more than 1
+         analogyMessage = `That's quite deep! ${depth.toFixed(1)} km is like stacking about ${numObjects} Burj Khalifas!`;
+      } else if (numObjects === 1 ) { // if depth is between 0.828 and ~0.9km, it's roughly 1 Burj Khalifa
+         analogyMessage = `That's quite deep! ${depth.toFixed(1)} km is about the height of the Burj Khalifa!`;
+      }
+  } else if (depth > 0.5) { // Use Eiffel Tower for smaller depths
+      const eiffelTower = RELATABLE_OBJECTS.find(r => r.name === "Eiffel Towers");
+      const numObjects = Math.round(depth / eiffelTower.height);
+      if (numObjects >=1) {
+          analogyMessage = `That's pretty deep! ${depth.toFixed(1)} km is like stacking ${numObjects} ${numObjects === 1 ? eiffelTower.singular : eiffelTower.name}!`;
+      }
+  }
+
+  if (analogyMessage) {
+    return [analogyMessage];
+  }
+
+  // 4. Fallback messages
+  if (depth === 0) {
+    return ["This earthquake was right at the surface!"];
+  }
+  if (depth < 0.1 && depth > 0) {
+    return [`${depth.toFixed(2)} km is very close to the surface!`];
+  }
+  if (depth > 700) { // Still acknowledge exceptionally deep ones simply
+      return [`Whoa, ${depth.toFixed(0)} km is incredibly deep, way down into the Earth's mantle!`];
+  }
+  if (depth > 300) {
+      return [`That's a very deep earthquake, ${depth.toFixed(0)} km down!`];
+  }
+   if (depth > 70) {
+      return [`That's a deep earthquake, ${depth.toFixed(0)} km down!`];
+  }
+
+  // Generic fallback if no other condition met (e.g., shallow but not super shallow, no close comparisons)
+  return [`That's an earthquake at ${depth.toFixed(1)} km deep.`];
 }
 
 export default SimplifiedDepthProfile;
