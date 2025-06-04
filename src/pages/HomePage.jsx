@@ -15,7 +15,8 @@ import BottomNav from "../components/BottomNav.jsx";
 import ClusterSummaryItem from '../components/ClusterSummaryItem';
 import ClusterDetailModal from '../components/ClusterDetailModal'; // This is for the cluster map point, not the route component
 // import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx'; // Removed static import, will use lazy loaded
-import { calculateDistance, getMagnitudeColor } from '../utils/utils.js';
+import { getMagnitudeColor } from '../utils/utils.js'; // calculateDistance removed
+import { findActiveClusters } from '../utils/clusterUtils.js'; // Import findActiveClusters
 
 // Import newly created components
 import SkeletonText from '../components/skeletons/SkeletonText';
@@ -129,60 +130,6 @@ const GlobeLayout = (props) => {
     </div>
   );
 };
-
-/**
- * Calculates the distance between two geographical coordinates using the Haversine formula.
- * @param {number} lat1 Latitude of the first point.
- * @param {number} lon1 Longitude of the first point.
- * @param {number} lat2 Latitude of the second point.
-/**
- * Finds clusters of earthquakes based on proximity and time.
- * @param {Array<object>} earthquakes - Array of earthquake objects. Expected to have `properties.time` and `geometry.coordinates`.
- * @param {number} maxDistanceKm - Maximum distance between quakes to be considered in the same cluster.
- * @param {number} minQuakes - Minimum number of quakes to form a valid cluster.
- * @returns {Array<Array<object>>} An array of clusters, where each cluster is an array of earthquake objects.
- */
-function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
-    const clusters = [];
-    const processedQuakeIds = new Set();
-
-    // Sort earthquakes by magnitude (descending) to potentially form clusters around stronger events first.
-    const sortedEarthquakes = [...earthquakes].sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-
-    for (const quake of sortedEarthquakes) {
-        if (processedQuakeIds.has(quake.id)) {
-            continue;
-        }
-
-        const newCluster = [quake];
-        processedQuakeIds.add(quake.id);
-        const baseLat = quake.geometry.coordinates[1];
-        const baseLon = quake.geometry.coordinates[0];
-
-        for (const otherQuake of sortedEarthquakes) {
-            if (processedQuakeIds.has(otherQuake.id) || otherQuake.id === quake.id) {
-                continue;
-            }
-
-            const dist = calculateDistance(
-                baseLat,
-                baseLon,
-                otherQuake.geometry.coordinates[1],
-                otherQuake.geometry.coordinates[0]
-            );
-
-            if (dist <= maxDistanceKm) {
-                newCluster.push(otherQuake);
-                processedQuakeIds.add(otherQuake.id);
-            }
-        }
-
-        if (newCluster.length >= minQuakes) {
-            clusters.push(newCluster);
-        }
-    }
-    return clusters;
-}
 
 // --- App Component ---
 /**
