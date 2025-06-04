@@ -32,7 +32,7 @@ const SVG_WIDTH = 600;
 const SVG_HEIGHT = 400; // Increased height for text and better visual
 const EARTH_RADIUS_SVG = SVG_WIDTH / 2 * 0.8; // Scaled Earth radius for SVG
 const MAX_DEPTH_SVG = EARTH_RADIUS_SVG * 0.5; // Max depth visualization exaggerated
-const MAX_ANIMATION_SECONDS = 60; // Loop duration: 60 seconds of seismic travel time
+const MAX_ANIMATION_SECONDS = 300; // Loop duration: increased for debugging visibility
 
 // Component
 const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'average' }) => {
@@ -179,6 +179,14 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
   const pWaveRadiusSVG = (animationTime * AVERAGE_P_WAVE_VELOCITY_KM_S) * (EARTH_RADIUS_SVG / 6371); // Scale real km to SVG pixels
   const sWaveRadiusSVG = (animationTime * AVERAGE_S_WAVE_VELOCITY_KM_S) * (EARTH_RADIUS_SVG / 6371);
 
+  // DEBUGGING CONSOLE LOGS - Step 1
+  // console.log(`Animation Time: ${animationTime?.toFixed(1)}s`);
+  // console.log(`P-Wave Velocity: ${AVERAGE_P_WAVE_VELOCITY_KM_S} km/s, S-Wave Velocity: ${AVERAGE_S_WAVE_VELOCITY_KM_S} km/s`);
+  // console.log(`Calculated SVG Radii - P: ${pWaveRadiusSVG?.toFixed(1)}, S: ${sWaveRadiusSVG?.toFixed(1)}`);
+  // console.log(`Earth Radius SVG: ${EARTH_RADIUS_SVG}, Max Depth SVG: ${MAX_DEPTH_SVG}`);
+  // console.log(`Hypocenter: X=${hypocenterX}, Y=${hypocenterY}`);
+
+
   // Station positions on the SVG (approximate for a flat cross-section)
   // This is a very simplified representation. A true projection would be more complex.
   // For this visualization, we'll place them along the arc of the semicircle.
@@ -237,26 +245,34 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
 
         {/* P-Wave */}
         {animationTime > 0 && pWaveRadiusSVG > 0 && (
-          <circle
-            cx={hypocenterX}
-            cy={hypocenterY}
-            r={pWaveRadiusSVG}
-            fill="url(#pWaveGradient)"
-            stroke={`rgba(${P_WAVE_BASE_COLOR}, 0.8)`}
-            strokeWidth="1"
-          />
+          (() => {
+            const pWaveProps = {
+              cx: hypocenterX,
+              cy: hypocenterY,
+              r: pWaveRadiusSVG,
+              fill: "url(#pWaveGradient)",
+              stroke: `rgba(${P_WAVE_BASE_COLOR}, 0.8)`,
+              strokeWidth: "3" // Increased for debugging visibility
+            };
+            // console.log("P-Wave props:", pWaveProps); // DEBUGGING CONSOLE LOGS - Step 2
+            return <circle {...pWaveProps} />;
+          })()
         )}
 
         {/* S-Wave */}
         {animationTime > 0 && sWaveRadiusSVG > 0 && (
-          <circle
-            cx={hypocenterX}
-            cy={hypocenterY}
-            r={sWaveRadiusSVG}
-            fill="url(#sWaveGradient)"
-            stroke={`rgba(${S_WAVE_BASE_COLOR}, 0.8)`}
-            strokeWidth="1"
-          />
+          (() => {
+            const sWaveProps = {
+              cx: hypocenterX,
+              cy: hypocenterY,
+              r: sWaveRadiusSVG,
+              fill: "url(#sWaveGradient)",
+              stroke: `rgba(${S_WAVE_BASE_COLOR}, 0.8)`,
+              strokeWidth: "3" // Increased for debugging visibility
+            };
+            // console.log("S-Wave props:", sWaveProps); // DEBUGGING CONSOLE LOGS - Step 2
+            return <circle {...sWaveProps} />;
+          })()
         )}
 
         {/* Stations & Text */}
