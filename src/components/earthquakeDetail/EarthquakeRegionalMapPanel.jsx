@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
-import EarthquakeMap from '../EarthquakeMap'; // Adjusted path
-import { isValidNumber } from '../../utils/utils.js'; // Assuming this path
+import EarthquakeMap from '../EarthquakeMap';
+import { isValidNumber } from '../../utils/utils.js';
 
 function EarthquakeRegionalMapPanel({
     geometry,
@@ -8,13 +8,44 @@ function EarthquakeRegionalMapPanel({
     shakemapIntensityImageUrl,
     regionalQuakes,
     detailUrl,
-    // isValidNumber, // Helper function - now imported
-    exhibitPanelClass, // Style class
-    exhibitTitleClass  // Style class
+    exhibitPanelClass,
+    exhibitTitleClass
 }) {
-    // Guard condition based on the original rendering logic
-    if (!geometry || !geometry.coordinates || !isValidNumber(geometry.coordinates[1]) || !isValidNumber(geometry.coordinates[0])) { // isValidNumber is now imported
-        return null; // Or some fallback UI if the map cannot be displayed
+    // Main Guard for Centering: Ensure valid coordinates for the map center.
+    if (!geometry || !geometry.coordinates ||
+        !isValidNumber(geometry.coordinates[1]) ||
+        !isValidNumber(geometry.coordinates[0])) {
+        // If essential coordinates are missing or invalid, render a fallback UI within the panel structure.
+        console.warn("EarthquakeRegionalMapPanel: Cannot render map due to invalid main quake coordinates. Geometry:", geometry);
+        return (
+            <div className={`${exhibitPanelClass} border-sky-500`}>
+                <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
+                <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2 flex items-center justify-center bg-slate-100 dark:bg-slate-700">
+                    <p className="text-slate-500 dark:text-slate-400">Map data is unavailable for this earthquake.</p>
+                </div>
+            </div>
+        );
+    }
+
+    const mapCenterLat = geometry.coordinates[1];
+    const mapCenterLng = geometry.coordinates[0];
+
+    // Conditional Highlight Props:
+    // Prepare props for the highlighted quake only if its magnitude is valid.
+    // If not, the EarthquakeMap component will use its defaultProps for highlight-related fields,
+    // effectively not showing a specific highlight marker if magnitude is invalid.
+    let highlightProps = {};
+    if (properties && isValidNumber(properties.mag)) {
+        highlightProps = {
+            highlightQuakeLatitude: mapCenterLat, // In detail view, highlight is the same as center
+            highlightQuakeLongitude: mapCenterLng,
+            highlightQuakeMagnitude: properties.mag,
+            // Ensure a fallback title if properties.title or properties.place is not available.
+            highlightQuakeTitle: properties.title || properties.place || 'Earthquake Event',
+        };
+    } else {
+        // Log a warning if properties or magnitude are missing/invalid, as a highlight was likely intended.
+        console.warn("EarthquakeRegionalMapPanel: Invalid or missing magnitude for highlighting. No highlight marker will be shown.", properties);
     }
 
     return (
@@ -22,15 +53,15 @@ function EarthquakeRegionalMapPanel({
             <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
             <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
                 <EarthquakeMap
-                    mapCenterLatitude={geometry.coordinates[1]}
-                    mapCenterLongitude={geometry.coordinates[0]}
-                    highlightQuakeLatitude={geometry.coordinates[1]}
-                    highlightQuakeLongitude={geometry.coordinates[0]}
-                    highlightQuakeMagnitude={properties.mag}
-                    highlightQuakeTitle={properties.title}
+                    mapCenterLatitude={mapCenterLat}
+                    mapCenterLongitude={mapCenterLng}
+                    {...highlightProps} // Spread highlight-related props; will be empty if mag was invalid
                     shakeMapUrl={shakemapIntensityImageUrl}
                     nearbyQuakes={regionalQuakes}
                     mainQuakeDetailUrl={detailUrl}
+                    // Fit bounds if there are regional quakes to show alongside the main one.
+                    // If no regional quakes, EarthquakeMap's default for fitMapToBounds (false) will apply,
+                    // resulting in using defaultZoom centered on mapCenterLat/Lng.
                     fitMapToBounds={regionalQuakes && regionalQuakes.length > 0}
                 />
             </div>
