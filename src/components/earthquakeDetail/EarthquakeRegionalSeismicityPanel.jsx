@@ -5,6 +5,8 @@ function EarthquakeRegionalSeismicityPanel({
     detailData, // Will be passed as currentEarthquake to RegionalSeismicityChart
     broaderEarthquakeData, // Will be passed as nearbyEarthquakesData to RegionalSeismicityChart
     dataSourceTimespanDays,
+    isLoadingMonthly,         // Added
+    hasAttemptedMonthlyLoad,  // Added
     exhibitPanelClass
 }) {
     // Guard condition based on the original rendering logic
@@ -18,6 +20,8 @@ function EarthquakeRegionalSeismicityPanel({
                 currentEarthquake={detailData}
                 nearbyEarthquakesData={broaderEarthquakeData}
                 dataSourceTimespanDays={dataSourceTimespanDays}
+                isLoadingMonthly={isLoadingMonthly}         // Added
+                hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}  // Added
             />
         </div>
     );

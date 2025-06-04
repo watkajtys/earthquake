@@ -34,7 +34,7 @@ function EarthquakeSnapshotPanel({
     return (
         <div className={`${exhibitPanelClass} border-blue-500`}>
             <h2 className={`${exhibitTitleClass} text-blue-800 border-blue-200`}>Earthquake Snapshot</h2>
-            <table className="w-full text-xs md:text-sm"><tbody>
+            <table data-testid="snapshot-table" className="w-full text-xs md:text-sm"><tbody>
             {isValidString(properties.title) && (
                 <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600 w-2/5 md:w-1/3">Event Name</td><td className="py-1.5">{properties.title}</td></tr>
             )}

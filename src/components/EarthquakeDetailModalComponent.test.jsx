@@ -1,9 +1,18 @@
 import React from 'react';
 import { render, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext'; // Import context
+import { EarthquakeDataContext, useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context and hook
 
 // MOCKS MUST BE AT THE TOP (or at least before imports that use them)
+// Mock the context hook
+vi.mock('../contexts/EarthquakeDataContext', async () => {
+  const actual = await vi.importActual('../contexts/EarthquakeDataContext');
+  return {
+    ...actual, // Preserve actual exports like EarthquakeDataContext
+    useEarthquakeDataState: vi.fn(), // Mock the hook
+  };
+});
+
 let mockOnDataLoadedForSeoCallback;
 let mockOnCloseCallback;
 
@@ -67,22 +76,31 @@ describe('EarthquakeDetailModalComponent', () => {
     if (SeoMetadata && SeoMetadata.mock) SeoMetadata.mockClear();
     mockOnDataLoadedForSeoCallback = undefined;
     mockOnCloseCallback = undefined;
-    defaultEarthquakeContextValue.loadMonthlyData.mockClear();
+    // defaultEarthquakeContextValue.loadMonthlyData.mockClear(); // No longer using this structure for context
+    // Clear the mock for the hook if it's a spy or vi.fn()
+    if (useEarthquakeDataState && useEarthquakeDataState.mockClear) {
+        useEarthquakeDataState.mockClear();
+    }
   });
 
-  const renderComponent = (props = defaultMockProps, earthquakeContextValue = defaultEarthquakeContextValue) => {
+  // Modified renderComponent to not rely on defaultEarthquakeContextValue if useEarthquakeDataState is mocked for each test
+  const renderComponent = (props = defaultMockProps) => { // Removed earthquakeContextValue from params
+    // Mock return value for useEarthquakeDataState will be set in each test
+    // If a default is needed here, set it before render:
+    // useEarthquakeDataState.mockReturnValue(defaultEarthquakeContextValue);
     return render(
       <MemoryRouter initialEntries={['/quake/test-detail-url']}>
-        <EarthquakeDataContext.Provider value={earthquakeContextValue}>
-          <Routes>
-            <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModalComponent {...props} />} />
-          </Routes>
-        </EarthquakeDataContext.Provider>
+        {/* EarthquakeDataContext.Provider might not be needed if the hook is fully mocked */}
+        <Routes>
+          <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModalComponent {...props} />} />
+        </Routes>
       </MemoryRouter>
     );
   };
 
   test('renders without crashing and SeoMetadata initially receives null eventJsonLd', () => {
+    // Setup a default mock for useEarthquakeDataState for this test
+    useEarthquakeDataState.mockReturnValue(defaultEarthquakeContextValue);
     renderComponent();
     expect(EarthquakeDetailView).toHaveBeenCalled();
     expect(SeoMetadata).toHaveBeenCalled();
@@ -222,6 +240,7 @@ describe('EarthquakeDetailModalComponent', () => {
 
 
   test('calls navigate(-1) when onClose is triggered from EarthquakeDetailView', () => {
+    useEarthquakeDataState.mockReturnValue(defaultEarthquakeContextValue); // Setup mock for this test
     renderComponent();
 
     expect(mockNavigate).not.toHaveBeenCalled();
@@ -233,5 +252,54 @@ describe('EarthquakeDetailModalComponent', () => {
     });
 
     expect(mockNavigate).toHaveBeenCalledWith(-1);
+  });
+
+  describe('dataSourceTimespanDays logic', () => {
+    // No need to mock react-router-dom here as it's done globally at the top of the file
+    // Ensure EarthquakeDetailView mock is also available (done globally)
+
+    test('passes dataSourceTimespanDays as 30 to EarthquakeDetailView when hasAttemptedMonthlyLoad is true', () => {
+      useEarthquakeDataState.mockReturnValue({
+        allEarthquakes: [{ id: 'eq1', properties: {}, geometry: {} }],
+        earthquakesLast7Days: [],
+        loadMonthlyData: vi.fn(),
+        hasAttemptedMonthlyLoad: true, // Key for this test
+        isLoadingMonthly: false,
+      });
+
+      renderComponent(); // Uses the props passed to EarthquakeDetailModalComponent
+
+      // Check props passed to the mocked EarthquakeDetailView
+      // The mock for EarthquakeDetailView is at the top, using vi.mock
+      // We can use the imported EarthquakeDetailView directly as it's already the mock
+      // The mock is defined to take only one 'props' argument.
+      // Check the first argument of the first call
+      expect(EarthquakeDetailView.mock.calls[0][0]).toEqual(
+        expect.objectContaining({
+          dataSourceTimespanDays: 30,
+        })
+      );
+    });
+
+    test('passes dataSourceTimespanDays as 7 to EarthquakeDetailView when hasAttemptedMonthlyLoad is false', () => {
+      useEarthquakeDataState.mockReturnValue({
+        allEarthquakes: [],
+        earthquakesLast7Days: [{ id: 'eq2', properties: {}, geometry: {} }],
+        loadMonthlyData: vi.fn(),
+        hasAttemptedMonthlyLoad: false, // Key for this test
+        isLoadingMonthly: false,
+      });
+
+      renderComponent();
+
+      // Use the imported EarthquakeDetailView directly
+      // The mock is defined to take only one 'props' argument.
+      // Check the first argument of the first call
+      expect(EarthquakeDetailView.mock.calls[0][0]).toEqual(
+        expect.objectContaining({
+          dataSourceTimespanDays: 7,
+        })
+      );
+    });
   });
 });

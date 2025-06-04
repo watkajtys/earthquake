@@ -68,7 +68,7 @@ import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfo
  */
 function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) { // Add dataSourceTimespanDays
     const [detailData, setDetailData] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(!!detailUrl);
     const [error, setError] = useState(null);
     const [selectedFaultPlaneKey, setSelectedFaultPlaneKey] = useState('np1');
     const modalContentRef = React.useRef(null); // Ref for the modal content div
@@ -147,10 +147,20 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     }, [detailUrl, hasAttemptedMonthlyLoad, isLoadingMonthly, handleLoadMonthlyData]); // Dependencies for the effect
 
     useEffect(() => {
-        if (!detailUrl) return;
+        if (!detailUrl) {
+            // If detailUrl is cleared (e.g., modal closes or selection changes to none)
+            setIsLoading(false);
+            setDetailData(null);
+            setError(null);
+            return; // Stop further execution in this effect
+        }
+
+        // If detailUrl is present, prepare for fetching
         let isMounted = true;
         const fetchDetail = async () => {
-            setIsLoading(true); setError(null); setDetailData(null);
+            setIsLoading(true); // Ensure loading state is true at the start of any fetch
+            setError(null);     // Clear any previous error
+            setDetailData(null); // Clear previous data before new fetch to prevent stale display
             try {
                 const response = await fetch(detailUrl);
                 if (!response.ok) throw new Error(`HTTP error! Status: ${response.status} ${response.url}`);
@@ -185,9 +195,13 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                 if (isMounted) setIsLoading(false);
             }
         };
+
         fetchDetail();
-        return () => { isMounted = false; };
-    }, [detailUrl, onDataLoadedForSeo]); // Added onDataLoadedForSeo to dependency array as it's used inside
+
+        return () => {
+            isMounted = false;
+        };
+    }, [detailUrl, onDataLoadedForSeo]); // Dependencies remain the same
 
     // New useEffect for investigating phase-data
     useEffect(() => {
@@ -291,7 +305,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
 
     // MOVED: InteractiveFaultDiagram component definition was here
 
-    if (isLoading) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-8 rounded-lg max-w-3xl w-full animate-pulse"><SkeletonText width="w-3/4" height="h-8 mb-6 mx-auto" /><SkeletonBlock height="h-40 mb-4" /><SkeletonBlock height="h-64" /></div></div> );
+    if (isLoading) return ( <div data-testid="loading-skeleton-container" className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-8 rounded-lg max-w-3xl w-full animate-pulse"><SkeletonText width="w-3/4" height="h-8 mb-6 mx-auto" /><SkeletonBlock height="h-40 mb-4" /><SkeletonBlock height="h-64" /></div></div> );
     if (error) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-red-600 mb-4">Error Loading Details</h3><p className="text-slate-700 mb-6">{error}</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div> );
     if (!detailData || !properties) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-slate-700 mb-4">Details Not Available</h3><p className="text-slate-600 mb-6">Could not retrieve or parse details.</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div> );
 
@@ -371,6 +385,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         detailData={detailData}
                         broaderEarthquakeData={broaderEarthquakeData}
                         dataSourceTimespanDays={dataSourceTimespanDays}
+                        isLoadingMonthly={isLoadingMonthly}
+                        hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
                         exhibitPanelClass={exhibitPanelClass}
                     />
 

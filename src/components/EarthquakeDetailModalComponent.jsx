@@ -17,7 +17,7 @@ import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
  * @param {boolean} props.isLoadingMonthly - Whether monthly data is currently loading. (Removed, from context)
  * @returns {JSX.Element} The rendered EarthquakeDetailView component configured as a modal.
  */
-const EarthquakeDetailModalComponent = ({ dataSourceTimespanDays }) => { // Removed props from context
+const EarthquakeDetailModalComponent = () => { // Removed dataSourceTimespanDays from props
     const {
         allEarthquakes,
         earthquakesLast7Days,
@@ -30,6 +30,15 @@ const EarthquakeDetailModalComponent = ({ dataSourceTimespanDays }) => { // Remo
     const internalBroaderEarthquakeData = useMemo(() => {
         return (hasAttemptedMonthlyLoad && allEarthquakes && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days;
     }, [hasAttemptedMonthlyLoad, allEarthquakes, earthquakesLast7Days]);
+
+    // New logic for currentDataSourceTimespan
+    const currentDataSourceTimespan = useMemo(() => {
+        // If an attempt has been made to load monthly data, we are targeting 30 days.
+        // Even if it's still loading or failed, the intent was 30 days.
+        // If allEarthquakes is also populated, it further confirms 30-day data is active.
+        // If no attempt for monthly load, then it's 7 days.
+        return hasAttemptedMonthlyLoad ? 30 : 7;
+    }, [hasAttemptedMonthlyLoad]);
 
 
     const { detailUrlParam } = useParams();
@@ -133,7 +142,7 @@ const EarthquakeDetailModalComponent = ({ dataSourceTimespanDays }) => { // Remo
                 onClose={handleClose}
                 onDataLoadedForSeo={handleSeoDataLoaded} // Pass the callback
                 broaderEarthquakeData={internalBroaderEarthquakeData}
-            dataSourceTimespanDays={dataSourceTimespanDays} // This prop remains if needed for other logic
+                dataSourceTimespanDays={currentDataSourceTimespan} // Changed from dataSourceTimespanDays
             handleLoadMonthlyData={loadMonthlyData} // Use directly from context
             hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad} // Use directly from context
             isLoadingMonthly={isLoadingMonthly} // Use directly from context
@@ -144,7 +153,7 @@ const EarthquakeDetailModalComponent = ({ dataSourceTimespanDays }) => { // Remo
 
 EarthquakeDetailModalComponent.propTypes = {
     // broaderEarthquakeData: PropTypes.array.isRequired, // Now derived internally
-    dataSourceTimespanDays: PropTypes.number,
+    // dataSourceTimespanDays: PropTypes.number, // Removed
     // handleLoadMonthlyData: PropTypes.func.isRequired, // From context
     // hasAttemptedMonthlyLoad: PropTypes.bool.isRequired, // From context
     // isLoadingMonthly: PropTypes.bool.isRequired, // From context
