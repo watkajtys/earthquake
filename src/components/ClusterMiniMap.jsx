@@ -35,7 +35,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
     if (originalQuakes.length === 1) {
       const quake = originalQuakes[0];
       const latLng = [quake.geometry.coordinates[1], quake.geometry.coordinates[0]];
-      map.setView(latLng, 6); // Zoom level 6 for single quake
+      map.setView(latLng, 8); // Zoom level 6 for single quake
     } else {
       const bounds = L.latLngBounds(
         originalQuakes.map(quake => [
@@ -44,7 +44,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
         ])
       );
       if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [50, 50] }); // Padding for multiple quakes
+        map.fitBounds(bounds, { padding: [10, 10] }); // Padding for multiple quakes
       } else {
         // Fallback if bounds are not valid (e.g., all points identical or invalid)
         // This might happen if originalQuakes has multiple items but they are all at the exact same lat/lng
