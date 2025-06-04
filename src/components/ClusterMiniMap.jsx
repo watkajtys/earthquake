@@ -55,7 +55,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
       const resizeObserver = new ResizeObserver(entries => {
         for (let entry of entries) {
           if (entry.contentRect.width > 0) {
-            setContainerWidth(entry.contentRect.width);
+            // setContainerWidth(entry.contentRect.width);
             // Invalidate map size when container width changes to ensure it rerenders correctly
             if (mapRef.current) {
               mapRef.current.invalidateSize();

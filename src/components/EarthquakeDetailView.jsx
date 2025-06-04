@@ -187,7 +187,32 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
         };
         fetchDetail();
         return () => { isMounted = false; };
-    }, [detailUrl]);
+    }, [detailUrl, onDataLoadedForSeo]); // Added onDataLoadedForSeo to dependency array as it's used inside
+
+    // New useEffect for investigating phase-data
+    useEffect(() => {
+        if (detailData && detailData.properties && detailData.properties.products) {
+            const phaseDataProduct = detailData.properties.products['phase-data'];
+            if (phaseDataProduct && Array.isArray(phaseDataProduct) && phaseDataProduct.length > 0) {
+                console.log("Phase Data Product (first element):", phaseDataProduct[0]);
+                if (phaseDataProduct[0].contents) {
+                    console.log("Phase Data Contents:", phaseDataProduct[0].contents);
+                } else {
+                    console.log("No 'contents' found in phaseDataProduct[0].");
+                }
+                if (phaseDataProduct[0].properties) {
+                    console.log("Phase Data Properties:", phaseDataProduct[0].properties);
+                } else {
+                    console.log("No 'properties' found in phaseDataProduct[0].");
+                }
+            } else {
+                console.log("No 'phase-data' product found or it's empty in detailData.");
+            }
+        } else {
+            // This else block might be noisy if detailData is often null initially.
+            // console.log("'detailData', 'detailData.properties', or 'detailData.properties.products' is null/undefined.");
+        }
+    }, [detailData]); // Dependency: run when detailData changes
 
     const properties = useMemo(() => detailData?.properties, [detailData]);
     const geometry = useMemo(() => detailData?.geometry, [detailData]);
@@ -280,6 +305,10 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     const mmiValue = shakemapProductProps?.['maxmmi-grid'] ?? properties?.mmi;
     const pagerAlertValue = losspagerProductProps?.alertlevel ?? properties?.alert;
 
+    // Extract eventTime and eventDepth for SeismicWavesPanel
+    const eventTime = properties?.time; // Timestamp
+    const eventDepth = geometry?.coordinates?.[2]; // Depth in km
+
     return (
         <div
             className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-[55] p-2 sm:p-4 pt-10 md:pt-16"
@@ -351,6 +380,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                     />
 
                     <EarthquakeSeismicWavesPanel
+                        eventTime={eventTime}
+                        eventDepth={eventDepth}
                         exhibitPanelClass={exhibitPanelClass}
                         exhibitTitleClass={exhibitTitleClass}
                         captionClass={captionClass}

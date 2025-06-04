@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'; // Added useMemo
+import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Added useMemo and useCallback
 import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 import { useParams, useNavigate } from 'react-router-dom';
@@ -42,9 +42,9 @@ const EarthquakeDetailModalComponent = ({ dataSourceTimespanDays }) => { // Remo
         navigate(-1); // Go back to the previous page
     };
 
-    const handleSeoDataLoaded = (data) => {
+    const handleSeoDataLoaded = useCallback((data) => {
         setSeoData(data);
-    };
+    }, []); // Empty dependency array as setSeoData is stable
 
     // Construct canonical URL for the quake detail page
     const canonicalUrl = `https://earthquakeslive.com/quake/${detailUrlParam}`;
