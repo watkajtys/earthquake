@@ -11,10 +11,6 @@ function EarthquakeRegionalMapPanel({
     exhibitPanelClass,
     exhibitTitleClass
 }) {
-    console.log('[EarthquakeRegionalMapPanel] Received geometry:', JSON.stringify(geometry, null, 2));
-    console.log('[EarthquakeRegionalMapPanel] Received properties:', JSON.stringify(properties, null, 2));
-    console.log('[EarthquakeRegionalMapPanel] Received regionalQuakes:', JSON.stringify(regionalQuakes, null, 2));
-
     // Main Guard for Centering: Ensure valid coordinates for the map center.
     if (!geometry || !geometry.coordinates ||
         !isValidNumber(geometry.coordinates[1]) ||
@@ -33,7 +29,6 @@ function EarthquakeRegionalMapPanel({
 
     const mapCenterLat = geometry.coordinates[1];
     const mapCenterLng = geometry.coordinates[0];
-    console.log('[EarthquakeRegionalMapPanel] Derived mapCenterLat:', mapCenterLat, 'mapCenterLng:', mapCenterLng);
 
     // Conditional Highlight Props:
     // Prepare props for the highlighted quake only if its magnitude is valid.
@@ -48,9 +43,9 @@ function EarthquakeRegionalMapPanel({
             // Ensure a fallback title if properties.title or properties.place is not available.
             highlightQuakeTitle: properties.title || properties.place || 'Earthquake Event',
         };
-        console.log('[EarthquakeRegionalMapPanel] Derived highlightProps:', JSON.stringify(highlightProps, null, 2));
     } else {
         // Log a warning if properties or magnitude are missing/invalid, as a highlight was likely intended.
+        // This console.warn is valuable for development to identify data issues.
         console.warn("EarthquakeRegionalMapPanel: Invalid or missing magnitude for highlighting. No highlight marker will be shown.", properties);
     }
 
@@ -58,15 +53,12 @@ function EarthquakeRegionalMapPanel({
         <div className={`${exhibitPanelClass} border-sky-500`}>
             <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
             <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
-                {/* Log props being passed to EarthquakeMap for debugging */}
-                {console.log('[EarthquakeRegionalMapPanel] Passing nearbyQuakes to EarthquakeMap:', JSON.stringify(regionalQuakes, null, 2))}
-                {console.log('[EarthquakeRegionalMapPanel] Passing fitMapToBounds to EarthquakeMap:', (regionalQuakes && regionalQuakes.length > 0))}
                 <EarthquakeMap
                     mapCenterLatitude={mapCenterLat}
                     mapCenterLongitude={mapCenterLng}
                     {...highlightProps}
                     shakeMapUrl={shakemapIntensityImageUrl}
-                    nearbyQuakes={regionalQuakes} // This is passed as nearbyQuakes
+                    nearbyQuakes={regionalQuakes}
                     mainQuakeDetailUrl={detailUrl}
                     fitMapToBounds={regionalQuakes && regionalQuakes.length > 0}
                 />
