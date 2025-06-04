@@ -371,6 +371,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         detailData={detailData}
                         broaderEarthquakeData={broaderEarthquakeData}
                         dataSourceTimespanDays={dataSourceTimespanDays}
+                        isLoadingMonthly={isLoadingMonthly}
+                        hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
                         exhibitPanelClass={exhibitPanelClass}
                     />
 
