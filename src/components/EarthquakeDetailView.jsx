@@ -39,6 +39,7 @@ import EarthquakeEnergyPanel from './earthquakeDetail/EarthquakeEnergyPanel'; //
 import EarthquakeRegionalSeismicityPanel from './earthquakeDetail/EarthquakeRegionalSeismicityPanel'; // Import the new regional seismicity panel
 import EarthquakeDepthProfilePanel from './earthquakeDetail/EarthquakeDepthProfilePanel'; // Import the new depth profile panel
 import EarthquakeSeismicWavesPanel from './earthquakeDetail/EarthquakeSeismicWavesPanel'; // Import the new seismic waves panel
+import EarthquakeTriangulationPanel from './earthquakeDetail/EarthquakeTriangulationPanel'; // Import the new triangulation panel
 import EarthquakeLocationPanel from './earthquakeDetail/EarthquakeLocationPanel'; // Import the new location panel
 import EarthquakeImpactPanel from './earthquakeDetail/EarthquakeImpactPanel'; // Import the new impact panel
 import EarthquakeCitizenSciencePanel from './earthquakeDetail/EarthquakeCitizenSciencePanel'; // Import the new citizen science panel
@@ -386,6 +387,15 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         exhibitTitleClass={exhibitTitleClass}
                         captionClass={captionClass}
                     />
+
+                    {/* Render the conceptual triangulation animation panel. */}
+                    {/* detailData, which is the full earthquake GeoJSON feature, is passed for the animation logic. */}
+                    <EarthquakeTriangulationPanel
+                        earthquakeFeature={detailData}
+                        exhibitPanelClass={exhibitPanelClass}
+                        exhibitTitleClass={exhibitTitleClass}
+                    />
+
                     <EarthquakeLocationPanel
                         properties={properties}
                         originProductProps={originProductProps}
