@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import PropTypes from 'prop-types';
-import { calculatePWaveTravelTime, calculateSWaveTravelTime } from '../../utils/seismicUtils.js';
+import { calculatePWaveTravelTime, calculateSWaveTravelTime } from '../../utils/detailViewUtils.js'; // Corrected import path
 
 function EarthquakeSeismicWavesPanel({
     exhibitPanelClass,

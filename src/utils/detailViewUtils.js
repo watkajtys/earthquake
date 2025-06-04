@@ -80,3 +80,30 @@ export const getBeachballPathsAndType = (rake) => { // dip parameter removed
     }
     return { shadedPaths, faultType, nodalPlanes };
 };
+
+/**
+ * Placeholder for P-wave travel time calculation.
+ * Assumes an average P-wave velocity (e.g., 6.0-8.0 km/s in crust/upper mantle).
+ * This is a highly simplified model.
+ * @param {number} distanceKm - Distance from epicenter in kilometers.
+ * @returns {number} Approximate P-wave travel time in seconds.
+ */
+export const calculatePWaveTravelTime = (distanceKm) => {
+  if (!isValidNumber(distanceKm) || distanceKm < 0) return 0;
+  const averagePWaveVelocityKmS = 6.5; // Simplified average velocity
+  return distanceKm / averagePWaveVelocityKmS;
+};
+
+/**
+ * Placeholder for S-wave travel time calculation.
+ * Assumes an average S-wave velocity (e.g., 3.5-4.5 km/s in crust/upper mantle).
+ * S-waves are roughly 1.7 times slower than P-waves.
+ * This is a highly simplified model.
+ * @param {number} distanceKm - Distance from epicenter in kilometers.
+ * @returns {number} Approximate S-wave travel time in seconds.
+ */
+export const calculateSWaveTravelTime = (distanceKm) => {
+  if (!isValidNumber(distanceKm) || distanceKm < 0) return 0;
+  const averageSWaveVelocityKmS = 3.75; // Simplified average velocity
+  return distanceKm / averageSWaveVelocityKmS;
+};
