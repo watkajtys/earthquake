@@ -14,8 +14,15 @@ vi.mock('./EarthquakeMap', () => ({
     <div
       data-testid="mock-earthquake-map"
       data-nearby-quakes={props.nearbyQuakes ? JSON.stringify(props.nearbyQuakes) : ''}
-      data-latitude={props.latitude}
-      data-longitude={props.longitude}
+      data-map-center-latitude={props.mapCenterLatitude}
+      data-map-center-longitude={props.mapCenterLongitude}
+      data-highlight-quake-latitude={props.highlightQuakeLatitude}
+      data-highlight-quake-longitude={props.highlightQuakeLongitude}
+      data-highlight-quake-magnitude={props.highlightQuakeMagnitude}
+      // data-highlight-quake-title={props.highlightQuakeTitle} // Title can be long, omitting from data attribute for simplicity
+      data-fit-map-to-bounds={String(props.fitMapToBounds)}
+      data-shakemap-url={props.shakeMapUrl} // Also include other relevant props if needed for assertions
+      data-main-quake-detail-url={props.mainQuakeDetailUrl}
     >
       Mock Map
     </div>

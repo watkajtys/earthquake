@@ -22,13 +22,16 @@ function EarthquakeRegionalMapPanel({
             <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
             <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
                 <EarthquakeMap
-                    latitude={geometry.coordinates[1]}
-                    longitude={geometry.coordinates[0]}
-                    magnitude={properties.mag}
-                    title={properties.title}
+                    mapCenterLatitude={geometry.coordinates[1]}
+                    mapCenterLongitude={geometry.coordinates[0]}
+                    highlightQuakeLatitude={geometry.coordinates[1]}
+                    highlightQuakeLongitude={geometry.coordinates[0]}
+                    highlightQuakeMagnitude={properties.mag}
+                    highlightQuakeTitle={properties.title}
                     shakeMapUrl={shakemapIntensityImageUrl}
                     nearbyQuakes={regionalQuakes}
                     mainQuakeDetailUrl={detailUrl}
+                    fitMapToBounds={regionalQuakes && regionalQuakes.length > 0}
                 />
             </div>
         </div>
