@@ -119,22 +119,22 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
 
   // Render conditions
   if (!initialCenter || initialZoomVal === null) { // If cluster data is not processed yet
-    return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Initializing map parameters...</div>;
+    return <div style={{ height: '350px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Initializing map parameters...</div>;
   }
 
   if (containerWidth === 0 && cluster && cluster.originalQuakes && cluster.originalQuakes.length > 0) {
-    return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map...</div>;
+    return <div style={{ height: '350px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map...</div>;
   }
 
   // Do not render MapContainer if containerWidth is 0, to prevent Leaflet errors
   if (containerWidth === 0) {
       // This case might be hit if originalQuakes is empty initially, then the above "Loading map..." isn't shown.
       // Or if the parent div genuinely has no width for some reason.
-      return <div ref={mapContainerParentRef} style={{ width: '100%', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Awaiting dimensions...</div>;
+      return <div ref={mapContainerParentRef} style={{ width: '100%', height: '350px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Awaiting dimensions...</div>;
   }
 
   return (
-    <div ref={mapContainerParentRef} style={{ width: '100%', height: '200px' }}>
+    <div ref={mapContainerParentRef} style={{ width: '100%', height: '350px' }}>
       <MapContainer
         center={initialCenter}
         zoom={initialZoomVal}
