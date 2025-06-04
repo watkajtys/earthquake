@@ -33,7 +33,7 @@ const SVG_HEIGHT = 400; // Increased height for text and better visual
 const EARTH_RADIUS_SVG = SVG_WIDTH / 2 * 0.8; // Scaled Earth radius for SVG
 const MAX_DEPTH_SVG = EARTH_RADIUS_SVG * 0.5; // Max depth visualization exaggerated
 const MAX_ANIMATION_SECONDS = 300; // Loop duration: increased for debugging visibility
-const VISUAL_SPEED_MULTIPLIER = 2.0; // Makes the animation appear twice as fast
+const VISUAL_SPEED_MULTIPLIER = 15.0; // Makes the animation appear 15x as fast
 
 // Component
 const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'average' }) => {
