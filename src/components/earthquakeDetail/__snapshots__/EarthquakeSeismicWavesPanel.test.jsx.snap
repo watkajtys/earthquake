@@ -873,7 +873,7 @@ exports[`EarthquakeSeismicWavesPanel > renders correctly and matches snapshot 1`
         <p
           class="text-xs text-slate-600 mt-auto pt-2"
         >
-          Fastest waves, they compress and rarefy the material they pass through. Particles move back and forth in the same direction as the wave propagation.
+          Fastest waves, they compress and rarefy the material they pass through. Particles move back and forth in the same direction as the wave propagation. The table below illustrates how their travel time compares to S-waves over various distances.
         </p>
       </div>
       <div
@@ -919,10 +919,10 @@ exports[`EarthquakeSeismicWavesPanel > renders correctly and matches snapshot 1`
             Direction of Wave Propagation
           </text>
           <path
-            d="M-70 50 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0"
+            d="M-70 50 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0"
             fill="none"
             stroke="#ef4444"
-            stroke-dasharray="158"
+            stroke-dasharray="156.85"
             stroke-dashoffset="0"
             stroke-width="3"
           >
@@ -930,7 +930,7 @@ exports[`EarthquakeSeismicWavesPanel > renders correctly and matches snapshot 1`
               attributeName="stroke-dashoffset"
               dur="2s"
               repeatCount="indefinite"
-              values="0;-158"
+              values="0;-156.85"
             />
           </path>
           <rect
@@ -1050,7 +1050,7 @@ exports[`EarthquakeSeismicWavesPanel > renders correctly and matches snapshot 1`
         <p
           class="text-xs text-slate-600 mt-auto pt-2"
         >
-          Slower than P-waves, they cause particles to shear the material they pass through. Particles move side-to-side, perpendicular to the wave propagation direction.
+          Slower than P-waves, they cause particles to shear the material they pass through. Particles move side-to-side, perpendicular to the wave propagation direction. See the table below to compare their travel times with P-waves and understand the resulting 'S-P gap' used in locating earthquakes.
         </p>
       </div>
     </div>
@@ -1059,6 +1059,156 @@ exports[`EarthquakeSeismicWavesPanel > renders correctly and matches snapshot 1`
     >
       Surface waves (Love & Rayleigh) arrive later and often cause most shaking.
     </p>
+    <div
+      class="mt-4"
+    >
+      <h3
+        class="custom-title-class text-fuchsia-800 border-fuchsia-200 text-base mb-2"
+      >
+        P & S Wave Travel Times (Illustrative)
+      </h3>
+      <div
+        class="overflow-x-auto bg-slate-50 p-3 rounded-md shadow"
+      >
+        <table
+          class="w-full text-sm text-left text-slate-700"
+        >
+          <thead
+            class="text-xs text-slate-700 uppercase bg-slate-100"
+          >
+            <tr>
+              <th
+                class="px-4 py-2"
+                scope="col"
+              >
+                Distance (km)
+              </th>
+              <th
+                class="px-4 py-2 text-center"
+                scope="col"
+              >
+                P-Wave Travel (s)
+              </th>
+              <th
+                class="px-4 py-2 text-center"
+                scope="col"
+              >
+                S-Wave Travel (s)
+              </th>
+              <th
+                class="px-4 py-2 text-center"
+                scope="col"
+              >
+                S-P Gap (s)
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              class="border-b border-slate-200 hover:bg-slate-100"
+            >
+              <td
+                class="px-4 py-2 font-medium"
+              >
+                50
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                7.7
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                13.3
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                5.6
+              </td>
+            </tr>
+            <tr
+              class="border-b border-slate-200 hover:bg-slate-100"
+            >
+              <td
+                class="px-4 py-2 font-medium"
+              >
+                150
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                23.1
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                40.0
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                16.9
+              </td>
+            </tr>
+            <tr
+              class="border-b border-slate-200 hover:bg-slate-100"
+            >
+              <td
+                class="px-4 py-2 font-medium"
+              >
+                300
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                46.2
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                80.0
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                33.8
+              </td>
+            </tr>
+            <tr
+              class="border-b border-slate-200 hover:bg-slate-100"
+            >
+              <td
+                class="px-4 py-2 font-medium"
+              >
+                500
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                76.9
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                133.3
+              </td>
+              <td
+                class="px-4 py-2 text-center"
+              >
+                56.4
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p
+        class="custom-caption-class mt-2"
+      >
+        Note: Assumes average crustal velocities (P: 6.5 km/s, S: 3.75 km/s) and ignores depth.
+      </p>
+    </div>
     <div
       class="mt-6 p-4 bg-gray-50 rounded-md"
     >
