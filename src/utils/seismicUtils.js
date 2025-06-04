@@ -23,6 +23,11 @@ export const S_WAVE_FAST_KM_S = 4.3;
 export const P_WAVE_SLOW_KM_S = 5.5;
 export const S_WAVE_SLOW_KM_S = 3.2;
 
+// Ping colors - moved from SeismicWaveAnimation.jsx
+export const P_WAVE_PING_COLOR = "rgba(0, 0, 255, 1)"; // Solid Blue for P-wave ping
+export const S_WAVE_PING_COLOR = "rgba(255, 0, 0, 1)"; // Solid Red for S-wave ping
+
+
 /**
  * Calculates the travel time for a P-wave over a given distance.
  * This is a simplified calculation assuming a constant average velocity

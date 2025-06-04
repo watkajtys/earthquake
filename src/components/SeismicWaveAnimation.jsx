@@ -10,6 +10,8 @@ import {
   S_WAVE_FAST_KM_S,
   P_WAVE_SLOW_KM_S,
   S_WAVE_SLOW_KM_S,
+  P_WAVE_PING_COLOR, // Imported
+  S_WAVE_PING_COLOR, // Imported
 } from '../utils/seismicUtils';
 
 // Constants
@@ -21,13 +23,16 @@ const VIRTUAL_STATIONS = [
   { name: "Station Delta", lat: -33.8688, lon: 151.2093 }, // Sydney
 ];
 
-const P_WAVE_COLOR = "rgba(0, 0, 255, 0.5)"; // Blue, semi-transparent
-const S_WAVE_COLOR = "rgba(255, 0, 0, 0.5)"; // Red, semi-transparent
+const P_WAVE_BASE_COLOR = "0, 0, 255"; // RGB for blue
+const S_WAVE_BASE_COLOR = "255, 0, 0"; // RGB for red
+
+// PING_COLOR constants are now imported from seismicUtils.js
 
 const SVG_WIDTH = 600;
 const SVG_HEIGHT = 400; // Increased height for text and better visual
 const EARTH_RADIUS_SVG = SVG_WIDTH / 2 * 0.8; // Scaled Earth radius for SVG
 const MAX_DEPTH_SVG = EARTH_RADIUS_SVG * 0.5; // Max depth visualization exaggerated
+const MAX_ANIMATION_SECONDS = 60; // Loop duration: 60 seconds of seismic travel time
 
 // Component
 const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'average' }) => {
@@ -104,44 +109,56 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
     if (!startTimeRef.current) {
       startTimeRef.current = timestamp;
     }
-    const elapsedMilliseconds = timestamp - startTimeRef.current;
-    const newAnimationTime = elapsedMilliseconds / 1000; // Convert to seconds
+    let elapsedMilliseconds = timestamp - startTimeRef.current;
+    let newAnimationTime = elapsedMilliseconds / 1000; // Convert to seconds
+
+    if (newAnimationTime > MAX_ANIMATION_SECONDS) {
+      newAnimationTime = 0; // Reset animation time to loop
+      startTimeRef.current = timestamp; // Reset start time for the new loop
+      // Station arrival indicators are derived directly in render, so no explicit reset here is needed for them.
+    }
 
     setAnimationTime(newAnimationTime);
 
-    // Determine if animation should continue
-    const maxSTime = Math.max(...stationCalcs.filter(s => s.sWaveTime !== "N/A").map(s => parseFloat(s.sWaveTime)), 0);
-    const animationDurationLimit = maxSTime > 0 ? maxSTime + 10 : 60; // Add a buffer or default to 60s
-
-    if (newAnimationTime < animationDurationLimit && stationCalcs.length > 0) {
-      animationFrameId.current = requestAnimationFrame(animate);
+    // Continue animation as long as component is mounted and data is available
+    if (stationCalcs.length > 0) { // Ensure there are stations to animate for
+        animationFrameId.current = requestAnimationFrame(animate);
     } else {
-        // Optionally reset or finalize animation states here
-        if (newAnimationTime >= animationDurationLimit) {
-            console.log("Animation limit reached or all waves passed.");
+        // If no stationCalcs (e.g. earthquakeData became null), stop animation.
+        // This case is mostly handled by the Start and stop animation useEffect.
+        if (animationFrameId.current) {
+            cancelAnimationFrame(animationFrameId.current);
+            startTimeRef.current = null;
+            setAnimationTime(0);
         }
     }
-  }, [stationCalcs]);
+  }, [stationCalcs]); // stationCalcs dependency ensures that if it becomes empty, loop might re-evaluate stopping.
 
   // Start and stop animation
   useEffect(() => {
     if (earthquakeData && stationCalcs.length > 0) {
-      startTimeRef.current = null; // Reset start time for new earthquake/data
-      setAnimationTime(0); // Reset animation time
-      animationFrameId.current = requestAnimationFrame(animate);
-    } else {
+      startTimeRef.current = null;
+      setAnimationTime(0);
+
+      // Ensure any previous animation frame is cleared before starting a new one
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
-        startTimeRef.current = null;
-        setAnimationTime(0);
       }
+      animationFrameId.current = requestAnimationFrame(animate);
+    } else {
+      // Handles cleanup if earthquakeData or stationCalcs become null/empty
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
+      startTimeRef.current = null;
+      setAnimationTime(0);
     }
     return () => {
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
       }
     };
-  }, [earthquakeData, stationCalcs, animate]);
+  }, [earthquakeData, stationCalcs, animate]); // animate is in dependency array
 
 
   if (!earthquakeData) {
@@ -189,21 +206,34 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
         Mode: {speedScenario === 'variable' ? 'Illustrative Variable Speeds' : 'Illustrative Average Speeds'}
       </p>
       <svg width={SVG_WIDTH} height={SVG_HEIGHT} style={{ border: '1px solid #ccc', overflow: 'hidden' }}>
+        <defs>
+          <radialGradient id="pWaveGradient">
+            <stop offset="0%" stopColor={`rgba(${P_WAVE_BASE_COLOR}, 0.6)`} />
+            <stop offset="70%" stopColor={`rgba(${P_WAVE_BASE_COLOR}, 0.2)`} />
+            <stop offset="100%" stopColor={`rgba(${P_WAVE_BASE_COLOR}, 0.05)`} />
+          </radialGradient>
+          <radialGradient id="sWaveGradient">
+            <stop offset="0%" stopColor={`rgba(${S_WAVE_BASE_COLOR}, 0.6)`} />
+            <stop offset="70%" stopColor={`rgba(${S_WAVE_BASE_COLOR}, 0.2)`} />
+            <stop offset="100%" stopColor={`rgba(${S_WAVE_BASE_COLOR}, 0.05)`} />
+          </radialGradient>
+        </defs>
+
         {/* Earth's surface (semicircle) */}
         <path
           d={`M ${svgCenterX - EARTH_RADIUS_SVG},${svgCenterY}
               A ${EARTH_RADIUS_SVG},${EARTH_RADIUS_SVG} 0 0 1 ${svgCenterX + EARTH_RADIUS_SVG},${svgCenterY}`}
-          stroke="#654321" // Brown for earth crust
-          strokeWidth="2"
-          fill="#f0e68c" // Khaki for earth fill
+          stroke="#5c4033" // Darker Brown for earth crust outline
+          strokeWidth="2.5" // Slightly thicker
+          fill="#f5deb3" // Wheat color for earth fill - a bit lighter than khaki
         />
         {/* Line to represent the earth's "flat" surface for stations if needed, or just use the arc */}
-         <line x1={svgCenterX - EARTH_RADIUS_SVG} y1={svgCenterY} x2={svgCenterX + EARTH_RADIUS_SVG} y2={svgCenterY} stroke="#654321" strokeWidth="2"/>
+         <line x1={svgCenterX - EARTH_RADIUS_SVG} y1={svgCenterY} x2={svgCenterX + EARTH_RADIUS_SVG} y2={svgCenterY} stroke="#5c4033" strokeWidth="2.5"/>
 
 
         {/* Hypocenter */}
-        <circle cx={hypocenterX} cy={hypocenterY} r="5" fill="black" />
-        <text x={hypocenterX + 8} y={hypocenterY + 4} fontSize="10px">Hypocenter</text>
+        <circle cx={hypocenterX} cy={hypocenterY} r="6" fill="black" stroke="white" strokeWidth="1" />
+        <text x={hypocenterX + 10} y={hypocenterY + 4} fontSize="11px" fill="black" fontWeight="bold">Hypocenter</text>
 
         {/* P-Wave */}
         {animationTime > 0 && pWaveRadiusSVG > 0 && (
@@ -211,10 +241,9 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
             cx={hypocenterX}
             cy={hypocenterY}
             r={pWaveRadiusSVG}
-            fill="none"
-            stroke={P_WAVE_COLOR}
-            strokeWidth="3"
-            opacity="0.7"
+            fill="url(#pWaveGradient)"
+            stroke={`rgba(${P_WAVE_BASE_COLOR}, 0.8)`}
+            strokeWidth="1"
           />
         )}
 
@@ -224,10 +253,9 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
             cx={hypocenterX}
             cy={hypocenterY}
             r={sWaveRadiusSVG}
-            fill="none"
-            stroke={S_WAVE_COLOR}
-            strokeWidth="3"
-            opacity="0.7"
+            fill="url(#sWaveGradient)"
+            stroke={`rgba(${S_WAVE_BASE_COLOR}, 0.8)`}
+            strokeWidth="1"
           />
         )}
 
@@ -235,27 +263,47 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'ave
         {stationPositions.map((station, index) => {
           const pWaveArrived = station.pWaveTime !== "N/A" && animationTime >= parseFloat(station.pWaveTime);
           const sWaveArrived = station.sWaveTime !== "N/A" && animationTime >= parseFloat(station.sWaveTime);
-          let stationColor = "grey";
-          if (pWaveArrived) stationColor = P_WAVE_COLOR;
-          if (sWaveArrived) stationColor = S_WAVE_COLOR;
+
+          let stationFillColor = "#808080"; // Grey
+          let stationStrokeColor = "black";
+          let stationStrokeWidth = 1;
+
+          if (pWaveArrived) {
+            stationFillColor = `rgba(${P_WAVE_BASE_COLOR}, 0.7)`; // More solid than wave itself
+            stationStrokeColor = `rgba(${P_WAVE_BASE_COLOR}, 1)`;
+            stationStrokeWidth = 1.5;
+          }
+          if (sWaveArrived) {
+            stationFillColor = `rgba(${S_WAVE_BASE_COLOR}, 0.7)`;
+            stationStrokeColor = `rgba(${S_WAVE_BASE_COLOR}, 1)`;
+            stationStrokeWidth = 1.5;
+          }
+
 
           return (
             <g key={station.name}>
-              <circle cx={station.svgX} cy={station.svgY} r="6" fill={stationColor} stroke="black" />
+              <circle
+                cx={station.svgX}
+                cy={station.svgY}
+                r="7" // Slightly larger station markers
+                fill={stationFillColor}
+                stroke={stationStrokeColor}
+                strokeWidth={stationStrokeWidth}
+              />
               {/* Station Name */}
-              <text x={station.svgX} y={station.svgY - 25} textAnchor="middle" fontSize="10px" fill="#333">
+              <text x={station.svgX} y={station.svgY - 28} textAnchor="middle" fontSize="11px" fontWeight="bold" fill="#1a202c">
                 {station.name}
               </text>
               {/* Travel Times */}
-              <text x={station.svgX} y={station.svgY - 10} textAnchor="middle" fontSize="9px" fill="#555">
+              <text x={station.svgX} y={station.svgY - 12} textAnchor="middle" fontSize="10px" fill="#4a5568">
                 P: {station.pWaveTime}s, S: {station.sWaveTime}s
               </text>
                {/* Arrival Pings */}
               {pWaveArrived && !sWaveArrived && (
-                <line x1={station.svgX} y1={station.svgY} x2={station.svgX} y2={station.svgY - 8} stroke={P_WAVE_COLOR} strokeWidth="2" />
+                <line x1={station.svgX} y1={station.svgY - 8} x2={station.svgX} y2={station.svgY - 18} stroke={P_WAVE_PING_COLOR} strokeWidth="2.5" />
               )}
               {sWaveArrived && (
-                 <line x1={station.svgX} y1={station.svgY} x2={station.svgX} y2={station.svgY - 8} stroke={S_WAVE_COLOR} strokeWidth="3" />
+                 <line x1={station.svgX} y1={station.svgY - 8} x2={station.svgX} y2={station.svgY - 18} stroke={S_WAVE_PING_COLOR} strokeWidth="2.5" />
               )}
             </g>
           );

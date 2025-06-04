@@ -195,4 +195,46 @@ describe('SeismicWaveAnimation', () => {
 
     expect(screen.getByText(/Mode: Illustrative Variable Speeds/i)).toBeInTheDocument();
   });
+
+  test('renders SVG definitions for wave gradients when data is available', () => {
+    mockedUseEarthquakeDataState.mockReturnValue({ lastMajorQuake: null });
+    const { container } = render(<SeismicWaveAnimation earthquake={mockEarthquake} />);
+
+    const defs = container.querySelector('svg defs');
+    expect(defs).toBeInTheDocument();
+
+    const pWaveGradient = defs.querySelector('#pWaveGradient');
+    expect(pWaveGradient).toBeInTheDocument();
+    expect(pWaveGradient.tagName.toLowerCase()).toBe('radialgradient');
+
+    const sWaveGradient = defs.querySelector('#sWaveGradient');
+    expect(sWaveGradient).toBeInTheDocument();
+    expect(sWaveGradient.tagName.toLowerCase()).toBe('radialgradient');
+  });
+
+  test('station markers have default appearance on initial render', async () => {
+    mockedUseEarthquakeDataState.mockReturnValue({ lastMajorQuake: null });
+    // Ensure travel times are positive, so no arrivals at animationTime = 0
+     mockSeismicUtils.calculateHypocentralDistance.mockReturnValue(100); // All stations 100km away
+
+    const { container } = render(<SeismicWaveAnimation earthquake={mockEarthquake} speedScenario="average" />);
+
+    // Wait for station text to ensure rendering is complete
+    await screen.findByText("Station Alpha");
+
+    const stationCircles = container.querySelectorAll('g circle'); // Get all circles within station groups
+    stationCircles.forEach(circle => {
+      // Check default fill and stroke as set in the component for non-arrived state
+      expect(circle).toHaveAttribute('fill', '#808080'); // Grey
+      expect(circle).toHaveAttribute('stroke', 'black');
+      expect(circle).toHaveAttribute('stroke-width', '1');
+    });
+
+    // Ping lines should not be present initially as pWaveArrived/sWaveArrived are false
+    const pPingLines = container.querySelectorAll(`line[stroke="${actualSeismicUtils.P_WAVE_PING_COLOR}"]`);
+    expect(pPingLines.length).toBe(0);
+    const sPingLines = container.querySelectorAll(`line[stroke="${actualSeismicUtils.S_WAVE_PING_COLOR}"]`);
+    expect(sPingLines.length).toBe(0);
+  });
+
 });
