@@ -2,19 +2,20 @@ import React, { memo } from 'react';
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 
 /**
- * Renders a mini map for a cluster of earthquakes, focusing on the highest magnitude quake
- * and displaying other quakes in the cluster as nearby quakes.
- * This component is a wrapper around the EarthquakeMap component.
+ * Renders a mini map for a cluster of earthquakes.
+ * The map is centered at the geographic average of all quakes in the cluster.
+ * The latest earthquake in the cluster is highlighted with a pulsing marker.
+ * Other earthquakes in the cluster are shown as smaller, non-pulsing markers.
+ * The map automatically fits its bounds to display all earthquakes in the cluster.
  *
  * @param {object} props - The component's props.
  * @param {object} props.cluster - The cluster data. Must contain an `originalQuakes` array.
  * @param {Array<object>} props.cluster.originalQuakes - An array of earthquake objects. Each object is expected
- *   to have `id`, `geometry.coordinates` (lng, lat, depth), and `properties.mag` (magnitude), `properties.place`.
- * @param {function} props.getMagnitudeColor - (Currently unused in this component as EarthquakeMap handles its own)
- * @param {object} props.containerRef - (Currently unused in this component)
+ *   to have `id`, `geometry.coordinates` (lng, lat, depth), and `properties.mag` (magnitude),
+ *   `properties.place`, and `properties.time`.
  * @returns {JSX.Element | null} The rendered EarthquakeMap component for the cluster or null if data is invalid.
  */
-const ClusterMiniMap = ({ cluster /*, getMagnitudeColor, containerRef */ }) => {
+const ClusterMiniMap = ({ cluster }) => {
   if (!cluster) {
     return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map data or map disabled</div>;
   }
@@ -25,63 +26,79 @@ const ClusterMiniMap = ({ cluster /*, getMagnitudeColor, containerRef */ }) => {
 
   const { originalQuakes } = cluster;
 
-  // Find the earthquake with the highest magnitude
-  // This check is technically after the originalQuakes.length === 0 check,
-  // so originalQuakes is guaranteed to be a non-empty array here.
-  const highestMagnitudeQuake = originalQuakes.reduce((prev, current) => {
-    // Ensure properties and mag exist to prevent runtime errors during reduce
-    const prevMag = prev?.properties?.mag;
-    const currentMag = current?.properties?.mag;
-    // Simple way to handle potentially missing mag: treat as lowest possible
-    const effectivePrevMag = typeof prevMag === 'number' ? prevMag : -Infinity;
-    const effectiveCurrentMag = typeof currentMag === 'number' ? currentMag : -Infinity;
-
-    return (effectivePrevMag > effectiveCurrentMag) ? prev : current;
-  });
-
-  // This specific check for !highestMagnitudeQuake might be redundant if originalQuakes
-  // are guaranteed to have .properties.mag and the array is not empty.
-  // However, if quakes could lack `properties` or `mag`, this is a safeguard.
-  // Also check if the result of reduce actually has the needed properties.
-  if (!highestMagnitudeQuake || !highestMagnitudeQuake.properties || typeof highestMagnitudeQuake.properties.mag !== 'number' || !highestMagnitudeQuake.geometry || !Array.isArray(highestMagnitudeQuake.geometry.coordinates) || highestMagnitudeQuake.geometry.coordinates.length < 2) {
-    console.error("Main quake data is malformed or essential fields are missing in ClusterMiniMap:", highestMagnitudeQuake);
-    return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Could not identify main quake due to malformed data.</div>;
+  // 1. Identify Latest Quake
+  let latestQuake = null;
+  if (originalQuakes.length > 0) {
+    latestQuake = originalQuakes.reduce((latest, current) => {
+      const latestTime = latest?.properties?.time;
+      const currentTime = current?.properties?.time;
+      if (typeof latestTime !== 'number') return current; // Handle missing time on 'latest'
+      if (typeof currentTime !== 'number') return latest; // Handle missing time on 'current'
+      return (currentTime > latestTime) ? current : latest;
+    });
   }
 
-  // Filter out the highest magnitude quake from the originalQuakes array for the nearbyQuakes prop
-  const nearbyQuakes = originalQuakes.filter(
-    quake => quake.id !== highestMagnitudeQuake.id
-  );
+  // Ensure latestQuake and its essential properties exist
+  if (!latestQuake || !latestQuake.properties || typeof latestQuake.properties.mag !== 'number' ||
+      typeof latestQuake.properties.time !== 'number' || // Also check time for consistency
+      !latestQuake.geometry || !Array.isArray(latestQuake.geometry.coordinates) ||
+      latestQuake.geometry.coordinates.length < 2) {
+    console.error("Latest quake data is malformed or essential fields are missing in ClusterMiniMap:", latestQuake);
+    return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Latest quake data in cluster is malformed.</div>;
+  }
 
-  // Props for EarthquakeMap
-  // Ensure highestMagnitudeQuake.geometry and .properties exist
-  // At this point, highestMagnitudeQuake is confirmed to have the necessary structure
-  // due to the checks performed after the reduce operation.
-  const latitude = highestMagnitudeQuake.geometry.coordinates[1];
-  const longitude = highestMagnitudeQuake.geometry.coordinates[0];
-  const magnitude = highestMagnitudeQuake.properties.mag;
-  const title = highestMagnitudeQuake.properties.place || 'Main Quake'; // Fallback title
+  // 2. Calculate Geographic Center (avgLat, avgLng)
+  let sumLat = 0;
+  let sumLng = 0;
+  let validCoordCount = 0;
+  originalQuakes.forEach(quake => {
+    if (quake.geometry && Array.isArray(quake.geometry.coordinates) && quake.geometry.coordinates.length >= 2) {
+      const lat = parseFloat(quake.geometry.coordinates[1]);
+      const lng = parseFloat(quake.geometry.coordinates[0]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        sumLat += lat;
+        sumLng += lng;
+        validCoordCount++;
+      }
+    }
+  });
 
-  // The check for essential props (lat, lon, mag) is implicitly covered by the
-  // more robust `highestMagnitudeQuake` check above. If that check passes,
-  // these properties should be valid.
+  let avgLat = null;
+  let avgLng = null;
 
-  // The MiniMap will have a fixed height, similar to its previous fixed height.
-  // EarthquakeMap uses 100% height, so we wrap it in a div with a fixed height.
+  if (validCoordCount > 0) {
+    avgLat = sumLat / validCoordCount;
+    avgLng = sumLng / validCoordCount;
+  } else {
+    // Fallback if no valid coordinates found - center on the latest quake itself
+    // This shouldn't happen if latestQuake is valid, but as a safeguard.
+    avgLat = latestQuake.geometry.coordinates[1];
+    avgLng = latestQuake.geometry.coordinates[0];
+    console.warn("No valid coordinates found for averaging in cluster. Centering on latest quake.");
+  }
+
+  // 3. Determine otherQuakes (excluding the latestQuake)
+  const otherQuakes = originalQuakes.filter(quake => quake.id !== latestQuake.id);
+
+  // 4. Prepare props for EarthquakeMap
+  const mapProps = {
+    mapCenterLatitude: avgLat,
+    mapCenterLongitude: avgLng,
+    highlightQuakeLatitude: latestQuake.geometry.coordinates[1],
+    highlightQuakeLongitude: latestQuake.geometry.coordinates[0],
+    highlightQuakeMagnitude: latestQuake.properties.mag,
+    highlightQuakeTitle: latestQuake.properties.place || latestQuake.properties.title || 'Latest Quake',
+    nearbyQuakes: otherQuakes,
+    fitMapToBounds: true,
+    shakeMapUrl: null, // Clusters don't have a single ShakeMap URL
+    mainQuakeDetailUrl: null, // Or potentially a link to the latest quake's detail view if available
+                               // e.g., latestQuake.properties.detail (if such a prop exists)
+    defaultZoom: 8, // EarthquakeMap has a default, but can be explicit
+  };
+
   return (
     <div style={{ height: '200px', width: '100%' }}>
-      <EarthquakeMap
-        latitude={latitude}
-        longitude={longitude}
-        magnitude={magnitude}
-        title={title}
-        nearbyQuakes={nearbyQuakes}
-        fitMapToBounds={true} // Enable bounds fitting for clusters
-        // shakeMapUrl and mainQuakeDetailUrl are not directly available for clusters in this context
-        // Pass null or omit if EarthquakeMap handles undefined props gracefully
-        shakeMapUrl={null}
-        mainQuakeDetailUrl={null} // Or highestMagnitudeQuake.properties.detail if available and relevant
-      />
+      <EarthquakeMap {...mapProps} />
     </div>
   );
 };

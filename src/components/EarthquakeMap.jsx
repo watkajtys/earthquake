@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react'; // Added useRef and useEffect
+import React, { useRef, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
@@ -63,33 +63,40 @@ const getTectonicPlateStyle = (feature) => {
 };
 
 /**
- * `EarthquakeMap` component renders a Leaflet map displaying an earthquake epicenter,
- * its title, a link to its ShakeMap (if available), and tectonic plate boundaries.
+ * `EarthquakeMap` component renders a Leaflet map.
  *
  * @param {object} props - The component's props.
- * @param {number} props.latitude - The latitude of the earthquake epicenter.
- * @param {number} props.longitude - The longitude of the earthquake epicenter.
- * @param {number} props.magnitude - The magnitude of the earthquake.
- * @param {string} props.title - The title of the earthquake event.
- * @param {string} [props.shakeMapUrl] - Optional URL to the ShakeMap details page for the earthquake.
+ * @param {number} props.mapCenterLatitude - Latitude for the initial map center.
+ * @param {number} props.mapCenterLongitude - Longitude for the initial map center.
+ * @param {number} [props.highlightQuakeLatitude] - Latitude of the main quake to highlight.
+ * @param {number} [props.highlightQuakeLongitude] - Longitude of the main quake to highlight.
+ * @param {number} [props.highlightQuakeMagnitude] - Magnitude of the main quake to highlight.
+ * @param {string} [props.highlightQuakeTitle] - Title of the main quake to highlight.
+ * @param {string} [props.shakeMapUrl] - Optional URL to the ShakeMap details page for the highlighted quake.
  * @param {Array} [props.nearbyQuakes=[]] - Optional array of nearby earthquake objects.
- * @param {string} [props.mainQuakeDetailUrl] - Optional URL for the main quake's internal detail view.
+ * @param {string} [props.mainQuakeDetailUrl] - Optional URL for the highlighted quake's internal detail view.
  * @param {boolean} [props.fitMapToBounds=false] - Whether to automatically fit the map to show all markers.
+ * @param {number} [props.defaultZoom=8] - Default zoom level.
  * @returns {JSX.Element} The rendered EarthquakeMap component.
  */
 const EarthquakeMap = ({
-  latitude,
-  longitude,
-  magnitude,
-  title,
+  mapCenterLatitude,
+  mapCenterLongitude,
+  highlightQuakeLatitude,
+  highlightQuakeLongitude,
+  highlightQuakeMagnitude,
+  highlightQuakeTitle,
   shakeMapUrl,
   nearbyQuakes = [],
   mainQuakeDetailUrl,
-  fitMapToBounds = false, // New prop
+  fitMapToBounds = false,
+  defaultZoom = 8,
 }) => {
-  const mapRef = useRef(null); // New mapRef
-  const position = [latitude, longitude];
-  const defaultZoom = 8;
+  const mapRef = useRef(null);
+  const initialMapCenter = [mapCenterLatitude, mapCenterLongitude];
+  const highlightedQuakePosition = highlightQuakeLatitude !== undefined && highlightQuakeLongitude !== undefined
+    ? [highlightQuakeLatitude, highlightQuakeLongitude]
+    : null;
 
   const mapStyle = {
     height: '100%',
@@ -98,10 +105,18 @@ const EarthquakeMap = ({
 
   useEffect(() => {
     if (mapRef.current && fitMapToBounds) {
-      const allPoints = [[latitude, longitude]];
+      const allPoints = [];
+      if (highlightedQuakePosition) {
+        allPoints.push(highlightedQuakePosition);
+      }
       nearbyQuakes.forEach(quake => {
         if (quake.geometry && quake.geometry.coordinates) {
-          allPoints.push([quake.geometry.coordinates[1], quake.geometry.coordinates[0]]);
+          // Ensure coordinates are valid numbers before pushing
+          const lat = parseFloat(quake.geometry.coordinates[1]);
+          const lon = parseFloat(quake.geometry.coordinates[0]);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            allPoints.push([lat, lon]);
+          }
         }
       });
 
@@ -109,59 +124,68 @@ const EarthquakeMap = ({
         const bounds = L.latLngBounds(allPoints.map(point => L.latLng(point[0], point[1])));
         mapRef.current.fitBounds(bounds, { padding: [50, 50] });
       } else if (allPoints.length === 1) {
-        // If only one point, set view to that point with default zoom
         mapRef.current.setView(L.latLng(allPoints[0][0], allPoints[0][1]), defaultZoom);
+      } else { // No points to fit, use initialMapCenter
+        mapRef.current.setView(L.latLng(initialMapCenter[0], initialMapCenter[1]), defaultZoom);
       }
-      // If no points (e.g. main quake lat/lon invalid and no nearbyQuakes), map remains at initial center/zoom
     } else if (mapRef.current) {
-      // If fitMapToBounds is false, ensure map is centered on the main quake with default zoom
-      mapRef.current.setView(L.latLng(position[0], position[1]), defaultZoom);
+      mapRef.current.setView(L.latLng(initialMapCenter[0], initialMapCenter[1]), defaultZoom);
     }
-  }, [latitude, longitude, nearbyQuakes, fitMapToBounds, mapRef, defaultZoom, position]); // Added position to dependencies
+  }, [
+    mapCenterLatitude, mapCenterLongitude, // For initialMapCenter
+    highlightQuakeLatitude, highlightQuakeLongitude, // For highlightedQuakePosition and allPoints
+    nearbyQuakes,
+    fitMapToBounds,
+    defaultZoom,
+    mapRef, // mapRef itself as a dependency
+    initialMapCenter, // derived from mapCenterLat/Lon
+    highlightedQuakePosition // derived from highlightQuakeLat/Lon
+  ]);
 
   return (
     <MapContainer
-      center={position}
-      zoom={defaultZoom} // Use defaultZoom here
+      center={initialMapCenter}
+      zoom={defaultZoom}
       style={mapStyle}
-      ref={mapRef} // Assign mapRef
+      ref={mapRef}
     >
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
       />
-      <Marker position={position} icon={createEpicenterIcon(magnitude)}>
-        <Popup>
-          <strong>{title}</strong>
-          <br />
-          Magnitude: {magnitude}
-          {mainQuakeDetailUrl && (
-            <>
-              <br />
-              <Link to={`/quake/${encodeURIComponent(mainQuakeDetailUrl)}`} className="text-blue-500 hover:underline">
-                View Details
-              </Link>
-            </>
-          )}
-          {!mainQuakeDetailUrl && shakeMapUrl && (
-            <>
-              <br />
-              <a href={shakeMapUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                ShakeMap Details (External)
-              </a>
-            </>
-          )}
-        </Popup>
-      </Marker>
+      {highlightedQuakePosition && highlightQuakeMagnitude !== undefined && (
+        <Marker position={highlightedQuakePosition} icon={createEpicenterIcon(highlightQuakeMagnitude)}>
+          <Popup>
+            <strong>{highlightQuakeTitle || 'Highlighted Quake'}</strong>
+            <br />
+            Magnitude: {highlightQuakeMagnitude}
+            {mainQuakeDetailUrl && (
+              <>
+                <br />
+                <Link to={`/quake/${encodeURIComponent(mainQuakeDetailUrl)}`} className="text-blue-500 hover:underline">
+                  View Details
+                </Link>
+              </>
+            )}
+            {!mainQuakeDetailUrl && shakeMapUrl && (
+              <>
+                <br />
+                <a href={shakeMapUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                  ShakeMap Details (External)
+                </a>
+              </>
+            )}
+          </Popup>
+        </Marker>
+      )}
       {nearbyQuakes.map((quake, index) => {
-        // Basic validation for nearby quake data
         if (!quake.geometry || !quake.geometry.coordinates || typeof quake.properties?.mag !== 'number' || typeof quake.properties?.time !== 'number') {
           console.warn("Skipping rendering of nearby quake due to missing data:", quake);
           return null;
         }
         return (
           <Marker
-            key={quake.id || index} // Prefer quake.id if available
+            key={quake.id || index}
             position={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
             icon={createNearbyQuakeIcon(quake.properties.mag, quake.properties.time)}
           >
