@@ -76,6 +76,7 @@ const ClusterMiniMap = ({ cluster /*, getMagnitudeColor, containerRef */ }) => {
         magnitude={magnitude}
         title={title}
         nearbyQuakes={nearbyQuakes}
+        fitMapToBounds={true} // Enable bounds fitting for clusters
         // shakeMapUrl and mainQuakeDetailUrl are not directly available for clusters in this context
         // Pass null or omit if EarthquakeMap handles undefined props gracefully
         shakeMapUrl={null}
