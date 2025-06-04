@@ -16,11 +16,10 @@ import {
 
 // Constants
 const VIRTUAL_STATIONS = [
-  { name: "Station Alpha", lat: 34.0522, lon: -118.2437 }, // Los Angeles
-  { name: "Station Bravo", lat: 40.7128, lon: -74.0060 },  // New York
-  { name: "Station Charlie", lat: 35.6895, lon: 139.6917 }, // Tokyo
-  // Add a station in the southern hemisphere for variety if needed
-  { name: "Station Delta", lat: -33.8688, lon: 151.2093 }, // Sydney
+  { name: "Station Alpha", lat: 5, lon: 5 },       // Approx 781km from (0,0) thirty km deep, P-time (at 5.5km/s) ~142s
+  { name: "Station Bravo", lat: -7, lon: 9 },      // Approx 1240km, P-time ~226s
+  { name: "Station Charlie", lat: 10, lon: -5 },   // Approx 1227km, P-time ~223s
+  { name: "Station Delta", lat: -3, lon: -4 }    // Approx 551km, P-time ~100s
 ];
 
 const P_WAVE_BASE_COLOR = "0, 0, 255"; // RGB for blue
