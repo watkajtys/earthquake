@@ -29,12 +29,15 @@ describe('ClusterMiniMap', () => {
     EarthquakeMap.mockClear();
   });
 
-  it('should render the EarthquakeMap component', () => {
+  it('should render the EarthquakeMap component and pass fitMapToBounds=true', () => {
     render(<ClusterMiniMap cluster={mockClusterBase} />);
     expect(screen.getByTestId('mock-earthquake-map')).toBeInTheDocument();
+    expect(EarthquakeMap).toHaveBeenCalledTimes(1);
+    const passedProps = EarthquakeMap.mock.calls[0][0];
+    expect(passedProps.fitMapToBounds).toBe(true);
   });
 
-  it('should identify the highest magnitude quake and pass its details to EarthquakeMap', () => {
+  it('should identify the highest magnitude quake and pass its details to EarthquakeMap, including fitMapToBounds=true', () => {
     const clusterWithSpecificMax = {
       ...mockClusterBase,
       originalQuakes: [
@@ -52,9 +55,10 @@ describe('ClusterMiniMap', () => {
     expect(passedProps.longitude).toBe(2); // from q_high
     expect(passedProps.magnitude).toBe(6.2);
     expect(passedProps.title).toBe('High Mag Quake');
+    expect(passedProps.fitMapToBounds).toBe(true);
   });
 
-  it('should pass other quakes to EarthquakeMap as nearbyQuakes', () => {
+  it('should pass other quakes to EarthquakeMap as nearbyQuakes, including fitMapToBounds=true', () => {
     const clusterWithSpecificMax = {
       ...mockClusterBase,
       originalQuakes: [
@@ -75,9 +79,10 @@ describe('ClusterMiniMap', () => {
     // Check if q_low and q_mid ARE in nearbyQuakes
     expect(passedProps.nearbyQuakes.find(q => q.id === 'q_low')).toBeDefined();
     expect(passedProps.nearbyQuakes.find(q => q.id === 'q_mid')).toBeDefined();
+    expect(passedProps.fitMapToBounds).toBe(true);
   });
 
-  it('should handle a cluster with a single earthquake correctly', () => {
+  it('should handle a cluster with a single earthquake correctly, including fitMapToBounds=true', () => {
     const singleQuakeCluster = {
       ...mockClusterBase,
       originalQuakes: [
@@ -95,6 +100,7 @@ describe('ClusterMiniMap', () => {
     expect(passedProps.title).toBe('Single Quake');
     expect(passedProps.nearbyQuakes).toBeInstanceOf(Array);
     expect(passedProps.nearbyQuakes).toHaveLength(0);
+    expect(passedProps.fitMapToBounds).toBe(true);
   });
 
   it('should render a placeholder if cluster data is null or undefined', () => {
