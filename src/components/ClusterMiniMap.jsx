@@ -43,20 +43,20 @@ const getTectonicPlateStyle = (feature) => {
  *   to have `id`, `geometry.coordinates` (lng, lat, depth), and `properties.mag` (magnitude) and `properties.place`.
  * @param {function} props.getMagnitudeColor - A function that takes an earthquake's magnitude
  *   and returns a color string for its marker.
- * @param {object} props.containerRef - A React ref for the container element to observe for resizing.
  * @returns {JSX.Element | null} The rendered Leaflet map component or null if cluster data is invalid.
  */
-const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
+const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
   const mapRef = useRef(null);
+  const mapContainerParentRef = useRef(null); // New ref for the MapContainer's parent div
   const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
-    if (containerRef && containerRef.current) {
+    // Observe the new parent div for size changes
+    if (mapContainerParentRef && mapContainerParentRef.current) {
       const resizeObserver = new ResizeObserver(entries => {
         for (let entry of entries) {
           if (entry.contentRect.width > 0) {
             setContainerWidth(entry.contentRect.width);
-            // Invalidate map size when container width changes to ensure it rerenders correctly
             if (mapRef.current) {
               mapRef.current.invalidateSize();
             }
@@ -64,23 +64,23 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
         }
       });
 
-      resizeObserver.observe(containerRef.current);
+      resizeObserver.observe(mapContainerParentRef.current);
 
-      // Initial check
-      const initialWidth = containerRef.current.getBoundingClientRect().width;
+      // Initial check for width
+      const initialWidth = mapContainerParentRef.current.getBoundingClientRect().width;
       if (initialWidth > 0) {
         setContainerWidth(initialWidth);
       }
 
-
       return () => {
-        if (containerRef.current) { // Check if ref still exists before trying to unobserve
-            resizeObserver.unobserve(containerRef.current);
+        // Check if ref still exists before trying to unobserve
+        if (mapContainerParentRef.current) {
+            resizeObserver.unobserve(mapContainerParentRef.current);
         }
         resizeObserver.disconnect();
       };
     }
-  }, [containerRef, mapRef]); // mapRef added as dependency to re-run if it changes, though less likely
+  }, [mapContainerParentRef, mapRef]); // Dependencies updated to new ref
 
   if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
     return null;
@@ -143,23 +143,25 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
 
   // Render null or a placeholder if the container isn't ready (e.g., width is 0)
   // This prevents Leaflet errors if it tries to initialize in a zero-size container.
-  if (containerWidth === 0 && originalQuakes.length > 0) { // Check originalQuakes to avoid flash when initially no cluster
+  // Logic for "Loading map..." now correctly keys off the width of mapContainerParentRef via containerWidth state
+  if (containerWidth === 0 && originalQuakes.length > 0) {
       return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map...</div>;
   }
 
 
   return (
-    <MapContainer
-      center={mapCenter}
-      zoom={initialZoom}
-      style={{ height: '200px', width: '100%' }} // Width is 100% of its container
-      scrollWheelZoom={false}
-      ref={mapRef}
-      maxZoom={18}
-      // key={containerWidth} // Optionally, force remount if width changes drastically, though invalidateSize is preferred
-    >
-      <TileLayer
-        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+    // New parent div that wraps MapContainer
+    <div ref={mapContainerParentRef} style={{ width: '100%', height: '200px' }}>
+      <MapContainer
+        center={mapCenter}
+        zoom={initialZoom}
+        style={{ height: '100%', width: '100%' }} // MapContainer fills its new parent
+        scrollWheelZoom={false}
+        ref={mapRef}
+        maxZoom={18}
+      >
+        <TileLayer
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
       />
       <GeoJSON
@@ -184,7 +186,8 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
           </Tooltip>
         </CircleMarker>
       ))}
-    </MapContainer>
+      </MapContainer>
+    </div>
   );
 };
 
