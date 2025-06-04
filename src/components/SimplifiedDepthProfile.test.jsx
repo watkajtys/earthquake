@@ -128,186 +128,183 @@ describe('SimplifiedDepthProfile - Dynamic Contextual Insights', () => {
 // Import the function to be tested and the DEPTH_COMPARISONS array
 import { getDynamicContextualComparisons } from './SimplifiedDepthProfile';
 
-// Define a sample layers array similar to the one in the component
-const sampleLayers = [
-  { name: "Surface", startDepth: 0, endDepth: 0 },
-  { name: "Sedimentary/Upper Crust", startDepth: 0, endDepth: 10 },
-  { name: "Continental Crust", startDepth: 10, endDepth: 35 },
-  { name: "Lithospheric Mantle", startDepth: 35, endDepth: 100 },
-  { name: "Asthenosphere (Upper Mantle)", startDepth: 100, endDepth: 700 },
-];
 
-describe('getDynamicContextualComparisons direct tests', () => {
-  const consoleError = console.error; // Backup console.error
-  beforeEach(() => {
-    // Suppress console.error output specifically for .toFixed on potential nulls if a test gives bad depth
-    // This is more for robustness of test runner output than testing component logic
-    console.error = vi.fn();
-  });
-
-  afterEach(() => {
-    console.error = consoleError; // Restore console.error
-  });
+describe('getDynamicContextualComparisons direct tests (New Simplified Messages)', () => {
+  // Helper to check for absence of old, technical phrasing
+  const expectAbsenceOfOldPhrasing = (message) => {
+    expect(message).not.toContain('Shallow-focus event');
+    expect(message).not.toContain('Intermediate-focus earthquake');
+    expect(message).not.toContain('Deep-focus earthquake');
+    expect(message).not.toContain('originated within the Earth');
+    expect(message).not.toContain('subduction zones');
+    expect(message).not.toContain('oceanic slabs');
+    expect(message).not.toContain('beyond our deepest listed benchmark');
+    expect(message).not.toContain('deeper than the'); // Replaced by "even further down than" or analogies
+    expect(message).not.toContain('shallower than the');
+  };
 
   test('should return a single message string in an array', () => {
-    const result = getDynamicContextualComparisons(30, actualDepthComparisons, sampleLayers);
+    const result = getDynamicContextualComparisons(30, actualDepthComparisons);
     expect(result).toBeInstanceOf(Array);
     expect(result).toHaveLength(1);
     expect(typeof result[0]).toBe('string');
+    expectAbsenceOfOldPhrasing(result[0]);
   });
 
-  // Test cases for Shallow-focus earthquakes
-  describe('Shallow-focus earthquakes', () => {
-    test('depth 30 km (within Continental Crust)', () => {
-      const result = getDynamicContextualComparisons(30, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('This earthquake, at a depth of 30.0 km, originated within the Earth\'s Continental Crust. It\'s considered a shallow-focus event.');
-      expect(result[0]).toContain('Shallow-focus earthquakes (0-70 km depth) are common');
-      expect(result[0]).toContain('This is within the typical depth of the Earth\'s continental crust.');
-      expect(result[0]).toContain('For context, this is deeper than the Kola Superdeep Borehole (12.3 km). It is also shallower than the Average Continental Crust (35.0 km)');
+  describe('"Very Close" Comparisons', () => {
+    test('depth 10.9 km (Challenger Deep 10.935 km)', () => {
+      const result = getDynamicContextualComparisons(10.9, actualDepthComparisons);
+      expect(result[0]).toBe('10.9 km is nearly as deep as the Challenger Deep (ocean deepest) (10.9 km)!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
-
-    test('depth 57 km (example from prompt, in Lithospheric Mantle)', () => {
-      const result = getDynamicContextualComparisons(57, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('This earthquake, at a depth of 57.0 km, originated within the Earth\'s Lithospheric Mantle. It\'s considered a shallow-focus event.');
-      expect(result[0]).toContain('Shallow-focus earthquakes (0-70 km depth) are common');
-      expect(result[0]).toContain('This event occurred deeper than the average continental crust (35.0 km) but is still within the shallow-focus range.');
-      // Check for comparison with a specific benchmark if applicable, e.g. Average Continental Crust is shallower.
-      // The generic "deeper than X, shallower than Y" will be complex due to many benchmarks.
-      // Focus on the primary educational message and the specific comparisons requested.
-      expect(result[0]).toContain('For context, this is deeper than the Average Continental Crust (35.0 km). It is also shallower than the Shallow Focus Earthquakes (Upper Limit) (70.0 km)');
+    test('depth 0.8 km (Burj Khalifa 0.828 km)', () => {
+      const result = getDynamicContextualComparisons(0.8, actualDepthComparisons);
+      expect(result[0]).toBe('0.8 km is nearly as deep as the Burj Khalifa (0.8 km)!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
-
-    test('depth 65 km (approaching shallow limit, in Lithospheric Mantle)', () => {
-      const result = getDynamicContextualComparisons(65, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('This earthquake, at a depth of 65.0 km, originated within the Earth\'s Lithospheric Mantle. It\'s considered a shallow-focus event.');
-      expect(result[0]).toContain('Shallow-focus earthquakes (0-70 km depth) are common');
-      expect(result[0]).toContain('This event occurred deeper than the average continental crust (35.0 km) but is still within the shallow-focus range.');
-    });
-     test('depth 0 km (surface event)', () => {
-      const result = getDynamicContextualComparisons(0, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('This earthquake, at a depth of 0.0 km, originated at the Earth\'s surface. It\'s considered a shallow-focus event.');
-      expect(result[0]).toContain('Occurring at the surface, its impact depends heavily on magnitude and location.');
-      // It should also mention being shallower than the shallowest items.
-      const shallowestOther = actualDepthComparisons.filter(c => !c.isHeight && !c.name.includes("Focus Earthquakes")).sort((a,b) => a.depth - b.depth)[0];
-      expect(result[0]).toContain(`For context, this depth is shallower than the ${shallowestOther.name}`);
+     test('depth 12.3 km (Kola Superdeep Borehole 12.262 km)', () => {
+      const result = getDynamicContextualComparisons(12.3, actualDepthComparisons);
+      expect(result[0]).toBe('12.3 km is nearly as deep as the Kola Superdeep Borehole (deepest artificial point) (12.3 km)!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
   });
 
-  // Test cases for Intermediate-focus earthquakes
-  describe('Intermediate-focus earthquakes', () => {
-    test('depth 72 km (just past shallow boundary, in Lithospheric Mantle)', () => {
-      const result = getDynamicContextualComparisons(72, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('Occurring at 72.0 km, this is an intermediate-focus earthquake, originating within the Earth\'s Lithospheric Mantle.');
-      expect(result[0]).toContain('This is just below the 70 km boundary that typically defines shallow-focus events.');
-      expect(result[0]).toContain('Intermediate-focus earthquakes (70-300 km depth) typically occur in subduction zones');
+  describe('"Even Further Down Than" Comparisons', () => {
+    test('depth 40 km (vs Avg Continental Crust 35 km)', () => {
+      const result = getDynamicContextualComparisons(40, actualDepthComparisons);
+      expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Average Continental Crust (35.0 km)!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
-
-    test('depth 150 km (clearly intermediate, in Asthenosphere)', () => {
-      const result = getDynamicContextualComparisons(150, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('Occurring at 150.0 km, this is an intermediate-focus earthquake, originating within the Earth\'s Asthenosphere (Upper Mantle).');
-      expect(result[0]).toContain('Intermediate-focus earthquakes (70-300 km depth) typically occur in subduction zones');
+    test('depth 15 km (vs Kola Superdeep Borehole 12.262 km)', () => {
+      const result = getDynamicContextualComparisons(15, actualDepthComparisons);
+      expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Kola Superdeep Borehole (deepest artificial point) (12.3 km)!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
-
-    test('depth 290 km (approaching intermediate limit, in Asthenosphere)', () => {
-      const result = getDynamicContextualComparisons(290, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('Occurring at 290.0 km, this is an intermediate-focus earthquake, originating within the Earth\'s Asthenosphere (Upper Mantle).');
-      expect(result[0]).toContain('Intermediate-focus earthquakes (70-300 km depth) typically occur in subduction zones');
+     test('depth 4.0 km (vs Deepest Gold Mine 4.0 km) - should trigger "nearly as deep" instead', () => {
+      const result = getDynamicContextualComparisons(3.95, actualDepthComparisons); // 3.95km, Mponeng is 4.0km
+      expect(result[0]).toBe('4.0 km is nearly as deep as the Deepest Gold Mine (Mponeng, South Africa) (4.0 km)!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
   });
 
-  // Test cases for Deep-focus earthquakes
-  describe('Deep-focus earthquakes', () => {
-    test('depth 305 km (just past intermediate boundary, in Asthenosphere)', () => {
-      const result = getDynamicContextualComparisons(305, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('At a depth of 305.0 km, this is classified as a deep-focus earthquake, originating within the Earth\'s Asthenosphere (Upper Mantle).');
-      expect(result[0]).toContain('This is just below the 300 km boundary for intermediate-focus events.');
-      expect(result[0]).toContain('Such earthquakes (300-700 km depth) occur within subducting oceanic slabs');
+  describe('Relatable Analogies', () => {
+    test('depth 0.7 km (Eiffel Tower)', () => {
+      const result = getDynamicContextualComparisons(0.7, actualDepthComparisons);
+      // 0.7 / 0.3 = 2.33 -> rounds to 2
+      expect(result[0]).toBe('That\'s pretty deep! 0.7 km is like stacking 2 Eiffel Towers!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
-
-    test('depth 500 km (clearly deep, in Asthenosphere)', () => {
-      const result = getDynamicContextualComparisons(500, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('At a depth of 500.0 km, this is classified as a deep-focus earthquake, originating within the Earth\'s Asthenosphere (Upper Mantle).');
-      expect(result[0]).toContain('Such earthquakes (300-700 km depth) occur within subducting oceanic slabs');
+     test('depth 0.3 km (Eiffel Tower, single)', () => {
+      const result = getDynamicContextualComparisons(0.3, actualDepthComparisons);
+      expect(result[0]).toBe('That\'s pretty deep! 0.3 km is like stacking 1 Eiffel Tower!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
-
-    test('depth 690 km (approaching deep limit, in Asthenosphere)', () => {
-      const result = getDynamicContextualComparisons(690, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('At a depth of 690.0 km, this is classified as a deep-focus earthquake, originating within the Earth\'s Asthenosphere (Upper Mantle).');
-      expect(result[0]).toContain('Such earthquakes (300-700 km depth) occur within subducting oceanic slabs');
+    test('depth 5 km (Burj Khalifa)', () => {
+      const result = getDynamicContextualComparisons(5, actualDepthComparisons);
+      // 5 / 0.828 = 6.03 -> rounds to 6
+      expect(result[0]).toBe('That\'s quite deep! 5.0 km is like stacking about 6 Burj Khalifas!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
-  });
-
-  // Test cases for Exceptionally Deep earthquakes
-  describe('Exceptionally Deep earthquakes', () => {
-    test('depth 701 km (just past deep boundary)', () => {
-      // Note: The current `geologicalContext` logic might say "likely below Asthenosphere (Upper Mantle)" or similar.
-      // Let's verify the primary classification and the "exceptionally deep" part.
-      const result = getDynamicContextualComparisons(701, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('This exceptionally deep earthquake, at 701.0 km, originated deep within the Earth, likely below the Asthenosphere (Upper Mantle).');
-      expect(result[0]).toContain('occurred far below the typical 700 km limit for deep-focus events.');
-      expect(result[0]).toContain('Earthquakes at such profound depths are rare');
+    test('depth 57 km (Mount Everest)', () => {
+      const result = getDynamicContextualComparisons(57, actualDepthComparisons);
+      // 57 / 8.848 = 6.44 -> rounds to 6
+      expect(result[0]).toBe('Wow, 57.0 km is a long way down – that\'s like stacking about 6 Mount Everests on top of each other!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
-
-    test('depth 800 km (clearly exceptionally deep)', () => {
-      const result = getDynamicContextualComparisons(800, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('This exceptionally deep earthquake, at 800.0 km, originated deep within the Earth, likely below the Asthenosphere (Upper Mantle).');
-      expect(result[0]).toContain('occurred far below the typical 700 km limit for deep-focus events.');
+    test('depth 100 km (Mount Everest)', () => {
+      const result = getDynamicContextualComparisons(100, actualDepthComparisons);
+      // 100 / 8.848 = 11.3 -> rounds to 11
+      expect(result[0]).toBe('Wow, 100.0 km is a long way down – that\'s like stacking about 11 Mount Everests on top of each other!');
+      expectAbsenceOfOldPhrasing(result[0]);
+    });
+     test('depth 8.8 km (Mount Everest, single)', () => { // approx one Everest
+      const result = getDynamicContextualComparisons(8.8, actualDepthComparisons);
+      expect(result[0]).toBe('Wow, 8.8 km is a long way down – that\'s about as deep as Mount Everest is tall!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
   });
 
-  // Test for secondary contextual messages (non-focus benchmarks)
-  describe('Secondary contextual messages', () => {
-    test('depth 12.262 km (Kola Superdeep Borehole - very similar)', () => {
-      const result = getDynamicContextualComparisons(12.262, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('This earthquake, at a depth of 12.3 km, originated within the Earth\'s Continental Crust. It\'s considered a shallow-focus event.');
-      expect(result[0]).toContain('This depth is very similar to the Kola Superdeep Borehole (deepest artificial point) (12.3 km).');
-      // It should also be shallower than Avg Continental Crust
-      expect(result[0]).toContain('shallower than the Average Continental Crust (35.0 km)');
+  describe('Fallback Messages', () => {
+    test('depth 0 km (Surface event)', () => {
+      const result = getDynamicContextualComparisons(0, actualDepthComparisons);
+      expect(result[0]).toBe('This earthquake was right at the surface!');
+      expectAbsenceOfOldPhrasing(result[0]);
+    });
+    test('depth 0.05 km (Very shallow)', () => {
+      const result = getDynamicContextualComparisons(0.05, actualDepthComparisons);
+      expect(result[0]).toBe('0.05 km is very close to the surface!');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
 
-    test('depth 2.0 km (Typical Geothermal Well Depth - very similar, but also deeper/shallower)', () => {
-      const result = getDynamicContextualComparisons(2.0, actualDepthComparisons, sampleLayers);
-      expect(result[0]).toContain('This earthquake, at a depth of 2.0 km, originated within the Earth\'s Sedimentary/Upper Crust. It\'s considered a shallow-focus event.');
-      // The "very similar" logic for "Typical Geothermal Well Depth" (2.0 km) should be prioritized if specific enough.
-      // However, the current logic might pick up Krubera cave as "very similar" or just do deeper/shallower.
-      // Let's check the actual output based on the implementation.
-      // The current implementation's "very similar" check is for the *closestShallowerOther* or *closestDeeperOther*.
-      // For 2.0km:
-      // closestShallowerOther: Grand Canyon (1.83km) or Lake Baikal (1.642km) depending on exact list state.
-      // closestDeeperOther: Krubera Cave (2.197km) or Typical Geothermal Well (2.0km) if it's not the exact match.
-      // The `otherBenchmarks` list excludes focus-named items.
-      // `Typical Geothermal Well Depth` has depth 2.0.
-      // `Krubera Cave` has depth 2.197.
-      // `Grand Canyon` has depth 1.83.
-      // So for 2.0km, it should be "very similar to Typical Geothermal Well Depth".
-      // The code is: `Math.abs(currentDepth - closestShallowerOther.depth) <= fivePercentShallower`
-      // And `Math.abs(currentDepth - closestDeeperOther.depth) <= fivePercentDeeper`
-      // If currentDepth is 2.0, and a benchmark is 2.0, then `Math.abs` is 0, so it IS "very similar".
+    // Test tiered deep fallbacks, assuming no other comparisons are met
+    // These values need to be chosen carefully to avoid other rules.
+    // The deepest userFriendlyBenchmark not in significantBenchmarks is "Suez Canal Max Depth" (0.024 km)
+    // The shallowest in significantBenchmarks is "Average Continental Crust" (35km)
+    // The shallowest in userFriendlyBenchmarks is "Panama Canal Max Depth" (0.018km)
+    // The Kola Superdeep Borehole is 12.262km.
+    // Mount Everest analogy starts > 5km. Burj analogy > 1km. Eiffel > 0.5km.
+    // "Even further down" uses significant benchmarks (deepest is Challenger Deep 10.935, Kola 12.262, Avg Continental Crust 35)
 
-      // The issue is that the current code filters out the exact match before finding closest shallower/deeper.
-      // `else if (comp.depth > currentDepth && comp.depth !== currentDepth)` - this was for otherBenchmarks.
-      // Let's re-check the logic for "very similar" in the actual implementation.
-      // It iterates `otherBenchmarks`. If `comp.depth < currentDepth`, it's a candidate for `closestShallowerOther`.
-      // If `comp.depth > currentDepth`, it's a candidate for `closestDeeperOther`.
-      // The "very similar" check happens *after* `closestShallowerOther` and `closestDeeperOther` are determined.
-      // For currentDepth = 2.0:
-      // closestShallowerOther will be "Grand Canyon (average depth)" (1.83 km)
-      // closestDeeperOther will be "Krubera Cave (deepest cave)" (2.197 km)
-      // The comparison message will be built using these two.
-      // "Typical Geothermal Well Depth" (2.0km) is skipped in this closest logic because it's equal.
+    test('depth 80 km (Deep fallback)', () => {
+      // Should be deeper than Avg Continental Crust (35km), but not by factor of 3 (105km)
+      // So "even further down" should not trigger for Avg Continental Crust.
+      // It is deeper than Challenger Deep (10.9km) by more than 3x.
+      // It should trigger Everest analogy: 80/8.8 = 9
+      const result = getDynamicContextualComparisons(80, actualDepthComparisons);
+      expect(result[0]).toBe('Wow, 80.0 km is a long way down – that\'s like stacking about 9 Mount Everests on top of each other!');
+      // This shows the fallback tier messages are hard to hit if analogies are broad.
+      // Let's test the fallback directly by choosing values that don't fit analogies well.
+      // The current fallback tiers are: >700, >300, >70
+    });
 
-      // This reveals a slight nuance: "very similar" is only checked against the *strictly* shallower or *strictly* deeper items.
-      // An exact match to an "otherBenchmark" is not currently being highlighted as "very similar" by that specific path.
-      // However, "Shallow Focus Earthquakes (Upper Limit)" etc. *are* in `comparisonsList`
-      // The `otherBenchmarks` list filters them out.
-      // The main educational message already handles the focus categories.
+    test('depth 750 km (Exceptionally Deep fallback)', () => {
+      const result = getDynamicContextualComparisons(750, actualDepthComparisons);
+      expect(result[0]).toBe('Whoa, 750 km is incredibly deep, way down into the Earth\'s mantle!');
+      expectAbsenceOfOldPhrasing(result[0]);
+    });
 
-      // Let's test based on the expectation for a depth of 2.0km given the current code:
-      // It will be deeper than Grand Canyon (1.83km) and shallower than Krubera Cave (2.197km).
-      // Neither of these should be "very similar" to 2.0km by the 5% rule.
-      // Grand Canyon (1.83km): 5% is 0.0915. 2.0 - 1.83 = 0.17. Not very similar.
-      // Krubera Cave (2.197km): 5% is 0.109. 2.197 - 2.0 = 0.197. Not very similar.
-      expect(result[0]).toContain('For context, this is deeper than the Grand Canyon (average depth) (1.8 km). It is also shallower than the Krubera Cave (deepest cave) (2.2 km).');
+    test('depth 450 km (Very Deep fallback)', () => {
+      const result = getDynamicContextualComparisons(450, actualDepthComparisons);
+      expect(result[0]).toBe('That\'s a very deep earthquake, 450 km down!');
+      expectAbsenceOfOldPhrasing(result[0]);
+    });
+
+    test('depth 75 km (Deep fallback, if no analogy/comparison fits)', () => {
+      // 75km / 8.8km (Everest) = 8.5 -> "stacking 9 Mount Everests"
+      // This means the analogy will likely always take precedence over the >70km fallback.
+      // This is acceptable, as analogies are preferred.
+      const result = getDynamicContextualComparisons(75, actualDepthComparisons);
+       expect(result[0]).toBe('Wow, 75.0 km is a long way down – that\'s like stacking about 9 Mount Everests on top of each other!');
+      // To hit "That's a deep earthquake, X km down!" for the 70-300 range,
+      // it must NOT be "nearly as deep", NOT "even further down", and NOT fit an analogy.
+      // Everest analogy starts at depth > 5km.
+      // Let's try a depth that is not much larger than any "significant" benchmark.
+      // e.g. 4.5km. Not deeper than Everest by much. Deeper than Kola/ChallengerDeep by <3x.
+      // 4.5km / 0.828 (Burj) = 5.4 (stacking 5 Burj)
+      // This demonstrates fallbacks are for cases where primary rules don't apply.
+    });
+
+    test('depth 25 km (Generic fallback - likely triggers Everest analogy or "further down than Kola")', () => {
+      // 25km vs Kola (12.262km): "That's incredibly deep! It's even further down than the Kola Superdeep Borehole (deepest artificial point) (12.3 km)!"
+      // 25km / 8.8 (Everest) = 2.8 (stacking 3 Everests)
+      // The "even further down than Kola" is more specific and likely chosen if Kola is significant.
+      // Let's check the actual output given the logic order.
+      // "very close" -> no.
+      // "even further down than" (significant benchmarks: Kola, Challenger, Avg Continental Crust, Deepest Gold Mine)
+      // 25km > Kola (12.262km) and 25 < 12.262 * 3 (36.7) -> This should be chosen.
+      const result = getDynamicContextualComparisons(25, actualDepthComparisons);
+      expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Kola Superdeep Borehole (deepest artificial point) (12.3 km)!');
+      expectAbsenceOfOldPhrasing(result[0]);
+    });
+     test('depth 0.2 km (Generic fallback for very shallow, no analogy)', () => {
+      // Not close to 0.3 (Eiffel), not close to 0.8 (Burj)
+      // Not close to any small userFriendlyBenchmark like canals.
+      // 0.2km is not > 0.5km for Eiffel analogy.
+      // Fallbacks: 0km (no), <0.1km (no). >700, >300, >70 (no).
+      // So, should be the final "That's an earthquake at X km deep."
+      const result = getDynamicContextualComparisons(0.2, actualDepthComparisons);
+      expect(result[0]).toBe('That\'s an earthquake at 0.2 km deep.');
+      expectAbsenceOfOldPhrasing(result[0]);
     });
   });
 });
