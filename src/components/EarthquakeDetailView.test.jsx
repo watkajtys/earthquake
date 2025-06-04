@@ -31,6 +31,20 @@ vi.mock('../utils/utils.js', async (importOriginal) => { // Corrected path and a
   };
 });
 
+// Define mockOnClose globally for the test file
+const mockOnClose = vi.fn();
+
+// Define mockDefaultProps globally for the test file to be accessible by all describe blocks
+const mockDefaultPropsGlobal = {
+  onClose: mockOnClose,
+  broaderEarthquakeData: [],
+  dataSourceTimespanDays: 7,
+  handleLoadMonthlyData: vi.fn(),
+  hasAttemptedMonthlyLoad: false,
+  isLoadingMonthly: false,
+  onDataLoadedForSeo: vi.fn(),
+};
+
 /*
 describe('EarthquakeDetailView - Nearby Quakes Filtering', () => {
   const mockDetailUrl = 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=testmainquake&format=geojson';
@@ -132,7 +146,7 @@ describe('EarthquakeDetailView - Nearby Quakes Filtering', () => {
 
 describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () => {
   const mockDetailUrl = 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=testquake&format=geojson';
-  const mockOnClose = vi.fn();
+  // mockOnClose is now global
   const baseMockDetailData = {
     id: 'testquake',
     properties: {
@@ -174,13 +188,38 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
   let fetchSpy;
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
+  // mockDefaultProps is now mockDefaultPropsGlobal, defined globally
+  // We will use mockDefaultPropsGlobal directly or spread it.
+  // Individual mocks inside it will be cleared in beforeEach.
+
   beforeEach(() => {
     fetchSpy = vi.spyOn(global, 'fetch');
-    mockOnClose.mockClear();
+    mockOnClose.mockClear(); // Clear the global mockOnClose
+    // Clear mocks within mockDefaultPropsGlobal for each test run
+    mockDefaultPropsGlobal.handleLoadMonthlyData.mockClear();
+    mockDefaultPropsGlobal.onDataLoadedForSeo.mockClear();
   });
 
   afterEach(() => {
     fetchSpy.mockRestore();
+  });
+
+  it('renders loading skeleton immediately on mount if detailUrl is provided', () => {
+    // Mock fetch to be a promise that never resolves for this specific test,
+    // so we can check the initial loading state without it quickly transitioning.
+    fetchSpy.mockImplementationOnce(() => new Promise(() => {}));
+
+    render(
+      <EarthquakeDetailView
+        {...mockDefaultPropsGlobal} // Spread global default props
+        detailUrl={mockDetailUrl} // Provide specific detailUrl for this test
+      />
+    );
+
+    // Check for the loading skeleton immediately after render
+    expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
+    // Also ensure "Details Not Available" is not shown
+    expect(screen.queryByText(/Details Not Available/i)).not.toBeInTheDocument();
   });
 
   it('displays loading state initially, then renders fetched data', async () => {
@@ -191,15 +230,22 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
 
     render(
       <EarthquakeDetailView
+        {...mockDefaultPropsGlobal}
+        {...mockDefaultPropsGlobal}
         detailUrl={mockDetailUrl}
-        onClose={mockOnClose}
-        broaderEarthquakeData={[]}
-        dataSourceTimespanDays={7}
       />
     );
 
+    // ADDED: Check for initial loading skeleton
+    expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
+    // Also ensure "Details Not Available" is not shown during this initial phase
+    expect(screen.queryByText(/Details Not Available/i)).not.toBeInTheDocument();
+
     await screen.findAllByText(baseMockDetailData.properties.title);
     expect(screen.getAllByText(baseMockDetailData.properties.title)[0]).toBeInTheDocument();
+
+    // ADDED: Ensure skeleton is gone after data loads
+    expect(screen.queryByTestId('loading-skeleton-container')).not.toBeInTheDocument();
 
     const magnitudeLabel = screen.getAllByText(/Magnitude \(.*?\)/i)[0];
     const magnitudeRow = magnitudeLabel.closest('tr');
@@ -246,10 +292,8 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
 
     render(
       <EarthquakeDetailView
+        {...mockDefaultPropsGlobal} // Corrected: Was mockDefaultProps
         detailUrl={mockDetailUrl}
-        onClose={mockOnClose}
-        broaderEarthquakeData={[]}
-        dataSourceTimespanDays={7}
       />
     );
 
@@ -277,11 +321,9 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
 
     render(
       <EarthquakeDetailView
+        {...mockDefaultPropsGlobal}
         detailUrl={mockDetailUrl}
-        onClose={mockOnClose}
-        onDataLoadedForSeo={mockOnDataLoadedForSeo}
-        broaderEarthquakeData={[]}
-        dataSourceTimespanDays={7}
+        onDataLoadedForSeo={mockOnDataLoadedForSeo} // Keep specific mock here if it differs from global default
       />
     );
 
@@ -309,7 +351,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.properties.time = null;
     currentMockData.properties.title = "Test Null Time";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.queryByText("Date & Time (UTC)")).not.toBeInTheDocument();
   });
@@ -319,7 +361,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     delete currentMockData.properties.time;
     currentMockData.properties.title = "Test Undefined Time";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.queryByText("Date & Time (UTC)")).not.toBeInTheDocument();
   });
@@ -329,7 +371,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.properties.time = 'invalid-date-string';
     currentMockData.properties.title = "Test Invalid String Time";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
     const dateTimeLabelCell = screen.getByText("Date & Time (UTC)");
     const dateTimeRow = dateTimeLabelCell.closest('tr');
@@ -342,7 +384,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.properties.mag = null;
     currentMockData.properties.title = "Test Null Magnitude";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.queryByText(/Magnitude \(.*?\)/i)).not.toBeInTheDocument();
   });
@@ -352,7 +394,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.properties.mag = 'not-a-number';
     currentMockData.properties.title = "Test Invalid String Mag";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     try {
       await screen.findAllByText(currentMockData.properties.title, {}, {timeout: 1000});
     } catch (UNUSED_ERROR_E) {
@@ -366,7 +408,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.geometry.coordinates[2] = null;
     currentMockData.properties.title = "Test Null Depth";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.queryByText("Depth")).not.toBeInTheDocument();
   });
@@ -376,7 +418,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.geometry.coordinates[2] = 'not-a-depth';
     currentMockData.properties.title = "Test Invalid String Depth";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.queryByText("Depth")).not.toBeInTheDocument();
   });
@@ -388,10 +430,10 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.properties.products['moment-tensor'][0].properties['scalar-moment'] = "1.23e+20";
     currentMockData.properties.title = "Test Valid Energy";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
-    const table = await screen.findByRole('table');
-    const energyRow = within(table).getByText(energyLabelText).closest('tr');
+    const snapshotTable = await screen.findByTestId('snapshot-table');
+    const energyRow = within(snapshotTable).getByText(energyLabelText).closest('tr');
     expect(within(energyRow).getByText(/123\s*quintillion N-m/i)).toBeInTheDocument();
   });
 
@@ -400,10 +442,10 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.properties.products['moment-tensor'][0].properties['scalar-moment'] = "0";
     currentMockData.properties.title = "Test Zero Energy";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
-    const table = await screen.findByRole('table');
-    const energyRow = within(table).getByText(energyLabelText).closest('tr');
+    const snapshotTable = await screen.findByTestId('snapshot-table');
+    const energyRow = within(snapshotTable).getByText(energyLabelText).closest('tr');
     expect(within(energyRow).getByText(/^0 N-m$/i)).toBeInTheDocument();
   });
 
@@ -412,7 +454,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.properties.products['moment-tensor'][0].properties['scalar-moment'] = null;
     currentMockData.properties.title = "Test Null Energy";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.queryByText(energyLabelText)).not.toBeInTheDocument();
   });
@@ -422,7 +464,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.properties.products['moment-tensor'][0].properties['scalar-moment'] = 'not-energy';
     currentMockData.properties.title = "Test Invalid Energy String";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.queryByText(energyLabelText)).not.toBeInTheDocument();
   });
@@ -436,7 +478,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
       'nodal-plane-2-rake': "0", 'nodal-plane-2-strike': "100", 'nodal-plane-2-dip': "45",
     };
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.getByText('"Beach Ball" Diagram')).toBeInTheDocument();
     const svgContainer = screen.getByTestId('beachball-svg-container');
@@ -454,7 +496,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
       'nodal-plane-1-rake': null // Key for this test
     };
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView detailUrl={mockDetailUrl} onClose={mockOnClose} />);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.getByText('"Beach Ball" Diagram')).toBeInTheDocument();
     const svgContainer = screen.getByTestId('beachball-svg-container');
@@ -466,9 +508,10 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
 });
 
 describe('EarthquakeDetailView Accessibility', () => {
-  const mockDetailUrl = 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=testquake-axe&format=geojson';
-  const mockOnClose = vi.fn();
-  const mockDetailData = {
+  const mockDetailUrlAxe = 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=testquake-axe&format=geojson';
+  // mockOnClose is global
+  // mockDefaultPropsGlobal is global
+  const mockDetailDataAxe = { // Renamed to avoid conflict if baseMockDetailData is ever needed here
     id: 'testquake-axe',
     properties: {
       title: 'M 7.0 - Axe Test Region',
@@ -521,29 +564,23 @@ describe('EarthquakeDetailView Accessibility', () => {
   });
 
   it('should have no axe violations when displaying data', async () => {
+    // Ensure a successful fetch for this specific test
     fetchSpy.mockResolvedValueOnce({
       ok: true,
-      json: async () => JSON.parse(JSON.stringify(mockDetailData)), // Deep clone
+      json: async () => JSON.parse(JSON.stringify(mockDetailDataAxe)),
     });
 
     const { container } = render(
       <EarthquakeDetailView
-        detailUrl={mockDetailUrl}
-        onClose={mockOnClose}
+        {...mockDefaultPropsGlobal}
+        detailUrl={mockDetailUrlAxe}
         onDataLoadedForSeo={vi.fn()}
-        broaderEarthquakeData={[]}
-        dataSourceTimespanDays={7}
-        handleLoadMonthlyData={vi.fn()}
-        hasAttemptedMonthlyLoad={false}
-        isLoadingMonthly={false}
       />
     );
 
     // Wait for the content to be loaded and displayed
     await waitFor(() => {
-      // Check for a more specific element if title is duplicated.
-      // For example, the one with the ID used for aria-labelledby.
-      expect(screen.getByText((content, element) => element.id === 'earthquake-detail-title' && content.startsWith('M 7.0 - Axe Test Region'))).toBeInTheDocument();
+      expect(screen.getByText((content, element) => element.id === 'earthquake-detail-title' && content.startsWith(mockDetailDataAxe.properties.title))).toBeInTheDocument();
     });
 
     const results = await axe(container);
@@ -551,51 +588,37 @@ describe('EarthquakeDetailView Accessibility', () => {
   });
 
   it('should have no axe violations in loading state', async () => {
-    fetchSpy.mockReturnValueOnce(new Promise(() => {})); // Simulate pending promise
+    fetchSpy.mockImplementationOnce(() => new Promise(() => {})); // Corrected: was mockReturnValueOnce
 
     const { container } = render(
       <EarthquakeDetailView
-        detailUrl={mockDetailUrl}
-        onClose={mockOnClose}
-        onDataLoadedForSeo={vi.fn()}
-        broaderEarthquakeData={[]}
-        dataSourceTimespanDays={7}
-        handleLoadMonthlyData={vi.fn()} // Added missing mock prop
-        hasAttemptedMonthlyLoad={false} // Added missing mock prop
-        isLoadingMonthly={false}       // Added missing mock prop
+        {...mockDefaultPropsGlobal}
+        detailUrl={mockDetailUrlAxe}
       />
     );
 
     // Check while loading skeleton is present
-    expect(container.querySelector('.animate-pulse')).not.toBeNull();
-    const results = await axe(container); // axe should be available globally via setupTests.js
+    expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
+    const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 
   it('should have no axe violations in error state', async () => {
     fetchSpy.mockRejectedValueOnce(new Error('Failed to fetch details for axe test'));
 
-    // Spy on console.error and silence it for this test
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const { container } = render(
       <EarthquakeDetailView
-        detailUrl={mockDetailUrl}
-        onClose={mockOnClose}
-        onDataLoadedForSeo={vi.fn()} // Added missing mock prop
-        broaderEarthquakeData={[]}
-        dataSourceTimespanDays={7}
-        handleLoadMonthlyData={vi.fn()} // Added missing mock prop
-        hasAttemptedMonthlyLoad={false} // Added missing mock prop
-        isLoadingMonthly={false}      // Added missing mock prop
+        {...mockDefaultPropsGlobal} // Ensured this uses global props
+        detailUrl={mockDetailUrlAxe}
       />
     );
 
     await screen.findByText(/Error Loading Details/i);
-    const results = await axe(container); // axe should be available globally via setupTests.js
+    const results = await axe(container);
     expect(results).toHaveNoViolations();
 
-    // Restore console.error
     consoleErrorSpy.mockRestore();
   });
 });
