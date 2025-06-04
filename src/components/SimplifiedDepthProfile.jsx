@@ -2,7 +2,7 @@
 import React from 'react';
 import { getMagnitudeColor } from '../utils/utils.js';
 
-const DEPTH_COMPARISONS = [
+export const DEPTH_COMPARISONS = [ // Added export
   { name: "Burj Khalifa", depth: 0.828 },
   { name: "Krubera Cave (deepest cave)", depth: 2.197 },
   { name: "Grand Canyon (average depth)", depth: 1.83 },
@@ -42,6 +42,9 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
     );
   }
   const depth = parseFloat(earthquakeDepth);
+
+  // Helper function for dynamic contextual comparisons
+  const contextualMessages = getDynamicContextualComparisons(depth, DEPTH_COMPARISONS);
 
   const layers = [
     // Surface is handled separately in terms of drawing height calculation
@@ -145,16 +148,31 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
         (approx. within {hypocenterLayerName}).
       </p>
 
-      <div className="my-3 p-2 rounded bg-slate-50 border border-slate-200" data-testid="comparison-text-list-container">
-        <h4 className="text-xs font-semibold text-slate-600 mb-1">Real-World Depth & Height Comparisons:</h4>
-        <ul className="list-disc list-inside text-xs text-slate-500 md:grid md:grid-cols-2 md:gap-x-4" data-testid="comparison-text-list">
-          {DEPTH_COMPARISONS.map(comp => (
-            <li key={comp.name} data-testid={`comparison-text-item-${comp.name.replace(/\s+/g, '-').toLowerCase()}`}>
-              {comp.name}: {comp.depth.toFixed(1)} km{comp.isHeight ? ' (Height)' : ''}
-            </li>
+      {contextualMessages.length > 0 && (
+        <div className="my-3 p-2 rounded bg-sky-50 border border-sky-200 text-sky-700" data-testid="contextual-insights-container">
+          <h4 className="text-xs font-semibold text-sky-800 mb-1">Contextual Depth Insights:</h4>
+          {contextualMessages.map((msg, index) => (
+            <p key={index} className="text-xs mb-0.5">{msg}</p>
           ))}
-        </ul>
-      </div>
+        </div>
+      )}
+
+      <details className="my-3 group" data-testid="static-comparison-list-details">
+        <summary className="p-2 rounded bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 group-open:rounded-b-none">
+          <h4 className="text-xs font-semibold text-slate-600 inline">Real-World Depth & Height Comparisons</h4>
+          <span className="text-xs text-slate-500 ml-1 group-open:hidden">(Click to expand)</span>
+          <span className="text-xs text-slate-500 ml-1 hidden group-open:inline">(Click to collapse)</span>
+        </summary>
+        <div className="p-2 rounded-b bg-slate-50 border border-t-0 border-slate-200" data-testid="comparison-text-list-container">
+          <ul className="list-disc list-inside text-xs text-slate-500 md:grid md:grid-cols-2 md:gap-x-4" data-testid="comparison-text-list">
+            {DEPTH_COMPARISONS.map(comp => (
+              <li key={comp.name} data-testid={`comparison-text-item-${comp.name.replace(/\s+/g, '-').toLowerCase()}`}>
+                {comp.name}: {comp.depth.toFixed(1)} km{comp.isHeight ? ' (Height)' : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </details>
 
       <div className="relative w-full bg-gray-100 rounded border border-gray-300 flex flex-col" style={{ height: `${diagramTotalRenderHeightPx}px` }} data-testid="depth-profile-chart">
         {/* Render Surface Band */}
@@ -282,6 +300,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
                     zIndex: 21, // Ensure label is above the line/marker
                     display: depth < 1 && depth > 0 ? 'none' : 'block'
                 }}
+                data-testid="earthquake-depth-label" // Added data-testid
             >
                 {depth?.toFixed(1)} km
             </div>
@@ -354,6 +373,77 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
       </p>
     </div>
   );
+}
+
+// Helper function implementation (outside the component for clarity)
+function getDynamicContextualComparisons(currentDepth, comparisonsList) {
+  const messages = [];
+  const depthComparisons = comparisonsList
+    .filter(c => !c.isHeight)
+    .sort((a, b) => a.depth - b.depth);
+
+  if (depthComparisons.length === 0) {
+    return []; // No depth benchmarks to compare against
+  }
+
+  // Check for "very close" comparisons
+  for (const comp of depthComparisons) {
+    const fivePercent = comp.depth * 0.05;
+    if (Math.abs(currentDepth - comp.depth) <= fivePercent) {
+      messages.push(`This depth of ${currentDepth.toFixed(1)} km is very similar to the ${comp.name} (${comp.depth.toFixed(1)} km).`);
+      // If one very close match is found, we can return early or add more context.
+      // For now, let's return just this one to keep it concise. If more needed, this logic can be expanded.
+      return messages;
+    }
+  }
+
+  // If not "very close", find closest shallower and deeper
+  let closestShallower = null;
+  let closestDeeper = null;
+
+  for (const comp of depthComparisons) {
+    if (comp.depth < currentDepth) {
+      if (!closestShallower || comp.depth > closestShallower.depth) {
+        closestShallower = comp;
+      }
+    } else if (comp.depth > currentDepth) {
+      if (!closestDeeper || comp.depth < closestDeeper.depth) {
+        closestDeeper = comp;
+      }
+    }
+    // If comp.depth === currentDepth, it would have been caught by "very close" or could be handled here.
+  }
+
+  if (closestShallower) {
+    messages.push(`At ${currentDepth.toFixed(1)} km, this event is deeper than the ${closestShallower.name} (${closestShallower.depth.toFixed(1)} km).`);
+  } else {
+    // Current depth is shallower than all benchmarks
+    messages.push(`This depth of ${currentDepth.toFixed(1)} km is shallower than all listed depth benchmarks, starting with the ${depthComparisons[0].name} (${depthComparisons[0].depth.toFixed(1)} km).`);
+    return messages; // Return only this message
+  }
+
+  if (closestDeeper) {
+    messages.push(`It is shallower than the ${closestDeeper.name} (${closestDeeper.depth.toFixed(1)} km).`);
+  } else if (closestShallower) { // Only add this if there was a shallower one, but no deeper ones
+    // Current depth is deeper than all benchmarks
+    messages.push(`This depth of ${currentDepth.toFixed(1)} km is deeper than all listed depth benchmarks, including the ${closestShallower.name} (${closestShallower.depth.toFixed(1)} km).`);
+     // If we are deeper than all, the first message about being deeper than closestShallower is good,
+     // and this specific one might be redundant or could replace it.
+     // Let's refine: if deeper than all, the first message already states it's "deeper than X (deepest one)".
+     // So, if closestDeeper is null AND closestShallower is the last item in depthComparisons.
+     if (closestShallower === depthComparisons[depthComparisons.length -1]) {
+        messages.pop(); // Remove the "deeper than X"
+        messages.push(`This depth of ${currentDepth.toFixed(1)} km is beyond our deepest benchmark, the ${closestShallower.name} (${closestShallower.depth.toFixed(1)} km).`);
+     }
+  }
+
+  // Ensure we return max 2 messages as per initial thought, though current logic might give more if not careful
+  // The logic above already tries to be concise. If "very close" is found, it returns 1.
+  // Otherwise, it aims for 1 or 2 (e.g. shallower than all, or between two points).
+  // If it's shallower than all, it returns 1 message.
+  // If it's deeper than all, it returns 1 refined message.
+  // If it's between two, it can return 2 messages. Let's cap at 2.
+  return messages.slice(0, 2);
 }
 
 export default SimplifiedDepthProfile;
