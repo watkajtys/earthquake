@@ -156,13 +156,13 @@ function EarthquakeSeismicWavesPanel({
                             stroke="#ef4444"
                             strokeWidth="3"
                             fill="none"
-                            strokeDasharray="156.85" // Approximate length of one full wave cycle (100px wide segment)
+                            strokeDasharray="392.125" // Represents 2.5 wavelengths (156.85 * 2.5)
                             strokeDashoffset="0"
                         >
                             <animate
                                 attributeName="stroke-dashoffset"
-                                values="0;-156.85" // Moves dashes leftward, making wave appear to move right
-                                dur="2s" // Duration for one full wave cycle to pass
+                                values="0;-392.125" // Animates over 2.5 wavelengths
+                                dur="5s" // Duration is now 2.5 times the original 2s
                                 repeatCount="indefinite"
                             />
                         </path>
