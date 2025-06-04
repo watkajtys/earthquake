@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, memo } from 'react';
-import PropTypes from 'prop-types'; // Re-add PropTypes import
+// PropTypes import removed
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
@@ -86,20 +86,20 @@ const getTectonicPlateStyle = (feature) => {
 
 /**
  * `EarthquakeMap` is a React component that renders a Leaflet map.
- * (JSDoc updated to reflect PropTypes restoration)
+ * (JSDoc remains, but references to PropTypes are no longer directly applicable from static properties)
  */
 const EarthquakeMap = ({
   mapCenterLatitude, // Required
   mapCenterLongitude, // Required
-  highlightQuakeLatitude, // Handled by defaultProps
-  highlightQuakeLongitude, // Handled by defaultProps
-  highlightQuakeMagnitude, // Handled by defaultProps
-  highlightQuakeTitle, // Handled by defaultProps
-  shakeMapUrl, // Handled by defaultProps
-  nearbyQuakes, // Handled by defaultProps
-  mainQuakeDetailUrl, // Handled by defaultProps
-  fitMapToBounds, // Handled by defaultProps
-  defaultZoom,    // Handled by defaultProps
+  highlightQuakeLatitude = undefined,
+  highlightQuakeLongitude = undefined,
+  highlightQuakeMagnitude = undefined,
+  highlightQuakeTitle = '',
+  shakeMapUrl = null,
+  nearbyQuakes = [],
+  mainQuakeDetailUrl = null,
+  fitMapToBounds = false,
+  defaultZoom = 8,
 }) => {
   const mapRef = useRef(null);
   const initialMapCenter = [mapCenterLatitude, mapCenterLongitude];
@@ -226,44 +226,6 @@ const EarthquakeMap = ({
   );
 };
 
-// Re-add PropTypes
-EarthquakeMap.propTypes = {
-  mapCenterLatitude: PropTypes.number.isRequired,
-  mapCenterLongitude: PropTypes.number.isRequired,
-  highlightQuakeLatitude: PropTypes.number,
-  highlightQuakeLongitude: PropTypes.number,
-  highlightQuakeMagnitude: PropTypes.number,
-  highlightQuakeTitle: PropTypes.string,
-  shakeMapUrl: PropTypes.string,
-  nearbyQuakes: PropTypes.arrayOf(PropTypes.shape({
-    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-    geometry: PropTypes.shape({
-        coordinates: PropTypes.arrayOf(PropTypes.number).isRequired
-    }).isRequired,
-    properties: PropTypes.shape({
-        mag: PropTypes.number,
-        place: PropTypes.string,
-        title: PropTypes.string,
-        time: PropTypes.number,
-        detail: PropTypes.string
-    }).isRequired,
-  })),
-  mainQuakeDetailUrl: PropTypes.string,
-  fitMapToBounds: PropTypes.bool,
-  defaultZoom: PropTypes.number,
-};
-
-// Re-add defaultProps
-EarthquakeMap.defaultProps = {
-  highlightQuakeLatitude: undefined,
-  highlightQuakeLongitude: undefined,
-  highlightQuakeMagnitude: undefined,
-  highlightQuakeTitle: '',
-  shakeMapUrl: null,
-  nearbyQuakes: [],
-  mainQuakeDetailUrl: null,
-  fitMapToBounds: false,
-  defaultZoom: 8,
-};
+// PropTypes and defaultProps blocks removed.
 
 export default memo(EarthquakeMap);
