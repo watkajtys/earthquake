@@ -13,101 +13,89 @@ const getTectonicPlateStyle = (feature) => {
   return { color: color, weight: 1, opacity: 1 };
 };
 
-const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
-  const mapRef = useRef(null);
-  const mapContainerParentRef = useRef(null);
-  const [containerWidth, setContainerWidth] = useState(0);
+// Accept dimensionSourceRef prop
+const ClusterMiniMap = ({ cluster, getMagnitudeColor, dimensionSourceRef }) => {
+  const mapRef = useRef(null); // Ref for the Leaflet map instance
+  const mapHostRef = useRef(null); // Ref for the direct parent of MapContainer within this component
+  const [containerWidth, setContainerWidth] = useState(0); // Width derived from dimensionSourceRef
   const [initialCenter, setInitialCenter] = useState(null);
   const [initialZoomVal, setInitialZoomVal] = useState(null);
 
   // Effect 1: Determine map center and zoom (Unchanged)
   useEffect(() => {
-    // ... (same as before)
     if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
-      setInitialCenter(null);
-      setInitialZoomVal(null);
-      return;
+      setInitialCenter(null); setInitialZoomVal(null); return;
     }
     const { originalQuakes } = cluster;
-    let calculatedCenter;
-    let calculatedZoom;
-
+    let calculatedCenter, calculatedZoom;
     if (originalQuakes.length === 1) {
-      const singleQuake = originalQuakes[0];
-      calculatedCenter = [singleQuake.geometry.coordinates[1], singleQuake.geometry.coordinates[0]];
+      const q = originalQuakes[0];
+      calculatedCenter = [q.geometry.coordinates[1], q.geometry.coordinates[0]];
       calculatedZoom = 10;
     } else {
-      const latitudes = originalQuakes.map(quake => quake.geometry.coordinates[1]);
-      const longitudes = originalQuakes.map(quake => quake.geometry.coordinates[0]);
-      const avgLat = latitudes.reduce((sum, lat) => sum + lat, 0) / latitudes.length;
-      const avgLng = longitudes.reduce((sum, lng) => sum + lng, 0) / longitudes.length;
-      calculatedCenter = [avgLat, avgLng];
-
-      const bounds = L.latLngBounds(originalQuakes.map(quake => [quake.geometry.coordinates[1], quake.geometry.coordinates[0]]));
-      if (bounds.getSouthWest().equals(bounds.getNorthEast()) ||
-          (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.001 &&
-           Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.001)) {
+      const lats = originalQuakes.map(q => q.geometry.coordinates[1]);
+      const lngs = originalQuakes.map(q => q.geometry.coordinates[0]);
+      calculatedCenter = [lats.reduce((s, l) => s + l, 0) / lats.length, lngs.reduce((s, l) => s + l, 0) / lngs.length];
+      const bounds = L.latLngBounds(originalQuakes.map(q => [q.geometry.coordinates[1], q.geometry.coordinates[0]]));
+      if (bounds.getSouthWest().equals(bounds.getNorthEast()) || (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.001 && Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.001)) {
         calculatedZoom = 10;
       } else {
         calculatedZoom = 7;
       }
     }
-    setInitialCenter(calculatedCenter);
-    setInitialZoomVal(calculatedZoom);
+    setInitialCenter(calculatedCenter); setInitialZoomVal(calculatedZoom);
   }, [cluster]);
 
-  // Effect 2: Setup ResizeObserver (Unchanged from previous attempt)
+  // Effect 2: Setup ResizeObserver on dimensionSourceRef (MODIFIED)
   useEffect(() => {
-    if (!mapContainerParentRef.current) return;
+    // Observe the dimensionSourceRef for width changes
+    if (!dimensionSourceRef || !dimensionSourceRef.current) {
+      // If the source ref is not provided, or not yet available, we can't get dimensions.
+      // Optionally, set width to 0 or handle as an error/warning.
+      // For now, if it's not there, width will remain 0 and map won't load.
+      setContainerWidth(0);
+      return;
+    }
+
     const observer = new ResizeObserver(entries => {
       for (let entry of entries) {
         const newWidth = entry.contentRect.width > 0 ? entry.contentRect.width : 0;
-        // Only set if it's different to avoid potential loops if an effect depends on containerWidth
         setContainerWidth(prevWidth => newWidth !== prevWidth ? newWidth : prevWidth);
       }
     });
-    observer.observe(mapContainerParentRef.current);
+    observer.observe(dimensionSourceRef.current);
+
+    // Also try to get initial width from dimensionSourceRef, as ResizeObserver might be async
+    const initialObservedWidth = dimensionSourceRef.current.getBoundingClientRect().width;
+     if (initialObservedWidth > 0) {
+        setContainerWidth(initialObservedWidth);
+     }
+
+
     return () => {
-      if (mapContainerParentRef.current) observer.unobserve(mapContainerParentRef.current);
+      if (dimensionSourceRef.current) { // Check ref before unobserving
+        observer.unobserve(dimensionSourceRef.current);
+      }
       observer.disconnect();
     };
-  }, []); // mapContainerParentRef is stable, so empty array is fine.
+  }, [dimensionSourceRef]); // Re-run if dimensionSourceRef itself changes (though unlikely for a stable ref)
 
-  // Effect 3: Explicit initial width check (NEW/MODIFIED)
-  useEffect(() => {
-    if (mapContainerParentRef.current) {
-      const currentWidth = mapContainerParentRef.current.getBoundingClientRect().width;
-      if (currentWidth > 0) {
-        setContainerWidth(currentWidth);
-      }
-    }
-    // This effect should run once after mount.
-    // If mapContainerParentRef.current isn't available on first pass, it might need a re-trigger,
-    // but typically it should be by the time this effect runs.
-  }, []); // Empty dependency array to run once on mount.
-
-  // Effect 4: Invalidate map size (Previously Effect 3 - Unchanged)
+  // Effect 3: Invalidate map size (Previously Effect 4 - Unchanged logic, but depends on new containerWidth source)
   useEffect(() => {
     if (containerWidth > 0 && mapRef.current) {
       mapRef.current.invalidateSize();
     }
-  }, [containerWidth, mapRef]); // mapRef is the ref object, stable.
+  }, [containerWidth, mapRef]);
 
-  // Effect 5: Fit bounds (Previously Effect 4 - Unchanged)
-   useEffect(() => {
-    // ... (same as before)
+  // Effect 4: Fit bounds (Previously Effect 5 - Unchanged logic)
+  useEffect(() => {
     if (mapRef.current && initialCenter && initialZoomVal !== null && containerWidth > 0) {
       if (cluster && cluster.originalQuakes && cluster.originalQuakes.length > 1 && initialZoomVal === 7) {
-        const bounds = L.latLngBounds(
-          cluster.originalQuakes.map(quake => [
-            quake.geometry.coordinates[1],
-            quake.geometry.coordinates[0],
-          ])
-        );
+        const bounds = L.latLngBounds(cluster.originalQuakes.map(q => [q.geometry.coordinates[1], q.geometry.coordinates[0]]));
         if (!bounds.getSouthWest().equals(bounds.getNorthEast())) {
-             mapRef.current.fitBounds(bounds, { padding: [0, 0] });
+          mapRef.current.fitBounds(bounds, { padding: [0, 0] });
         } else {
-            mapRef.current.setView(initialCenter, 10);
+          mapRef.current.setView(initialCenter, 10);
         }
       } else if (initialCenter && initialZoomVal !== null) {
         mapRef.current.setView(initialCenter, initialZoomVal);
@@ -115,25 +103,26 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
     }
   }, [cluster, initialCenter, initialZoomVal, mapRef, containerWidth]);
 
-  // Render conditions (Heights are 350px)
+  // Render conditions
   const placeholderStyle = { height: '350px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' };
 
   if (!initialCenter || initialZoomVal === null) {
     return <div style={placeholderStyle} className="text-slate-400">Initializing map parameters...</div>;
   }
 
+  // The mapHostRef div is always rendered with its fixed height and 100% width.
+  // Its content (MapContainer or placeholder text) depends on containerWidth derived from dimensionSourceRef.
   return (
-    <div ref={mapContainerParentRef} style={{ width: '100%', height: '350px' }}>
+    <div ref={mapHostRef} style={{ width: '100%', height: '350px' }}>
       {containerWidth > 0 ? (
         <MapContainer
           center={initialCenter}
           zoom={initialZoomVal}
-          style={{ height: '100%', width: '100%' }}
+          style={{ height: '100%', width: '100%' }} // Map fills mapHostRef
           scrollWheelZoom={false}
           ref={mapRef}
           maxZoom={18}
         >
-          {/* TileLayer, GeoJSON, CircleMarkers... same as before */}
           <TileLayer
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
@@ -159,9 +148,10 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
           ))}
         </MapContainer>
       ) : (
+        // Placeholder text shown if containerWidth (from dimensionSourceRef) is 0
         cluster && cluster.originalQuakes && cluster.originalQuakes.length > 0 ?
           <div style={placeholderStyle} className="text-slate-400">Loading map...</div> :
-          <div style={placeholderStyle} className="text-slate-400">Awaiting dimensions...</div>
+          <div style={placeholderStyle} className="text-slate-400">Awaiting dimensions from modal...</div>
       )}
     </div>
   );
