@@ -23,6 +23,7 @@ import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for g
 function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
     const modalContentRef = React.useRef(null);
     const closeButtonRef = React.useRef(null);
+    const mapWrapRef = React.useRef(null);
 
     // Handle Escape key press & Focus Trapping
     React.useEffect(() => {
@@ -148,8 +149,8 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 </div>
 
                 {/* Cluster Mini Map */}
-                <div className="my-4 h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative"> {/* Added margin for spacing */}
-                    <ClusterMiniMap cluster={cluster} getMagnitudeColor={getMagnitudeColor} containerRef={modalContentRef} />
+                <div ref={mapWrapRef} className="my-4 h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative"> {/* Added margin for spacing */}
+                    <ClusterMiniMap cluster={cluster} getMagnitudeColor={getMagnitudeColor} containerRef={mapWrapRef} />
                 </div>
 
                 {/* Individual Earthquakes List */}
