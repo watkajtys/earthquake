@@ -13,9 +13,11 @@ import { calculateDistance, getMagnitudeColor } from '../utils/utils.js';
  * @param {object} currentEarthquake - The main earthquake object (GeoJSON feature) around which regional activity is analyzed.
  * @param {object[]} nearbyEarthquakesData - An array of GeoJSON earthquake features representing potentially nearby events. This data is filtered by the component.
  * @param {number} dataSourceTimespanDays - The number of days of data the `nearbyEarthquakesData` prop typically represents (e.g., 30 for a monthly feed). Used for context in descriptive text.
+ * @param {boolean} isLoadingMonthly - Indicates if the 30-day data is currently being loaded.
+ * @param {boolean} hasAttemptedMonthlyLoad - Indicates if an attempt to load 30-day data has been made.
  * @returns {JSX.Element} The regional seismicity chart component or a message if data is insufficient.
  */
-function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dataSourceTimespanDays }) {
+function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dataSourceTimespanDays, isLoadingMonthly, hasAttemptedMonthlyLoad }) {
   const chartContainerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(380);
 
@@ -130,20 +132,35 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
   if (!currentEarthquake) {
     return <div className="p-3 rounded-md text-center text-sm text-slate-500">Select an earthquake to see regional seismicity.</div>;
   }
-  const isLoading = !nearbyEarthquakesData;
-  if (isLoading) {
-    return (
-      <div className="p-3 rounded-md">
-        <h3 className="text-md font-semibold text-blue-700 mb-2">Regional Activity</h3>
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
-          <div className="w-full h-40 bg-gray-200 rounded-md flex items-center justify-center mt-2">
-            <p className="text-gray-400 text-xs">Loading regional data...</p>
+
+    // Determine if we are specifically waiting for monthly (30-day) data to load.
+    const isWaitingForMonthlyData =
+        dataSourceTimespanDays === 30 &&
+        hasAttemptedMonthlyLoad &&
+        isLoadingMonthly;
+
+    // Original condition for when nearbyEarthquakesData itself is absent (e.g., initial load of 7-day data).
+    const isNearbyDataMissing = !nearbyEarthquakesData;
+
+    // Combine conditions: show loader if nearby data is missing OR if we are specifically waiting for monthly data.
+    const shouldShowLoadingSkeleton = isNearbyDataMissing || isWaitingForMonthlyData;
+
+    if (shouldShowLoadingSkeleton) {
+        return (
+          <div className="p-3 rounded-md">
+            <h3 className="text-md font-semibold text-blue-700 mb-2">Regional Activity</h3>
+            <div className="animate-pulse">
+              <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
+              <div className="w-full h-40 bg-gray-200 rounded-md flex items-center justify-center mt-2">
+                {/* Make the message more specific if waiting for monthly data */}
+                <p className="text-gray-400 text-xs">
+                  {isWaitingForMonthlyData ? "Loading 30-day regional data..." : "Loading regional data..."}
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    );
-  }
+        );
+    }
   if (regionalEvents.length === 0) {
     return (
       <div className="p-3 rounded-md">
