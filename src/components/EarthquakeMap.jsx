@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react'; // Added useRef, useEffect
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
@@ -128,64 +128,142 @@ const getTectonicPlateStyle = (feature) => {
  * @param {string} [props.shakeMapUrl] - Optional URL to the ShakeMap details page for the earthquake.
  * @param {Array} [props.nearbyQuakes=[]] - Optional array of nearby earthquake objects.
  * @param {string} [props.mainQuakeDetailUrl] - Optional URL for the main quake's internal detail view.
+ * @param {Array} [props.earthquakesToPlot=[]] - Optional array of earthquakes to plot, taking precedence.
+ * @param {number} [props.zoom=8] - Default zoom level if not fitting to bounds.
  * @returns {JSX.Element} The rendered EarthquakeMap component.
  */
-const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nearbyQuakes = [], mainQuakeDetailUrl }) => {
-  const position = [latitude, longitude];
+const EarthquakeMap = ({
+  latitude,
+  longitude,
+  magnitude,
+  title,
+  shakeMapUrl,
+  nearbyQuakes = [],
+  mainQuakeDetailUrl,
+  earthquakesToPlot = [],
+  zoom = 8 // Default zoom if not overridden or fitting to bounds
+}) => {
+  const mapRef = useRef(null);
+  const position = [latitude, longitude]; // Still needed for fallback
 
   const mapStyle = {
     height: '100%',
     width: '100%',
   };
 
+  useEffect(() => {
+    if (earthquakesToPlot && earthquakesToPlot.length > 0 && mapRef.current) {
+      const bounds = L.latLngBounds();
+      earthquakesToPlot.forEach(quake => {
+        if (quake.geometry && quake.geometry.coordinates && quake.geometry.coordinates.length >= 2) {
+          bounds.extend([quake.geometry.coordinates[1], quake.geometry.coordinates[0]]);
+        }
+      });
+
+      // Priority for single quake: setView directly
+      if (earthquakesToPlot.length === 1 && earthquakesToPlot[0].geometry?.coordinates) {
+        mapRef.current.setView([earthquakesToPlot[0].geometry.coordinates[1], earthquakesToPlot[0].geometry.coordinates[0]], zoom);
+      } else if (bounds.isValid()) { // For multiple quakes, fit bounds
+        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      }
+      // If bounds are not valid (e.g. no valid coordinates) and not a single quake, do nothing specific here.
+    }
+  }, [earthquakesToPlot, zoom]);
+
   return (
-    <MapContainer center={position} zoom={8} style={mapStyle}>
+    <MapContainer
+      center={position} // Fallback center if earthquakesToPlot is empty
+      zoom={zoom} // Fallback zoom
+      style={mapStyle}
+      ref={mapRef} // Assign ref to MapContainer
+    >
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
       />
-      <Marker position={position} icon={createEpicenterIcon(magnitude)}>
-        <Popup>
-          <strong>{title}</strong>
-          <br />
-          Magnitude: {magnitude}
-          {mainQuakeDetailUrl && (
-            <>
-              <br />
-              <Link to={`/quake/${encodeURIComponent(mainQuakeDetailUrl)}`} className="text-blue-500 hover:underline">
-                View Details
-              </Link>
-            </>
-          )}
-          {!mainQuakeDetailUrl && shakeMapUrl && ( // Fallback to ShakeMap if no detail URL provided
-            <>
-              <br />
-              <a href={shakeMapUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                ShakeMap Details (External)
-              </a>
-            </>
-          )}
-        </Popup>
-      </Marker>
-      {nearbyQuakes.map((quake, index) => (
-        <Marker
-          key={index}
-          position={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
-          icon={createNearbyQuakeIcon(quake.properties.mag, quake.properties.time)}
-        >
-          <Popup>
-            Magnitude: {quake.properties.mag}
-            <br />
-            {quake.properties.title}
-            <br />
-            Time: {formatTimeAgo(quake.properties.time)}
-            <br />
-            <Link to={`/quake/${encodeURIComponent(quake.properties.detail)}`} className="text-blue-500 hover:underline">
-              View Details
-            </Link>
-          </Popup>
-        </Marker>
-      ))}
+
+      {earthquakesToPlot && earthquakesToPlot.length > 0 ? (
+        earthquakesToPlot.map((quake) => {
+          if (!quake.geometry || !quake.geometry.coordinates || quake.geometry.coordinates.length < 2) {
+            return null; // Skip rendering if coordinates are invalid
+          }
+          const quakePos = [quake.geometry.coordinates[1], quake.geometry.coordinates[0]];
+          const quakeMag = quake.properties?.mag || 0;
+          const quakeTitle = quake.properties?.place || quake.properties?.title || 'Earthquake';
+          // Standardize detail link using quake.id
+          const detailLink = quake.id ? `/quake/${encodeURIComponent(quake.id)}` : null;
+
+          return (
+            <Marker key={quake.id || JSON.stringify(quakePos)} position={quakePos} icon={createEpicenterIcon(quakeMag)}>
+              <Popup>
+                <strong>{quakeTitle}</strong>
+                <br />
+                Magnitude: {quakeMag}
+                {detailLink && (
+                  <>
+                    <br />
+                    <Link to={detailLink} className="text-blue-500 hover:underline">
+                      View Details
+                    </Link>
+                  </>
+                )}
+              </Popup>
+            </Marker>
+          );
+        })
+      ) : (
+        // Fallback to existing logic if earthquakesToPlot is empty
+        <>
+          {typeof latitude === 'number' && typeof longitude === 'number' ? (
+            <Marker position={position} icon={createEpicenterIcon(magnitude)}>
+              <Popup>
+                <strong>{title}</strong>
+                <br />
+                Magnitude: {magnitude}
+                {mainQuakeDetailUrl && (
+                  <>
+                    <br />
+                    {/* Ensure mainQuakeDetailUrl is a path segment, not a full URL if used with Link like this */}
+                    <Link to={mainQuakeDetailUrl.startsWith('/') ? mainQuakeDetailUrl : `/quake/${encodeURIComponent(mainQuakeDetailUrl)}`} className="text-blue-500 hover:underline">
+                      View Details
+                    </Link>
+                  </>
+                )}
+                {!mainQuakeDetailUrl && shakeMapUrl && (
+                  <>
+                    <br />
+                    <a href={shakeMapUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                      ShakeMap Details (External)
+                    </a>
+                  </>
+                )}
+              </Popup>
+            </Marker>
+          ) : null}
+          {nearbyQuakes.map((quake, index) => (
+            <Marker
+              key={quake.id || index} // Prefer quake.id for key if available
+              position={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
+              icon={createNearbyQuakeIcon(quake.properties.mag, quake.properties.time)}
+            >
+              <Popup>
+                Magnitude: {quake.properties.mag}
+                <br />
+                {quake.properties.title || quake.properties.place}
+                <br />
+                Time: {formatTimeAgo(quake.properties.time)}
+                <br />
+                {/* Standardize detail link for nearby quakes if quake.id is available */}
+                {quake.id ? (
+                    <Link to={`/quake/${encodeURIComponent(quake.id)}`} className="text-blue-500 hover:underline">View Details</Link>
+                ) : quake.properties?.detail ? (
+                    <Link to={`/quake/${encodeURIComponent(quake.properties.detail)}`} className="text-blue-500 hover:underline">View Details</Link>
+                ) : null}
+              </Popup>
+            </Marker>
+          ))}
+        </>
+      )}
       <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
     </MapContainer>
   );

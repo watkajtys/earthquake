@@ -2,11 +2,25 @@ import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom'; // Import MemoryRouter
 import EarthquakeMap from './EarthquakeMap';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest'; // Added beforeEach
 import L from 'leaflet';
+import { formatTimeAgo } from '../utils/utils.js'; // Import formatTimeAgo
 
 // Mock Leaflet's imagePath to prevent console errors during tests
 // L.Icon.Default.imagePath = 'https://unpkg.com/leaflet@1.7.1/dist/images/';
+
+// Mock L.map and L.latLngBounds
+const mockMapInstance = {
+  fitBounds: vi.fn(),
+  setView: vi.fn(),
+  // Add any other Leaflet map methods that might be called by the component
+};
+L.map = vi.fn(() => mockMapInstance); // If L.map is called directly by MapContainer internally
+L.latLngBounds = vi.fn(() => ({ // Mock L.latLngBounds
+  extend: vi.fn(),
+  isValid: vi.fn().mockReturnValue(true) // Default to valid for simplicity
+}));
+
 
 // Mock TectonicPlateBoundaries.json
 vi.mock('./TectonicPlateBoundaries.json', () => ({
@@ -27,11 +41,27 @@ vi.mock('react-leaflet', async () => {
   const actual = await vi.importActual('react-leaflet');
   return {
     ...actual,
-    MapContainer: ({ children, center, zoom, style }) => (
-      <div data-testid="map-container" data-center={center ? JSON.stringify(center) : undefined} data-zoom={zoom} style={style}>
-        {children}
-      </div>
-    ),
+    MapContainer: React.forwardRef(({ children, center, zoom, style, whenCreated }, ref) => {
+      // If the component under test uses a ref on MapContainer,
+      // this mock needs to handle it and provide the mockMapInstance.
+      // The component EarthquakeMap.jsx now uses ref={mapRef}
+      if (ref) {
+        if (typeof ref === 'function') {
+          ref(mockMapInstance);
+        } else {
+          ref.current = mockMapInstance;
+        }
+      }
+      // Call whenCreated if provided (though our component uses ref now)
+      if (whenCreated) {
+        whenCreated(mockMapInstance);
+      }
+      return (
+        <div data-testid="map-container" data-center={center ? JSON.stringify(center) : undefined} data-zoom={zoom} style={style}>
+          {children}
+        </div>
+      );
+    }),
     TileLayer: ({ url, attribution }) => (
       <div data-testid="tile-layer" data-url={url} data-attribution={attribution}></div>
     ),
@@ -148,7 +178,7 @@ describe('EarthquakeMap Component', () => {
     render(<EarthquakeMap {...defaultProps} />);
     const geoJsonLayer = screen.getByTestId('geojson-layer');
     expect(geoJsonLayer).toBeInTheDocument();
-    expect(geoJsonLayer).toHaveAttribute('data-features', '117'); // Updated to actual count
+    expect(geoJsonLayer).toHaveAttribute('data-features', '117'); // Reverted to actual count, mock isn't effective here
     expect(geoJsonLayer).toHaveAttribute('data-passed-style-type', 'function');
 
     // To actually test the style function's logic, we would ideally:
@@ -206,12 +236,14 @@ describe('EarthquakeMap Component - Nearby Quakes', () => {
 
   const nearbyQuakesData = [
     {
+      id: 'nq1', // Added id
       geometry: { coordinates: [-119.0, 35.0, 10] }, // lon, lat, depth
-      properties: { mag: 3.5, title: "Nearby Quake 1" }
+      properties: { mag: 3.5, title: "Nearby Quake 1", time: Date.now() - 3600000, detail: 'nq1' } // Added time and detail
     },
     {
+      id: 'nq2', // Added id
       geometry: { coordinates: [-117.5, 33.5, 5] },
-      properties: { mag: 2.8, title: "Nearby Quake 2" }
+      properties: { mag: 2.8, title: "Nearby Quake 2", time: Date.now() - 7200000, detail: 'nq2' } // Added time and detail
     }
   ];
 
@@ -291,5 +323,173 @@ describe('EarthquakeMap Component - Nearby Quakes', () => {
       expect(within(popupForQuake).getByText(magnitudeRegex)).toBeInTheDocument();
       expect(within(popupForQuake).getByText(titleRegex)).toBeInTheDocument();
     });
+  });
+});
+
+// Mock data for earthquakesToPlot tests
+const mockEarthquakesToPlot = [
+  { id: 'plot1', properties: { mag: 6.1, place: 'Plot Quake A', title: 'Plot Quake A Title' }, geometry: { coordinates: [-120, 38, 10] } },
+  { id: 'plot2', properties: { mag: 5.5, place: 'Plot Quake B', title: 'Plot Quake B Title' }, geometry: { coordinates: [-121, 39, 15] } },
+  { id: 'plot3', properties: { mag: 6.8, place: 'Plot Quake C', title: 'Plot Quake C Title' }, geometry: { coordinates: [-122, 40, 5] } },
+];
+
+
+describe('EarthquakeMap Component - earthquakesToPlot', () => {
+  const baseProps = { // Fallback props if earthquakesToPlot is empty
+    latitude: 0,
+    longitude: 0,
+    magnitude: 0,
+    title: 'Fallback Quake',
+  };
+
+  beforeEach(() => {
+    mockMapInstance.fitBounds.mockClear();
+    mockMapInstance.setView.mockClear();
+    // If L.latLngBounds was used directly and its instance methods were called
+    // L.latLngBounds().extend.mockClear();
+    // L.latLngBounds().isValid.mockClear();
+    // For simplicity, the L.latLngBounds mock above creates a new object each time,
+    // so its internal mocks are fresh. If it was a singleton, clearing would be essential.
+  });
+
+  it('renders markers from earthquakesToPlot and calls fitBounds for multiple quakes', () => {
+    render(
+      <MemoryRouter>
+        <EarthquakeMap earthquakesToPlot={mockEarthquakesToPlot} />
+      </MemoryRouter>
+    );
+
+    const markers = screen.getAllByTestId('marker');
+    expect(markers.length).toBe(mockEarthquakesToPlot.length);
+
+    markers.forEach((marker, index) => {
+      const quake = mockEarthquakesToPlot[index];
+      expect(marker).toHaveAttribute('data-icon-classname', 'custom-pulsing-icon');
+      const popup = within(marker).getByTestId('popup');
+      expect(within(popup).getByText(quake.properties.place || quake.properties.title)).toBeInTheDocument();
+      expect(within(popup).getByText(`Magnitude: ${quake.properties.mag}`)).toBeInTheDocument();
+      const link = within(popup).getByRole('link', { name: 'View Details' });
+      expect(link).toHaveAttribute('href', `/quake/${encodeURIComponent(quake.id)}`);
+    });
+
+    expect(mockMapInstance.fitBounds).toHaveBeenCalledTimes(1);
+    expect(mockMapInstance.setView).not.toHaveBeenCalled();
+  });
+
+  it('renders single marker from earthquakesToPlot and calls setView', () => {
+    const singleQuakeToPlot = [mockEarthquakesToPlot[0]];
+    L.latLngBounds().isValid.mockReturnValueOnce(false); // Ensure setView path is taken for single item
+    render(
+      <MemoryRouter>
+        <EarthquakeMap earthquakesToPlot={singleQuakeToPlot} zoom={10} />
+      </MemoryRouter>
+    );
+
+    const markers = screen.getAllByTestId('marker');
+    expect(markers.length).toBe(1);
+    const marker = markers[0];
+    const quake = singleQuakeToPlot[0];
+
+    expect(marker).toHaveAttribute('data-icon-classname', 'custom-pulsing-icon');
+    const popup = within(marker).getByTestId('popup');
+    expect(within(popup).getByText(quake.properties.place || quake.properties.title)).toBeInTheDocument();
+    expect(within(popup).getByText(`Magnitude: ${quake.properties.mag}`)).toBeInTheDocument();
+    const link = within(popup).getByRole('link', { name: 'View Details' });
+    expect(link).toHaveAttribute('href', `/quake/${encodeURIComponent(quake.id)}`);
+
+    // The component's useEffect for earthquakesToPlot calls setView for a single quake.
+    expect(mockMapInstance.setView).toHaveBeenCalledTimes(1);
+    expect(mockMapInstance.setView).toHaveBeenCalledWith(
+      [quake.geometry.coordinates[1], quake.geometry.coordinates[0]], // lat, lon
+      10 // zoom passed in props
+    );
+    expect(mockMapInstance.fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('falls back to latitude/longitude/nearbyQuakes if earthquakesToPlot is empty', () => {
+    // Using a more complete nearby quake mock, similar to nearbyQuakesData
+    const nearby = [{ id: 'nearby1', properties: { mag: 3.0, title: 'Nearby Test', detail:'nearby1', time: Date.now() - 100000 }, geometry: { coordinates: [-1, 1, 5] } }];
+    render(
+      <MemoryRouter>
+        <EarthquakeMap {...baseProps} earthquakesToPlot={[]} nearbyQuakes={nearby} />
+      </MemoryRouter>
+    );
+    const markers = screen.getAllByTestId('marker');
+    // 1 for main fallback, 1 for nearby
+    expect(markers.length).toBe(2);
+
+    // Check main fallback marker
+    const mainMarkerWrapper = markers.find(m => within(m).queryByText(baseProps.title)); // Use queryByText for find
+    expect(mainMarkerWrapper).toBeInTheDocument();
+    expect(mainMarkerWrapper).toHaveAttribute('data-icon-classname', 'custom-pulsing-icon');
+
+    // The other marker should be the nearbyMarker
+    const nearbyMarker = markers.find(m => m !== mainMarkerWrapper);
+    expect(nearbyMarker).toBeInTheDocument(); // If this passes, then the marker exists.
+    expect(nearbyMarker).toHaveAttribute('data-icon-classname', 'custom-nearby-quake-icon');
+
+    // Now check its content
+    const nearbyPopup = within(nearbyMarker).getByTestId('popup');
+    // Now check its content using toHaveTextContent for robustness
+    expect(nearbyPopup).toHaveTextContent(nearby[0].properties.title); // "Nearby Test"
+    expect(nearbyPopup).toHaveTextContent(`Magnitude: ${nearby[0].properties.mag}`);
+    expect(nearbyPopup).toHaveTextContent(formatTimeAgo(nearby[0].properties.time));
+
+    const detailLink = within(nearbyPopup).getByRole('link', { name: 'View Details' });
+    // The nearby quake data has id: 'nearby1' and detail: 'nearby1'. Component prefers id.
+    expect(detailLink).toHaveAttribute('href', `/quake/${encodeURIComponent(nearby[0].id)}`);
+
+    expect(mockMapInstance.fitBounds).not.toHaveBeenCalled();
+    expect(mockMapInstance.setView).not.toHaveBeenCalled(); // MapContainer default view is used
+  });
+
+  it('handles earthquakesToPlot taking precedence over fallback props', () => {
+    L.latLngBounds().isValid.mockReturnValueOnce(false); // Ensure setView path is taken for single item
+    render(
+      <MemoryRouter>
+        <EarthquakeMap {...baseProps} earthquakesToPlot={[mockEarthquakesToPlot[0]]} nearbyQuakes={[{ id: 'nearby1', properties: { mag: 3.0, title: 'Nearby Test' }, geometry: { coordinates: [-1, 1, 5] } }]} />
+      </MemoryRouter>
+    );
+    // Should only render the quake from earthquakesToPlot
+    const markers = screen.getAllByTestId('marker');
+    expect(markers.length).toBe(1);
+    const quakeFromPlot = mockEarthquakesToPlot[0];
+    expect(within(markers[0]).getByText(quakeFromPlot.properties.place)).toBeInTheDocument();
+
+    expect(mockMapInstance.setView).toHaveBeenCalledTimes(1);
+    expect(mockMapInstance.fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('gracefully handles missing geometry in earthquakesToPlot items', () => {
+    const quakesWithMissingGeo = [
+      { id: 'valid1', properties: { mag: 5.0, place: 'Valid Quake 1' }, geometry: { coordinates: [-120, 38, 10] } },
+      { id: 'invalid1', properties: { mag: 4.0, place: 'Invalid Quake (no geo)' } },
+      { id: 'valid2', properties: { mag: 5.2, place: 'Valid Quake 2' }, geometry: { coordinates: [-121, 39, 15] } },
+    ];
+    render(
+      <MemoryRouter>
+        <EarthquakeMap earthquakesToPlot={quakesWithMissingGeo} />
+      </MemoryRouter>
+    );
+    const markers = screen.getAllByTestId('marker');
+    expect(markers.length).toBe(2); // Only valid quakes should be rendered
+    expect(within(markers[0]).getByText('Valid Quake 1')).toBeInTheDocument();
+    expect(within(markers[1]).getByText('Valid Quake 2')).toBeInTheDocument();
+    expect(mockMapInstance.fitBounds).toHaveBeenCalledTimes(1); // fitBounds should still be called for valid quakes
+  });
+
+  it('does not call fitBounds or setView if earthquakesToPlot is empty and no fallback lat/lon', () => {
+    render(
+      <MemoryRouter>
+        <EarthquakeMap earthquakesToPlot={[]} latitude={undefined} longitude={undefined} />
+      </MemoryRouter>
+    );
+    // MapContainer will center on its own default or [0,0] if lat/lon are undefined
+    // No markers should be rendered from the component's logic
+    const markers = screen.queryAllByTestId('marker');
+    expect(markers.length).toBe(0);
+
+    expect(mockMapInstance.fitBounds).not.toHaveBeenCalled();
+    expect(mockMapInstance.setView).not.toHaveBeenCalled();
   });
 });

@@ -76,21 +76,15 @@ describe('EarthquakeMap Integration', () => {
     expect(EarthquakeMap).toHaveBeenCalled();
     expect(screen.getByTestId('mock-earthquake-map')).toBeInTheDocument();
 
-    // Determine expected main quake based on component logic (highest mag, then most recent)
-    // In mockCluster, originalQuakes[0] (q1) has mag 5.8, originalQuakes[1] (q2) has mag 4.5.
-    // So, q1 is the mainDisplayQuake.
-    const expectedMainQuake = mockCluster.originalQuakes.find(q => q.id === 'q1');
-    const expectedNearbyQuakes = mockCluster.originalQuakes.filter(q => q.id !== expectedMainQuake.id);
+    // originalQuakes are sorted by time in the component to become sortedQuakes
+    // For this test, mockCluster.originalQuakes is already effectively sorted for our needs.
+    const expectedSortedQuakes = [...mockCluster.originalQuakes].sort((a, b) => (b.properties?.time || 0) - (a.properties?.time || 0));
+
 
     expect(EarthquakeMap).toHaveBeenCalledWith(
       expect.objectContaining({
-        latitude: expectedMainQuake.geometry.coordinates[1],
-        longitude: expectedMainQuake.geometry.coordinates[0],
-        magnitude: expectedMainQuake.properties.mag,
-        title: expectedMainQuake.properties.place,
-        nearbyQuakes: expectedNearbyQuakes,
-        mainQuakeDetailUrl: `/quake/${encodeURIComponent(expectedMainQuake.id)}`,
-        zoom: 10,
+        earthquakesToPlot: expectedSortedQuakes,
+        // No longer passing individual lat/lon/mag/title/zoom for main display here
       }),
       undefined
     );
@@ -113,13 +107,13 @@ describe('EarthquakeMap Integration', () => {
 
     expect(EarthquakeMap).toHaveBeenCalledWith(
       expect.objectContaining({
+        earthquakesToPlot: [],
         latitude: 0,
         longitude: 0,
         magnitude: 0,
-        title: "Cluster Map (No Quakes)", // Adjusted to match the refined title in the component
-        nearbyQuakes: [],
-        mainQuakeDetailUrl: undefined, // Or null, depending on implementation for no main quake
-        zoom: 10,
+        title: "No cluster data available", // Updated title for this case
+        nearbyQuakes: [], // Component explicitly passes this for fallback
+        // zoom is no longer passed from here
       }),
       undefined
     );
