@@ -1,10 +1,12 @@
 // src/setupTests.js
+// src/setupTests.js
 import '@testing-library/jest-dom';
+import { vi } from 'vitest'; // Import vi
 
-global.ResizeObserver = jest.fn().mockImplementation(() => ({
-  observe: jest.fn(),
-  unobserve: jest.fn(),
-  disconnect: jest.fn(),
+global.ResizeObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
 }));
 
 import { expect } from 'vitest';

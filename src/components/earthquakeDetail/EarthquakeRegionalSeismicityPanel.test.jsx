@@ -9,6 +9,10 @@ vi.mock('../RegionalSeismicityChart', () => ({
   default: vi.fn(() => <div data-testid="regional-chart-mock">Mock Regional Chart</div>)
 }));
 
+// Import the mocked component using ES6 import syntax
+// It will be the mocked version due to vi.mock at the top.
+import MockedRegionalSeismicityChart from '../RegionalSeismicityChart';
+
 describe('EarthquakeRegionalSeismicityPanel', () => {
   const mockDetailData = {
     id: 'mainQuake',
@@ -23,7 +27,6 @@ describe('EarthquakeRegionalSeismicityPanel', () => {
 
   // Clear mock history before each test
   beforeEach(() => {
-    const MockedRegionalSeismicityChart = require('../RegionalSeismicityChart').default;
     if (MockedRegionalSeismicityChart.mockClear) {
         MockedRegionalSeismicityChart.mockClear();
     }
@@ -41,16 +44,14 @@ describe('EarthquakeRegionalSeismicityPanel', () => {
 
     render(<EarthquakeRegionalSeismicityPanel {...props} />);
 
-    const MockedRegionalSeismicityChart = require('../RegionalSeismicityChart').default;
-    expect(MockedRegionalSeismicityChart).toHaveBeenCalledWith(
+    expect(MockedRegionalSeismicityChart.mock.calls[0][0]).toEqual(
       expect.objectContaining({
         currentEarthquake: props.detailData,
         nearbyEarthquakesData: props.broaderEarthquakeData,
         dataSourceTimespanDays: props.dataSourceTimespanDays,
         isLoadingMonthly: props.isLoadingMonthly,
         hasAttemptedMonthlyLoad: props.hasAttemptedMonthlyLoad,
-      }),
-      expect.anything() // For the second argument (context/ref) if any
+      })
     );
   });
 
@@ -81,14 +82,12 @@ describe('EarthquakeRegionalSeismicityPanel', () => {
 
     render(<EarthquakeRegionalSeismicityPanel {...props} />);
 
-    const MockedRegionalSeismicityChart = require('../RegionalSeismicityChart').default;
-    expect(MockedRegionalSeismicityChart).toHaveBeenCalledWith(
+    expect(MockedRegionalSeismicityChart.mock.calls[0][0]).toEqual(
       expect.objectContaining({
         isLoadingMonthly: false,
         hasAttemptedMonthlyLoad: false,
         dataSourceTimespanDays: 7,
-      }),
-      expect.anything()
+      })
     );
   });
 });

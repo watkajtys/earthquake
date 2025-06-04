@@ -271,13 +271,13 @@ describe('EarthquakeDetailModalComponent', () => {
 
       // Check props passed to the mocked EarthquakeDetailView
       // The mock for EarthquakeDetailView is at the top, using vi.mock
-      // We need to access the mock from the module system
-      const MockedEarthquakeDetailView = require('./EarthquakeDetailView').default;
-      expect(MockedEarthquakeDetailView).toHaveBeenCalledWith(
+      // We can use the imported EarthquakeDetailView directly as it's already the mock
+      // The mock is defined to take only one 'props' argument.
+      // Check the first argument of the first call
+      expect(EarthquakeDetailView.mock.calls[0][0]).toEqual(
         expect.objectContaining({
           dataSourceTimespanDays: 30,
-        }),
-        expect.anything()
+        })
       );
     });
 
@@ -292,12 +292,13 @@ describe('EarthquakeDetailModalComponent', () => {
 
       renderComponent();
 
-      const MockedEarthquakeDetailView = require('./EarthquakeDetailView').default;
-      expect(MockedEarthquakeDetailView).toHaveBeenCalledWith(
+      // Use the imported EarthquakeDetailView directly
+      // The mock is defined to take only one 'props' argument.
+      // Check the first argument of the first call
+      expect(EarthquakeDetailView.mock.calls[0][0]).toEqual(
         expect.objectContaining({
           dataSourceTimespanDays: 7,
-        }),
-        expect.anything()
+        })
       );
     });
   });
