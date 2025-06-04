@@ -47,6 +47,7 @@ const getTectonicPlateStyle = (feature) => {
  * @returns {JSX.Element | null} The rendered Leaflet map component or null if cluster data is invalid.
  */
 const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
+  console.log('[ClusterMiniMap] Props:', { cluster, containerRef });
   const mapRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -55,6 +56,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
       const resizeObserver = new ResizeObserver(entries => {
         for (let entry of entries) {
           if (entry.contentRect.width > 0) {
+            console.log('[ClusterMiniMap] ResizeObserver: containerWidth set to:', entry.contentRect.width);
             setContainerWidth(entry.contentRect.width);
             // Invalidate map size when container width changes to ensure it rerenders correctly
             if (mapRef.current) {
@@ -68,6 +70,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
 
       // Initial check
       const initialWidth = containerRef.current.getBoundingClientRect().width;
+      console.log('[ClusterMiniMap] ResizeObserver: initialWidth check:', initialWidth);
       if (initialWidth > 0) {
         setContainerWidth(initialWidth);
       }
@@ -83,11 +86,18 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
   }, [containerRef, mapRef]); // mapRef added as dependency to re-run if it changes, though less likely
 
   if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
+    console.log('[ClusterMiniMap] Returning null due to invalid cluster data:', { cluster });
     return null;
   }
 
   const { originalQuakes } = cluster;
 
+  originalQuakes.forEach((quake, index) => {
+    if (!quake.geometry || !quake.geometry.coordinates || quake.geometry.coordinates.length < 2) {
+      console.warn(`[ClusterMiniMap] Quake at index ${index} has missing or invalid geometry/coordinates:`, quake);
+    }
+  });
+  console.log('[ClusterMiniMap] Processing originalQuakes:', originalQuakes);
   let mapCenter;
   let initialZoom;
 
@@ -144,7 +154,8 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
   // Render null or a placeholder if the container isn't ready (e.g., width is 0)
   // This prevents Leaflet errors if it tries to initialize in a zero-size container.
   if (containerWidth === 0 && originalQuakes.length > 0) { // Check originalQuakes to avoid flash when initially no cluster
-      return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map...</div>;
+      console.log('[ClusterMiniMap] Returning "Loading map..." because containerWidth is 0:', { containerWidth, originalQuakesCount: originalQuakes.length });
+      return <div style={{ height: '300px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Loading map...</div>;
   }
 
 
@@ -152,7 +163,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
     <MapContainer
       center={mapCenter}
       zoom={initialZoom}
-      style={{ height: '200px', width: containerWidth ? `${containerWidth}px` : '100%' }} // Width is 100% of its container
+      style={{ height: '300px', width: containerWidth ? `${containerWidth}px` : '100%' }} // Width is 100% of its container
       scrollWheelZoom={false}
       ref={mapRef}
       maxZoom={18}
