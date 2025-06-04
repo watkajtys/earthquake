@@ -94,7 +94,8 @@ describe('onRequest proxy function', () => {
     const responseBody = await response.json();
     expect(response.status).toBe(400);
     // ... (rest of assertions remain the same)
-    expect(responseBody.message).toBe("Missing apiUrl query parameter");
+    expect(responseBody.message).toBe("Missing apiUrl query parameter for proxy request");
+    expect(responseBody.source).toBe("usgs-proxy-router"); // Also check the sourceName
   });
 
   it('should return cached response if available and log cache hit', async () => {
