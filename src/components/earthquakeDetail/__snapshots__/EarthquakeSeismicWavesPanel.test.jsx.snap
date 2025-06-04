@@ -919,18 +919,18 @@ exports[`EarthquakeSeismicWavesPanel > renders correctly and matches snapshot 1`
             Direction of Wave Propagation
           </text>
           <path
-            d="M-70 50 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0"
+            d="M-156.85 50 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0"
             fill="none"
             stroke="#ef4444"
-            stroke-dasharray="392.125"
+            stroke-dasharray="156.85"
             stroke-dashoffset="0"
             stroke-width="3"
           >
             <animate
               attributeName="stroke-dashoffset"
-              dur="5s"
+              dur="2s"
               repeatCount="indefinite"
-              values="0;-392.125"
+              values="0;-156.85"
             />
           </path>
           <rect
