@@ -922,15 +922,15 @@ exports[`EarthquakeSeismicWavesPanel > renders correctly and matches snapshot 1`
             d="M-70 50 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0"
             fill="none"
             stroke="#ef4444"
-            stroke-dasharray="156.85"
+            stroke-dasharray="392.125"
             stroke-dashoffset="0"
             stroke-width="3"
           >
             <animate
               attributeName="stroke-dashoffset"
-              dur="2s"
+              dur="5s"
               repeatCount="indefinite"
-              values="0;-156.85"
+              values="0;-392.125"
             />
           </path>
           <rect
