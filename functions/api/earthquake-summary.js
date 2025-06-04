@@ -19,7 +19,7 @@ export async function onRequest(context) {
   };
 
   // Define USGS API endpoints
-  const SIGNIFICANT_QUAKES_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson";
+  const SIGNIFICANT_QUAKES_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson";
   const HOURLY_QUAKES_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson";
 
   const cacheKey = new Request(context.request.url, context.request);

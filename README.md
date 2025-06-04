@@ -46,8 +46,7 @@ Acts as a caching proxy for requests to the USGS API to improve performance and 
 Key features: Caches responses based on the `apiUrl` query parameter. Cache duration is configurable via the `WORKER_CACHE_DURATION_SECONDS` environment variable.
 
 ### Earthquake Summary Worker (`functions/api/earthquake-summary.js`)
-Provides a summarized view of recent earthquake activity by fetching and combining data from multiple USGS GeoJSON feeds.
-Key features: Fetches data from the 'significant earthquakes in the past day' and 'all earthquakes in the past hour' feeds. Aggregates counts and metadata. Caches the combined summary. Cache duration is configurable via the `EARTHQUAKE_SUMMARY_CACHE_SECONDS` environment variable.
+Provides a summarized view of recent earthquake activity. It fetches data from the USGS 'M2.5+ Earthquakes, Past Day' feed (this is used for the metric displayed as 'Significant (24h)' in the UI) and the 'All Earthquakes, Past Hour' feed. It aggregates counts and metadata from these feeds and caches the combined summary. Cache duration is configurable via the `EARTHQUAKE_SUMMARY_CACHE_SECONDS` environment variable.
 
 ## Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
 

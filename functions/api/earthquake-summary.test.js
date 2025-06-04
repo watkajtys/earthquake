@@ -52,7 +52,7 @@ global.Response = vi.fn().mockImplementation((body, init) => {
 });
 
 
-const SIGNIFICANT_QUAKES_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson";
+const SIGNIFICANT_QUAKES_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson";
 const HOURLY_QUAKES_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson";
 const WORKER_SOURCE_NAME = "earthquake-summary-worker";
 const DEFAULT_CACHE_DURATION_SECONDS = 300;
