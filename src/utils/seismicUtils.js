@@ -17,6 +17,12 @@ export const AVERAGE_P_WAVE_VELOCITY_KM_S = 6.5;
  */
 export const AVERAGE_S_WAVE_VELOCITY_KM_S = 3.75;
 
+// New illustrative speed constants
+export const P_WAVE_FAST_KM_S = 7.5;
+export const S_WAVE_FAST_KM_S = 4.3;
+export const P_WAVE_SLOW_KM_S = 5.5;
+export const S_WAVE_SLOW_KM_S = 3.2;
+
 /**
  * Calculates the travel time for a P-wave over a given distance.
  * This is a simplified calculation assuming a constant average velocity

@@ -2,10 +2,14 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext';
 import {
   calculateHypocentralDistance,
-  calculatePWaveTravelTime,
-  calculateSWaveTravelTime,
-  AVERAGE_P_WAVE_VELOCITY_KM_S, // Assuming this is exported
-  AVERAGE_S_WAVE_VELOCITY_KM_S, // Assuming this is exported
+  // calculatePWaveTravelTime, // Will be calculated manually for variable speeds
+  // calculateSWaveTravelTime, // Will be calculated manually for variable speeds
+  AVERAGE_P_WAVE_VELOCITY_KM_S,
+  AVERAGE_S_WAVE_VELOCITY_KM_S,
+  P_WAVE_FAST_KM_S,
+  S_WAVE_FAST_KM_S,
+  P_WAVE_SLOW_KM_S,
+  S_WAVE_SLOW_KM_S,
 } from '../utils/seismicUtils';
 
 // Constants
@@ -26,7 +30,7 @@ const EARTH_RADIUS_SVG = SVG_WIDTH / 2 * 0.8; // Scaled Earth radius for SVG
 const MAX_DEPTH_SVG = EARTH_RADIUS_SVG * 0.5; // Max depth visualization exaggerated
 
 // Component
-const SeismicWaveAnimation = ({ earthquake: earthquakeProp }) => {
+const SeismicWaveAnimation = ({ earthquake: earthquakeProp, speedScenario = 'average' }) => {
   const { lastMajorQuake } = useEarthquakeDataState();
   const [earthquakeData, setEarthquakeData] = useState(null);
   const [stationCalcs, setStationCalcs] = useState([]);
@@ -52,32 +56,48 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp }) => {
   // Calculate station distances and travel times
   useEffect(() => {
     if (earthquakeData) {
-      const calcs = VIRTUAL_STATIONS.map(station => {
+      const calcs = VIRTUAL_STATIONS.map((station, index) => {
         const hypocentralDistance = calculateHypocentralDistance(
           { geometry: { coordinates: [earthquakeData.lon, earthquakeData.lat, earthquakeData.depth] } },
           station.lat,
           station.lon
         );
 
-        if (isNaN(hypocentralDistance)) {
-          return { ...station, hypocentralDistance: "N/A", pWaveTime: "N/A", sWaveTime: "N/A" };
+        if (isNaN(hypocentralDistance) || hypocentralDistance < 0) {
+          return { ...station, hypocentralDistance: "N/A", pWaveTime: "N/A", sWaveTime: "N/A", pWaveSpeed: "N/A", sWaveSpeed: "N/A" };
         }
 
-        const pWaveTime = calculatePWaveTravelTime(hypocentralDistance);
-        const sWaveTime = calculateSWaveTravelTime(hypocentralDistance);
+        let pWaveSpeedToUse = AVERAGE_P_WAVE_VELOCITY_KM_S;
+        let sWaveSpeedToUse = AVERAGE_S_WAVE_VELOCITY_KM_S;
+
+        if (speedScenario === 'variable') {
+          if (index === 0) { // First station
+            pWaveSpeedToUse = P_WAVE_FAST_KM_S;
+            sWaveSpeedToUse = S_WAVE_FAST_KM_S;
+          } else if (index === 1) { // Second station
+            pWaveSpeedToUse = P_WAVE_SLOW_KM_S;
+            sWaveSpeedToUse = S_WAVE_SLOW_KM_S;
+          }
+          // Subsequent stations use AVERAGE speeds by default initialization
+        }
+
+        const pWaveTime = hypocentralDistance > 0 ? hypocentralDistance / pWaveSpeedToUse : 0;
+        const sWaveTime = hypocentralDistance > 0 ? hypocentralDistance / sWaveSpeedToUse : 0;
 
         return {
           ...station,
           hypocentralDistance: hypocentralDistance.toFixed(0),
           pWaveTime: pWaveTime.toFixed(1),
           sWaveTime: sWaveTime.toFixed(1),
+          pWaveSpeed: pWaveSpeedToUse.toFixed(1), // For potential display or debugging
+          sWaveSpeed: sWaveSpeedToUse.toFixed(1), // For potential display or debugging
         };
       });
       setStationCalcs(calcs);
     } else {
       setStationCalcs([]);
     }
-  }, [earthquakeData]);
+  }, [earthquakeData, speedScenario]);
 
   // Animation loop
   const animate = useCallback((timestamp) => {
@@ -165,6 +185,9 @@ const SeismicWaveAnimation = ({ earthquake: earthquakeProp }) => {
       <h3>Seismic Wave Propagation</h3>
       <p>Earthquake Magnitude: {earthquakeData.magnitude.toFixed(1)} | Depth: {earthquakeData.depth.toFixed(0)} km</p>
       <p>Animation Time: {animationTime.toFixed(1)}s</p>
+      <p style={{ fontSize: '0.8em', color: '#aaa', marginBottom: '5px' }}>
+        Mode: {speedScenario === 'variable' ? 'Illustrative Variable Speeds' : 'Illustrative Average Speeds'}
+      </p>
       <svg width={SVG_WIDTH} height={SVG_HEIGHT} style={{ border: '1px solid #ccc', overflow: 'hidden' }}>
         {/* Earth's surface (semicircle) */}
         <path

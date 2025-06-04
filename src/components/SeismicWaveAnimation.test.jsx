@@ -29,7 +29,8 @@ vi.mock('../contexts/EarthquakeDataContext', async (importOriginal) => {
 });
 
 // Helper to reset mocks and context before each test
-const mockSeismicUtils = await import('../utils/seismicUtils');
+const actualSeismicUtils = await import('../utils/seismicUtils'); // Get actual values for constants
+const mockSeismicUtils = await import('../utils/seismicUtils'); // This is the mocked version for functions
 // Import the mocked hook AFTER vi.mock has been processed
 const { useEarthquakeDataState: mockedUseEarthquakeDataState } = await import('../contexts/EarthquakeDataContext');
 
@@ -56,16 +57,24 @@ describe('SeismicWaveAnimation', () => {
     mockSeismicUtils.calculateSWaveTravelTime.mockClear();
 
     // Reset mock implementations to default behavior for each test if needed
+    // For distance, we often want specific mock values per station for predictability
     mockSeismicUtils.calculateHypocentralDistance.mockImplementation((eq, stationLat, stationLon) => {
-      // Basic mock: return a value based on station name for predictability
       if (stationLat === mockStations[0].lat) return 100; // Alpha
       if (stationLat === mockStations[1].lat) return 200; // Bravo
       if (stationLat === mockStations[2].lat) return 300; // Charlie
-      if (stationLat === mockStations[3].lat) return NaN;  // Delta (for NaN test)
-      return 150;
+      if (stationLat === mockStations[3].lat) return 400;  // Delta (make it a number for variable speed test)
+      return 150; // Default
     });
-    mockSeismicUtils.calculatePWaveTravelTime.mockImplementation(distance => distance / 6.5); // Simplified
-    mockSeismicUtils.calculateSWaveTravelTime.mockImplementation(distance => distance / 3.75); // Simplified
+
+    // For the travel time functions in seismicUtils, they are less critical now for 'variable'
+    // as the component does its own calculation. But for 'average', they might be used.
+    // Let's make them reflect the average speeds.
+    mockSeismicUtils.calculatePWaveTravelTime.mockImplementation(
+        distance => distance / actualSeismicUtils.AVERAGE_P_WAVE_VELOCITY_KM_S
+    );
+    mockSeismicUtils.calculateSWaveTravelTime.mockImplementation(
+        distance => distance / actualSeismicUtils.AVERAGE_S_WAVE_VELOCITY_KM_S
+    );
   });
 
   test('renders "No earthquake data available" when no prop and no context data', () => {
@@ -85,6 +94,7 @@ describe('SeismicWaveAnimation', () => {
     expect(screen.getByText(/Station Delta/i)).toBeInTheDocument(); // Checks if all stations are rendered
     const { container } = renderResult;
     expect(container.querySelector('svg')).toBeInTheDocument(); // Check for SVG presence by tag
+    expect(screen.getByText(/Mode: Illustrative Average Speeds/i)).toBeInTheDocument();
   });
 
   test('renders with lastMajorQuake from context and displays station names', () => {
@@ -96,31 +106,18 @@ describe('SeismicWaveAnimation', () => {
     expect(screen.getByText(/Station Bravo/i)).toBeInTheDocument();
     // Removed the /SVG_WIDTH/ check as it was problematic and not essential for this test's core goal.
     expect(container.querySelector('svg')).toBeInTheDocument(); // Check for SVG presence by tag
+    expect(screen.getByText(/Mode: Illustrative Average Speeds/i)).toBeInTheDocument();
   });
 
-  test('calls calculation utilities and displays their results', async () => {
+  test('calls calculation utilities and displays their results (average scenario)', async () => {
     mockedUseEarthquakeDataState.mockReturnValue({ lastMajorQuake: null });
 
-    // Override specific mock implementations for this test for more direct assertion
-    mockSeismicUtils.calculateHypocentralDistance.mockImplementation((eq, stationLat) => {
-        if (stationLat === mockStations[0].lat) return 100; // Alpha
-        if (stationLat === mockStations[1].lat) return 200; // Bravo
-        return 300; // Default for others
-    });
-    mockSeismicUtils.calculatePWaveTravelTime.mockImplementation(dist => {
-        if (dist === 100) return 15.4; // Alpha P-time
-        if (dist === 200) return 30.8; // Bravo P-time
-        return 46.2;
-    });
-    mockSeismicUtils.calculateSWaveTravelTime.mockImplementation(dist => {
-        if (dist === 100) return 26.7; // Alpha S-time
-        if (dist === 200) return 53.3; // Bravo S-time
-        return 80.0;
-    });
+    // Using default mock for calculateHypocentralDistance from beforeEach
+    // P and S wave times will be calculated by the component using AVERAGE speeds
 
-    render(<SeismicWaveAnimation earthquake={mockEarthquake} />);
+    render(<SeismicWaveAnimation earthquake={mockEarthquake} speedScenario="average" />);
 
-    // Verify calls
+    // Verify calculateHypocentralDistance calls
     expect(mockSeismicUtils.calculateHypocentralDistance).toHaveBeenCalledTimes(mockStations.length);
     for (const station of mockStations) {
       expect(mockSeismicUtils.calculateHypocentralDistance).toHaveBeenCalledWith(
@@ -134,55 +131,68 @@ describe('SeismicWaveAnimation', () => {
       );
     }
 
-    // Check if PWave and SWave utils were called (indirectly through useEffect)
-    // Number of calls depends on how many valid distances were returned
-    await waitFor(() => {
-        // For Station Alpha (dist=100)
-        expect(mockSeismicUtils.calculatePWaveTravelTime).toHaveBeenCalledWith(100);
-        expect(mockSeismicUtils.calculateSWaveTravelTime).toHaveBeenCalledWith(100);
-         // For Station Bravo (dist=200)
-        expect(mockSeismicUtils.calculatePWaveTravelTime).toHaveBeenCalledWith(200);
-        expect(mockSeismicUtils.calculateSWaveTravelTime).toHaveBeenCalledWith(200);
-    });
-
-    // Verify displayed times (approximate due to toFixed(1))
-    // These assertions wait for the text to appear, which accommodates the async nature of useEffect
+    // For average scenario, the component calculates times internally using AVERAGE speeds.
+    // Station Alpha: dist = 100km
+    // P-time = 100 / 6.5 = 15.38 => 15.4s
+    // S-time = 100 / 3.75 = 26.66 => 26.7s
     await screen.findByText(/P: 15.4s, S: 26.7s/i); // Station Alpha
+
+    // Station Bravo: dist = 200km
+    // P-time = 200 / 6.5 = 30.76 => 30.8s
+    // S-time = 200 / 3.75 = 53.33 => 53.3s
     await screen.findByText(/P: 30.8s, S: 53.3s/i); // Station Bravo
+
+    expect(screen.getByText(/Mode: Illustrative Average Speeds/i)).toBeInTheDocument();
   });
 
   test('displays "N/A" for stations where distance calculation returns NaN', async () => {
     mockedUseEarthquakeDataState.mockReturnValue({ lastMajorQuake: null });
 
-    // Ensure calculateHypocentralDistance returns NaN for Station Delta specifically for this test
      mockSeismicUtils.calculateHypocentralDistance.mockImplementation((eq, stationLat) => {
-      if (stationLat === mockStations[3].lat) return NaN;
-      return 100; // Default for others
+      if (stationLat === mockStations[3].lat) return NaN; // Station Delta gets NaN
+      return 100;
     });
-    // P and S wave times for NaN distance will also be NaN, handled by component
-    mockSeismicUtils.calculatePWaveTravelTime.mockImplementation(dist => isNaN(dist) ? NaN : dist / 6.5);
-    mockSeismicUtils.calculateSWaveTravelTime.mockImplementation(dist => isNaN(dist) ? NaN : dist / 3.75);
-
 
     render(<SeismicWaveAnimation earthquake={mockEarthquake} />);
 
     // For Station Delta (where distance is NaN)
-    // The text combines P and S wave times, so we look for "N/A" within its display.
-    // The station name "Station Delta" should be present.
     const stationDeltaText = await screen.findByText(/Station Delta/i);
-    // Check the parent or a sibling of Station Delta's name for its P/S times text
-    // This is a bit fragile; a more robust way would be to have specific test IDs on text elements
-    // Assuming the structure: <text>Station Name</text> <text>P: N/A, S: N/A</text>
-    const parentOfStationName = stationDeltaText.closest('g'); // Assuming name is in a <g> with its times
+    const parentOfStationName = stationDeltaText.closest('g');
     expect(parentOfStationName).toHaveTextContent(/P: N\/As, S: N\/As/i);
 
-    // Ensure other stations still get their numbers (e.g. Station Alpha)
-    expect(mockSeismicUtils.calculateHypocentralDistance).toHaveBeenCalledWith(expect.anything(), mockStations[0].lat, mockStations[0].lon);
+    // Ensure other stations still get their numbers
     const stationAlphaText = await screen.findByText(/Station Alpha/i);
     const parentOfStationAlpha = stationAlphaText.closest('g');
-    expect(parentOfStationAlpha).not.toHaveTextContent(/P: N\/As, S: N\/As/i);
-    // Example: check for an actual time if default mock for Alpha is 100km -> P: 15.4s, S: 26.7s
-    // Using default mock values: dist=100, PTime=100/6.5=15.38 -> 15.4, STime=100/3.75=26.66 -> 26.7
+    // P-time = 100 / 6.5 = 15.4s, S-time = 100 / 3.75 = 26.7s
     expect(parentOfStationAlpha).toHaveTextContent(/P: 15.4s, S: 26.7s/i);
+  });
+
+  test('calculates and displays variable travel times with speedScenario="variable"', async () => {
+    mockedUseEarthquakeDataState.mockReturnValue({ lastMajorQuake: null });
+    // Distances from mock: Station Alpha=100, Bravo=200, Charlie=300, Delta=400
+
+    render(<SeismicWaveAnimation earthquake={mockEarthquake} speedScenario="variable" />);
+
+    // Station Alpha (index 0) uses FAST speeds: P_WAVE_FAST_KM_S (7.5), S_WAVE_FAST_KM_S (4.3)
+    // P-time = 100 / 7.5 = 13.33 => 13.3s
+    // S-time = 100 / 4.3 = 23.25 => 23.3s
+    await screen.findByText(/P: 13.3s, S: 23.3s/i); // Station Alpha
+
+    // Station Bravo (index 1) uses SLOW speeds: P_WAVE_SLOW_KM_S (5.5), S_WAVE_SLOW_KM_S (3.2)
+    // P-time = 200 / 5.5 = 36.36 => 36.4s
+    // S-time = 200 / 3.2 = 62.5s => 62.5s
+    await screen.findByText(/P: 36.4s, S: 62.5s/i); // Station Bravo
+
+    // Station Charlie (index 2) uses AVERAGE speeds: AVERAGE_P_WAVE_VELOCITY_KM_S (6.5), AVERAGE_S_WAVE_VELOCITY_KM_S (3.75)
+    // P-time = 300 / 6.5 = 46.15 => 46.2s
+    // S-time = 300 / 3.75 = 80.0s => 80.0s
+    await screen.findByText(/P: 46.2s, S: 80.0s/i); // Station Charlie
+
+    // Station Delta (index 3) uses AVERAGE speeds
+    // P-time = 400 / 6.5 = 61.53 => 61.5s
+    // S-time = 400 / 3.75 = 106.66 => 106.7s
+    await screen.findByText(/P: 61.5s, S: 106.7s/i); // Station Delta
+
+    expect(screen.getByText(/Mode: Illustrative Variable Speeds/i)).toBeInTheDocument();
   });
 });

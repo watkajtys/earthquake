@@ -6,6 +6,7 @@ import InfoSnippet                                          from "./InfoSnippet.
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 import { calculateDistance } from '../utils/utils.js'; // isValidNumber import removed
 // getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
+import SeismicWaveAnimation from './SeismicWaveAnimation'; // Added import
 
 // Define REGIONAL_RADIUS_KM
 const REGIONAL_RADIUS_KM = 804.672; // 500 miles
@@ -71,6 +72,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [selectedFaultPlaneKey, setSelectedFaultPlaneKey] = useState('np1');
+    const [animationSpeedScenario, setAnimationSpeedScenario] = useState('average'); // State for animation speed scenario
     const modalContentRef = React.useRef(null); // Ref for the modal content div
     const closeButtonRef = React.useRef(null); // Ref for the close button
 
@@ -492,6 +494,52 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         exhibitPanelClass={exhibitPanelClass}
                         exhibitTitleClass={exhibitTitleClass}
                     />
+
+                    {/* Seismic Wave Animation Integration */}
+                    {detailData && detailData.geometry && detailData.geometry.coordinates && (
+                        <div className={`${exhibitPanelClass} border-blue-500`}>
+                            <h3 className={`${exhibitTitleClass} text-blue-700`}>P & S Wave Propagation</h3>
+                            <div className="mb-3 text-sm text-slate-600 space-y-1"> {/* Changed text-xs to text-sm */}
+                                <p>
+                                    <strong>P-waves (Primary waves)</strong> are compressional waves that travel fastest through the Earth.
+                                    <strong>S-waves (Secondary waves)</strong> are shear waves that travel slower and cannot pass through liquid (like the outer core).
+                                    The time difference between their arrivals at seismograph stations helps locate the earthquake.
+                                </p>
+                                {animationSpeedScenario === 'average' && (
+                                    <p>This mode shows waves traveling at a <strong>constant, simplified average speed</strong>. Visual wave fronts match calculated arrival pings.</p>
+                                )}
+                                {animationSpeedScenario === 'variable' && (
+                                    <p>This mode illustrates that wave speeds <strong>vary with depth and material</strong>. Arrival pings are adjusted for some stations (using faster/slower illustrative speeds), while visual wave fronts remain at average speed for simplicity.</p>
+                                )}
+                            </div>
+                            <div className="my-3 flex justify-center space-x-2">
+                                <button
+                                    onClick={() => setAnimationSpeedScenario('average')}
+                                    className={`px-3 py-1 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                                        animationSpeedScenario === 'average'
+                                            ? 'bg-blue-600 text-white ring-blue-500'
+                                            : 'bg-slate-200 text-slate-700 hover:bg-slate-300 ring-slate-400'
+                                    }`}
+                                >
+                                    Average Speeds
+                                </button>
+                                <button
+                                    onClick={() => setAnimationSpeedScenario('variable')}
+                                    className={`px-3 py-1 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                                        animationSpeedScenario === 'variable'
+                                            ? 'bg-blue-600 text-white ring-blue-500'
+                                            : 'bg-slate-200 text-slate-700 hover:bg-slate-300 ring-slate-400'
+                                    }`}
+                                >
+                                    Variable Speeds (Illustrative)
+                                </button>
+                            </div>
+                            <div className="w-full max-w-2xl mx-auto my-2 bg-gray-50 p-2 rounded shadow-inner"> {/* Changed max-w-md to max-w-2xl */}
+                                <SeismicWaveAnimation earthquake={detailData} speedScenario={animationSpeedScenario} />
+                            </div>
+                        </div>
+                    )}
+
                 </div> {/* This closes the div with className="p-3 md:p-5 space-y-5 text-sm" */}
             </div> {/* This closes the div with ref={modalContentRef} */}
             </ErrorBoundary>
