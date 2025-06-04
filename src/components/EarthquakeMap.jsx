@@ -158,7 +158,7 @@ const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nea
           ])
         );
         if (bounds.isValid()) {
-          mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+          mapRef.current.fitBounds(bounds, { padding: [5, 5] });
         }
       }
     }
