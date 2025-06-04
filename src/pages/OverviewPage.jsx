@@ -5,72 +5,81 @@ import AlertDisplay from '../components/AlertDisplay';
 import LatestEvent from '../components/LatestEvent';
 import ActivityList from '../components/ActivityList';
 import ActiveRegionDisplay from '../components/ActiveRegionDisplay';
-import QuickFact from '../components/QuickFact'; // Import the new component
+import QuickFact from '../components/QuickFact';
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
-import RegionalDistributionList from '../components/RegionalDistributionList';
-// InfoSnippet is now imported in QuickFact.jsx
-import ClusterSummaryItem from '../components/ClusterSummaryItem'; // Assuming this is used here
-// Import any other components specific to the previous inline overview content if needed
+// RegionalDistributionList might not be needed here if overview doesn't show it.
+import ClusterSummaryItem from '../components/ClusterSummaryItem';
 
-import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
+import { ALERT_LEVELS, REGIONS as APP_REGIONS } from '../constants/appConstants'; // Import constants if needed by sub-components or logic here
 
-// Props that would have been passed to the inline JSX in HomePage.jsx for the /overview route
-// These will need to be passed from HomePage.jsx when rendering this component
+// Props that were previously passed from App.jsx are now mostly sourced from context
 const OverviewPage = ({
-    // currentAlertConfig, // Will get from context via highestRecentAlert
-    ALERT_LEVELS, // Constant, but might be passed if structure demands
-    // hasRecentTsunamiWarning, // Will get from context
-    // lastMajorQuake, // Will get from context
-    getMagnitudeColor,
-    formatDate,
-    handleQuakeClick, // Callback
-    latestFeelableQuakesSnippet,
-    formatTimeAgo,
-    // BottomNav related click might be handled by NavLink if this page is simple
-    // isLoadingInitialData, // Will get from context
-    // isLoadingMonthly, // Will get from context
-    // hasAttemptedMonthlyLoad, // Will get from context
-    // timeBetweenPreviousMajorQuakes, // Will get from context
-    // previousMajorQuake, // Will get from context
-    formatTimeDuration, // For TimeSinceLastMajorQuakeBanner
-    getRegionForEarthquake, // For TimeSinceLastMajorQuakeBanner & RegionalDistributionList
-    // earthquakesLast24Hours, // Will get from context
-    // prev24HourData, // Will get from context
-    // isLoadingDaily, // Will get from context
-    // isLoadingWeekly, // Will get from context
-    calculateStats, // For SummaryStatisticsCard
-    overviewClusters, // For ClusterSummaryItem list
-    handleClusterSummaryClick, // For ClusterSummaryItem list
-    topActiveRegionsOverview, // For active region display
-    REGIONS, // For active region display color (if not handled by topActiveRegionsOverview structure)
-    navigate, // For "Learn More" button, if not using Link
+    getMagnitudeColor, // Utility function, can be passed or imported by sub-components
+    formatDate, // Utility function
+    handleQuakeClick, // Callback for interactions
+    formatTimeAgo, // Utility function
+    formatTimeDuration, // Utility function
+    getRegionForEarthquake, // Utility function
+    handleClusterSummaryClick, // Callback
+    navigate, // For navigation actions
 }) => {
     const {
-        highestRecentAlert, // Used to derive currentAlertConfig
-        hasRecentTsunamiWarning,
-        lastMajorQuake,
-        isLoadingInitialData,
-        isLoadingMonthly,
-        hasAttemptedMonthlyLoad,
-        timeBetweenPreviousMajorQuakes,
-        previousMajorQuake,
-        earthquakesLast24Hours,
-        prev24HourData,
-        isLoadingDaily,
-        isLoadingWeekly
+        // Overview specific data from context:
+        keyStatsForGlobe,
+        topActiveRegionsOverview,
+        latestFeelableQuakesSnippet,
+        recentSignificantQuakesForOverview,
+        overviewClusters,
+
+        // General state from context:
+        isLoadingInitialData, // Or general isLoading
+        error, // Combined error state
+        overviewError, // Specific error for overview data
+        // highestRecentAlert, // If needed for AlertDisplay, though currentAlertConfig derived below covers it
+        // hasRecentTsunamiWarning, // If needed for AlertDisplay
     } = useEarthquakeDataState();
 
-    // Derive currentAlertConfig here
+    // Derive currentAlertConfig based on data from keyStatsForGlobe or a dedicated alert field if available
     const currentAlertConfig = React.useMemo(() => {
-        if (highestRecentAlert && ALERT_LEVELS[highestRecentAlert.toUpperCase()]) {
-            return ALERT_LEVELS[highestRecentAlert.toUpperCase()];
+        // Assuming keyStatsForGlobe might contain an alert level, e.g., keyStatsForGlobe.pagerAlert
+        // This part needs to align with what the /api/overview endpoint provides in keyStatsForGlobe
+        const alertLevelFromStats = keyStatsForGlobe?.pagerAlert; // Example field
+        if (alertLevelFromStats && ALERT_LEVELS[alertLevelFromStats.toUpperCase()]) {
+            return ALERT_LEVELS[alertLevelFromStats.toUpperCase()];
         }
+        // Fallback or if another source for alerts is preferred for this page
+        // const { highestRecentAlert } = useEarthquakeDataState(); // This was how it was before, ensure this data point is still valid
+        // if (highestRecentAlert && ALERT_LEVELS[highestRecentAlert.toUpperCase()]) {
+        //     return ALERT_LEVELS[highestRecentAlert.toUpperCase()];
+        // }
         return null;
-    }, [highestRecentAlert, ALERT_LEVELS]);
+    }, [keyStatsForGlobe /*, highestRecentAlert */]); // Add dependencies as needed
+
+    const hasRecentTsunamiWarning = keyStatsForGlobe?.tsunami > 0; // Example, adapt to actual field from worker
+
+    // Derive the primary "latest major quake" for display from recentSignificantQuakesForOverview
+    const latestMajorQuakeForDisplay = React.useMemo(() => {
+        return recentSignificantQuakesForOverview && recentSignificantQuakesForOverview.length > 0
+            ? recentSignificantQuakesForOverview[0]
+            : null;
+    }, [recentSignificantQuakesForOverview]);
+
+    // Determine if there's an error to display
+    const displayError = error || overviewError;
+
+    if (isLoadingInitialData && !keyStatsForGlobe) { // Show a loading state for the whole page if critical data isn't there
+        return (
+            <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden text-center">
+                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                    Overview
+                </h2>
+                <p className="animate-pulse">Loading overview data...</p>
+            </div>
+        );
+    }
     
-    // This component will replicate the JSX structure previously under the /overview Route in HomePage.jsx
-    // For brevity, I'm showing a simplified structure. The actual content should be moved from HomePage.jsx
     return (
         <>
             <SeoMetadata
@@ -82,29 +91,32 @@ const OverviewPage = ({
                 locale="en_US"
                 type="website"
             />
-            <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden">
+            <div className="p-3 md:p-4 h-full space-y-3 text-slate-200 lg:hidden"> {/* Ensure this class matches mobile-first design */}
                 <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
                     Overview
                 </h2>
 
-                {/* Render the AlertDisplay component */}
+                {displayError && (
+                     <div className="bg-red-700 bg-opacity-40 border border-red-600 text-red-200 px-3 py-2 rounded-md text-xs" role="alert">
+                        <strong className="font-bold">Error:</strong> {displayError}
+                     </div>
+                )}
+
                 <AlertDisplay
                     currentAlertConfig={currentAlertConfig}
-                    hasRecentTsunamiWarning={hasRecentTsunamiWarning}
-                    ALERT_LEVELS={ALERT_LEVELS}
+                    hasRecentTsunamiWarning={hasRecentTsunamiWarning} // Sourced from keyStatsForGlobe or similar
+                    ALERT_LEVELS={ALERT_LEVELS} // Constant
                 />
 
-                {/* Render the LatestEvent component */}
                 <LatestEvent
-                    lastMajorQuake={lastMajorQuake}
+                    lastMajorQuake={latestMajorQuakeForDisplay} // Use derived latest significant quake
                     getMagnitudeColor={getMagnitudeColor}
                     formatDate={formatDate}
                     handleQuakeClick={handleQuakeClick}
                 />
 
-                {/* Render the ActivityList component */}
                 <ActivityList
-                    latestFeelableQuakesSnippet={latestFeelableQuakesSnippet}
+                    latestFeelableQuakesSnippet={latestFeelableQuakesSnippet} // From context
                     getMagnitudeColor={getMagnitudeColor}
                     formatTimeAgo={formatTimeAgo}
                     handleQuakeClick={handleQuakeClick}
@@ -112,11 +124,11 @@ const OverviewPage = ({
                 />
 
                 <TimeSinceLastMajorQuakeBanner
-                    lastMajorQuake={lastMajorQuake}
-                    timeBetweenPreviousMajorQuakes={timeBetweenPreviousMajorQuakes}
-                    previousMajorQuake={previousMajorQuake}
-                    isLoadingInitial={isLoadingInitialData}
-                    isLoadingMonthly={isLoadingMonthly && hasAttemptedMonthlyLoad}
+                    // This component might need its internal logic updated to use recentSignificantQuakesForOverview
+                    // For now, passing the single "latestMajorQuakeForDisplay"
+                    lastMajorQuake={latestMajorQuakeForDisplay}
+                    // timeBetweenPreviousMajorQuakes and previousMajorQuake might be derived inside the banner or passed if available from overview data
+                    isLoadingInitial={isLoadingInitialData && !latestMajorQuakeForDisplay}
                     formatTimeDuration={formatTimeDuration}
                     getRegionForEarthquake={getRegionForEarthquake}
                     handleQuakeClick={handleQuakeClick}
@@ -124,18 +136,18 @@ const OverviewPage = ({
                 />
                 <SummaryStatisticsCard
                     title="Global Statistics (Last 24 Hours)"
-                    currentPeriodData={earthquakesLast24Hours}
-                    previousPeriodData={prev24HourData}
-                    isLoading={isLoadingDaily || (isLoadingWeekly && !earthquakesLast24Hours)}
-                    calculateStats={calculateStats}
+                    stats={keyStatsForGlobe} // Pass keyStatsForGlobe directly, Card needs to adapt to its structure
+                    isLoading={isLoadingInitialData && !keyStatsForGlobe}
+                    // calculateStats prop removed
                 />
 
-                {/* Active Earthquake Clusters Section */}
                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
                     <h3 className="text-md font-semibold mb-2 text-indigo-300">
                         Active Earthquake Clusters
                     </h3>
-                    {overviewClusters && overviewClusters.length > 0 ? (
+                    {isLoadingInitialData && !overviewClusters?.length ? (
+                        <p className="text-xs text-slate-300 text-center py-2 animate-pulse">Loading clusters...</p>
+                    ) : overviewClusters && overviewClusters.length > 0 ? (
                         <ul className="space-y-2">
                             {overviewClusters.map(cluster => (
                                 <ClusterSummaryItem
@@ -146,23 +158,20 @@ const OverviewPage = ({
                             ))}
                         </ul>
                     ) : (
-                        <p className="text-xs text-slate-300 text-center py-2"> {/* Changed from text-slate-400 */}
+                        <p className="text-xs text-slate-300 text-center py-2">
                             No significant active clusters detected currently.
                         </p>
                     )}
                 </div>
 
-                {/* Render the ActiveRegionDisplay component */}
                 <ActiveRegionDisplay
-                    topActiveRegionsOverview={topActiveRegionsOverview}
-                    REGIONS={REGIONS}
-                    isLoadingDaily={isLoadingDaily}
-                    earthquakesLast24Hours={earthquakesLast24Hours}
+                    topActiveRegionsOverview={topActiveRegionsOverview} // From context
+                    REGIONS={APP_REGIONS} // Use imported APP_REGIONS
+                    isLoadingDaily={isLoadingInitialData && !topActiveRegionsOverview?.length} // Simplified loading check
+                    // earthquakesLast24Hours prop removed, not needed if topActiveRegionsOverview is directly used
                 />
 
-                {/* Render the QuickFact component */}
                 <QuickFact navigate={navigate} />
-                {/* ... other content from /overview route ... */}
             </div>
         </>
     );

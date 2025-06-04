@@ -38,6 +38,58 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * **Tailwind CSS**: Utility-first CSS framework for styling.
 * **Vite**: Frontend build tool.
 * **JavaScript (ES6+)**
+* **Cloudflare Workers**: For backend logic, data processing, and caching.
+
+## Backend Architecture
+
+This application utilizes a serverless backend implemented with Cloudflare Workers, moving from a fully client-side architecture. The worker functions enhance performance and efficiency.
+
+*   **Location**: The worker code resides in the `functions/api/` directory.
+*   **Deployment**: It is automatically deployed as part of the Cloudflare Pages Functions integration.
+*   **Purpose**:
+    *   **Data Processing Offload**: The worker handles computationally intensive tasks that were previously done on the client-side. This includes calculating detailed statistics for various feeds, identifying earthquake clusters, and aggregating data for overview displays.
+    *   **Caching**: It caches responses from the USGS API at Cloudflare's edge locations. This significantly speeds up data retrieval for users, reduces the load on the USGS servers, and makes the application more resilient to intermittent API issues.
+*   **Benefits**: This architecture leads to a faster user experience, reduced client-side bundle size, and a more scalable and efficient application overall.
+
+### API Endpoints
+
+The Cloudflare Worker exposes the following API endpoints:
+
+*   **`/api/feed`**
+    *   **Method**: `GET`
+    *   **Description**: Provides earthquake data for specified periods, along with summary statistics for that period.
+    *   **Query Parameters**:
+        *   `period` (string): Defines the time window and type of data to fetch.
+            *   Examples: `last_hour`, `last_24_hours` (default), `last_7_days`, `last_14_days`, `last_30_days`, `feelable_quakes_7_days`, `significant_quakes_7_days`, `feelable_quakes_30_days`, `significant_quakes_30_days`.
+    *   **Response Structure**:
+        ```json
+        {
+          "period": "last_24_hours",
+          "lastUpdated": 1678886400000, // Timestamp of when the source data was generated
+          "earthquakes": [ /* Array of earthquake GeoJSON features */ ],
+          "statistics": { /* Object containing summary statistics for the period */ }
+        }
+        ```
+
+*   **`/api/overview-data`**
+    *   **Method**: `GET`
+    *   **Description**: Provides aggregated and processed data required for the main overview page of the application.
+    *   **Response Structure**:
+        ```json
+        {
+          "lastUpdated": 1678886400000, // Timestamp of when the source data was generated
+          "keyStatsForGlobe": {
+            "lastHourCount": 5,
+            "count24h": 50,
+            "count72h": 150,
+            "strongest24h": { "mag": 5.5, "title": "California", "time": 1678880000000 }
+          },
+          "topActiveRegionsOverview": [ /* { name: "Region", count: 10 }, ... */ ],
+          "latestFeelableQuakesSnippet": [ /* Array of simplified quake objects */ ],
+          "recentSignificantQuakesForOverview": [ /* Array of significant quake GeoJSON features */ ],
+          "overviewClusters": [ /* Array of processed cluster objects */ ]
+        }
+        ```
 
 ## Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
 
@@ -90,6 +142,8 @@ To run this project locally:
     npm run dev
     ```
     (or `yarn dev`)
+    This will typically start the Vite development server for the frontend. For local development of the Cloudflare Worker functions, you might use `wrangler dev functions/api/[[catchall]].js` in a separate terminal, or configure Vite to proxy API requests to the Wrangler dev server. Refer to Cloudflare Pages and Wrangler documentation for the latest local development practices.
+
 
 5.  **Open your browser and navigate to the local URL provided by Vite (usually `http://localhost:5173` or similar).**
 
@@ -107,6 +161,9 @@ The `src/` directory contains the core source code for the application, organize
 -   **`App.jsx`**: The root application component.
 -   **`main.jsx`**: The main entry point for the React application.
 -   **`index.css`**: Global styles for the application.
+
+The `functions/` directory at the root contains the Cloudflare Worker code:
+-   **`functions/api/[[catchall]].js`**: The entry point for the API worker, handling requests to `/api/*`.
 
 This structure helps in organizing the codebase logically, making it easier to navigate and maintain. JSDoc comments are used throughout these files to provide detailed documentation for components, functions, and hooks.
 

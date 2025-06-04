@@ -1,5 +1,6 @@
 // src/utils.js
 
+// NOTE: This client-side utility is still used by RegionalSeismicityChart.jsx.
 /**
  * Calculates the distance between two geographical coordinates using the Haversine formula.
  * @param {number} lat1 Latitude of the first point.

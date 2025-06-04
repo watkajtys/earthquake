@@ -31,6 +31,8 @@ class IntersectionObserver {
 
 vi.stubGlobal('IntersectionObserver', IntersectionObserver);
 
+// Mock global fetch
+global.fetch = vi.fn();
 
 // Mock matchMedia
 window.matchMedia = window.matchMedia || function() {
@@ -42,39 +44,64 @@ window.matchMedia = window.matchMedia || function() {
 };
 
 describe('HomePage Accessibility', () => {
-  it('should have no axe violations on initial render', async () => {
-    // Suppress console.error output from "Error in fetchDataCb" during test
-    const originalConsoleError = console.error;
-    console.error = (...args) => {
-      if (args[0] && typeof args[0] === 'string' && args[0].includes('Error in fetchDataCb')) {
-        return;
-      }
-      originalConsoleError(...args);
-    };
+  beforeEach(() => {
+    // Reset fetch mock before each test
+    global.fetch.mockReset();
 
+    // Provide default successful mocks for initial data load by EarthquakeDataContext
+    global.fetch.mockImplementation(async (url) => {
+      if (url.includes('/api/overview')) {
+        return {
+          ok: true,
+          json: async () => ({
+            lastUpdated: Date.now(),
+            keyStatsForGlobe: { lastHourCount: 1, count24h: 10, count72h: 20, strongest24h: { mag: 5, title: 'Test' } },
+            topActiveRegionsOverview: [],
+            latestFeelableQuakesSnippet: [],
+            recentSignificantQuakesForOverview: [],
+            overviewClusters: [],
+            lastMajorQuake: null,
+            previousMajorQuake: null,
+            timeBetweenPreviousMajorQuakes: null,
+          }),
+        };
+      }
+      if (url.includes('/api/feed')) { // Default feed call
+        return {
+          ok: true,
+          json: async () => ({
+            period: 'last_7_days', // Or whatever the default is
+            lastUpdated: Date.now(),
+            earthquakes: [],
+            statistics: { count: 0 },
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({ error: 'Unhandled API call in HomePage test mock' }) };
+    });
+  });
+
+  it('should have no axe violations on initial render', async () => {
     let container;
+    // No need to suppress console.error for fetchDataCb as it's no longer used.
+    // However, we might see errors from the new fetch if mocks are not perfectly aligned.
+
     await act(async () => {
       const renderResult = render(
         <MemoryRouter initialEntries={['/']}>
           <EarthquakeDataProvider>
-            <UIStateProvider> {/* Added UIStateProvider */}
+            <UIStateProvider>
               <App />
             </UIStateProvider>
           </EarthquakeDataProvider>
         </MemoryRouter>
       );
       container = renderResult.container;
-      // Wait for initial data loading to settle, if possible, or use a timeout.
-      // For critical async content, ideally wait for elements to appear.
-      // Here, we'll test the initial state which includes loading states.
-      // Let's give a brief moment for initial effects.
+      // Allow time for context to fetch and update state
       await new Promise(resolve => setTimeout(resolve, 500));
     });
 
-    const results = await act(async () => await axe(container));
+    const results = await axe(container); // axe can be run outside act if DOM is stable
     expect(results).toHaveNoViolations();
-
-    // Restore console.error
-    console.error = originalConsoleError;
-  }, 15000); // Increase timeout for this test due to potential async operations
+  }, 15000);
 });

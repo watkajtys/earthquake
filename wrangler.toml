@@ -1,0 +1,25 @@
+name = "earthquake-dashboard-worker" # Name of the worker
+compatibility_date = "2024-03-15" # Today's date
+
+# For Cloudflare Pages, the `functions` directory is automatically picked up
+# and built. This wrangler.toml file is primarily for local development with `wrangler dev`,
+# potential future advanced configurations (like KV, R2, D1 bindings), or if
+# this worker were to be deployed as a standalone Cloudflare Worker project.
+
+# Placeholder for pages functions, actual deployment is via Pages.
+# If deploying as a standalone worker, you'd have settings like these:
+# main = "functions/api/[[catchall]].js" # Entry point for the worker
+# account_id = "YOUR_ACCOUNT_ID" # Replace with your Cloudflare account ID
+# route = { pattern = "your-app-url.com/api/*", zone_name = "your-app-url.com" } # Example route
+
+# Example if we add KV namespaces later:
+# kv_namespaces = [
+#   { binding = "USGS_CACHE_KV", id = "your_kv_namespace_id_here" }
+# ]
+
+# Example for local development with `wrangler dev functions/api/[[catchall]].js`
+# You might need to specify a port or other dev server options.
+# [dev]
+# port = 8788
+# local_protocol = "http"
+# upstream_protocol = "https"
