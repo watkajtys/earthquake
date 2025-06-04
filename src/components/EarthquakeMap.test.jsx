@@ -1,96 +1,64 @@
 import React from 'react';
-import { render, screen, within, act } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom'; // Import MemoryRouter
+import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import EarthquakeMap from './EarthquakeMap';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import L from 'leaflet';
 
 // --- Mocks ---
-
-// Mock TectonicPlateBoundaries.json
-vi.mock('../assets/TectonicPlateBoundaries.json', () => ({ // Corrected path
+vi.mock('../assets/TectonicPlateBoundaries.json', () => ({
   default: {
     type: 'FeatureCollection',
-    features: [
-      { type: 'Feature', properties: { Boundary_Type: 'Convergent' }, geometry: { type: 'LineString', coordinates: [[0,0],[1,1]] }},
-    ],
+    features: [{ type: 'Feature', properties: { Boundary_Type: 'Convergent' }, geometry: { type: 'LineString', coordinates: [[0,0],[1,1]] }}],
   }
 }));
 
-// Variables for map instance methods, to be accessible in tests
-// Initialize them here so they are defined when the vi.mock factory is hoisted and executed.
 let mockFitBounds = vi.fn();
 let mockSetView = vi.fn();
 let mockInvalidateSize = vi.fn();
 
 vi.mock('react-leaflet', async () => {
   const actual = await vi.importActual('react-leaflet');
-  // mockFitBounds, mockSetView, mockInvalidateSize are already vi.fn() instances here
-
   return {
     ...actual,
     MapContainer: React.forwardRef(({ children, center, zoom, style }, ref) => {
-      // Simulate Leaflet's map instance being available on ref.current
-      // Use useEffect to assign to ref.current after initial render, similar to how Leaflet does.
       React.useEffect(() => {
         if (ref) {
-          ref.current = {
-            fitBounds: mockFitBounds,
-            setView: mockSetView,
-            invalidateSize: mockInvalidateSize,
-            // Add other map methods if your component uses them
-          };
+          ref.current = { fitBounds: mockFitBounds, setView: mockSetView, invalidateSize: mockInvalidateSize };
         }
-      }, [ref]); // Rerun if ref object itself changes, though unlikely
-
-      return (
-        <div data-testid="map-container" data-center={center ? JSON.stringify(center) : undefined} data-zoom={zoom} style={style}>
-          {children}
-        </div>
-      );
+      }, [ref]);
+      return <div data-testid="map-container" data-center={center ? JSON.stringify(center) : undefined} data-zoom={zoom} style={style}>{children}</div>;
     }),
-    TileLayer: ({ url, attribution }) => (
-      <div data-testid="tile-layer" data-url={url} data-attribution={attribution}></div>
-    ),
+    TileLayer: ({ url, attribution }) => <div data-testid="tile-layer" data-url={url} data-attribution={attribution}></div>,
     Marker: ({ position, icon, children }) => (
-      <div
-        data-testid="marker"
-        data-position={position ? JSON.stringify(position) : undefined}
-        data-icon-classname={icon?.options?.className}
-        data-icon-html={icon?.options?.html}
-        data-icon-size={icon?.options?.iconSize ? JSON.stringify(icon.options.iconSize) : undefined}
-      >
+      <div data-testid="marker" data-position={position ? JSON.stringify(position) : undefined} data-icon-classname={icon?.options?.className} data-icon-html={icon?.options?.html} data-icon-size={icon?.options?.iconSize ? JSON.stringify(icon.options.iconSize) : undefined}>
         {children}
       </div>
     ),
     Popup: ({ children }) => <div data-testid="popup">{children}</div>,
-    GeoJSON: ({ data, style }) => (
-      <div
-        data-testid="geojson-layer"
-        data-style-function={style ? style.toString() : ''}
-        data-features={data && data.features ? data.features.length : 0}
-        data-passed-style-type={typeof style}
-      ></div>
-    ),
+    GeoJSON: ({ data, style }) => <div data-testid="geojson-layer" data-style-function={style ? style.toString() : ''} data-features={data?.features?.length || 0} data-passed-style-type={typeof style}></div>,
   };
 });
 
-// --- Default Props and Data ---
-const defaultProps = {
-  latitude: 34.0522,
-  longitude: -118.2437,
-  magnitude: 5.5,
-  title: 'Test Earthquake',
+// --- Updated Default Props and Data ---
+const baseProps = {
+  mapCenterLatitude: 34.0522,
+  mapCenterLongitude: -118.2437,
+  highlightQuakeLatitude: 34.0522, // Often same as mapCenter for simple cases
+  highlightQuakeLongitude: -118.2437,
+  highlightQuakeMagnitude: 5.5,
+  highlightQuakeTitle: 'Test Highlight Quake',
   shakeMapUrl: 'https://example.com/shakemap.jpg',
   mainQuakeDetailUrl: '/quake/test-quake-id',
+  nearbyQuakes: [], // Default to empty, add in specific tests
+  fitMapToBounds: false, // Default to false
+  defaultZoom: 8,
 };
 
 const nearbyQuakesData = [
   { id: 'nq1', geometry: { coordinates: [-119.0, 35.0, 10] }, properties: { mag: 3.5, title: "Nearby Quake 1", time: Date.now() - 1000, detail: 'nq1_detail' } },
   { id: 'nq2', geometry: { coordinates: [-117.5, 33.5, 5] }, properties: { mag: 2.8, title: "Nearby Quake 2", time: Date.now() - 2000, detail: 'nq2_detail' } }
 ];
-
-const defaultZoom = 8; // As defined in EarthquakeMap.jsx
 
 // --- Test Suites ---
 
@@ -102,39 +70,46 @@ describe('EarthquakeMap Component - Core Rendering', () => {
   });
 
   it('renders the map container', () => {
-    render(<MemoryRouter><EarthquakeMap {...defaultProps} /></MemoryRouter>);
+    render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
     expect(screen.getByTestId('map-container')).toBeInTheDocument();
   });
 
-  it('renders the map with correct initial center and zoom when fitMapToBounds is false', () => {
-    render(<MemoryRouter><EarthquakeMap {...defaultProps} fitMapToBounds={false} /></MemoryRouter>);
+  it('renders map with correct initial center and zoom from props', () => {
+    render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
     const mapContainer = screen.getByTestId('map-container');
-    expect(mapContainer).toHaveAttribute('data-center', JSON.stringify([defaultProps.latitude, defaultProps.longitude]));
-    expect(mapContainer).toHaveAttribute('data-zoom', defaultZoom.toString());
-    // setView is called by useEffect even when fitMapToBounds is false
-    expect(mockSetView).toHaveBeenCalledWith(L.latLng(defaultProps.latitude, defaultProps.longitude), defaultZoom);
+    expect(mapContainer).toHaveAttribute('data-center', JSON.stringify([baseProps.mapCenterLatitude, baseProps.mapCenterLongitude]));
+    expect(mapContainer).toHaveAttribute('data-zoom', baseProps.defaultZoom.toString());
+    // useEffect will call setView
+    expect(mockSetView).toHaveBeenCalledWith(L.latLng(baseProps.mapCenterLatitude, baseProps.mapCenterLongitude), baseProps.defaultZoom);
   });
 
-  it('renders a marker with custom pulsing icon for the main quake', () => {
-    render(<MemoryRouter><EarthquakeMap {...defaultProps} /></MemoryRouter>);
-    const markers = screen.getAllByTestId('marker');
+  it('renders a marker with custom pulsing icon for the highlightQuake', () => {
+    render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
+    const markers = screen.getAllByTestId('marker'); // Will be 1 if no nearbyQuakes
     const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
     expect(mainMarker).toBeInTheDocument();
-    expect(mainMarker).toHaveAttribute('data-position', JSON.stringify([defaultProps.latitude, defaultProps.longitude]));
+    expect(mainMarker).toHaveAttribute('data-position', JSON.stringify([baseProps.highlightQuakeLatitude, baseProps.highlightQuakeLongitude]));
   });
 
-  it('displays main quake title, magnitude, and detail link in popup', () => {
-    render(<MemoryRouter><EarthquakeMap {...defaultProps} /></MemoryRouter>);
+  it('does not render highlightQuake marker if coordinates are undefined', () => {
+    render(<MemoryRouter><EarthquakeMap {...baseProps} highlightQuakeLatitude={undefined} highlightQuakeLongitude={undefined} /></MemoryRouter>);
+    const markers = screen.queryAllByTestId('marker');
+    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
+    expect(mainMarker).toBeUndefined();
+  });
+
+  it('displays highlight quake title, magnitude, and detail link in popup', () => {
+    render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
     const mainMarker = screen.getAllByTestId('marker').find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
     const popup = within(mainMarker).getByTestId('popup');
-    expect(popup).toHaveTextContent(defaultProps.title);
-    expect(popup).toHaveTextContent(`Magnitude: ${defaultProps.magnitude}`);
+    expect(popup).toHaveTextContent(baseProps.highlightQuakeTitle);
+    expect(popup).toHaveTextContent(`Magnitude: ${baseProps.highlightQuakeMagnitude}`);
     const detailLink = within(popup).getByRole('link', { name: /View Details/i });
-    expect(detailLink).toHaveAttribute('href', `/quake/${encodeURIComponent(defaultProps.mainQuakeDetailUrl)}`);
+    expect(detailLink).toHaveAttribute('href', `/quake/${encodeURIComponent(baseProps.mainQuakeDetailUrl)}`);
   });
 
   it('displays ShakeMap link if mainQuakeDetailUrl is not provided but shakeMapUrl is', () => {
-    render(<MemoryRouter><EarthquakeMap {...defaultProps} mainQuakeDetailUrl={null} shakeMapUrl="https://shakemap.example.com" /></MemoryRouter>);
+    render(<MemoryRouter><EarthquakeMap {...baseProps} mainQuakeDetailUrl={null} shakeMapUrl="https://shakemap.example.com" /></MemoryRouter>);
     const mainMarker = screen.getAllByTestId('marker').find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
     const popup = within(mainMarker).getByTestId('popup');
     const shakeMapLink = within(popup).getByRole('link', { name: /ShakeMap Details/i });
@@ -142,13 +117,13 @@ describe('EarthquakeMap Component - Core Rendering', () => {
   });
 
   it('renders TileLayer and GeoJSON layer', () => {
-    render(<MemoryRouter><EarthquakeMap {...defaultProps} /></MemoryRouter>);
+    render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
     expect(screen.getByTestId('tile-layer')).toBeInTheDocument();
     expect(screen.getByTestId('geojson-layer')).toBeInTheDocument();
   });
 
   it('renders markers for nearby quakes', () => {
-    render(<MemoryRouter><EarthquakeMap {...defaultProps} nearbyQuakes={nearbyQuakesData} /></MemoryRouter>);
+    render(<MemoryRouter><EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} /></MemoryRouter>);
     const markers = screen.getAllByTestId('marker');
     const nearbyMarkers = markers.filter(m => m.getAttribute('data-icon-classname') === 'custom-nearby-quake-icon');
     expect(nearbyMarkers.length).toBe(nearbyQuakesData.length);
@@ -163,68 +138,141 @@ describe('EarthquakeMap Component - Bounds Fitting', () => {
     mockInvalidateSize.mockClear();
   });
 
-  it('fitMapToBounds={true} with multiple quakes: calls fitBounds and not setView for zoom', () => {
+  it('fitMapToBounds={true} with highlight quake and nearby quakes: calls fitBounds', () => {
     render(
       <MemoryRouter>
-        <EarthquakeMap {...defaultProps} nearbyQuakes={nearbyQuakesData} fitMapToBounds={true} />
+        <EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} fitMapToBounds={true} />
       </MemoryRouter>
     );
 
     expect(mockFitBounds).toHaveBeenCalledTimes(1);
-
     const expectedPoints = [
-      L.latLng(defaultProps.latitude, defaultProps.longitude),
+      L.latLng(baseProps.highlightQuakeLatitude, baseProps.highlightQuakeLongitude),
       L.latLng(nearbyQuakesData[0].geometry.coordinates[1], nearbyQuakesData[0].geometry.coordinates[0]),
       L.latLng(nearbyQuakesData[1].geometry.coordinates[1], nearbyQuakesData[1].geometry.coordinates[0]),
     ];
     const expectedBounds = L.latLngBounds(expectedPoints);
 
-    // Compare bounds by their string representation or individual components
     const calledBounds = mockFitBounds.mock.calls[0][0];
     expect(calledBounds.getSouthWest().equals(expectedBounds.getSouthWest())).toBe(true);
     expect(calledBounds.getNorthEast().equals(expectedBounds.getNorthEast())).toBe(true);
     expect(mockFitBounds).toHaveBeenCalledWith(expect.anything(), { padding: [50, 50] });
+    expect(mockSetView).not.toHaveBeenCalled(); // fitBounds should be called instead of setView by the effect
+  });
 
-    // setView might be called initially by MapContainer, but should not be called by the effect for zooming
-    // The effect for fitMapToBounds=true with multiple points should prioritize fitBounds.
-    // If an initial setView happens from MapContainer itself, that's fine.
-    // We are checking that *our effect* doesn't call setView for zooming.
-    // Let's assume initial render might call setView once.
-    // The critical part is that fitBounds is called.
-    // If the effect for fitMapToBounds=false (which calls setView) also runs,
-    // it might lead to multiple setView calls. The current logic in EarthquakeMap
-    // has an if/else if for fitMapToBounds, so only one path should execute.
-    // Thus, setView should not be called by the effect IF fitBounds is called.
-    // However, MapContainer itself takes 'center' and 'zoom' props. If these trigger a setView internally
-    // in the mocked component or in a real one, that's separate. The test should focus on our effect's behavior.
-    // Given the mock, setView is NOT called by the MapContainer mock directly.
-    // The useEffect in EarthquakeMap with fitMapToBounds=true and multiple points calls fitBounds.
-    // The else if for fitMapToBounds=false calls setView. So setView should not be called here from the effect.
+  it('fitMapToBounds={true} with only highlight quake: calls setView with highlight quake position and defaultZoom', () => {
+    render(
+      <MemoryRouter>
+        <EarthquakeMap {...baseProps} nearbyQuakes={[]} fitMapToBounds={true} />
+      </MemoryRouter>
+    );
+    expect(mockSetView).toHaveBeenCalledTimes(1);
+    expect(mockSetView).toHaveBeenCalledWith(L.latLng(baseProps.highlightQuakeLatitude, baseProps.highlightQuakeLongitude), baseProps.defaultZoom);
+    expect(mockFitBounds).not.toHaveBeenCalled();
+  });
+
+  it('fitMapToBounds={true} with no highlight quake but with nearby quakes: calls fitBounds for nearby', () => {
+    render(
+      <MemoryRouter>
+        <EarthquakeMap
+          {...baseProps}
+          highlightQuakeLatitude={undefined}
+          highlightQuakeLongitude={undefined}
+          highlightQuakeMagnitude={undefined}
+          nearbyQuakes={nearbyQuakesData}
+          fitMapToBounds={true}
+        />
+      </MemoryRouter>
+    );
+    expect(mockFitBounds).toHaveBeenCalledTimes(1);
+    const expectedPoints = [
+      L.latLng(nearbyQuakesData[0].geometry.coordinates[1], nearbyQuakesData[0].geometry.coordinates[0]),
+      L.latLng(nearbyQuakesData[1].geometry.coordinates[1], nearbyQuakesData[1].geometry.coordinates[0]),
+    ];
+    const expectedBounds = L.latLngBounds(expectedPoints);
+    const calledBounds = mockFitBounds.mock.calls[0][0];
+    expect(calledBounds.getSouthWest().equals(expectedBounds.getSouthWest())).toBe(true);
+    expect(calledBounds.getNorthEast().equals(expectedBounds.getNorthEast())).toBe(true);
     expect(mockSetView).not.toHaveBeenCalled();
   });
 
-  it('fitMapToBounds={true} with only main quake: calls setView and not fitBounds', () => {
-    render(
+  it('fitMapToBounds={true} with no points at all: calls setView with mapCenter and defaultZoom', () => {
+     render(
       <MemoryRouter>
-        <EarthquakeMap {...defaultProps} nearbyQuakes={[]} fitMapToBounds={true} />
+        <EarthquakeMap
+          {...baseProps}
+          highlightQuakeLatitude={undefined}
+          highlightQuakeLongitude={undefined}
+          highlightQuakeMagnitude={undefined}
+          nearbyQuakes={[]}
+          fitMapToBounds={true}
+        />
       </MemoryRouter>
     );
-
     expect(mockSetView).toHaveBeenCalledTimes(1);
-    expect(mockSetView).toHaveBeenCalledWith(L.latLng(defaultProps.latitude, defaultProps.longitude), defaultZoom);
+    expect(mockSetView).toHaveBeenCalledWith(L.latLng(baseProps.mapCenterLatitude, baseProps.mapCenterLongitude), baseProps.defaultZoom);
     expect(mockFitBounds).not.toHaveBeenCalled();
   });
 
-  it('fitMapToBounds={false}: calls setView and not fitBounds', () => {
+
+  it('fitMapToBounds={false}: calls setView with mapCenter and defaultZoom', () => {
     render(
       <MemoryRouter>
-        <EarthquakeMap {...defaultProps} nearbyQuakes={nearbyQuakesData} fitMapToBounds={false} />
+        <EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} fitMapToBounds={false} />
       </MemoryRouter>
     );
+    expect(mockSetView).toHaveBeenCalledTimes(1);
+    expect(mockSetView).toHaveBeenCalledWith(L.latLng(baseProps.mapCenterLatitude, baseProps.mapCenterLongitude), baseProps.defaultZoom);
+    expect(mockFitBounds).not.toHaveBeenCalled();
+  });
+
+  it('map centers on mapCenter props even if highlightQuake is different, when fitMapToBounds is false', () => {
+    const differentCenterProps = {
+      ...baseProps,
+      mapCenterLatitude: 40.7128, // New York
+      mapCenterLongitude: -74.0060,
+      highlightQuakeLatitude: 34.0522, // LA
+      highlightQuakeLongitude: -118.2437,
+      fitMapToBounds: false,
+    };
+    render(<MemoryRouter><EarthquakeMap {...differentCenterProps} /></MemoryRouter>);
+
+    const mapContainer = screen.getByTestId('map-container');
+    expect(mapContainer).toHaveAttribute('data-center', JSON.stringify([differentCenterProps.mapCenterLatitude, differentCenterProps.mapCenterLongitude]));
+
+    const markers = screen.getAllByTestId('marker');
+    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
+    expect(mainMarker).toBeInTheDocument();
+    expect(mainMarker).toHaveAttribute('data-position', JSON.stringify([differentCenterProps.highlightQuakeLatitude, differentCenterProps.highlightQuakeLongitude]));
 
     expect(mockSetView).toHaveBeenCalledTimes(1);
-    // The setView call in the useEffect for fitMapToBounds=false should use L.latLng
-    expect(mockSetView).toHaveBeenCalledWith(L.latLng(defaultProps.latitude, defaultProps.longitude), defaultZoom);
+    expect(mockSetView).toHaveBeenCalledWith(L.latLng(differentCenterProps.mapCenterLatitude, differentCenterProps.mapCenterLongitude), differentCenterProps.defaultZoom);
     expect(mockFitBounds).not.toHaveBeenCalled();
+  });
+
+  it('fitMapToBounds={true} includes highlightQuake and nearbyQuakes even if mapCenter is different', () => {
+    const differentCenterProps = {
+      ...baseProps,
+      mapCenterLatitude: 0,
+      mapCenterLongitude: 0, // Center of the world
+      highlightQuakeLatitude: 34.0522, // LA
+      highlightQuakeLongitude: -118.2437,
+      nearbyQuakes: nearbyQuakesData, // from California
+      fitMapToBounds: true,
+    };
+    render(<MemoryRouter><EarthquakeMap {...differentCenterProps} /></MemoryRouter>);
+
+    expect(mockFitBounds).toHaveBeenCalledTimes(1);
+    const expectedPoints = [
+      L.latLng(differentCenterProps.highlightQuakeLatitude, differentCenterProps.highlightQuakeLongitude),
+      L.latLng(nearbyQuakesData[0].geometry.coordinates[1], nearbyQuakesData[0].geometry.coordinates[0]),
+      L.latLng(nearbyQuakesData[1].geometry.coordinates[1], nearbyQuakesData[1].geometry.coordinates[0]),
+    ];
+    const expectedBounds = L.latLngBounds(expectedPoints);
+
+    const calledBounds = mockFitBounds.mock.calls[0][0];
+    expect(calledBounds.getSouthWest().equals(expectedBounds.getSouthWest())).toBe(true);
+    expect(calledBounds.getNorthEast().equals(expectedBounds.getNorthEast())).toBe(true);
+    expect(mockSetView).not.toHaveBeenCalled();
   });
 });
