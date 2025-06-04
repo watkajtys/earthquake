@@ -14,14 +14,15 @@ const getTectonicPlateStyle = (feature) => {
 };
 
 const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
-  const mapRef = useRef(null); // For Leaflet map instance
-  const mapContainerParentRef = useRef(null); // For the div wrapping MapContainer
+  const mapRef = useRef(null);
+  const mapContainerParentRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [initialCenter, setInitialCenter] = useState(null);
   const [initialZoomVal, setInitialZoomVal] = useState(null);
 
-  // Effect 1: Determine map center and zoom based on cluster data (Unchanged)
+  // Effect 1: Determine map center and zoom (Unchanged)
   useEffect(() => {
+    // ... (same as before)
     if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
       setInitialCenter(null);
       setInitialZoomVal(null);
@@ -48,43 +49,53 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
            Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.001)) {
         calculatedZoom = 10;
       } else {
-        calculatedZoom = 7; // fitBounds will adjust this later if needed
+        calculatedZoom = 7;
       }
     }
     setInitialCenter(calculatedCenter);
     setInitialZoomVal(calculatedZoom);
   }, [cluster]);
 
-  // Effect 2: Setup ResizeObserver (MODIFIED - No immediate getBoundingClientRect for width)
+  // Effect 2: Setup ResizeObserver (Unchanged from previous attempt)
   useEffect(() => {
     if (!mapContainerParentRef.current) return;
-
     const observer = new ResizeObserver(entries => {
       for (let entry of entries) {
-        // Set width from observer entry. If it's 0 or less, set to 0.
         const newWidth = entry.contentRect.width > 0 ? entry.contentRect.width : 0;
-        setContainerWidth(newWidth);
+        // Only set if it's different to avoid potential loops if an effect depends on containerWidth
+        setContainerWidth(prevWidth => newWidth !== prevWidth ? newWidth : prevWidth);
       }
     });
     observer.observe(mapContainerParentRef.current);
-
     return () => {
-      if (mapContainerParentRef.current) {
-        observer.unobserve(mapContainerParentRef.current);
-      }
+      if (mapContainerParentRef.current) observer.unobserve(mapContainerParentRef.current);
       observer.disconnect();
     };
-  }, []); // Runs once on mount
+  }, []); // mapContainerParentRef is stable, so empty array is fine.
 
-  // Effect 3: Invalidate map size when containerWidth changes and map is ready (Unchanged)
+  // Effect 3: Explicit initial width check (NEW/MODIFIED)
+  useEffect(() => {
+    if (mapContainerParentRef.current) {
+      const currentWidth = mapContainerParentRef.current.getBoundingClientRect().width;
+      if (currentWidth > 0) {
+        setContainerWidth(currentWidth);
+      }
+    }
+    // This effect should run once after mount.
+    // If mapContainerParentRef.current isn't available on first pass, it might need a re-trigger,
+    // but typically it should be by the time this effect runs.
+  }, []); // Empty dependency array to run once on mount.
+
+  // Effect 4: Invalidate map size (Previously Effect 3 - Unchanged)
   useEffect(() => {
     if (containerWidth > 0 && mapRef.current) {
       mapRef.current.invalidateSize();
     }
-  }, [containerWidth, mapRef]);
+  }, [containerWidth, mapRef]); // mapRef is the ref object, stable.
 
-  // Effect 4: Fit bounds when map is ready and relevant props change (Unchanged)
+  // Effect 5: Fit bounds (Previously Effect 4 - Unchanged)
    useEffect(() => {
+    // ... (same as before)
     if (mapRef.current && initialCenter && initialZoomVal !== null && containerWidth > 0) {
       if (cluster && cluster.originalQuakes && cluster.originalQuakes.length > 1 && initialZoomVal === 7) {
         const bounds = L.latLngBounds(
@@ -111,8 +122,6 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
     return <div style={placeholderStyle} className="text-slate-400">Initializing map parameters...</div>;
   }
 
-  // Render MapContainer only if containerWidth is determined and positive
-  // The mapContainerParentRef div is always rendered to be observed.
   return (
     <div ref={mapContainerParentRef} style={{ width: '100%', height: '350px' }}>
       {containerWidth > 0 ? (
@@ -124,6 +133,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
           ref={mapRef}
           maxZoom={18}
         >
+          {/* TileLayer, GeoJSON, CircleMarkers... same as before */}
           <TileLayer
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
@@ -149,7 +159,6 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
           ))}
         </MapContainer>
       ) : (
-        // Show "Loading map..." or "Awaiting dimensions..." based on data presence
         cluster && cluster.originalQuakes && cluster.originalQuakes.length > 0 ?
           <div style={placeholderStyle} className="text-slate-400">Loading map...</div> :
           <div style={placeholderStyle} className="text-slate-400">Awaiting dimensions...</div>
