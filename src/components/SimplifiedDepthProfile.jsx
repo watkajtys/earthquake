@@ -298,134 +298,108 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
 
 
 // Helper function implementation (outside the component for clarity)
-function getDynamicContextualComparisons(currentDepth, comparisonsList, earthLayers) {
-  let mainMessage = "";
+function getDynamicContextualComparisons(currentDepth, comparisonsList) {
+  // EarthLayers parameter removed as per new requirements
 
-  // Define earthquake focus depth benchmarks
-  const shallowFocusUpperLimit = 70;
-  const intermediateFocusUpperLimit = 300;
-  const deepFocusUpperLimit = 700;
+  const RELATABLE_OBJECTS = [
+    { name: "Eiffel Towers", height: 0.3, singular: "Eiffel Tower" },
+    // Burj Khalifa is in comparisonsList, so we can use its data directly.
+    // Mount Everest is in comparisonsList (isHeight: true), use its data.
+  ];
 
-  // Determine Geological Context using earthLayers
-  let geologicalContext = "within the Earth"; // Default
-  if (currentDepth === 0) {
-      geologicalContext = "at the Earth's surface";
-  } else {
-      // Find the layer that contains the currentDepth. Note: layers[0] is "Surface".
-      const containingLayer = earthLayers.slice(1).find(l => currentDepth > l.startDepth && currentDepth <= l.endDepth);
-      // Note: using currentDepth > l.startDepth and currentDepth <= l.endDepth
-      // This aligns with how one might describe being "in" a layer up to its boundary.
-      // If it's exactly on startDepth, it's often considered the top of that layer or boundary.
-
-      if (containingLayer) {
-          geologicalContext = `within the Earth's ${containingLayer.name}`;
-      } else if (currentDepth > 0 && currentDepth <= earthLayers.find(l=>l.name === "Sedimentary/Upper Crust")?.endDepth) {
-          // Special handling for very shallow, within the first subsurface layer if not caught by general logic
-          geologicalContext = `within the Earth's ${earthLayers.find(l=>l.name === "Sedimentary/Upper Crust").name}`;
-      } else {
-          // If deeper than all defined layers or on a boundary not perfectly caught
-          const deepestLayer = earthLayers.reduce((max, l) => l.endDepth > max.endDepth ? l : max, earthLayers[0]);
-          if (currentDepth > deepestLayer.endDepth) {
-              geologicalContext = `deep within the Earth, likely below the ${deepestLayer.name}`;
-          } else {
-              // Attempt to find if it's on a boundary if not strictly "in" a layer
-              const onBoundaryLayer = earthLayers.slice(1).find(l => currentDepth === l.startDepth || currentDepth === l.endDepth);
-              if (onBoundaryLayer) {
-                // If it's the start of one layer, it's the end of another (usually)
-                // Prefer naming the layer it's entering or is the primary feature of.
-                geologicalContext = `at the boundary of the Earth's ${onBoundaryLayer.name}`;
-              } else {
-                geologicalContext = "at a significant depth within the Earth"; // Fallback
-              }
-          }
-      }
+  const depth = parseFloat(currentDepth);
+  if (isNaN(depth)) { // Should have been caught before, but good to be safe.
+    return ["Depth information is currently unavailable."];
   }
 
-  // Determine Earthquake Focus Category and craft primary message
-  if (currentDepth <= shallowFocusUpperLimit) {
-    mainMessage = `This earthquake, at a depth of ${currentDepth.toFixed(1)} km, originated ${geologicalContext}. It's considered a shallow-focus event.`;
-    if (currentDepth > 0) {
-      mainMessage += ` Shallow-focus earthquakes (0-${shallowFocusUpperLimit} km depth) are common and can cause significant shaking at the surface depending on their magnitude and proximity to populated areas.`;
-      const avgContinentalCrust = comparisonsList.find(c => c.name === "Average Continental Crust");
-      if (avgContinentalCrust) {
-        if (currentDepth > avgContinentalCrust.depth && currentDepth < shallowFocusUpperLimit) {
-          mainMessage += ` This event occurred deeper than the average continental crust (${avgContinentalCrust.depth.toFixed(1)} km) but is still within the shallow-focus range.`;
-        } else if (currentDepth <= avgContinentalCrust.depth && avgContinentalCrust.depth < shallowFocusUpperLimit) {
-          mainMessage += ` This is within the typical depth of the Earth's continental crust.`;
-        }
-      }
-    } else {
-      mainMessage += ` Occurring at the surface, its impact depends heavily on magnitude and location.`;
-    }
-  } else if (currentDepth <= intermediateFocusUpperLimit) {
-    mainMessage = `Occurring at ${currentDepth.toFixed(1)} km, this is an intermediate-focus earthquake, originating ${geologicalContext}.`;
-    if (currentDepth > shallowFocusUpperLimit && currentDepth < shallowFocusUpperLimit + 5) { // e.g., 70.1km to 74.9km
-        mainMessage += ` This is just below the ${shallowFocusUpperLimit} km boundary that typically defines shallow-focus events.`;
-    }
-    mainMessage += ` Intermediate-focus earthquakes (${shallowFocusUpperLimit}-${intermediateFocusUpperLimit} km depth) typically occur in subduction zones where one tectonic plate slides beneath another. While their energy is released further from the surface, strong intermediate-focus quakes can still be widely felt.`;
-  } else if (currentDepth <= deepFocusUpperLimit) {
-    mainMessage = `At a depth of ${currentDepth.toFixed(1)} km, this is classified as a deep-focus earthquake, originating ${geologicalContext}.`;
-    if (currentDepth > intermediateFocusUpperLimit && currentDepth < intermediateFocusUpperLimit + 10) { // e.g. 300.1 to 309.9 km
-        mainMessage += ` This is just below the ${intermediateFocusUpperLimit} km boundary for intermediate-focus events.`;
-    }
-    mainMessage += ` Such earthquakes (${intermediateFocusUpperLimit}-${deepFocusUpperLimit} km depth) occur within subducting oceanic slabs sinking into the Earth's mantle. The mechanisms for these very deep events are complex and may involve phase transformations in minerals under extreme pressure. Despite their depth, very large deep-focus earthquakes can sometimes be felt, though usually with less intensity than a shallow quake of comparable magnitude.`;
-  } else { // currentDepth > deepFocusUpperLimit
-    mainMessage = `This exceptionally deep earthquake, at ${currentDepth.toFixed(1)} km, originated ${geologicalContext}. It occurred far below the typical ${deepFocusUpperLimit} km limit for deep-focus events. Earthquakes at such profound depths are rare and are subjects of ongoing research into mantle dynamics and subducting slab behavior.`;
-  }
-
-  // Add comparisons to other relevant, non-earthquake-focus benchmarks
-  const otherBenchmarks = comparisonsList
+  const userFriendlyBenchmarks = comparisonsList
     .filter(c => !c.isHeight && !c.name.includes("Focus Earthquakes"))
     .sort((a, b) => a.depth - b.depth);
 
-  if (otherBenchmarks.length > 0) {
-    let closestShallowerOther = null;
-    let closestDeeperOther = null;
-
-    for (const comp of otherBenchmarks) {
-      if (comp.depth < currentDepth) {
-        if (!closestShallowerOther || comp.depth > closestShallowerOther.depth) {
-          closestShallowerOther = comp;
-        }
-      } else if (comp.depth > currentDepth && comp.depth !== currentDepth) { // ensure it's actually deeper
-        if (!closestDeeperOther || comp.depth < closestDeeperOther.depth) {
-          closestDeeperOther = comp;
-        }
-      }
+  // 1. Check for "very close" match to any user-friendly benchmark
+  for (const benchmark of userFriendlyBenchmarks) {
+    const difference = Math.abs(depth - benchmark.depth);
+    let isClose = false;
+    if (benchmark.depth > 1) { // Use percentage for larger benchmarks
+      isClose = difference <= benchmark.depth * 0.10; // 10% threshold for "nearly as deep"
+    } else { // Use absolute for smaller benchmarks (e.g. canals, Burj)
+      isClose = difference <= 0.1; // 100m absolute difference
     }
 
-    let comparisonMessage = "";
-    if (closestShallowerOther) {
-      // Check for "very close" to this shallower benchmark
-      const fivePercentShallower = closestShallowerOther.depth * 0.05;
-      if (Math.abs(currentDepth - closestShallowerOther.depth) <= fivePercentShallower && Math.abs(currentDepth - closestShallowerOther.depth) > 0.001) {
-          comparisonMessage += ` This depth is very similar to the ${closestShallowerOther.name} (${closestShallowerOther.depth.toFixed(1)} km).`;
-      } else {
-          comparisonMessage += ` For context, this is deeper than the ${closestShallowerOther.name} (${closestShallowerOther.depth.toFixed(1)} km).`;
-      }
-    }
-
-    if (closestDeeperOther) {
-      const fivePercentDeeper = closestDeeperOther.depth * 0.05;
-      if (Math.abs(currentDepth - closestDeeperOther.depth) <= fivePercentDeeper && Math.abs(currentDepth - closestDeeperOther.depth) > 0.001) {
-          comparisonMessage += (comparisonMessage ? " And it's " : " This depth is ") + `very similar to the ${closestDeeperOther.name} (${closestDeeperOther.depth.toFixed(1)} km).`;
-      } else {
-          comparisonMessage += (comparisonMessage ? " It is also " : " For context, this depth is ") + `shallower than the ${closestDeeperOther.name} (${closestDeeperOther.depth.toFixed(1)} km).`;
-      }
-    } else if (closestShallowerOther && !comparisonMessage.includes("very similar")) {
-      // Only add this if we haven't already said it's "very similar" to the deepest benchmark
-      // And if there are no deeper benchmarks at all.
-      comparisonMessage += ` This depth is beyond our deepest listed comparable feature, the ${closestShallowerOther.name} (${closestShallowerOther.depth.toFixed(1)} km).`;
-    }
-
-
-    if (comparisonMessage) {
-      mainMessage += comparisonMessage;
+    if (isClose) {
+      return [`${depth.toFixed(1)} km is nearly as deep as the ${benchmark.name} (${benchmark.depth.toFixed(1)} km)!`];
     }
   }
 
-  // The function expects an array of strings.
-  return [mainMessage.trim()];
+  // 2. Check if "even further down than" a significant, well-known benchmark
+  // Prioritize deeper, more impressive benchmarks for this message.
+  // Select a few well-known items that are good for this "further down than" comparison.
+  const significantBenchmarks = userFriendlyBenchmarks.filter(b =>
+    b.name === "Kola Superdeep Borehole (deepest artificial point)" ||
+    b.name === "Challenger Deep (ocean deepest)" ||
+    b.name === "Average Continental Crust" || // Good mid-range geological feature
+    b.name === "Deepest Gold Mine (Mponeng, South Africa)"
+  ).sort((a, b) => b.depth - a.depth); // Sort deepest first
+
+  for (const benchmark of significantBenchmarks) {
+    if (depth > benchmark.depth && depth < benchmark.depth * 3) { // If deeper, but not astronomically deeper
+      return [`That's incredibly deep! It's even further down than the ${benchmark.name} (${benchmark.depth.toFixed(1)} km)!`];
+    }
+  }
+
+  // 3. Use a relatable analogy for very significant depths
+  let analogyMessage = "";
+
+  const mountEverest = comparisonsList.find(c => c.name === "Height of Mount Everest"); // isHeight = true
+  const burjKhalifa = comparisonsList.find(c => c.name === "Burj Khalifa");
+
+  if (depth > 5 && mountEverest) { // Use Mount Everest for reasonably large depths
+      const numObjects = Math.round(depth / mountEverest.depth);
+      if (numObjects > 1) {
+        analogyMessage = `Wow, ${depth.toFixed(1)} km is a long way down – that's like stacking about ${numObjects} Mount Everests on top of each other!`;
+      } else if (numObjects === 1) {
+        analogyMessage = `Wow, ${depth.toFixed(1)} km is a long way down – that's about as deep as Mount Everest is tall!`;
+      }
+  } else if (depth > 1 && burjKhalifa) { // Use Burj Khalifa for moderate depths
+      const numObjects = Math.round(depth / burjKhalifa.depth);
+       if (numObjects > 1) {
+        analogyMessage = `That's quite deep! ${depth.toFixed(1)} km is like stacking about ${numObjects} Burj Khalifas!`;
+      } else if (numObjects === 1 && depth > burjKhalifa.depth * 1.1) { // Only if significantly more than 1
+         analogyMessage = `That's quite deep! ${depth.toFixed(1)} km is like stacking about ${numObjects} Burj Khalifas!`;
+      } else if (numObjects === 1 ) { // if depth is between 0.828 and ~0.9km, it's roughly 1 Burj Khalifa
+         analogyMessage = `That's quite deep! ${depth.toFixed(1)} km is about the height of the Burj Khalifa!`;
+      }
+  } else if (depth > 0.5) { // Use Eiffel Tower for smaller depths
+      const eiffelTower = RELATABLE_OBJECTS.find(r => r.name === "Eiffel Towers");
+      const numObjects = Math.round(depth / eiffelTower.height);
+      if (numObjects >=1) {
+          analogyMessage = `That's pretty deep! ${depth.toFixed(1)} km is like stacking ${numObjects} ${numObjects === 1 ? eiffelTower.singular : eiffelTower.name}!`;
+      }
+  }
+
+  if (analogyMessage) {
+    return [analogyMessage];
+  }
+
+  // 4. Fallback messages
+  if (depth === 0) {
+    return ["This earthquake was right at the surface!"];
+  }
+  if (depth < 0.1 && depth > 0) {
+    return [`${depth.toFixed(2)} km is very close to the surface!`];
+  }
+  if (depth > 700) { // Still acknowledge exceptionally deep ones simply
+      return [`Whoa, ${depth.toFixed(0)} km is incredibly deep, way down into the Earth's mantle!`];
+  }
+  if (depth > 300) {
+      return [`That's a very deep earthquake, ${depth.toFixed(0)} km down!`];
+  }
+   if (depth > 70) {
+      return [`That's a deep earthquake, ${depth.toFixed(0)} km down!`];
+  }
+
+  // Generic fallback if no other condition met (e.g., shallow but not super shallow, no close comparisons)
+  return [`That's an earthquake at ${depth.toFixed(1)} km deep.`];
 }
 
 export default SimplifiedDepthProfile;
