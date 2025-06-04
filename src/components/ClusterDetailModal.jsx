@@ -148,7 +148,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 </div>
 
                 {/* Cluster Mini Map */}
-                <div className="my-4"> {/* Added margin for spacing */}
+                <div className="my-4 h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative"> {/* Added margin for spacing */}
                     <ClusterMiniMap cluster={cluster} getMagnitudeColor={getMagnitudeColor} containerRef={modalContentRef} />
                 </div>
 
