@@ -58,6 +58,7 @@ const EarthquakeDetailModalComponent = lazy(() => import('../components/Earthqua
 const ClusterDetailModalWrapper = lazy(() => import('../components/ClusterDetailModalWrapper'));
 const OverviewPage = lazy(() => import('./OverviewPage'));
 const LearnPage = lazy(() => import('./LearnPage'));
+const FaultsPage = lazy(() => import('./FaultsPage')); // Added FaultsPage
 
 // Lazy load other heavy/conditional components for the sidebar
 const RegionalDistributionList = lazy(() => import('../components/RegionalDistributionList'));
@@ -874,6 +875,7 @@ function App() {
                                   />
                               } />
                               <Route path="/learn" element={<LearnPage />} />
+                              <Route path="/faults" element={<FaultsPage />} /> {/* Added FaultsPage Route */}
 
                             </Routes>
                 </Suspense>

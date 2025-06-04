@@ -1,7 +1,7 @@
 // src/BottomNav.jsx
 import React, { memo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FaGlobe, FaListAlt, FaStream, FaBook } from 'react-icons/fa';
+import { FaGlobe, FaListAlt, FaStream, FaBook, FaLayerGroup } from 'react-icons/fa'; // Added FaLayerGroup
 
 /**
  * A React component that renders the bottom navigation bar for mobile views.
@@ -16,6 +16,7 @@ const BottomNav = () => { // Removed activeMobileView and setActiveMobileView pr
         { name: 'Overview', path: '/overview', icon: <FaListAlt /> },
         { name: 'Feeds', path: '/feeds', icon: <FaStream /> },
         { name: 'Learn', path: '/learn', icon: <FaBook /> },
+        { name: 'Faults', path: '/faults', icon: <FaLayerGroup /> }, // Added Faults tab
     ];
 
     return (
