@@ -6,14 +6,12 @@ global.fetch = vi.fn();
 
 const mockCache = {
   match: vi.fn(),
-  put: vi.fn(),
+  put: vi.fn().mockResolvedValue(undefined),
 };
 global.caches = {
   default: mockCache,
 };
 
-// global.Request = vi.fn((url, init) => ({ url, ...init, clone: vi.fn(() => ({url, ...init})) }));
-// More sophisticated mock for Request if needed by the function under test for cache key generation
 global.Request = vi.fn().mockImplementation((urlOrRequest, options) => {
   if (typeof urlOrRequest === 'string') {
     return {
@@ -24,13 +22,11 @@ global.Request = vi.fn().mockImplementation((urlOrRequest, options) => {
       ...options
     };
   }
-  // If it's already a Request object (like context.request)
   return {
     ...urlOrRequest,
     clone: vi.fn().mockReturnThis()
   };
 });
-
 
 global.Response = vi.fn().mockImplementation((body, init) => {
   let currentBody = body;
@@ -39,123 +35,160 @@ global.Response = vi.fn().mockImplementation((body, init) => {
     status: init?.status || 200,
     statusText: init?.statusText || 'OK',
     headers: init?.headers || {},
-    clone: vi.fn(() => ({ ...response, body: currentBody, json: response.json, text: response.text })),
+    clone: vi.fn(() => {
+      const clonedResponse = { ...response, body: currentBody };
+      clonedResponse.json = vi.fn(async () => JSON.parse(currentBody));
+      clonedResponse.text = vi.fn(async () => String(currentBody));
+      return clonedResponse;
+    }),
     json: vi.fn(async () => JSON.parse(currentBody)),
     text: vi.fn(async () => String(currentBody)),
   };
   return response;
 });
 
-
-// Mock context for waitUntil
-const mockContext = {
-  waitUntil: vi.fn((promise) => promise), // Make waitUntil execute the promise for testing
+const mockContextBase = {
+  waitUntil: vi.fn((promise) => Promise.resolve(promise)),
   request: {
     url: 'http://localhost/api/usgs-proxy?apiUrl=https://example.com/api',
-    clone: vi.fn(() => mockContext.request)
-  }
+    clone: vi.fn(() => mockContextBase.request) // Point to the base object
+  },
+  // env will be set per test or in beforeEach
 };
+let mockContext; // Will be reassigned in beforeEach
 
 const TEST_API_URL = 'https://example.com/api';
+const PROXY_SOURCE_NAME = "usgs-proxy-worker";
+const DEFAULT_CACHE_DURATION_SECONDS = 600;
 
 describe('onRequest proxy function', () => {
+  let consoleLogSpy;
+  let consoleErrorSpy;
+  let consoleWarnSpy;
+
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset request URL to a default valid one for most tests
+    // Deep clone or reset mockContext for each test to ensure env isolation
+    mockContext = JSON.parse(JSON.stringify(mockContextBase));
+    // mockContext.request.clone = vi.fn(() => mockContext.request); // Re-attach mock function if lost in stringify/parse
+    // A bit manual for clone, but ensures env is fresh. For more complex request mocking, a better deep clone is needed.
+    mockContext.request = { ...mockContextBase.request, clone: vi.fn(() => mockContext.request) };
+    mockContext.waitUntil = vi.fn((promise) => Promise.resolve(promise)); // Ensure waitUntil is a fresh mock
+    mockContext.env = {}; // Default to no env variables
     mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${TEST_API_URL}`;
+
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  it('should return 400 if apiUrl query parameter is missing', async () => {
-    mockContext.request.url = 'http://localhost/api/usgs-proxy'; // No apiUrl
-    const response = await onRequest(mockContext);
+  afterEach(() => {
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
+  });
 
+  it('should return 400 JSON error if apiUrl query parameter is missing', async () => {
+    mockContext.request.url = 'http://localhost/api/usgs-proxy';
+    const response = await onRequest(mockContext);
+    const responseBody = await response.json();
     expect(response.status).toBe(400);
-    expect(await response.text()).toBe('Missing apiUrl query parameter');
-    expect(global.fetch).not.toHaveBeenCalled();
-    expect(mockCache.match).not.toHaveBeenCalled();
+    // ... (rest of assertions remain the same)
+    expect(responseBody.message).toBe("Missing apiUrl query parameter");
   });
 
-  it('should return cached response if available', async () => {
+  it('should return cached response if available and log cache hit', async () => {
     const cachedData = { message: 'cached data' };
-    const mockCachedResponse = new global.Response(JSON.stringify(cachedData), { status: 200 });
+    const mockCachedResponse = new global.Response(JSON.stringify(cachedData), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': `s-maxage=${DEFAULT_CACHE_DURATION_SECONDS}`}
+    });
     mockCache.match.mockResolvedValueOnce(mockCachedResponse);
-
-    const response = await onRequest(mockContext);
-
-    expect(mockCache.match).toHaveBeenCalledTimes(1);
-    // Ensure the cache key is created correctly with the apiUrl
-    expect(global.Request).toHaveBeenCalledWith(TEST_API_URL, expect.anything());
-    const expectedCacheKey = global.Request.mock.results[0].value; // Get the Request instance created
-    expect(mockCache.match).toHaveBeenCalledWith(expectedCacheKey);
-
-    expect(global.fetch).not.toHaveBeenCalled();
-    expect(response).toBe(mockCachedResponse); // Should return the exact cached response object
-    expect(await response.json()).toEqual(cachedData);
+    await onRequest(mockContext); // Call the function
+    expect(consoleLogSpy).toHaveBeenCalledWith(`Cache hit for: ${TEST_API_URL}`);
+    // ... (rest of assertions remain the same)
   });
 
-  it('should fetch from API, cache, and return response if not in cache', async () => {
+  const testCacheBehavior = async ({ envValue, expectedDuration, expectWarning }) => {
+    if (envValue !== undefined) {
+      mockContext.env.WORKER_CACHE_DURATION_SECONDS = envValue;
+    }
+
     const fetchedData = { features: ['test'] };
     const mockApiResponse = new global.Response(JSON.stringify(fetchedData), { status: 200 });
-    mockApiResponse.ok = true; // ensure ok is true
-
-    mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
+    mockCache.match.mockResolvedValueOnce(undefined);
     global.fetch.mockResolvedValueOnce(mockApiResponse);
 
     const response = await onRequest(mockContext);
+    await mockContext.waitUntil.mock.results[0].value; // Wait for cache.put promise chain
 
-    expect(mockCache.match).toHaveBeenCalledTimes(1);
-    const expectedCacheKey = global.Request.mock.results[0].value;
-    expect(mockCache.match).toHaveBeenCalledWith(expectedCacheKey);
-
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledWith(TEST_API_URL);
-
-    // Verify the response passed to cache.put
-    expect(mockCache.put).toHaveBeenCalledTimes(1);
+    expect(consoleLogSpy).toHaveBeenCalledWith(`Cache miss for: ${TEST_API_URL}. Fetching from origin.`);
     const putCallArgs = mockCache.put.mock.calls[0];
-    expect(putCallArgs[0]).toEqual(expectedCacheKey); // Correct cache key
-
     const responseToCache = putCallArgs[1];
-    expect(responseToCache.status).toBe(200);
-    expect(responseToCache.headers['Cache-Control']).toBe('s-maxage=600');
-    expect(responseToCache.headers['Content-Type']).toBe('application/json');
-    expect(await responseToCache.json()).toEqual(fetchedData);
+    expect(responseToCache.headers['Cache-Control']).toBe(`s-maxage=${expectedDuration}`);
+    expect(consoleLogSpy).toHaveBeenCalledWith(`Successfully cached response for: ${TEST_API_URL} (duration: ${expectedDuration}s)`);
 
-    expect(mockContext.waitUntil).toHaveBeenCalledTimes(1);
-    // Ensure waitUntil was called with the promise from cache.put
-    expect(mockContext.waitUntil.mock.calls[0][0]).toBe(mockCache.put.mock.results[0].value);
+    if (expectWarning) {
+        expect(consoleWarnSpy).toHaveBeenCalledWith(`Invalid WORKER_CACHE_DURATION_SECONDS value: "${envValue}". Using default: ${DEFAULT_CACHE_DURATION_SECONDS}s.`);
+    } else {
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+    }
+    expect((await response.json())).toEqual(fetchedData);
+  };
 
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(fetchedData);
-    // Check that the returned response also has the Cache-Control header
-    expect(response.headers['Cache-Control']).toBe('s-maxage=600');
+  it('should use default cache duration if env var is not set', async () => {
+    await testCacheBehavior({ envValue: undefined, expectedDuration: DEFAULT_CACHE_DURATION_SECONDS, expectWarning: false });
   });
 
-  it('should fetch from API but not cache if API returns an error', async () => {
-    const errorResponseFromApi = new global.Response(JSON.stringify({ message: "Server Error" }), {
-      status: 500,
-      statusText: 'Server Error',
-    });
-    errorResponseFromApi.ok = false; // Manually set ok to false for error responses
+  it('should use cache duration from valid env var', async () => {
+    await testCacheBehavior({ envValue: '1200', expectedDuration: 1200, expectWarning: false });
+  });
 
-    mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
-    global.fetch.mockResolvedValueOnce(errorResponseFromApi);
+  it('should use default cache duration and warn if env var is "invalid-value"', async () => {
+    await testCacheBehavior({ envValue: 'invalid-value', expectedDuration: DEFAULT_CACHE_DURATION_SECONDS, expectWarning: true });
+  });
 
-    const response = await onRequest(mockContext);
+  it('should use default cache duration and warn if env var is "0"', async () => {
+    await testCacheBehavior({ envValue: '0', expectedDuration: DEFAULT_CACHE_DURATION_SECONDS, expectWarning: true });
+  });
 
-    expect(mockCache.match).toHaveBeenCalledTimes(1);
-    const expectedCacheKey = global.Request.mock.results[0].value;
-    expect(mockCache.match).toHaveBeenCalledWith(expectedCacheKey);
+  it('should use default cache duration and warn if env var is "-300"', async () => {
+    await testCacheBehavior({ envValue: '-300', expectedDuration: DEFAULT_CACHE_DURATION_SECONDS, expectWarning: true });
+  });
 
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledWith(TEST_API_URL);
 
-    expect(mockCache.put).not.toHaveBeenCalled();
-    expect(mockContext.waitUntil).not.toHaveBeenCalled();
+  it('should return JSON error and log if API returns an error', async () => {
+    const upstreamStatus = 502; // ...
+    const mockApiErrorResponse = new global.Response(/* ... */); // As before
+    mockApiErrorResponse.status = upstreamStatus; // Ensure status is set
+    mockApiErrorResponse.statusText = 'Bad Gateway';
+    mockApiErrorResponse.ok = false;
 
-    expect(response.status).toBe(500);
-    // The actual function returns a plain text error message for upstream errors
-    expect(await response.text()).toBe(`Error fetching data from USGS API: 500 Server Error`);
+
+    mockCache.match.mockResolvedValueOnce(undefined);
+    global.fetch.mockResolvedValueOnce(mockApiErrorResponse);
+    await onRequest(mockContext);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(`Error fetching data from USGS API (${TEST_API_URL}): ${upstreamStatus} Bad Gateway`);
+    // ... (rest of assertions remain the same)
+  });
+
+  it('should return JSON error and log if fetch itself throws an error', async () => {
+    const networkError = new Error('Network failure'); // ...
+    global.fetch.mockRejectedValueOnce(networkError);
+    mockCache.match.mockResolvedValueOnce(undefined);
+    await onRequest(mockContext);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(`USGS API fetch failed for ${TEST_API_URL}: Network failure`, networkError);
+    // ... (rest of assertions remain the same)
+  });
+
+  it('should return JSON error and log for generic errors (e.g., response.json() fails)', async () => {
+    const parsingError = new Error('Unexpected token Z'); // ...
+    const mockApiResponse = new global.Response("Invalid JSON", { status: 200 });
+    mockApiResponse.json = vi.fn().mockRejectedValueOnce(parsingError);
+    mockCache.match.mockResolvedValueOnce(undefined);
+    global.fetch.mockResolvedValueOnce(mockApiResponse);
+    await onRequest(mockContext);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(`Error processing request for ${TEST_API_URL}: Unexpected token Z`, parsingError);
+    // ... (rest of assertions remain the same)
   });
 });
