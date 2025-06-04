@@ -152,17 +152,17 @@ function EarthquakeSeismicWavesPanel({
                         {/* Original segment for one wavelength: M30,50 Q55,20 80,50 T130,50 (100px wide) */}
                         {/* Estimated length of one wavelength (100px wide, 30px amplitude) is ~156-160px */}
                         <path
-                            d="M-156.85 50 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0" // Path starts further left, 7 wavelengths
+                            d="M-250 50 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0 q25 -30 50 0 t50 0" // Path starts further left, 7 wavelengths
                             stroke="#ef4444"
                             strokeWidth="3"
                             fill="none"
-                            strokeDasharray="156.85" // Length of ONE full wave cycle
+                            strokeDasharray="200" // Length of ONE full wave cycle
                             strokeDashoffset="0"
                         >
                             <animate
                                 attributeName="stroke-dashoffset"
-                                values="0;-156.85" // Animates over ONE full wave cycle
-                                dur="2s" // Duration for ONE full wave cycle to pass
+                                values="0;-400" // Animates over ONE full wave cycle
+                                dur="6s" // Duration for ONE full wave cycle to pass
                                 repeatCount="indefinite"
                             />
                         </path>
