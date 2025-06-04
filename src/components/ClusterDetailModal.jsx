@@ -94,20 +94,6 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
         return timeB - timeA; // Descending order
     });
 
-    // Calculate Depth Range (Optional, as designed)
-    let minDepth = Infinity;
-    let maxDepth = -Infinity;
-    let depthDataAvailable = false;
-    originalQuakes.forEach(quake => {
-        const depth = quake.geometry?.coordinates?.[2];
-        if (typeof depth === 'number') {
-            depthDataAvailable = true;
-            if (depth < minDepth) minDepth = depth;
-            if (depth > maxDepth) maxDepth = depth;
-        }
-    });
-    const depthRangeStr = depthDataAvailable ? `${minDepth.toFixed(1)}km - ${maxDepth.toFixed(1)}km` : 'N/A';
-
     return (
         <div
             className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[51] p-4 transition-opacity duration-300 ease-in-out"
@@ -144,12 +130,16 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                     <p><strong>Total Earthquakes:</strong> <span className="text-slate-100">{quakeCount}</span></p>
                     <p><strong>Maximum Magnitude:</strong> <span className="text-slate-100">M {maxMagnitude?.toFixed(1)}</span></p>
                     <p><strong>Active Period:</strong> <span className="text-slate-100">{timeRange}</span></p>
-                    <p><strong>Depth Range:</strong> <span className="text-slate-100">{depthRangeStr}</span></p>
                 </div>
 
                 {/* Cluster Mini Map */}
                 <div className="my-4"> {/* Added margin for spacing */}
-                    <ClusterMiniMap cluster={cluster} getMagnitudeColor={getMagnitudeColor} containerRef={modalContentRef} />
+                    <ClusterMiniMap
+                        cluster={cluster}
+                        getMagnitudeColor={getMagnitudeColor}
+                        onQuakeSelect={onIndividualQuakeSelect} // Pass the selection handler
+                        containerRef={modalContentRef}
+                    />
                 </div>
 
                 {/* Individual Earthquakes List */}
@@ -194,9 +184,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                                     <span>
                                         {formatDate ? formatDate(quake.properties?.time) : new Date(quake.properties?.time).toLocaleString() || 'N/A'}
                                     </span>
-                                    <span>
-                                        Depth: {quake.geometry?.coordinates?.[2]?.toFixed(1) || 'N/A'} km
-                                    </span>
+                                    {/* Removed individual depth display from list item */}
                                 </div>
                             </div>
                         ); // Restored semicolon for return

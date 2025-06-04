@@ -5,6 +5,37 @@ import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Corr
 // Assuming getMagnitudeColor will be provided as a prop or imported if generalized
 // import { getMagnitudeColor } from './utils';
 
+/**
+ * Formats the time difference between now and a given timestamp into a human-readable string.
+ * e.g., "2 hours ago", "3 days ago", "just now".
+ * @param {number} timestamp - The earthquake's time in milliseconds since epoch.
+ * @returns {string} A string representing how long ago the earthquake occurred.
+ */
+const formatTimeAgo = (timestamp) => {
+  const now = new Date();
+  const secondsPast = (now.getTime() - timestamp) / 1000;
+
+  if (secondsPast < 60) {
+    return 'just now';
+  }
+  if (secondsPast < 3600) {
+    const minutes = Math.round(secondsPast / 60);
+    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  }
+  if (secondsPast <= 86400) { // 24 hours
+    const hours = Math.round(secondsPast / 3600);
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  }
+  // For days, we can be more approximate or use a library for more complex date formatting if needed.
+  const days = Math.round(secondsPast / 86400);
+  if (days <= 30) { // Roughly up to a month
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  }
+  // For more than 30 days, you might want to show the date or "over a month ago"
+  // For this scope, "X days ago" is fine.
+  return `${days} day${days > 1 ? 's' : ''} ago`;
+};
+
 // Style function for Tectonic Plates
 /**
  * Determines the style for tectonic plate boundary features on the map.
@@ -40,13 +71,15 @@ const getTectonicPlateStyle = (feature) => {
  * @param {object} props - The component's props.
  * @param {object} props.cluster - The cluster data. Must contain an `originalQuakes` array.
  * @param {Array<object>} props.cluster.originalQuakes - An array of earthquake objects. Each object is expected
- *   to have `id`, `geometry.coordinates` (lng, lat, depth), and `properties.mag` (magnitude) and `properties.place`.
+ *   to have `id`, `geometry.coordinates` (lng, lat, depth), `properties.mag` (magnitude),
+ *   `properties.place`, and `properties.time`.
  * @param {function} props.getMagnitudeColor - A function that takes an earthquake's magnitude
  *   and returns a color string for its marker.
+ * @param {function} props.onQuakeSelect - Callback function to handle when a quake is selected.
  * @param {object} props.containerRef - A React ref for the container element to observe for resizing.
  * @returns {JSX.Element | null} The rendered Leaflet map component or null if cluster data is invalid.
  */
-const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
+const ClusterMiniMap = ({ cluster, getMagnitudeColor, onQuakeSelect, containerRef }) => {
   const mapRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -179,8 +212,22 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
           }}
           radius={5 + quake.properties.mag / 2} // Radius proportional to magnitude
         >
+          eventHandlers={{
+            click: () => {
+              // Ensure onQuakeSelect is a function before calling it
+              if (typeof onQuakeSelect === 'function') {
+                onQuakeSelect(quake.id);
+              }
+            },
+          }} // This closes the eventHandlers prop
+        >   {/* This > closes the CircleMarker opening tag */}
           <Tooltip>
-            M {quake.properties.mag.toFixed(1)} - {quake.properties.place}
+            <div>Magnitude: {quake.properties.mag.toFixed(1)}</div>
+            <div>{quake.properties.place}</div>
+            <div>{formatTimeAgo(quake.properties.time)}</div>
+            <div style={{ marginTop: '5px', fontStyle: 'italic', fontSize: '0.9em' }}>
+              Click marker for details
+            </div>
           </Tooltip>
         </CircleMarker>
       ))}
