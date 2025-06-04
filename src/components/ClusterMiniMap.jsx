@@ -94,7 +94,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
   if (originalQuakes.length === 1) {
     const singleQuake = originalQuakes[0];
     mapCenter = [singleQuake.geometry.coordinates[1], singleQuake.geometry.coordinates[0]];
-    initialZoom = 10; // Zoom level for a single quake
+    initialZoom = 8; // Zoom level for a single quake
   } else {
     // Calculate map center for multiple quakes (average lat/lng)
     const latitudes = originalQuakes.map(quake => quake.geometry.coordinates[1]);
@@ -116,7 +116,7 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
       (Math.abs(bounds.getNorthEast().lat - bounds.getSouthWest().lat) < 0.001 && // Refined threshold
        Math.abs(bounds.getNorthEast().lng - bounds.getSouthWest().lng) < 0.001)  // Refined threshold
     ) {
-      initialZoom = 10; // Increased zoom for pinpoint clusters
+      initialZoom = 8; // Increased zoom for pinpoint clusters
     } else {
       initialZoom = 7; // Fallback zoom, fitBounds will adjust this for spread out clusters
     }
@@ -134,15 +134,34 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor, containerRef }) => {
         ])
       );
       // The initialZoom check above should be sufficient to prevent re-zooming pinpoint clusters.
-      mapRef.current.fitBounds(bounds, { padding: [0, 0] });
+      mapRef.current.fitBounds(bounds, { padding: [40, 40] });
     }
     // For a single quake (initialZoom=10) or pinpoint cluster (initialZoom=13),
     // the view is already set by mapCenter and initialZoom on MapContainer.
   }, [originalQuakes, mapRef, initialZoom, containerWidth]); // Added initialZoom and containerWidth to dependency array.
                                  // originalQuakes is the primary data dependency.
 
+  let clusterKey;
+  if (cluster && cluster.id) {
+    clusterKey = cluster.id;
+  } else if (cluster && cluster.locationName && cluster.timeRange && cluster.originalQuakes) {
+    clusterKey = `${cluster.locationName}-${cluster.timeRange}-${cluster.originalQuakes.length}`;
+  } else if (cluster && cluster.originalQuakes) {
+    // Fallback if other properties are missing but quakes are there
+    try {
+      clusterKey = JSON.stringify(cluster.originalQuakes.map(q => q.id).sort());
+    } catch (e) {
+      // If stringify fails or IDs are missing, use a random key as a last resort, though this is not ideal
+      // Forcing a remount every time if data is truly unstable without IDs
+      clusterKey = Math.random().toString();
+    }
+  } else {
+    clusterKey = 'default-map-key'; // Should not happen if guards earlier are effective
+  }
+
   return (
     <MapContainer
+      key={clusterKey}
       center={mapCenter}
       zoom={initialZoom}
       style={{ height: '100%', width: '100%' }} // Width is 100% of its container
