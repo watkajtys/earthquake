@@ -19,48 +19,71 @@ const getTectonicPlateStyle = (feature) => {
 };
 
 const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
-  // Initial guard clause
-  if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
-    return null;
-  }
-
-  const { originalQuakes } = cluster;
+  const originalQuakes = cluster && cluster.originalQuakes ? cluster.originalQuakes : [];
   const [map, setMap] = useState(null);
 
   useEffect(() => {
-    if (!map || !originalQuakes || originalQuakes.length === 0) {
+    if (!map) { // Check for map instance first
       return;
+    }
+
+    // Handle empty or invalid originalQuakes separately
+    if (!originalQuakes || originalQuakes.length === 0) {
+      map.setView([0, 0], 2);
+      map.invalidateSize(false); // Explicit invalidateSize
+      return; // No markers to process
     }
 
     if (originalQuakes.length === 1) {
       const quake = originalQuakes[0];
-      const latLng = [quake.geometry.coordinates[1], quake.geometry.coordinates[0]];
-      map.setView(latLng, 8); // Zoom level 6 for single quake
-    } else {
-      const bounds = L.latLngBounds(
-        originalQuakes.map(quake => [
-          quake.geometry.coordinates[1],
-          quake.geometry.coordinates[0],
-        ])
-      );
-      if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [10, 10] }); // Padding for multiple quakes
+      // Ensure quake geometry and coordinates are valid before accessing
+      if (quake && quake.geometry && quake.geometry.coordinates && quake.geometry.coordinates.length >= 2) {
+          const latLng = [quake.geometry.coordinates[1], quake.geometry.coordinates[0]];
+          map.setView(latLng, 8); // Restored from previous step
       } else {
-        // Fallback if bounds are not valid (e.g., all points identical or invalid)
-        // This might happen if originalQuakes has multiple items but they are all at the exact same lat/lng
-        // or if coordinates are bad.
-        if (originalQuakes[0] && originalQuakes[0].geometry && originalQuakes[0].geometry.coordinates) {
-            const fallbackLatLng = [originalQuakes[0].geometry.coordinates[1], originalQuakes[0].geometry.coordinates[0]];
-            map.setView(fallbackLatLng, 6); // Default to first quake's location
+          // Fallback for invalid single quake data
+          map.setView([0,0], 2);
+      }
+      map.invalidateSize(false); // Explicit invalidateSize
+    } else { // Multiple quakes
+      const bounds = L.latLngBounds(
+        originalQuakes.reduce((acc, quake) => {
+          // Ensure each quake has valid geometry before adding to bounds
+          if (quake && quake.geometry && quake.geometry.coordinates && quake.geometry.coordinates.length >= 2) {
+            acc.push([quake.geometry.coordinates[1], quake.geometry.coordinates[0]]);
+          }
+          return acc;
+        }, [])
+      );
+
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [10, 10] }); // Restored from previous step
+      } else {
+        // Fallback if bounds are not valid
+        if (originalQuakes[0] && originalQuakes[0].geometry && originalQuakes[0].geometry.coordinates && originalQuakes[0].geometry.coordinates.length >=2) {
+          const fallbackLatLng = [originalQuakes[0].geometry.coordinates[1], originalQuakes[0].geometry.coordinates[0]];
+          map.setView(fallbackLatLng, 6);
         } else {
-            map.setView([0,0], 2); // Absolute fallback
+          map.setView([0,0], 2);
         }
       }
+      map.invalidateSize(false); // Explicit invalidateSize
     }
   }, [map, originalQuakes]);
 
-  // Generate a simple key for MapContainer to help with re-initialization if quakes change drastically
-  const mapKey = originalQuakes.length + '-' + (originalQuakes[0] ? originalQuakes[0].id : 'empty');
+  let mapKey;
+  if (!originalQuakes || originalQuakes.length === 0) {
+    mapKey = 'empty-map';
+  } else {
+    try {
+      // Ensure all quakes have an id, or filter them out / use index if id can be missing
+      const ids = originalQuakes.map((q, index) => q && q.id ? q.id : `no-id-${index}`);
+      mapKey = JSON.stringify(ids.sort());
+    } catch (e) {
+      console.error('Error generating mapKey:', e);
+      mapKey = `map-fallback-${originalQuakes.length}-${Math.random()}`; // Fallback key
+    }
+  }
 
   return (
     <MapContainer
@@ -77,9 +100,12 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
         attribution='Tiles &copy; Esri &mdash; ... GIS User Community' // Truncated for brevity
       />
       <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
-      {originalQuakes.map((quake) => (
+      {originalQuakes && originalQuakes.length > 0 && originalQuakes.map((quake) => {
+      // Add checks for quake validity if necessary, e.g. if quake or quake.properties can be null/undefined
+      if (!quake || !quake.properties || !quake.geometry || !quake.geometry.coordinates || quake.geometry.coordinates.length < 2) return null;
+      return (
         <CircleMarker
-          key={quake.id}
+          key={quake.id} // Assuming quake.id is reliable here
           center={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
           pathOptions={{
             fillColor: getMagnitudeColor(quake.properties.mag),
@@ -94,7 +120,8 @@ const ClusterMiniMap = ({ cluster, getMagnitudeColor }) => {
             M {quake.properties.mag.toFixed(1)} - {quake.properties.place}
           </Tooltip>
         </CircleMarker>
-      ))}
+      );
+    })}
     </MapContainer>
   );
 };
