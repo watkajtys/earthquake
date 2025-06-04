@@ -245,10 +245,12 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
             };
         }
         case actionTypes.WEEKLY_DATA_PROCESSED: {
-            const { features, fetchTime } = action.payload;
+            // MODIFIED: Destructure features, fetchTime, and potentially transformed_stats from payload
+            const { features, fetchTime, transformed_stats } = action.payload;
+
             const last72HoursData = filterByTime(features, 72, 0, fetchTime);
 
-            // Deduplication step
+            // Deduplication step for last72HoursData
             const uniqueEarthquakeIds = new Set();
             const deduplicatedLast72HoursData = last72HoursData.filter(quake => {
                 if (!uniqueEarthquakeIds.has(quake.id)) {
@@ -258,42 +260,32 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
                 return false;
             });
 
+            // currentEarthquakesLast7Days is still needed for sampling and other potential uses.
+            // The features array from the payload should be the full, original set from USGS.
             const currentEarthquakesLast7Days = filterByTime(features, 7 * 24, 0, fetchTime);
 
             const weeklyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
             const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, weeklyMajors);
 
-            // Calculate dailyCounts7Days
-            const dailyCounts7Days = getInitialDailyCounts(7, fetchTime);
-            const sevenDaysAgo = fetchTime - 7 * 24 * 3600 * 1000;
-            currentEarthquakesLast7Days.forEach(quake => {
-                const quakeTime = quake.properties.time;
-                // Ensure quake is within the 7-day window for daily counts (already filtered by currentEarthquakesLast7Days, but good for sanity)
-                if (quakeTime >= sevenDaysAgo && quakeTime <= fetchTime) {
-                    const dateString = formatDateForTimeline(quakeTime);
-                    const dayEntry = dailyCounts7Days.find(d => d.dateString === dateString);
-                    if (dayEntry) {
-                        dayEntry.count += 1;
-                    }
-                }
-            });
+            // MODIFIED: Use transformed_stats if available, otherwise fallback to empty arrays.
+            // Client-side calculations for dailyCounts7Days and magnitudeDistribution7Days are removed.
+            const dailyCounts7Days = transformed_stats?.dailyCounts7Days || [];
+            const magnitudeDistribution7Days = transformed_stats?.magnitudeDistribution7Days || [];
 
-            // Calculate sampledEarthquakesLast7Days
+            // Calculate sampledEarthquakesLast7Days (still done client-side)
+            // This uses currentEarthquakesLast7Days which is derived from the original features list.
             const sampledEarthquakesLast7Days = sampleArrayWithPriority(currentEarthquakesLast7Days, SCATTER_SAMPLING_THRESHOLD_7_DAYS, MAJOR_QUAKE_THRESHOLD);
-
-            // Calculate magnitudeDistribution7Days
-            const magnitudeDistribution7Days = calculateMagnitudeDistribution(currentEarthquakesLast7Days);
 
             return {
                 ...state,
                 isLoadingWeekly: false,
-                earthquakesLast72Hours: deduplicatedLast72HoursData, // Use deduplicated data
+                earthquakesLast72Hours: deduplicatedLast72HoursData,
                 prev24HourData: filterByTime(features, 48, 24, fetchTime),
                 earthquakesLast7Days: currentEarthquakesLast7Days,
                 globeEarthquakes: [...deduplicatedLast72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900),
-                dailyCounts7Days,
-                sampledEarthquakesLast7Days,
-                magnitudeDistribution7Days,
+                dailyCounts7Days, // From transformed_stats or fallback
+                sampledEarthquakesLast7Days, // Still calculated client-side
+                magnitudeDistribution7Days, // From transformed_stats or fallback
                 ...majorQuakeUpdates,
             };
         }
@@ -415,14 +407,17 @@ export const EarthquakeDataProvider = ({ children }) => {
             // Fetch Weekly Data
             try {
                 if (isMounted && state.isInitialAppLoad) dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
-                const weeklyResult = await fetchUsgsData(USGS_API_URL_WEEK);
+                // MODIFIED: Added transformParams for weekly data
+                const weeklyResult = await fetchUsgsData(USGS_API_URL_WEEK, { transform: "stats_7day" });
                 if (!isMounted) return;
 
-                if (!weeklyResult.error && weeklyResult.features) {
+                // The weeklyResult payload might now include 'transformed_stats' alongside 'features' and 'metadata'
+                if (!weeklyResult.error && weeklyResult.features) { // Ensure features are still present for other calculations
                      if (isMounted && state.isInitialAppLoad) dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
                     dispatch({
                         type: actionTypes.WEEKLY_DATA_PROCESSED,
-                        payload: { features: weeklyResult.features, fetchTime: nowForFiltering }
+                        // Pass the entire weeklyResult as payload, reducer will pick what it needs
+                        payload: { ...weeklyResult, fetchTime: nowForFiltering }
                     });
                 } else {
                     weeklyError = weeklyResult?.error?.message || "Weekly data features are missing.";

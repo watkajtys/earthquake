@@ -1,8 +1,21 @@
 // src/services/usgsApiService.js
 
-export const fetchUsgsData = async (apiUrl) => {
+export const fetchUsgsData = async (apiUrl, transformParams = {}) => {
   try {
-    const proxyUrl = `/api/usgs-proxy?apiUrl=${encodeURIComponent(apiUrl)}`;
+    let proxyUrl = `/api/usgs-proxy?apiUrl=${encodeURIComponent(apiUrl)}`;
+
+    // Append transformParams if any
+    const params = new URLSearchParams();
+    for (const key in transformParams) {
+      if (Object.prototype.hasOwnProperty.call(transformParams, key)) {
+        params.append(key, transformParams[key]);
+      }
+    }
+    const additionalParams = params.toString();
+    if (additionalParams) {
+      proxyUrl += `&${additionalParams}`;
+    }
+
     const response = await fetch(proxyUrl);
     if (!response.ok) {
       throw { message: `HTTP error! status: ${response.status}`, status: response.status };
