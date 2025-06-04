@@ -1,7 +1,7 @@
 // src/ClusterDetailModal.jsx
 import React from 'react';
-import ClusterMiniMap from './ClusterMiniMap'; // Added import for the mini-map
-import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor
+import EarthquakeMap from './EarthquakeMap'; // Replaced ClusterMiniMap with EarthquakeMap
+// getMagnitudeColor is not directly needed here anymore, EarthquakeMap handles it.
 
 /**
  * A modal component to display detailed information about an earthquake cluster.
@@ -148,8 +148,8 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 </div>
 
                 {/* Cluster Mini Map */}
-                <div className="my-4"> {/* Added margin for spacing */}
-                    <ClusterMiniMap cluster={cluster} getMagnitudeColor={getMagnitudeColor} containerRef={modalContentRef} />
+                <div className="my-4 h-64"> {/* Added margin and fixed height for EarthquakeMap container */}
+                    <EarthquakeMap clusterQuakesData={originalQuakes} />
                 </div>
 
                 {/* Individual Earthquakes List */}

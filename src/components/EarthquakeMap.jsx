@@ -1,5 +1,5 @@
-import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
+import React, { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Tooltip } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -78,10 +78,15 @@ const createNearbyQuakeIcon = (magnitude, time) => {
   // Convert opacity to 2-digit hex string
   const alphaHex = Math.round(opacity * 255).toString(16).padStart(2, '0');
   const finalColor = fillColor + alphaHex;
+  const titleId = `nearby-quake-icon-${Math.random().toString(36).substring(2, 9)}`; // Unique ID for title
 
   return new L.DivIcon({
-    html: `<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="5" fill="${finalColor}" /></svg>`,
-    className: 'custom-nearby-quake-icon',
+    html: `
+      <svg width="18" height="18" viewBox="0 0 18 18" role="img" aria-labelledby="${titleId}">
+        <title id="${titleId}">Nearby earthquake magnitude ${magnitude.toFixed(1)}</title>
+        <circle cx="9" cy="9" r="5" fill="${finalColor}" />
+      </svg>`,
+    className: 'custom-nearby-quake-icon', // Ensure this class doesn't remove accessibility features
     iconSize: [18, 18],
     iconAnchor: [9, 9],
   });
@@ -128,64 +133,115 @@ const getTectonicPlateStyle = (feature) => {
  * @param {string} [props.shakeMapUrl] - Optional URL to the ShakeMap details page for the earthquake.
  * @param {Array} [props.nearbyQuakes=[]] - Optional array of nearby earthquake objects.
  * @param {string} [props.mainQuakeDetailUrl] - Optional URL for the main quake's internal detail view.
+ * @param {Array} [props.clusterQuakesData] - Optional array of earthquake objects for cluster view.
  * @returns {JSX.Element} The rendered EarthquakeMap component.
  */
-const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nearbyQuakes = [], mainQuakeDetailUrl }) => {
-  const position = [latitude, longitude];
+const EarthquakeMap = ({ latitude, longitude, magnitude, title, shakeMapUrl, nearbyQuakes = [], mainQuakeDetailUrl, clusterQuakesData }) => {
+  const mapRef = useRef(null);
+  const position = clusterQuakesData && clusterQuakesData.length > 0 ? null : [latitude, longitude]; // Null if cluster data, else main quake position
 
   const mapStyle = {
     height: '100%',
     width: '100%',
   };
 
+  useEffect(() => {
+    if (mapRef.current && clusterQuakesData && clusterQuakesData.length > 0) {
+      if (clusterQuakesData.length === 1) {
+        const singleQuake = clusterQuakesData[0];
+        mapRef.current.setView([singleQuake.geometry.coordinates[1], singleQuake.geometry.coordinates[0]], 10);
+      } else {
+        const bounds = L.latLngBounds(
+          clusterQuakesData.map(quake => [
+            quake.geometry.coordinates[1],
+            quake.geometry.coordinates[0],
+          ])
+        );
+        if (bounds.isValid()) {
+          mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+        }
+      }
+    }
+  }, [clusterQuakesData, mapRef]);
+
+  // Determine initial center and zoom
+  // If clusterQuakesData is provided, map will fit bounds, so initial center/zoom is less critical
+  // If not, use the provided latitude, longitude, and a default zoom or a prop if available.
+  const initialCenter = position || [0,0]; // Fallback to [0,0] if no position (e.g. cluster mode before fitBounds)
+  const initialZoom = position ? 8 : 3; // Zoom out more if showing clusters initially
+
   return (
-    <MapContainer center={position} zoom={8} style={mapStyle}>
+    <MapContainer
+      center={initialCenter}
+      zoom={initialZoom}
+      style={mapStyle}
+      ref={mapRef}
+      // whenCreated={(mapInstance) => (mapRef.current = mapInstance)} // Alternative if ref prop not working
+    >
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
       />
-      <Marker position={position} icon={createEpicenterIcon(magnitude)}>
-        <Popup>
-          <strong>{title}</strong>
-          <br />
-          Magnitude: {magnitude}
-          {mainQuakeDetailUrl && (
-            <>
-              <br />
-              <Link to={`/quake/${encodeURIComponent(mainQuakeDetailUrl)}`} className="text-blue-500 hover:underline">
-                View Details
-              </Link>
-            </>
+      {clusterQuakesData && clusterQuakesData.length > 0 ? (
+        clusterQuakesData.map((quake, index) => (
+          <Marker
+            key={quake.id || index} // Use quake.id if available, otherwise index
+            position={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
+            icon={createNearbyQuakeIcon(quake.properties.mag, quake.properties.time)}
+          >
+            <Tooltip>
+              M {quake.properties.mag.toFixed(1)} - {quake.properties.place || 'N/A'}
+            </Tooltip>
+          </Marker>
+        ))
+      ) : (
+        <>
+          {position && ( // Only render main marker if position is valid (not in cluster mode)
+            <Marker position={position} icon={createEpicenterIcon(magnitude)}>
+              <Popup>
+                <strong>{title}</strong>
+                <br />
+                Magnitude: {magnitude}
+                {mainQuakeDetailUrl && (
+                  <>
+                    <br />
+                    <Link to={`/quake/${encodeURIComponent(mainQuakeDetailUrl)}`} className="text-blue-500 hover:underline">
+                      View Details
+                    </Link>
+                  </>
+                )}
+                {!mainQuakeDetailUrl && shakeMapUrl && (
+                  <>
+                    <br />
+                    <a href={shakeMapUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                      ShakeMap Details (External)
+                    </a>
+                  </>
+                )}
+              </Popup>
+            </Marker>
           )}
-          {!mainQuakeDetailUrl && shakeMapUrl && ( // Fallback to ShakeMap if no detail URL provided
-            <>
-              <br />
-              <a href={shakeMapUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                ShakeMap Details (External)
-              </a>
-            </>
-          )}
-        </Popup>
-      </Marker>
-      {nearbyQuakes.map((quake, index) => (
-        <Marker
-          key={index}
-          position={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
-          icon={createNearbyQuakeIcon(quake.properties.mag, quake.properties.time)}
-        >
-          <Popup>
-            Magnitude: {quake.properties.mag}
-            <br />
-            {quake.properties.title}
-            <br />
-            Time: {formatTimeAgo(quake.properties.time)}
-            <br />
-            <Link to={`/quake/${encodeURIComponent(quake.properties.detail)}`} className="text-blue-500 hover:underline">
-              View Details
-            </Link>
-          </Popup>
-        </Marker>
-      ))}
+          {nearbyQuakes.map((quake, index) => (
+            <Marker
+              key={index}
+              position={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
+              icon={createNearbyQuakeIcon(quake.properties.mag, quake.properties.time)}
+            >
+              <Popup>
+                Magnitude: {quake.properties.mag}
+                <br />
+                {quake.properties.title}
+                <br />
+                Time: {formatTimeAgo(quake.properties.time)}
+                <br />
+                <Link to={`/quake/${encodeURIComponent(quake.properties.detail)}`} className="text-blue-500 hover:underline">
+                  View Details
+                </Link>
+              </Popup>
+            </Marker>
+          ))}
+        </>
+      )}
       <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
     </MapContainer>
   );
