@@ -13,6 +13,7 @@ function EarthquakeRegionalMapPanel({
 }) {
     console.log('[EarthquakeRegionalMapPanel] Received geometry:', JSON.stringify(geometry, null, 2));
     console.log('[EarthquakeRegionalMapPanel] Received properties:', JSON.stringify(properties, null, 2));
+    console.log('[EarthquakeRegionalMapPanel] Received regionalQuakes:', JSON.stringify(regionalQuakes, null, 2));
 
     // Main Guard for Centering: Ensure valid coordinates for the map center.
     if (!geometry || !geometry.coordinates ||
@@ -57,25 +58,17 @@ function EarthquakeRegionalMapPanel({
         <div className={`${exhibitPanelClass} border-sky-500`}>
             <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
             <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
+                {/* Log props being passed to EarthquakeMap for debugging */}
+                {console.log('[EarthquakeRegionalMapPanel] Passing nearbyQuakes to EarthquakeMap:', JSON.stringify(regionalQuakes, null, 2))}
+                {console.log('[EarthquakeRegionalMapPanel] Passing fitMapToBounds to EarthquakeMap:', (regionalQuakes && regionalQuakes.length > 0))}
                 <EarthquakeMap
-                    // Dynamic props commented out for debugging:
-                    // mapCenterLatitude={mapCenterLat}
-                    // mapCenterLongitude={mapCenterLng}
-                    // {...highlightProps}
-                    // shakeMapUrl={shakemapIntensityImageUrl}
-                    // nearbyQuakes={regionalQuakes}
-                    // mainQuakeDetailUrl={detailUrl}
-                    // fitMapToBounds={regionalQuakes && regionalQuakes.length > 0}
-
-                    // Hardcoded props for testing basic rendering:
-                    mapCenterLatitude={34.0522}     // Los Angeles latitude
-                    mapCenterLongitude={-118.2437}  // Los Angeles longitude
-                    highlightQuakeLatitude={34.0522}
-                    highlightQuakeLongitude={-118.2437}
-                    highlightQuakeMagnitude={5.0}
-                    highlightQuakeTitle="Hardcoded Test Quake"
-                    // Other props like nearbyQuakes, fitMapToBounds, defaultZoom, etc.,
-                    // will use defaults defined in EarthquakeMap component signature.
+                    mapCenterLatitude={mapCenterLat}
+                    mapCenterLongitude={mapCenterLng}
+                    {...highlightProps}
+                    shakeMapUrl={shakemapIntensityImageUrl}
+                    nearbyQuakes={regionalQuakes} // This is passed as nearbyQuakes
+                    mainQuakeDetailUrl={detailUrl}
+                    fitMapToBounds={regionalQuakes && regionalQuakes.length > 0}
                 />
             </div>
         </div>
