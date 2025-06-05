@@ -298,7 +298,7 @@ function SimplifiedDepthProfile({ earthquakeDepth, magnitude }) {
 
 
 // Helper function implementation (outside the component for clarity)
-function getDynamicContextualComparisons(currentDepth, comparisonsList) {
+export function getDynamicContextualComparisons(currentDepth, comparisonsList) { // Added export
   // EarthLayers parameter removed as per new requirements
 
   const RELATABLE_OBJECTS = [
