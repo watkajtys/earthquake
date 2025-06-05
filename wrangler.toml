@@ -1,0 +1,48 @@
+# wrangler.toml
+name = "your-pages-project-name" # TODO: Replace with your actual Cloudflare Pages project name
+compatibility_date = "2024-06-05" # Feel free to update to a more recent date
+
+# Configuration for Cloudflare Pages Functions
+# Ensure this matches your project's build output directory (e.g., "dist", "build", "public")
+pages_build_output_dir = "./dist"
+
+# KV Namespace binding for cluster definitions
+# -----------------------------------------------------------------------------------------
+# IMPORTANT INSTRUCTIONS FOR THE USER:
+# 1. Create KV Namespaces:
+#    You need to create KV namespaces using the Wrangler CLI. It's recommended to have
+#    separate namespaces for production and preview/local development.
+#    Run these commands in your terminal:
+#      wrangler kv:namespace create CLUSTER_KV
+#      wrangler kv:namespace create CLUSTER_KV_PREVIEW
+#
+# 2. Update IDs Below:
+#    Wrangler will output an 'id' for each namespace created.
+#    Replace "REPLACE_WITH_PRODUCTION_KV_ID" with the ID for CLUSTER_KV.
+#    Replace "REPLACE_WITH_PREVIEW_KV_ID" with the ID for CLUSTER_KV_PREVIEW.
+#
+# 3. Dashboard Configuration (Crucial for Git-integrated Pages):
+#    For Cloudflare Pages projects linked to a Git repository, bindings set in the
+#    Cloudflare Dashboard (Settings -> Functions -> KV Namespace Bindings) often take
+#    precedence for deployed environments (production and preview).
+#    Ensure you also configure the 'CLUSTER_KV' binding there, pointing it to the
+#    respective KV namespaces for your production and preview environments.
+#    This wrangler.toml configuration is especially useful for local development
+#    with `wrangler pages dev`.
+# -----------------------------------------------------------------------------------------
+kv_namespaces = [
+  { binding = "CLUSTER_KV", id = "REPLACE_WITH_PRODUCTION_KV_ID", preview_id = "REPLACE_WITH_PREVIEW_KV_ID" }
+]
+
+# Example of other potential configurations (uncomment and adjust if needed):
+# [vars]
+# MY_VARIABLE = "production_value"
+#
+# [env.preview.vars]
+# MY_VARIABLE = "preview_value"
+#
+# [env.dev.vars] # For 'wrangler pages dev'
+# MY_VARIABLE = "dev_value"
+
+# If you have other bindings (like D1, R2, Services), define them here too.
+# Refer to Cloudflare Wrangler documentation for more details.

@@ -830,6 +830,8 @@ function App() {
                                       formatDate={formatDate}
                                       getMagnitudeColorStyle={getMagnitudeColorStyle}
                                       onIndividualQuakeSelect={handleQuakeClick}
+                                      formatTimeAgo={formatTimeAgo}
+                                      formatTimeDuration={formatTimeDuration}
                                     />
                                   }
                                 />
