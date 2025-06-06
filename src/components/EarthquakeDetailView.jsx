@@ -201,7 +201,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
         return () => {
             isMounted = false;
         };
-    }, [detailUrl, onDataLoadedForSeo]); // Dependencies remain the same
+    }, [detailUrl]); // Changed dependency: removed onDataLoadedForSeo
 
     // New useEffect for investigating phase-data
     useEffect(() => {
