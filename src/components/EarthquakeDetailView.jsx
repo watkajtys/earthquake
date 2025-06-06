@@ -4,6 +4,7 @@ import RegionalSeismicityChart from './RegionalSeismicityChart';
 import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
+import { useUIState } from '../contexts/UIStateContext'; // Import useUIState
 import { calculateDistance } from '../utils/utils.js'; // isValidNumber import removed
 // getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
 
@@ -67,6 +68,7 @@ import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfo
  * @returns {JSX.Element} The rendered EarthquakeDetailView component.
  */
 function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) { // Add dataSourceTimespanDays
+    const { setCurrentEarthquakeForAnimation } = useUIState(); // Get the setter
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(!!detailUrl);
     const [error, setError] = useState(null);
@@ -167,6 +169,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                 const data = await response.json();
                 if (isMounted) {
                     setDetailData(data);
+                    setCurrentEarthquakeForAnimation(data); // Set the fetched earthquake data in context
                     if (onDataLoadedForSeo && data) {
                         const props = data.properties;
                         const geom = data.geometry;
@@ -201,7 +204,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
         return () => {
             isMounted = false;
         };
-    }, [detailUrl, onDataLoadedForSeo]); // Dependencies remain the same
+    }, [detailUrl, onDataLoadedForSeo, setCurrentEarthquakeForAnimation]); // Added setCurrentEarthquakeForAnimation
 
     // New useEffect for investigating phase-data
     useEffect(() => {

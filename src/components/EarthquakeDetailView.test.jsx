@@ -1,6 +1,8 @@
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom'; // Import MemoryRouter
 import EarthquakeDetailView from './EarthquakeDetailView'; // Component to test
+import { UIStateProvider } from '../contexts/UIStateContext'; // Import the provider
 import { vi } from 'vitest'; // Using Vitest's mocking utilities
 
 import { axe } from 'jest-axe'; // Import axe
@@ -208,14 +210,26 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
 
   it('renders loading skeleton immediately on mount if detailUrl is provided', () => {
     fetchSpy.mockImplementationOnce(() => new Promise(() => {}));
-    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
+    render(
+      <MemoryRouter>
+        <UIStateProvider>
+          <EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />
+        </UIStateProvider>
+      </MemoryRouter>
+    );
     expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
     expect(screen.queryByText(/Details Not Available/i)).not.toBeInTheDocument();
   });
 
   it('displays loading state initially, then renders fetched data', async () => {
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => deepClone(baseMockDetailData) });
-    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
+    render(
+      <MemoryRouter>
+        <UIStateProvider>
+          <EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />
+        </UIStateProvider>
+      </MemoryRouter>
+    );
     expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
     expect(screen.queryByText(/Details Not Available/i)).not.toBeInTheDocument();
     await screen.findAllByText(baseMockDetailData.properties.title);
@@ -233,7 +247,13 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     mockDataScenarioA.geometry.coordinates = [null, null, 10];
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => mockDataScenarioA });
 
-    const { rerender } = render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={`${mockDetailUrl}A`} />);
+    const { rerender } = render(
+      <MemoryRouter>
+        <UIStateProvider>
+          <EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={`${mockDetailUrl}A`} />
+        </UIStateProvider>
+      </MemoryRouter>
+    );
     await waitFor(() => expect(screen.queryByTestId('loading-skeleton-container')).not.toBeInTheDocument());
     expect(screen.queryByTestId('mock-earthquake-map')).toBeNull(); // Map should not render due to panel's guard
     expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('MockEarthquakeMap received invalid mapCenterLatitude'));
@@ -247,7 +267,23 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     mockDataScenarioB.properties.mag = null;
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => mockDataScenarioB });
 
-    rerender(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={`${mockDetailUrl}B`} />);
+    // Need to wrap the rerendered component as well, or provide a wrapper utility
+    // For simplicity, we'll assume rerender can take the new tree.
+    // If not, the test structure might need a custom render function.
+    // Vitest's `render` typically handles the initial render. For `rerender`,
+    // it updates props of the already rendered component.
+    // The provider needs to be part of the initial render.
+    // Let's adjust by rendering into a container and then rerendering with new props
+    // but the same provider. Better: wrap initial render and trust rerender works with context.
+    // For rerender to work correctly with context providers, the initial render must have the same provider structure.
+    // The props passed to rerender will be for EarthquakeDetailView itself.
+    rerender(
+        <MemoryRouter>
+            <UIStateProvider>
+                <EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={`${mockDetailUrl}B`} />
+            </UIStateProvider>
+        </MemoryRouter>
+    );
     await waitFor(() => expect(screen.queryByTestId('loading-skeleton-container')).not.toBeInTheDocument());
 
     const mapElement = screen.queryByTestId('mock-earthquake-map');
@@ -273,7 +309,13 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     const localErrorMessage = 'Network error: Failed to fetch details';
     fetchSpy.mockRejectedValueOnce(new Error(localErrorMessage));
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
+    render(
+      <MemoryRouter>
+        <UIStateProvider>
+          <EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />
+        </UIStateProvider>
+      </MemoryRouter>
+    );
     const expectedErrorMessage = `Failed to load details: ${localErrorMessage}`;
     const errorElements = await screen.findAllByText(expectedErrorMessage);
     expect(errorElements[0]).toBeInTheDocument();
@@ -284,7 +326,13 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
   it('calls onDataLoadedForSeo with correct data when details are fetched', async () => {
     const mockOnDataLoadedForSeo = vi.fn();
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => deepClone(baseMockDetailData) });
-    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} onDataLoadedForSeo={mockOnDataLoadedForSeo} />);
+    render(
+      <MemoryRouter>
+        <UIStateProvider>
+          <EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} onDataLoadedForSeo={mockOnDataLoadedForSeo} />
+        </UIStateProvider>
+      </MemoryRouter>
+    );
     await waitFor(() => expect(mockOnDataLoadedForSeo).toHaveBeenCalledTimes(1));
     const shakemapProduct = baseMockDetailData.properties.products?.shakemap?.[0];
     const expectedShakemapUrl = shakemapProduct?.contents?.['download/intensity.jpg']?.url;
@@ -305,7 +353,13 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.properties.time = null;
     currentMockData.properties.title = "Test Null Time";
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
+    render(
+      <MemoryRouter>
+        <UIStateProvider>
+          <EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />
+        </UIStateProvider>
+      </MemoryRouter>
+    );
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.queryByText("Date & Time (UTC)")).not.toBeInTheDocument();
   });
@@ -327,7 +381,13 @@ describe('EarthquakeDetailView Accessibility', () => {
 
   it('should have no axe violations when displaying data', async () => {
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => JSON.parse(JSON.stringify(mockDetailDataAxe)) });
-    const { container } = render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlAxe} onDataLoadedForSeo={vi.fn()} />);
+    const { container } = render(
+      <MemoryRouter>
+        <UIStateProvider>
+          <EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlAxe} onDataLoadedForSeo={vi.fn()} />
+        </UIStateProvider>
+      </MemoryRouter>
+    );
     await waitFor(() => {
       expect(screen.getByText((content, element) => element.id === 'earthquake-detail-title' && content.startsWith(mockDetailDataAxe.properties.title))).toBeInTheDocument();
     });
