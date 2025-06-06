@@ -132,7 +132,7 @@ const ClusterMiniMap = ({ cluster }) => {
 
   // Render the EarthquakeMap with the prepared props, wrapped in a div to maintain fixed height.
   return (
-    <div style={{ height: '200px', width: '100%' }}>
+    <div style={{ width: '100%' }} className="h-[300px] md:h-[400px] lg:h-[450px]">
       <EarthquakeMap {...mapProps} />
     </div>
   );
