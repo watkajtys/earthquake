@@ -48,48 +48,54 @@ export const SeismicEnergyDisplay = () => {
                                  energyThisWeek > 0 ? 'Significantly more than last week' : 'N/A';
 
     return (
-        <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm text-slate-200">
-            <h3 className="text-md font-semibold mb-3 text-indigo-400">Seismic Energy Release Comparison</h3>
+        <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md text-sm text-slate-200">
+            {/* Adjusted padding slightly (p-4), and title size for responsiveness */}
+            <h3 className="text-base sm:text-md font-semibold mb-4 text-indigo-400">Seismic Energy Release Comparison</h3>
 
-            {/* Daily Comparison */}
-            <div className="mb-3 pb-3 border-b border-slate-600">
-                <p className="font-semibold text-slate-300 mb-1">Daily Energy (Today vs. Yesterday)</p>
-                <div className="grid grid-cols-2 gap-x-2">
-                    <div>
-                        <p className="text-xs text-slate-400">Today:</p>
-                        <p className="font-medium text-lg text-sky-400">{formatEnergy(energyToday)}</p>
+            <div className="flex flex-col md:flex-row md:space-x-4">
+                {/* Daily Comparison Section */}
+                {/* Added md:flex-1 for equal width on medium screens and up */}
+                {/* Adjusted border: border-b md:border-b-0 md:border-r - border on bottom for mobile, on right for desktop */}
+                <div className="md:flex-1 mb-4 md:mb-0 pb-4 md:pb-0 md:pr-4 border-b border-slate-600 md:border-b-0 md:border-r">
+                    <p className="font-semibold text-slate-300 mb-2">Daily Energy (Today vs. Yesterday)</p>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1"> {/* Added gap-y-1 for consistency */}
+                        <div>
+                            <p className="text-xs text-slate-400">Today:</p>
+                            {/* Adjusted text size for values to be slightly more responsive */}
+                            <p className="font-medium text-base sm:text-lg text-sky-400">{formatEnergy(energyToday)}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-400">Yesterday:</p>
+                            <p className="font-medium text-base sm:text-lg text-slate-400">{formatEnergy(energyYesterday)}</p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-xs text-slate-400">Yesterday:</p>
-                        <p className="font-medium text-lg text-slate-400">{formatEnergy(energyYesterday)}</p>
-                    </div>
+                    {energyYesterday === 0 && energyToday === 0 ? (
+                        <p className="text-xs mt-2 text-slate-500">No significant energy recorded.</p> // Simplified message
+                    ) : (
+                        <p className="text-xs mt-2 text-slate-400">Factor: <span className="font-semibold">{todayYesterdayRatio}</span></p>
+                    )}
                 </div>
-                {energyYesterday === 0 && energyToday === 0 ? (
-                     <p className="text-xs mt-1 text-slate-500">No significant energy recorded for today or yesterday.</p>
-                ) : (
-                     <p className="text-xs mt-1 text-slate-400">Factor: <span className="font-semibold">{todayYesterdayRatio}</span></p>
-                )}
 
-            </div>
-
-            {/* Weekly Comparison */}
-            <div>
-                <p className="font-semibold text-slate-300 mb-1">Weekly Energy (This Week vs. Last Week)</p>
-                 <div className="grid grid-cols-2 gap-x-2">
-                    <div>
-                        <p className="text-xs text-slate-400">This Week:</p>
-                        <p className="font-medium text-lg text-sky-400">{formatEnergy(energyThisWeek)}</p>
+                {/* Weekly Comparison Section */}
+                {/* Added md:flex-1 for equal width */}
+                <div className="md:flex-1">
+                    <p className="font-semibold text-slate-300 mb-2">Weekly Energy (This Week vs. Last Week)</p>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                        <div>
+                            <p className="text-xs text-slate-400">This Week:</p>
+                            <p className="font-medium text-base sm:text-lg text-sky-400">{formatEnergy(energyThisWeek)}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-400">Last Week:</p>
+                            <p className="font-medium text-base sm:text-lg text-slate-400">{formatEnergy(energyLastWeek)}</p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-xs text-slate-400">Last Week:</p>
-                        <p className="font-medium text-lg text-slate-400">{formatEnergy(energyLastWeek)}</p>
-                    </div>
+                    {energyLastWeek === 0 && energyThisWeek === 0 ? (
+                        <p className="text-xs mt-2 text-slate-500">No significant energy recorded.</p> // Simplified message
+                    ) : (
+                        <p className="text-xs mt-2 text-slate-400">Factor: <span className="font-semibold">{thisWeekLastWeekRatio}</span></p>
+                    )}
                 </div>
-                {energyLastWeek === 0 && energyThisWeek === 0 ? (
-                    <p className="text-xs mt-1 text-slate-500">No significant energy recorded for this or last week.</p>
-                ) : (
-                    <p className="text-xs mt-1 text-slate-400">Factor: <span className="font-semibold">{thisWeekLastWeekRatio}</span></p>
-                )}
             </div>
         </div>
     );

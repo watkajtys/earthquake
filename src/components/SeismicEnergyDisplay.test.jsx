@@ -31,9 +31,8 @@ describe('SeismicEnergyDisplay', () => {
         expect(screen.getByText('Seismic Energy Release Comparison')).toBeInTheDocument();
         expect(screen.getByText('Today:')).toBeInTheDocument();
         expect(screen.getAllByText('0 J').length).toBeGreaterThanOrEqual(4); // Today, Yesterday, This Week, Last Week
-        // Check for the specific message for no significant energy, which replaces "Factor: N/A"
-        expect(screen.getByText('No significant energy recorded for today or yesterday.')).toBeInTheDocument();
-        expect(screen.getByText('No significant energy recorded for this or last week.')).toBeInTheDocument();
+        // Check for the new simplified message for no significant energy
+        expect(screen.getAllByText('No significant energy recorded.').length).toBe(2);
         expect(screen.queryByText('Factor: N/A')).not.toBeInTheDocument();
     });
 
@@ -124,6 +123,7 @@ describe('SeismicEnergyDisplay', () => {
         // Let's re-check JSX:
         // {energyYesterday === 0 && energyToday === 0 ? specific_message : general_factor_line }
         // So "Factor: N/A" should NOT be there if both are zero.
+        // This assertion was already correct. The specific messages above were the primary change.
         expect(screen.queryByText('Factor: N/A')).not.toBeInTheDocument();
     });
 

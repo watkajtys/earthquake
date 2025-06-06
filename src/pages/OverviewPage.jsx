@@ -9,6 +9,7 @@ import QuickFact from '../components/QuickFact'; // Import the new component
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 import RegionalDistributionList from '../components/RegionalDistributionList';
+import SeismicEnergyDisplay from '../components/SeismicEnergyDisplay'; // Import the new component
 // InfoSnippet is now imported in QuickFact.jsx
 import ClusterSummaryItem from '../components/ClusterSummaryItem'; // Assuming this is used here
 // Import any other components specific to the previous inline overview content if needed
@@ -129,6 +130,8 @@ const OverviewPage = ({
                     isLoading={isLoadingDaily || (isLoadingWeekly && !earthquakesLast24Hours)}
                     calculateStats={calculateStats}
                 />
+
+                <SeismicEnergyDisplay />
 
                 {/* Active Earthquake Clusters Section */}
                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">

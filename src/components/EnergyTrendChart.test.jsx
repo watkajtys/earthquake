@@ -13,6 +13,43 @@ const renderWithMockContext = (ui, contextValues) => {
     );
 };
 
+// Mock offsetWidth to allow chart rendering in JSDOM
+let originalOffsetWidth;
+let mockResizeObserver;
+
+beforeAll(() => {
+    originalOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+        configurable: true,
+        value: 500, // Provide a mock width
+    });
+
+    mockResizeObserver = class ResizeObserver {
+        constructor(callback) {
+            this.callback = callback;
+        }
+        observe(target) {
+            // Immediately call the callback with mock dimensions
+            // JSDOM doesn't have layout, so we simulate a resize event
+            this.callback([{ contentRect: { width: 500, height: 220 } }], this);
+        }
+        unobserve() {
+            // Do nothing in mock
+        }
+        disconnect() {
+            // Do nothing in mock
+        }
+    };
+    global.ResizeObserver = mockResizeObserver;
+});
+
+afterAll(() => {
+    if (originalOffsetWidth) {
+        Object.defineProperty(HTMLElement.prototype, 'offsetWidth', originalOffsetWidth);
+    }
+    delete global.ResizeObserver; // Clean up the global mock
+});
+
 // Mock initial state for context, focusing on what EnergyTrendChart uses
 const mockBaseContextValue = {
     dailyEnergyTrend: [],

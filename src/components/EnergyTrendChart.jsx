@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
 
 // Simplified formatter for axis labels, showing only units for large numbers
@@ -35,13 +35,41 @@ const formatEnergyForTooltip = (joules) => {
 
 export const EnergyTrendChart = ({ title = "Daily Seismic Energy Trend (Last 30 Days)" }) => {
     const { dailyEnergyTrend, energyComparisonError } = useEarthquakeDataState();
+    const svgContainerRef = useRef(null);
+    const [currentSvgWidth, setCurrentSvgWidth] = useState(450); // Default width
 
-    // SVG Dimensions and Margins
-    const svgWidth = 450;
-    const svgHeight = 220;
-    const margin = { top: 20, right: 20, bottom: 50, left: 60 }; // Increased bottom for x-axis labels, left for y-axis
-    const chartWidth = svgWidth - margin.left - margin.right;
-    const chartHeight = svgHeight - margin.top - margin.bottom;
+    const fixedSvgHeight = 220; // Keep height fixed for simplicity, or make it aspect ratio based
+    const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+
+    useEffect(() => {
+        const observer = new ResizeObserver(entries => {
+            if (entries[0]?.contentRect) {
+                setCurrentSvgWidth(entries[0].contentRect.width);
+            }
+        });
+
+        let currentRef = null; // Variable to hold the current ref value
+
+        if (svgContainerRef.current) {
+            observer.observe(svgContainerRef.current);
+            currentRef = svgContainerRef.current; // Assign current ref to variable
+        }
+
+        // Initial set
+        if (svgContainerRef.current && currentSvgWidth === 450) { // Only set if still default
+             setCurrentSvgWidth(svgContainerRef.current.offsetWidth);
+        }
+
+
+        return () => {
+            if (currentRef) { // Use the variable in the cleanup function
+                observer.unobserve(currentRef);
+            }
+        };
+    }, []); // Empty dependency array: run only on mount and unmount
+
+    const chartWidth = Math.max(0, currentSvgWidth - margin.left - margin.right);
+    const chartHeight = Math.max(0, fixedSvgHeight - margin.top - margin.bottom);
 
     if (energyComparisonError) { // Though less likely for trend, good to check
         return (
@@ -65,9 +93,10 @@ export const EnergyTrendChart = ({ title = "Daily Seismic Energy Trend (Last 30 
 
     // Scales
     const xScale = (index) => (index / dailyEnergyTrend.length) * chartWidth;
-    const yScale = (energyValue) => chartHeight - (energyValue / (maxEnergy > 0 ? maxEnergy : 1)) * chartHeight; // Avoid division by zero if maxEnergy is 0
+    const yScale = (energyValue) => chartHeight - (energyValue / (maxEnergy > 0 ? maxEnergy : 1)) * chartHeight;
 
-    const barWidth = chartWidth / dailyEnergyTrend.length - 2; // -2 for some spacing
+    const barPadding = 2; // Space between bars
+    const barWidth = dailyEnergyTrend.length > 0 ? (chartWidth / dailyEnergyTrend.length) - barPadding : 0;
 
     // Y-axis ticks (simplified: 0, half, max)
     const yTicks = [
@@ -78,71 +107,86 @@ export const EnergyTrendChart = ({ title = "Daily Seismic Energy Trend (Last 30 
         ] : [])
     ];
 
-    // X-axis ticks (simplified: first, middle, last date)
+    // X-axis ticks - adjust density based on width
     const xTickData = [];
-    if (dailyEnergyTrend.length > 0) {
-        xTickData.push({ index: 0, label: dailyEnergyTrend[0].dateString });
-        if (dailyEnergyTrend.length > 15) { // Add middle tick if data is substantial
-             xTickData.push({ index: Math.floor(dailyEnergyTrend.length / 2), label: dailyEnergyTrend[Math.floor(dailyEnergyTrend.length / 2)].dateString });
-        }
-        if (dailyEnergyTrend.length > 1) { // Ensure not to repeat if only 1 item
-            xTickData.push({ index: dailyEnergyTrend.length - 1, label: dailyEnergyTrend[dailyEnergyTrend.length - 1].dateString });
+    if (dailyEnergyTrend.length > 0 && chartWidth > 0) {
+        const maxTicks = Math.floor(chartWidth / 70); // Approx 70px per label
+        const numLabels = Math.min(dailyEnergyTrend.length, Math.max(2, maxTicks)); // At least 2 labels, at most what fits
+
+        if (numLabels <= 2 && dailyEnergyTrend.length > 0) {
+            xTickData.push({ index: 0, label: dailyEnergyTrend[0].dateString });
+            if (dailyEnergyTrend.length > 1) {
+                 xTickData.push({ index: dailyEnergyTrend.length - 1, label: dailyEnergyTrend[dailyEnergyTrend.length - 1].dateString });
+            }
+        } else {
+            const step = Math.max(1, Math.floor(dailyEnergyTrend.length / (numLabels -1)));
+            for (let i = 0; i < dailyEnergyTrend.length; i += step) {
+                xTickData.push({ index: i, label: dailyEnergyTrend[i].dateString });
+            }
+            // Ensure last item is added if step doesn't cover it
+            if (!xTickData.find(tick => tick.index === dailyEnergyTrend.length - 1) && dailyEnergyTrend.length > 1) {
+                 xTickData.push({ index: dailyEnergyTrend.length - 1, label: dailyEnergyTrend[dailyEnergyTrend.length -1].dateString });
+            }
         }
     }
 
 
     return (
-        <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 shadow-xl text-sm text-slate-300">
-            {title && <h3 className="text-lg font-semibold mb-3 text-indigo-300">{title}</h3>}
-            <svg width={svgWidth} height={svgHeight} aria-labelledby="chart-title" role="graphics-document">
-                <title id="chart-title">{title}</title>
-                <g transform={`translate(${margin.left}, ${margin.top})`}>
-                    {/* Y-axis Line */}
-                    <line x1="0" y1="0" x2="0" y2={chartHeight} stroke="#a0aec0" strokeWidth="1" />
-                    {/* Y-axis Ticks and Labels */}
-                    {yTicks.map(tick => (
-                        <g key={`y-tick-${tick.value}`} transform={`translate(0, ${yScale(tick.value)})`}>
-                            <line x1="-5" y1="0" x2="0" y2="0" stroke="#a0aec0" strokeWidth="1" />
-                            <text x="-10" y="3" fill="#a0aec0" textAnchor="end" fontSize="10px">
-                                {tick.label}
-                            </text>
+        <div className="bg-slate-800 p-2 sm:p-4 rounded-lg border border-slate-700 shadow-xl text-sm text-slate-300">
+            {title && <h3 className="text-base sm:text-lg font-semibold mb-3 text-indigo-300">{title}</h3>}
+            <div ref={svgContainerRef} className="w-full">
+                {chartWidth > 0 && chartHeight > 0 && dailyEnergyTrend.length > 0 && ( // Only render SVG if dimensions are valid
+                    <svg width="100%" height={fixedSvgHeight} aria-labelledby="chart-title" role="graphics-document" viewBox={`0 0 ${currentSvgWidth} ${fixedSvgHeight}`}>
+                        <title id="chart-title">{title}</title>
+                        <g transform={`translate(${margin.left}, ${margin.top})`}>
+                            {/* Y-axis Line */}
+                            <line x1="0" y1="0" x2="0" y2={chartHeight} stroke="currentColor" strokeOpacity="0.3" strokeWidth="1" />
+                            {/* Y-axis Ticks and Labels */}
+                            {yTicks.map(tick => (
+                                <g key={`y-tick-${tick.value}`} transform={`translate(0, ${yScale(tick.value)})`}>
+                                    <line x1="-5" y1="0" x2="0" y2="0" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1" />
+                                    <text x="-8" y="3" fill="currentColor" strokeOpacity="0.7" textAnchor="end" fontSize="0.6rem" sm-fontsize="0.75rem">
+                                        {tick.label}
+                                    </text>
+                                </g>
+                            ))}
+
+                            {/* X-axis Line */}
+                            <line x1="0" y1={chartHeight} x2={chartWidth} y2={chartHeight} stroke="currentColor" strokeOpacity="0.3" strokeWidth="1" />
+                            {/* X-axis Ticks and Labels */}
+                            {xTickData.map(tick => (
+                                <g key={`x-tick-${tick.index}`} transform={`translate(${xScale(tick.index) + barWidth / 2}, ${chartHeight})`}>
+                                    <text y="15" fill="currentColor" strokeOpacity="0.7" textAnchor="middle" fontSize="0.6rem" sm-fontsize="0.75rem">
+                                        {tick.label}
+                                    </text>
+                                </g>
+                            ))}
+
+                            {/* Bars */}
+                            {dailyEnergyTrend.map((dataPoint, index) => {
+                                const barHeight = chartHeight - yScale(dataPoint.energy);
+                                const xPos = xScale(index) + barPadding / 2; // Adjust xPos for padding
+                                const yPos = yScale(dataPoint.energy);
+
+                                return (
+                                    <rect
+                                        key={dataPoint.dateString || index}
+                                        x={xPos}
+                                        y={yPos}
+                                        width={Math.max(0, barWidth)}
+                                        height={Math.max(0, barHeight)}
+                                        fill={dataPoint.energy > 0 ? "rgba(59, 130, 246, 0.6)" : "rgba(71, 85, 105, 0.6)"} // blue-500/slate-600 with opacity
+                                        className="hover:opacity-100 transition-opacity duration-150"
+                                        rx="1"
+                                    >
+                                        <title>{`${dataPoint.dateString}: ${formatEnergyForTooltip(dataPoint.energy)}`}</title>
+                                    </rect>
+                                );
+                            })}
                         </g>
-                    ))}
-
-                    {/* X-axis Line */}
-                    <line x1="0" y1={chartHeight} x2={chartWidth} y2={chartHeight} stroke="#a0aec0" strokeWidth="1" />
-                     {/* X-axis Ticks and Labels */}
-                    {xTickData.map(tick => (
-                        <g key={`x-tick-${tick.index}`} transform={`translate(${xScale(tick.index) + barWidth / 2}, ${chartHeight})`}>
-                            <text y="15" fill="#a0aec0" textAnchor="middle" fontSize="10px">
-                                {tick.label}
-                            </text>
-                        </g>
-                    ))}
-
-                    {/* Bars */}
-                    {dailyEnergyTrend.map((dataPoint, index) => {
-                        const barHeight = chartHeight - yScale(dataPoint.energy);
-                        const xPos = xScale(index);
-                        const yPos = yScale(dataPoint.energy);
-
-                        return (
-                            <rect
-                                key={dataPoint.dateString || index}
-                                x={xPos}
-                                y={yPos}
-                                width={Math.max(0, barWidth)} // Ensure width is not negative
-                                height={Math.max(0, barHeight)} // Ensure height is not negative
-                                fill={dataPoint.energy > 0 ? "rgba(59, 130, 246, 0.7)" : "#4a5568"} // blue-500 with opacity, gray for zero
-                                className="hover:fill-blue-400 transition-colors duration-150"
-                                rx="1" // Slightly rounded corners for bars
-                            >
-                                <title>{`${dataPoint.dateString}: ${formatEnergyForTooltip(dataPoint.energy)}`}</title>
-                            </rect>
-                        );
-                    })}
-                </g>
-            </svg>
+                    </svg>
+                )}
+            </div>
         </div>
     );
 };

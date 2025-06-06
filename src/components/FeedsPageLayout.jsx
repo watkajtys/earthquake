@@ -4,6 +4,7 @@ import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // I
 import { useUIState } from '../contexts/UIStateContext'; // Import context
 import SeoMetadata from './SeoMetadata';
 import SummaryStatisticsCard from './SummaryStatisticsCard';
+import EnergyTrendChart from './EnergyTrendChart'; // Import the new component
 import PaginatedEarthquakeTable from './PaginatedEarthquakeTable';
 import FeedSelector from './FeedSelector';
 import LoadMoreDataButton from './LoadMoreDataButton'; // Import the new component
@@ -145,6 +146,10 @@ const FeedsPageLayout = ({
                     calculateStats={calculateStats}
                     // FEELABLE_QUAKE_THRESHOLD is now imported by SummaryStatisticsCard
                 />
+                {/* Add EnergyTrendChart here */}
+                <div className="my-3"> {/* Add some vertical margin for spacing */}
+                    <EnergyTrendChart title="30-Day Seismic Energy Trend" />
+                </div>
                 <PaginatedEarthquakeTable
                     title={currentFeedTitle}
                     earthquakes={currentFeedData || []}
