@@ -288,48 +288,73 @@ describe('EarthquakeDetailModalComponent', () => {
     // No need to mock react-router-dom here as it's done globally at the top of the file
     // Ensure EarthquakeDetailView mock is also available (done globally)
 
-    test('passes dataSourceTimespanDays as 30 to EarthquakeDetailView when hasAttemptedMonthlyLoad is true', () => {
+    test('passes correct props to EarthquakeDetailView when hasAttemptedMonthlyLoad is true', () => {
+      const mockLoadMonthly = vi.fn();
+      const mockAllEarthquakes = [{ id: 'a1' }];
       useEarthquakeDataState.mockReturnValue({
-        allEarthquakes: [{ id: 'eq1', properties: {}, geometry: {} }],
-        earthquakesLast7Days: [],
-        loadMonthlyData: vi.fn(),
-        hasAttemptedMonthlyLoad: true, // Key for this test
-        isLoadingMonthly: false,
-      });
-
-      renderComponent(); // Uses the props passed to EarthquakeDetailModalComponent
-
-      // Check props passed to the mocked EarthquakeDetailView
-      // The mock for EarthquakeDetailView is at the top, using vi.mock
-      // We can use the imported EarthquakeDetailView directly as it's already the mock
-      // The mock is defined to take only one 'props' argument.
-      // Check the first argument of the first call
-      expect(EarthquakeDetailView.mock.calls[0][0]).toEqual(
-        expect.objectContaining({
-          dataSourceTimespanDays: 30,
-        })
-      );
-    });
-
-    test('passes dataSourceTimespanDays as 7 to EarthquakeDetailView when hasAttemptedMonthlyLoad is false', () => {
-      useEarthquakeDataState.mockReturnValue({
-        allEarthquakes: [],
-        earthquakesLast7Days: [{ id: 'eq2', properties: {}, geometry: {} }],
-        loadMonthlyData: vi.fn(),
-        hasAttemptedMonthlyLoad: false, // Key for this test
+        allEarthquakes: mockAllEarthquakes,
+        earthquakesLast7Days: [{id: 's7'}],
+        loadMonthlyData: mockLoadMonthly,
+        hasAttemptedMonthlyLoad: true,
         isLoadingMonthly: false,
       });
 
       renderComponent();
 
-      // Use the imported EarthquakeDetailView directly
-      // The mock is defined to take only one 'props' argument.
-      // Check the first argument of the first call
-      expect(EarthquakeDetailView.mock.calls[0][0]).toEqual(
-        expect.objectContaining({
-          dataSourceTimespanDays: 7,
-        })
+      const passedProps = EarthquakeDetailView.mock.calls[0][0];
+      expect(passedProps.dataSourceTimespanDays).toBe(30);
+      expect(passedProps.broaderEarthquakeData).toBe(mockAllEarthquakes);
+      expect(passedProps.handleLoadMonthlyData).toBe(mockLoadMonthly);
+      expect(passedProps.hasAttemptedMonthlyLoad).toBe(true);
+    });
+
+    test('passes correct props to EarthquakeDetailView when hasAttemptedMonthlyLoad is false', () => {
+      const mockLoadMonthly = vi.fn();
+      const mock7DayEarthquakes = [{ id: 's7' }];
+      useEarthquakeDataState.mockReturnValue({
+        allEarthquakes: [],
+        earthquakesLast7Days: mock7DayEarthquakes,
+        loadMonthlyData: mockLoadMonthly,
+        hasAttemptedMonthlyLoad: false,
+        isLoadingMonthly: false,
+      });
+
+      renderComponent();
+
+      const passedProps = EarthquakeDetailView.mock.calls[0][0];
+      expect(passedProps.dataSourceTimespanDays).toBe(7);
+      expect(passedProps.broaderEarthquakeData).toBe(mock7DayEarthquakes);
+      expect(passedProps.handleLoadMonthlyData).toBe(mockLoadMonthly);
+      expect(passedProps.hasAttemptedMonthlyLoad).toBe(false);
+    });
+  });
+
+  describe('Handling of detailUrlParam', () => {
+    test('does not render EarthquakeDetailView if detailUrlParam is missing/invalid', () => {
+      // Override useParams mock for this test
+      vi.mocked(require('react-router-dom').useParams).mockReturnValueOnce({ detailUrlParam: undefined });
+
+      render( // Render directly without initialEntries for this specific useParams case or provide matching route
+        <MemoryRouter initialEntries={['/quake/']}> {/* Or a route that results in no param */}
+            <Routes>
+                <Route path="/quake/:detailUrlParam?" element={<EarthquakeDetailModalComponent />} />
+            </Routes>
+        </MemoryRouter>
       );
+      expect(EarthquakeDetailView).not.toHaveBeenCalled();
+
+      // Check SeoMetadata for default/initial URLs when detailUrlParam is missing
+      const lastSeoCall = SeoMetadata.mock.calls[SeoMetadata.mock.calls.length - 1][0];
+      expect(lastSeoCall.pageUrl).toBe("https://earthquakeslive.com");
+      expect(lastSeoCall.canonicalUrl).toBe("https://earthquakeslive.com");
+    });
+
+    test('renders EarthquakeDetailView when detailUrlParam is present', () => {
+      // useParams is mocked globally to return 'test-detail-url'
+      renderComponent();
+      expect(EarthquakeDetailView).toHaveBeenCalled();
+      const passedProps = EarthquakeDetailView.mock.calls[0][0];
+      expect(passedProps.detailUrl).toBe('test-detail-url'); // Decoded version
     });
   });
 });

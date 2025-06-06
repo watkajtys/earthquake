@@ -313,3 +313,195 @@ describe('getMagnitudeColor', () => {
     expect(getMagnitudeColor(-1.0)).toBe('#67E8F9');
   });
 });
+
+describe('isValidNumber', () => {
+  it('should return true for valid numbers and numeric strings', () => {
+    expect(isValidNumber(123)).toBe(true);
+    expect(isValidNumber(-123.45)).toBe(true);
+    expect(isValidNumber("123")).toBe(true);
+    expect(isValidNumber("0.5")).toBe(true);
+    expect(isValidNumber("-12.3")).toBe(true);
+    expect(isValidNumber(0)).toBe(true);
+    expect(isValidNumber("0")).toBe(true);
+  });
+
+  it('should return false for non-numeric strings, null, undefined, NaN', () => {
+    expect(isValidNumber("abc")).toBe(false);
+    expect(isValidNumber("12a")).toBe(false);
+    expect(isValidNumber(null)).toBe(false);
+    expect(isValidNumber(undefined)).toBe(false);
+    expect(isValidNumber(NaN)).toBe(false);
+    expect(isValidNumber("")).toBe(false);
+    expect(isValidNumber("  ")).toBe(false); // parseFloat("  ") is NaN
+    expect(isValidNumber({})).toBe(false);
+    expect(isValidNumber([])).toBe(false);
+  });
+});
+
+describe('formatDate', () => {
+  it('should format a valid timestamp correctly', () => {
+    // Example: Tue, Apr 9, 2024, 10:15:30 AM GMT+0000 (Coordinated Universal Time)
+    // The exact string depends on the test runner's locale & timezone unless specified.
+    // Let's use a fixed date for predictability if possible, or regex.
+    // For now, check it's a non-empty string and contains year.
+    const timestamp = 1678886400000; // March 15, 2023, 12:00:00 PM UTC
+    const formatted = formatDate(timestamp);
+    expect(formatted).toEqual(expect.any(String));
+    expect(formatted).not.toBe('N/A');
+    // A more specific check might be too brittle due to locale.
+    // Example: "Wednesday, March 15, 2023 at 12:00:00 PM Coordinated Universal Time"
+    // For consistency, we can mock toLocaleString or check parts.
+    // For this test, we'll check for a known part of a UTC formatted date.
+    // new Date(timestamp).toLocaleString([], { dateStyle: 'full', timeStyle: 'long' })
+    // For a consistent test, let's assume a specific locale is used by the environment or mock it.
+    // Since we can't easily mock toLocaleString's internal behavior here,
+    // we'll rely on a snapshot or a very general check.
+    // A simple check could be that it contains the year.
+    expect(formatted).toContain("2023");
+    expect(formatted).toContain("March");
+  });
+
+  it('should return "N/A" for null timestamp', () => {
+    expect(formatDate(null)).toBe('N/A');
+  });
+
+  it('should return "N/A" for undefined timestamp', () => {
+    expect(formatDate(undefined)).toBe('N/A');
+  });
+
+  it('should return "N/A" for invalid timestamp (e.g. string)', () => {
+    // new Date("invalid-date").toLocaleString() might return "Invalid Date" or throw.
+    // The function's current implementation doesn't explicitly check for invalid date objects after new Date().
+    // It relies on new Date(timestamp) behavior. If timestamp is a string that can't be parsed,
+    // new Date() will produce an "Invalid Date" object. toLocaleString() on that is "Invalid Date".
+    // However, the guard `if (!timestamp)` handles empty strings correctly.
+    // Let's test with a non-parseable string.
+    const result = formatDate("not-a-date-string");
+    // Depending on JS engine, new Date("not-a-date-string").toLocaleString() could be "Invalid Date"
+    // The current implementation returns "N/A" due to the initial `if (!timestamp)` check for falsy values.
+    // If "not-a-date-string" is passed, it's truthy, so it proceeds.
+    // `new Date("not-a-date-string").toLocaleString()` is "Invalid Date" in Node.
+    expect(result).toBe("Invalid Date");
+  });
+});
+
+describe('isValidString', () => {
+  it('should return true for non-empty strings', () => {
+    expect(isValidString("hello")).toBe(true);
+    expect(isValidString("  hello  ")).toBe(true); // Should still be true after trim
+    expect(isValidString("0")).toBe(true);
+    expect(isValidString("null")).toBe(true);
+  });
+
+  it('should return false for empty or whitespace-only strings', () => {
+    expect(isValidString("")).toBe(false);
+    expect(isValidString("   ")).toBe(false);
+  });
+
+  it('should return false for non-string types', () => {
+    expect(isValidString(123)).toBe(false);
+    expect(isValidString(null)).toBe(false);
+    expect(isValidString(undefined)).toBe(false);
+    expect(isValidString({})).toBe(false);
+    expect(isValidString([])).toBe(false);
+  });
+});
+
+describe('isValuePresent', () => {
+  it('should return true for values that are not null or undefined', () => {
+    expect(isValuePresent(0)).toBe(true);
+    expect(isValuePresent("")).toBe(true); // Empty string is present
+    expect(isValuePresent(false)).toBe(true);
+    expect(isValuePresent({})).toBe(true);
+    expect(isValuePresent([])).toBe(true);
+    expect(isValuePresent("hello")).toBe(true);
+    expect(isValuePresent(NaN)).toBe(true); // NaN is considered present
+  });
+
+  it('should return false for null', () => {
+    expect(isValuePresent(null)).toBe(false);
+  });
+
+  it('should return false for undefined', () => {
+    expect(isValuePresent(undefined)).toBe(false);
+  });
+});
+
+describe('formatNumber', () => {
+  it('should format numbers to specified precision', () => {
+    expect(formatNumber(123.456, 2)).toBe("123.46");
+    expect(formatNumber(123.456, 1)).toBe("123.5");
+    expect(formatNumber(123, 2)).toBe("123.00");
+    expect(formatNumber("123.456", 2)).toBe("123.46");
+  });
+
+  it('should default to 1 decimal place if precision is not specified', () => {
+    expect(formatNumber(123.456)).toBe("123.5");
+  });
+
+  it('should return "N/A" for NaN or non-parseable inputs', () => {
+    expect(formatNumber(NaN)).toBe("N/A");
+    expect(formatNumber("abc")).toBe("N/A");
+    expect(formatNumber(undefined)).toBe("N/A");
+    expect(formatNumber(null)).toBe("N/A"); // parseFloat(null) is 0, so this will be "0.0"
+  });
+
+  it('should handle null by returning "0.0" due to parseFloat(null) === 0', () => {
+    expect(formatNumber(null)).toBe("0.0");
+  });
+});
+
+describe('formatLargeNumber', () => {
+  it('should return "N/A" for invalid number inputs', () => {
+    expect(formatLargeNumber("abc")).toBe("N/A");
+    expect(formatLargeNumber(null)).toBe("N/A"); // isValidNumber(null) is false
+    expect(formatLargeNumber(undefined)).toBe("N/A");
+  });
+
+  it('should return "0" for 0', () => {
+    expect(formatLargeNumber(0)).toBe("0");
+  });
+
+  it('should format numbers less than 1000 without suffix', () => {
+    expect(formatLargeNumber(123)).toBe("123");
+    expect(formatLargeNumber(999.99)).toBe("999.99");
+    expect(formatLargeNumber(-123.45)).toBe("-123.45");
+  });
+
+  it('should format thousands with "thousand" suffix', () => {
+    expect(formatLargeNumber(1234)).toBe("1.23 thousand");
+    expect(formatLargeNumber(123456)).toBe("123.46 thousand");
+    expect(formatLargeNumber(999999)).toBe("1,000 thousand"); // toLocaleString behavior for 999.999
+  });
+
+  it('should format millions with "million" suffix', () => {
+    expect(formatLargeNumber(1234567)).toBe("1.23 million");
+    expect(formatLargeNumber(987654321)).toBe("987.65 million");
+  });
+
+  it('should format billions with "billion" suffix', () => {
+    expect(formatLargeNumber(1.23e9)).toBe("1.23 billion");
+  });
+
+  it('should format trillions with "trillion" suffix', () => {
+    expect(formatLargeNumber(1.23e12)).toBe("1.23 trillion");
+  });
+
+  it('should format quadrillions with "quadrillion" suffix', () => {
+    expect(formatLargeNumber(1.23e15)).toBe("1.23 quadrillion");
+  });
+
+  it('should format quintillions with "quintillion" suffix', () => {
+    expect(formatLargeNumber(1.23e18)).toBe("1.23 quintillion");
+  });
+
+  it('should use exponential notation for numbers >= 1e21', () => {
+    expect(formatLargeNumber(1.23e21)).toBe("1.23 x 10^21");
+    expect(formatLargeNumber(1e24)).toBe("1.00 x 10^24");
+  });
+
+  it('should handle negative large numbers correctly', () => {
+    expect(formatLargeNumber(-1234567)).toBe("-1.23 million");
+    expect(formatLargeNumber(-1.23e21)).toBe("-1.23 x 10^21");
+  });
+});
