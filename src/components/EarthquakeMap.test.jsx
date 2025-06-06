@@ -116,10 +116,11 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     expect(shakeMapLink).toHaveAttribute('href', "https://shakemap.example.com");
   });
 
-  it('renders TileLayer and GeoJSON layer', () => {
+  it('renders TileLayer and GeoJSON layer', async () => { // Made test async
     render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
     expect(screen.getByTestId('tile-layer')).toBeInTheDocument();
-    expect(screen.getByTestId('geojson-layer')).toBeInTheDocument();
+    // GeoJSON layer is now loaded asynchronously
+    expect(await screen.findByTestId('geojson-layer')).toBeInTheDocument();
   });
 
   it('renders markers for nearby quakes', () => {
