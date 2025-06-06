@@ -91,7 +91,7 @@ const EarthquakeTimelineSVGChart = React.memo(({earthquakes, days = 7, titleSuff
     return (
         <div className={`${cardBg} p-4 rounded-lg border ${borderColor} overflow-x-auto shadow-md`}>
             <h3 className={`text-lg font-semibold mb-4 ${titleColor}`}>Earthquake Frequency {titleSuffix}</h3>
-            <svg width="100%" height={chartHeight + xOffset} viewBox={`0 0 ${svgW} ${chartHeight + xOffset}`} className="overflow-visible">
+            <svg data-testid="timeline-svg-chart" width="100%" height={chartHeight + xOffset} viewBox={`0 0 ${svgW} ${chartHeight + xOffset}`} className="overflow-visible">
                 <text transform={`translate(${yOffset / 3},${chartHeight / 2}) rotate(-90)`} textAnchor="middle" className={`text-xs fill-current ${axisLabelColor}`}>Count</text>
                 <text x={yOffset + (svgW - yOffset) / 2} y={chartHeight + xOffset - 5} textAnchor="middle" className={`text-xs fill-current ${axisLabelColor}`}>Date</text>
                 {yLbls.map((l, i) => {
