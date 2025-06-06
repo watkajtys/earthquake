@@ -1,5 +1,6 @@
 // src/pages/LearnPage.jsx
 import React from 'react';
+import { Link } from 'react-router-dom'; // Added Link import
 import SeoMetadata from '../components/SeoMetadata';
 import InfoSnippet from '../components/InfoSnippet';
 // Import any other components specific to the previous inline learn page content
@@ -33,7 +34,31 @@ const LearnPage = () => {
                 <InfoSnippet topic="stationsUsed"/>
                 <InfoSnippet topic="azimuthalGap"/>
                 <InfoSnippet topic="rmsError"/>
-                {/* ... other content from /learn route ... */}
+
+                {/* New section for further reading */}
+                <div className="mt-6 pt-4 border-t border-slate-700">
+                    <h3 className="text-md font-semibold text-indigo-300 mb-3">
+                        Further Reading & In-depth Topics
+                    </h3>
+                    <ul className="space-y-2 list-disc list-inside pl-1">
+                        <li>
+                            <Link to="/learn/magnitude-vs-intensity" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                Understanding Earthquake Magnitude vs. Intensity
+                            </Link>
+                        </li>
+                        <li>
+                            <Link to="/learn/measuring-earthquakes" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                How Earthquakes Are Measured (Seismographs & Scales)
+                            </Link>
+                        </li>
+                        <li>
+                            <Link to="/learn/plate-tectonics" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                Plate Tectonics and Earthquakes
+                            </Link>
+                        </li>
+                    </ul>
+                </div>
+                 {/* ... other content from /learn route ... */}
             </div>
         </>
     );
