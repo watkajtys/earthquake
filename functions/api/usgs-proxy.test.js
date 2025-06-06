@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { onRequest } from './usgs-proxy';
+import { onRequest } from '../[[catchall]].js';
 
 // Mock Cloudflare Workers globals
 global.fetch = vi.fn();

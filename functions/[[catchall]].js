@@ -153,7 +153,7 @@ async function handleUsgsProxyRequest(context, apiUrl) {
 // --- Sitemap Handler Functions ---
 
 // 1. Sitemap Index Endpoint (/sitemap-index.xml)
-export async function handleSitemapIndexRequest(context) {
+async function handleSitemapIndexRequest(context) {
   const sitemapIndexXML = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
@@ -193,7 +193,7 @@ function escapeXml(unsafe) {
 }
 
 // 2. Static Pages Sitemap Endpoint (/sitemap-static-pages.xml)
-export async function handleStaticPagesSitemapRequest(context) {
+async function handleStaticPagesSitemapRequest(context) {
   const staticPages = [
     { loc: "https://earthquakeslive.com/", priority: "1.0", changefreq: "hourly" },
     { loc: "https://earthquakeslive.com/overview", priority: "0.9", changefreq: "hourly" },
@@ -247,7 +247,7 @@ export async function handleStaticPagesSitemapRequest(context) {
 }
 
 // 3. Earthquakes Sitemap Endpoint (/sitemap-earthquakes.xml)
-export async function handleEarthquakesSitemapRequest(context) {
+async function handleEarthquakesSitemapRequest(context) {
   const sourceName = "earthquakes-sitemap-handler";
   // Use M2.5+ Earthquakes, Past 7 Days feed
   const usgsFeedUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson";
@@ -346,7 +346,7 @@ export async function handleEarthquakesSitemapRequest(context) {
 }
 
 // 4. Clusters Sitemap Endpoint (/sitemap-clusters.xml)
-export async function handleClustersSitemapRequest(context) {
+async function handleClustersSitemapRequest(context) {
   const sourceName = "clusters-sitemap-handler";
   const CLUSTER_KV = context.env.CLUSTER_KV;
   let clustersXml = "";
