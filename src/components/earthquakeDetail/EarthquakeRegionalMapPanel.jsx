@@ -69,7 +69,7 @@ function EarthquakeRegionalMapPanel({
         console.log("[EarthquakeRegionalMapPanel] Skipping highlightProps due to invalid/missing properties or magnitude.");
     }
 
-    const fitMap = regionalQuakes && regionalQuakes.length > 0;
+    const fitMap = false;
     const finalMapProps = {
         mapCenterLatitude: mapCenterLat,
         mapCenterLongitude: mapCenterLng,
@@ -77,7 +77,7 @@ function EarthquakeRegionalMapPanel({
         shakeMapUrl: shakemapIntensityImageUrl,
         nearbyQuakes: regionalQuakes,
         mainQuakeDetailUrl: detailUrl,
-        fitMapToBounds: fitMap,
+        fitMapToBounds: false,
         // defaultZoom is handled by EarthquakeMap's defaults
     };
 
