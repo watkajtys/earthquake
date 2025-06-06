@@ -44,119 +44,114 @@ const EarthquakeDetailModalComponent = () => { // Removed dataSourceTimespanDays
     const { detailUrlParam } = useParams();
     const navigate = useNavigate();
     const detailUrl = decodeURIComponent(detailUrlParam);
-    const [seoData, setSeoData] = useState(null);
-    const [eventJsonLdData, setEventJsonLdData] = useState(null);
+    const [seoProps, setSeoProps] = useState(null); // Renamed from seoData to seoProps
 
     const handleClose = () => {
         navigate(-1); // Go back to the previous page
     };
 
-    const handleSeoDataLoaded = useCallback((data) => {
-        setSeoData(data);
-    }, []); // Empty dependency array as setSeoData is stable
+    // Callback for when EarthquakeDetailView has loaded data
+    const onDataLoadedForSeo = useCallback((data) => {
+        // Construct SEO properties as per subtask requirements
+        const pageTitle = `M ${data.mag} Earthquake - ${data.place} - ${new Date(data.time).toLocaleDateString()}`;
+        const pageDescription = `Detailed information about the M ${data.mag} earthquake that occurred near ${data.place} on ${new Date(data.time).toUTCString()}. Depth: ${data.depth} km.`;
+        const pageKeywords = `earthquake, seismic event, M ${data.mag}, ${data.place}, earthquake details, usgs event`;
+        const canonicalPageUrl = `https://earthquakeslive.com/quake/${data.detailUrlParam}`;
 
-    // Construct canonical URL for the quake detail page
-    const canonicalUrl = `https://earthquakeslive.com/quake/${detailUrlParam}`;
+        const eventLocation = {
+            '@type': 'Place',
+            name: data.place,
+        };
 
-    // Default/loading SEO values
-    let pageTitle = "Loading Earthquake Details...";
-    let pageDescription = "Fetching detailed information for the selected seismic event.";
-    let keywords = "earthquake details, seismic event, seismology";
-    // imageUrl is already defined or null from seoData later
-    // let publishedTimeIso = null; // these will be derived from seoData
-    // let modifiedTimeIso = null;
-
-    // Effect to construct Event JSON-LD
-    useEffect(() => {
-        if (seoData) {
-            const eventData = {
-                '@context': 'https://schema.org',
-                '@type': 'Event',
-                name: seoData.title || `Earthquake: ${seoData.place || 'Unknown Location'}`,
-                description: `Magnitude ${seoData.mag || 'N/A'} earthquake reported ${seoData.place ? `near ${seoData.place}` : 'at an unknown location'}. Occurred on ${seoData.time ? new Date(seoData.time).toUTCString() : 'unknown date'}.`,
-                startDate: seoData.time ? new Date(seoData.time).toISOString() : null,
-                // endDate can be same as startDate for instantaneous events like earthquakes
-                endDate: seoData.time ? new Date(seoData.time).toISOString() : null,
-                location: {
-                    '@type': 'Place',
-                    name: seoData.place || 'Near the epicenter',
-                },
-                organizer: {
-                    '@type': 'Organization',
-                    name: 'Global Seismic Activity Monitor (via USGS)',
-                },
+        if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+            eventLocation.geo = {
+                '@type': 'GeoCoordinates',
+                latitude: data.latitude,
+                longitude: data.longitude,
             };
-
-            // Add GeoCoordinates if latitude, longitude, and depth are available
-            if (seoData.latitude != null && seoData.longitude != null) {
-                eventData.location.geo = {
-                    '@type': 'GeoCoordinates',
-                    latitude: seoData.latitude,
-                    longitude: seoData.longitude,
-                };
-                // Add elevation (depth) if available. Using positive value as depth.
-                // Schema.org's elevation is distance from sea level.
-                // If depth is distance *below* sea level, it should ideally be negative.
-                // For now, using the direct depth value.
-                if (seoData.depth != null) {
-                    eventData.location.geo.elevation = seoData.depth;
-                }
-            }
-
-            // If there's a specific event page URL (canonicalUrl)
-            if (canonicalUrl) {
-                eventData.url = canonicalUrl;
-            }
-
-            setEventJsonLdData(eventData);
-        } else {
-            setEventJsonLdData(null);
         }
-    }, [seoData, detailUrlParam, canonicalUrl]); // detailUrlParam and canonicalUrl ensure it updates if the route changes
 
+        const eventJsonLd = {
+            '@context': 'https://schema.org',
+            '@type': 'Event',
+            name: pageTitle,
+            description: pageDescription,
+            startDate: data.time ? new Date(data.time).toISOString() : undefined,
+            endDate: data.time ? new Date(data.time).toISOString() : undefined, // Assuming event duration is very short
+            location: eventLocation,
+            image: data.shakemapIntensityImageUrl || undefined, // Use undefined if not available
+            keywords: pageKeywords,
+            url: canonicalPageUrl,
+            identifier: data.detailUrlParam, // Or full USGS detail URL if preferred
+            subjectOf: {
+                '@type': 'WebPage',
+                url: canonicalPageUrl,
+            },
+        };
 
-    if (seoData) {
-        pageTitle = seoData.title ? `${seoData.title} | Earthquake Details` : "Earthquake Details | Seismic Monitor";
-        pageDescription = `Detailed information for earthquake: ${seoData.place || 'Unknown Location'}. Magnitude ${seoData.mag || 'N/A'}, Depth ${seoData.depth?.toFixed(1) || 'N/A'} km. Occurred on ${new Date(seoData.time).toUTCString()}.`;
-        keywords = `earthquake, ${seoData.place || 'location'}, M ${seoData.mag || 'magnitude'}, seismology, earthquake details, ${seoData.time ? new Date(seoData.time).getFullYear() : 'year'}`;
-    }
+        setSeoProps({
+            title: pageTitle,
+            description: pageDescription,
+            keywords: pageKeywords,
+            canonicalUrl: canonicalPageUrl,
+            pageUrl: canonicalPageUrl, // Assuming pageUrl is same as canonical for this component
+            eventJsonLd: eventJsonLd,
+            type: 'article', // As specified
+            publishedTime: data.time ? new Date(data.time).toISOString() : undefined,
+            modifiedTime: data.updated ? new Date(data.updated).toISOString() : (data.time ? new Date(data.time).toISOString() : undefined),
+            imageUrl: data.shakemapIntensityImageUrl || null, // Pass imageUrl for SeoMetadata
+        });
+    }, [detailUrlParam]); // Added detailUrlParam to dependencies, as it's used in canonicalPageUrl
+
+    // Default/loading SEO values (can be removed or adjusted if SeoMetadata handles null props gracefully)
+    const initialPageTitle = "Loading Earthquake Details...";
+    const initialPageDescription = "Fetching detailed information for the selected seismic event.";
+    const initialKeywords = "earthquake details, seismic event, seismology";
+    const initialCanonicalUrl = `https://earthquakeslive.com/quake/${detailUrlParam}`;
 
 
     return (
         <>
-            <SeoMetadata
-                title={pageTitle}
-                description={pageDescription}
-                keywords={keywords}
-                pageUrl={canonicalUrl}
-                canonicalUrl={canonicalUrl}
-                locale="en_US"
-                type="article"
-                publishedTime={seoData?.time ? new Date(seoData.time).toISOString() : null}
-                modifiedTime={seoData?.updated ? new Date(seoData.updated).toISOString() : null}
-                imageUrl={seoData?.shakemapIntensityImageUrl || null}
-                eventJsonLd={eventJsonLdData}
-            />
+            {seoProps ? (
+                <SeoMetadata
+                    title={seoProps.title}
+                    description={seoProps.description}
+                    keywords={seoProps.keywords}
+                    pageUrl={seoProps.pageUrl}
+                    canonicalUrl={seoProps.canonicalUrl}
+                    locale="en_US" // Assuming en_US, can be made dynamic if needed
+                    type={seoProps.type}
+                    publishedTime={seoProps.publishedTime}
+                    modifiedTime={seoProps.modifiedTime}
+                    imageUrl={seoProps.imageUrl}
+                    eventJsonLd={seoProps.eventJsonLd}
+                />
+            ) : (
+                // Render basic SEO tags while loading or if seoProps is null
+                <SeoMetadata
+                    title={initialPageTitle}
+                    description={initialPageDescription}
+                    keywords={initialKeywords}
+                    pageUrl={initialCanonicalUrl}
+                    canonicalUrl={initialCanonicalUrl}
+                    eventJsonLd={null}
+                />
+            )}
             <EarthquakeDetailView
                 detailUrl={detailUrl}
                 onClose={handleClose}
-                onDataLoadedForSeo={handleSeoDataLoaded} // Pass the callback
+                onDataLoadedForSeo={(data) => onDataLoadedForSeo({ ...data, detailUrlParam })} // Pass detailUrlParam
                 broaderEarthquakeData={internalBroaderEarthquakeData}
-                dataSourceTimespanDays={currentDataSourceTimespan} // Changed from dataSourceTimespanDays
-            handleLoadMonthlyData={loadMonthlyData} // Use directly from context
-            hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad} // Use directly from context
-            isLoadingMonthly={isLoadingMonthly} // Use directly from context
+                dataSourceTimespanDays={currentDataSourceTimespan}
+            handleLoadMonthlyData={loadMonthlyData}
+            hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
+            isLoadingMonthly={isLoadingMonthly}
         />
         </>
     );
 };
 
-EarthquakeDetailModalComponent.propTypes = {
-    // broaderEarthquakeData: PropTypes.array.isRequired, // Now derived internally
-    // dataSourceTimespanDays: PropTypes.number, // Removed
-    // handleLoadMonthlyData: PropTypes.func.isRequired, // From context
-    // hasAttemptedMonthlyLoad: PropTypes.bool.isRequired, // From context
-    // isLoadingMonthly: PropTypes.bool.isRequired, // From context
-};
+// PropTypes remain the same as they are mostly for context-derived or route-derived props
+// which are not directly passed to EarthquakeDetailModalComponent anymore.
 
 export default EarthquakeDetailModalComponent;
