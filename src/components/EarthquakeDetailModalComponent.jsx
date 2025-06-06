@@ -58,22 +58,27 @@ const EarthquakeDetailModalComponent = () => { // Removed dataSourceTimespanDays
         const pageKeywords = `earthquake, seismic event, M ${data.mag}, ${data.place}, earthquake details, usgs event`;
         const canonicalPageUrl = `https://earthquakeslive.com/quake/${data.detailUrlParam}`;
 
+        const eventLocation = {
+            '@type': 'Place',
+            name: data.place,
+        };
+
+        if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+            eventLocation.geo = {
+                '@type': 'GeoCoordinates',
+                latitude: data.latitude,
+                longitude: data.longitude,
+            };
+        }
+
         const eventJsonLd = {
             '@context': 'https://schema.org',
             '@type': 'Event',
             name: pageTitle,
             description: pageDescription,
-            startDate: new Date(data.time).toISOString(),
-            endDate: new Date(data.time).toISOString(), // Assuming event duration is very short
-            location: {
-                '@type': 'Place',
-                geo: {
-                    '@type': 'GeoCoordinates',
-                    latitude: data.latitude,
-                    longitude: data.longitude,
-                },
-                name: data.place,
-            },
+            startDate: data.time ? new Date(data.time).toISOString() : undefined,
+            endDate: data.time ? new Date(data.time).toISOString() : undefined, // Assuming event duration is very short
+            location: eventLocation,
             image: data.shakemapIntensityImageUrl || undefined, // Use undefined if not available
             keywords: pageKeywords,
             url: canonicalPageUrl,
@@ -92,8 +97,8 @@ const EarthquakeDetailModalComponent = () => { // Removed dataSourceTimespanDays
             pageUrl: canonicalPageUrl, // Assuming pageUrl is same as canonical for this component
             eventJsonLd: eventJsonLd,
             type: 'article', // As specified
-            publishedTime: new Date(data.time).toISOString(),
-            modifiedTime: new Date(data.updated).toISOString(),
+            publishedTime: data.time ? new Date(data.time).toISOString() : undefined,
+            modifiedTime: data.updated ? new Date(data.updated).toISOString() : (data.time ? new Date(data.time).toISOString() : undefined),
             imageUrl: data.shakemapIntensityImageUrl || null, // Pass imageUrl for SeoMetadata
         });
     }, [detailUrlParam]); // Added detailUrlParam to dependencies, as it's used in canonicalPageUrl
@@ -129,6 +134,7 @@ const EarthquakeDetailModalComponent = () => { // Removed dataSourceTimespanDays
                     keywords={initialKeywords}
                     pageUrl={initialCanonicalUrl}
                     canonicalUrl={initialCanonicalUrl}
+                    eventJsonLd={null}
                 />
             )}
             <EarthquakeDetailView
