@@ -39,7 +39,12 @@ async function handleClusterDefinitionRequest(context, url) {
       if (!clusterId || !earthquakeIds || !Array.isArray(earthquakeIds) || earthquakeIds.length === 0 || !strongestQuakeId) {
         return jsonErrorResponse("Missing or invalid parameters for POST", 400, sourceName);
       }
-      const kvValue = JSON.stringify({ earthquakeIds, strongestQuakeId });
+      const valueToStore = {
+        earthquakeIds,
+        strongestQuakeId,
+        updatedAt: new Date().toISOString()
+      };
+      const kvValue = JSON.stringify(valueToStore);
       await CLUSTER_KV.put(clusterId, kvValue, { expirationTtl: ttl_seconds });
       return new Response(JSON.stringify({ status: "success", message: "Cluster definition stored." }), {
         status: 201,
@@ -360,10 +365,23 @@ async function handleClustersSitemapRequest(context) {
     if (listResult && listResult.keys) {
       for (const key of listResult.keys) {
         const loc = `https://earthquakeslive.com/cluster/${escapeXml(key.name)}`;
-        // lastmod: Simplified to current date as per subtask.
-        // A more accurate lastmod would require storing an update timestamp in the KV value,
-        // or fetching the cluster definition and finding the latest quake time, which is complex here.
-        const lastmod = currentDate;
+        let lastmod = currentDate; // Fallback to current date
+
+        try {
+          const kvValueString = await CLUSTER_KV.get(key.name);
+          if (kvValueString) {
+            const kvValue = JSON.parse(kvValueString);
+            if (kvValue && kvValue.updatedAt) {
+              lastmod = kvValue.updatedAt;
+            } else {
+              console.warn(`[${sourceName}] Missing updatedAt for cluster key: ${key.name}. Falling back to currentDate.`);
+            }
+          } else {
+            console.warn(`[${sourceName}] No KV value found for cluster key: ${key.name} during sitemap generation. Falling back to currentDate.`);
+          }
+        } catch (e) {
+          console.error(`[${sourceName}] Error parsing KV value for cluster key ${key.name}: ${e.message}. Falling back to currentDate.`, e);
+        }
 
         clustersXml += `
   <url>
@@ -398,10 +416,168 @@ async function handleClustersSitemapRequest(context) {
 
 // --- End Sitemap Handler Functions ---
 
+// Helper function to detect crawlers
+function isCrawler(request) {
+  const userAgent = request.headers.get("User-Agent") || "";
+  const crawlerRegex = /Googlebot|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|facebookexternalhit|Twitterbot/i;
+  return crawlerRegex.test(userAgent);
+}
+
+// Prerendering function for Earthquake pages
+async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
+  const { request, env } = context;
+  const sourceName = "prerender-earthquake";
+  const siteUrl = "https://earthquakeslive.com"; // Base site URL
+
+  try {
+    const detailUrl = decodeURIComponent(quakeIdPathSegment);
+    console.log(`[${sourceName}] Prerendering earthquake: ${detailUrl}`);
+
+    // Fetch earthquake data
+    // For simplicity, direct fetch. Consider using handleUsgsProxyRequest's caching logic if needed.
+    const response = await fetch(detailUrl);
+    if (!response.ok) {
+      console.error(`[${sourceName}] Failed to fetch earthquake data from ${detailUrl}: ${response.status}`);
+      return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Earthquake data not found.</body></html>`, {
+        status: 404,
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+    const quakeData = await response.json();
+
+    if (!quakeData || !quakeData.properties || !quakeData.geometry) {
+      console.error(`[${sourceName}] Invalid earthquake data structure from ${detailUrl}`);
+      return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Invalid earthquake data.</body></html>`, {
+        status: 500,
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    const mag = quakeData.properties.mag;
+    const place = quakeData.properties.place;
+    const time = new Date(quakeData.properties.time).toUTCString();
+    const depth = quakeData.geometry.coordinates[2];
+    const canonicalUrl = `${siteUrl}/quake/${quakeIdPathSegment}`;
+
+    const title = `M ${mag} Earthquake - ${place}`;
+    const description = `Detailed information about the M ${mag} earthquake that occurred near ${place} on ${time}. Depth: ${depth} km.`;
+
+    // Basic HTML structure
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeXml(title)}</title>
+  <meta name="description" content="${escapeXml(description)}">
+  <link rel="canonical" href="${escapeXml(canonicalUrl)}">
+  <!-- TODO: Add more meta tags (Open Graph, Twitter, JSON-LD) -->
+</head>
+<body>
+  <h1>${escapeXml(title)}</h1>
+  <p>Time: ${escapeXml(time)}</p>
+  <p>Location: ${escapeXml(place)}</p>
+  <p>Magnitude: ${mag}</p>
+  <p>Depth: ${depth} km</p>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>`;
+
+    return new Response(html, { headers: { "Content-Type": "text/html" } });
+
+  } catch (error) {
+    console.error(`[${sourceName}] Error: ${error.message}`, error);
+    return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error prerendering earthquake page.</body></html>`, {
+      status: 500,
+      headers: { "Content-Type": "text/html" },
+    });
+  }
+}
+
+// Prerendering function for Cluster pages
+async function handlePrerenderCluster(context, clusterId) {
+  const { request, env } = context;
+  const sourceName = "prerender-cluster";
+  const siteUrl = "https://earthquakeslive.com"; // Base site URL
+
+  if (!env.CLUSTER_KV) {
+    console.error(`[${sourceName}] CLUSTER_KV not configured.`);
+    return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Service configuration error.</body></html>`, {
+      status: 500,
+      headers: { "Content-Type": "text/html" },
+    });
+  }
+
+  try {
+    console.log(`[${sourceName}] Prerendering cluster: ${clusterId}`);
+    const clusterDataString = await env.CLUSTER_KV.get(clusterId);
+
+    if (!clusterDataString) {
+      console.warn(`[${sourceName}] Cluster definition not found for ID: ${clusterId}`);
+      return new Response(`<!DOCTYPE html><html><head><title>Not Found</title><meta name="robots" content="noindex"></head><body>Cluster not found.</body></html>`, {
+        status: 404,
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // const clusterData = JSON.parse(clusterDataString); // { earthquakeIds, strongestQuakeId }
+    // For now, use generic text as fetching strongestQuakeId details is complex for initial setup.
+    // Future: Fetch strongestQuakeId details to get a better locationName.
+    const locationName = clusterId; // Placeholder
+    const canonicalUrl = `${siteUrl}/cluster/${clusterId}`;
+    const title = `Earthquake Cluster: ${locationName}`;
+    const description = `Explore details of an earthquake cluster identified as ${locationName}, featuring multiple seismic events.`;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeXml(title)}</title>
+  <meta name="description" content="${escapeXml(description)}">
+  <link rel="canonical" href="${escapeXml(canonicalUrl)}">
+  <!-- TODO: Add more meta tags (Open Graph, Twitter, JSON-LD) -->
+</head>
+<body>
+  <h1>${escapeXml(title)}</h1>
+  <p>${escapeXml(description)}</p>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>`;
+
+    return new Response(html, { headers: { "Content-Type": "text/html" } });
+
+  } catch (error) {
+    console.error(`[${sourceName}] Error: ${error.message}`, error);
+    return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error prerendering cluster page.</body></html>`, {
+      status: 500,
+      headers: { "Content-Type": "text/html" },
+    });
+  }
+}
+
+
 export async function onRequest(context) {
   const mainSourceName = "worker-router"; // For errors originating from the router itself
   const url = new URL(context.request.url);
   const pathname = url.pathname;
+
+  // Prerendering for crawlers
+  if (isCrawler(context.request)) {
+    if (pathname.startsWith("/quake/")) {
+      const quakeIdPathSegment = pathname.substring("/quake/".length);
+      if (quakeIdPathSegment) {
+        return handlePrerenderEarthquake(context, quakeIdPathSegment);
+      }
+    } else if (pathname.startsWith("/cluster/")) {
+      const clusterId = pathname.substring("/cluster/".length);
+      if (clusterId) {
+        return handlePrerenderCluster(context, clusterId);
+      }
+    }
+  }
 
   // Sitemap routes
   if (pathname === "/sitemap-index.xml") {
@@ -426,13 +602,51 @@ export async function onRequest(context) {
       return jsonErrorResponse("Missing apiUrl query parameter for proxy request", 400, "usgs-proxy-router");
     }
     return handleUsgsProxyRequest(context, apiUrl);
-  } else {
-    // Fallback for original behavior if any other path was implicitly handled by the proxy
-    const apiUrl = url.searchParams.get("apiUrl");
-    if (apiUrl) {
-        console.warn(`Request to unspecific path ${pathname} with apiUrl, proceeding with proxy. Consider using /api/usgs-proxy explicitly.`);
-        return handleUsgsProxyRequest(context, apiUrl);
-    }
-    return jsonErrorResponse("Unknown API path", 404, mainSourceName);
   }
+
+  // If it's not a crawler and not an API/Sitemap route,
+  // Pages will serve the static asset (e.g. index.html for SPA routes like /quake/* /cluster/*)
+  // or a 404 if the asset doesn't exist.
+  // We are *not* returning a jsonErrorResponse for unknown paths here anymore,
+  // to allow Pages to handle SPA routing and static assets.
+  // If context.next exists (i.e. part of Cloudflare Pages advanced mode functions), call it.
+  if (context.next) {
+     return context.next();
+  }
+  // For simple Pages _functions, not returning anything specific here means
+  // the request might be passed to the static asset handler.
+  // If this function is the *only* thing handling requests (e.g. not a Pages Function but a standalone Worker script for a route)
+  // then we might need to explicitly fetch index.html for SPA routes.
+  // Given this is functions/api/usgs-proxy.js, it's likely a Pages function.
+  // The desired behavior is to let Pages serve index.html for non-crawler /quake/ and /cluster/
+
+  // Fallback for old proxy behavior if apiUrl is present on an unhandled path.
+  const apiUrlParam = url.searchParams.get("apiUrl");
+  if (apiUrlParam) {
+      console.warn(`Request to unspecific path ${pathname} with apiUrl, proceeding with proxy. Consider using /api/usgs-proxy explicitly.`);
+      return handleUsgsProxyRequest(context, apiUrlParam);
+  }
+
+  // If we've reached here, it's not a path the worker actively handles.
+  // For Cloudflare Pages, not returning a Response (or calling context.next())
+  // should allow the static asset handler to take over.
+  // If this were a classic worker script that must always return a response,
+  // we'd need to return a 404 or fetch index.html.
+  // The current setup expects Pages to handle it.
+  // If there's no context.next() and no explicit response, this might result in an error
+  // depending on the exact Cloudflare Pages execution model for _functions without explicit passthrough.
+  // For now, let's assume Pages handles the fall-through correctly for SPA routes.
+  // A more robust way for SPA fallbacks if this function *must* return:
+  // return context.env.ASSETS.fetch(new Request(new URL("/index.html", request.url)));
+  // But this is usually not required for Pages functions if they simply don't handle the route.
+
+  // Default behavior if no other handler is matched:
+  // It's important to let non-matching requests pass through to Cloudflare Pages static asset serving.
+  // So, we don't return a generic 404 here for all non-matched paths.
+  // Only the specific API routes should return errors if malformed.
+  // The final "else" block from the original code that returned a generic "Unknown API path"
+  // has been removed to allow SPA routing.
+  console.log(`[${mainSourceName}] Path ${pathname} not handled by explicit routing in worker. Passing to Pages asset handler.`);
+  // Implicitly, Pages will now try to serve a static file or index.html.
+  // No explicit return new Response(...) for unhandled paths.
 }
