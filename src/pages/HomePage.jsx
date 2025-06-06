@@ -592,7 +592,10 @@ function App() {
             return b._quakeCountInternal - a._quakeCountInternal;
         });
 
-        return processed;
+        // Filter clusters to include only those with a max magnitude >= MAJOR_QUAKE_THRESHOLD
+        const significantClusters = processed.filter(cluster => cluster._maxMagInternal >= MAJOR_QUAKE_THRESHOLD);
+
+        return significantClusters;
 
     }, [activeClusters, formatDate, formatTimeAgo, formatTimeDuration]); // Include formatDate, formatTimeAgo, formatTimeDuration if they are from useCallback/component scope
 
