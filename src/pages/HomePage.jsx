@@ -4,7 +4,7 @@ import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Remove
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
-import InteractiveGlobeView from '../components/InteractiveGlobeView';
+// import InteractiveGlobeView from '../components/InteractiveGlobeView'; // Will be lazy loaded
 import NotableQuakeFeature from '../components/NotableQuakeFeature';
 import PreviousNotableQuakeFeature from '../components/PreviousNotableQuakeFeature';
 import InfoSnippet from '../components/InfoSnippet';
@@ -32,6 +32,7 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // PaginatedEarthquakeTable will be lazy loaded
 // FeedsPageLayoutComponent will be lazy loaded
 // EarthquakeDetailModalComponent will be lazy loaded
+const InteractiveGlobeView = lazy(() => import('../components/InteractiveGlobeView'));
 // import useEarthquakeData from '../hooks/useEarthquakeData'; // Will use context instead
 // import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
@@ -88,18 +89,20 @@ const GlobeLayout = (props) => {
 
   return (
     <div className="block h-full w-full"> {/* Base container for the globe and its fixed UI elements */}
-      <InteractiveGlobeView
-        defaultFocusLat={20}
-        defaultFocusLng={globeFocusLng}
-        onQuakeClick={handleQuakeClick}
-        getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
-        allowUserDragRotation={true}
-        enableAutoRotation={true}
-        globeAutoRotateSpeed={0.1}
-        coastlineGeoJson={coastlineData}
-        tectonicPlatesGeoJson={tectonicPlatesData}
-        activeClusters={activeClusters}
-      />
+      <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe...</div>}>
+        <InteractiveGlobeView
+          defaultFocusLat={20}
+          defaultFocusLng={globeFocusLng}
+          onQuakeClick={handleQuakeClick}
+          getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
+          allowUserDragRotation={true}
+          enableAutoRotation={true}
+          globeAutoRotateSpeed={0.1}
+          coastlineGeoJson={coastlineData}
+          tectonicPlatesGeoJson={tectonicPlatesData}
+          activeClusters={activeClusters}
+        />
+      </Suspense>
 
       {/* Absolutely positioned UI elements over the globe */}
       <div className="absolute top-2 left-2 z-10 space-y-2">
