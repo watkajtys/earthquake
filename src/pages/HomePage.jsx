@@ -60,6 +60,9 @@ const EarthquakeDetailModalComponent = lazy(() => import('../components/Earthqua
 const ClusterDetailModalWrapper = lazy(() => import('../components/ClusterDetailModalWrapper'));
 const OverviewPage = lazy(() => import('./OverviewPage'));
 const LearnPage = lazy(() => import('./LearnPage'));
+const MagnitudeVsIntensityPage = lazy(() => import('./learn/MagnitudeVsIntensityPage'));
+const MeasuringEarthquakesPage = lazy(() => import('./learn/MeasuringEarthquakesPage'));
+const PlateTectonicsPage = lazy(() => import('./learn/PlateTectonicsPage'));
 
 // Lazy load other heavy/conditional components for the sidebar
 const RegionalDistributionList = lazy(() => import('../components/RegionalDistributionList'));
@@ -870,6 +873,9 @@ function App() {
                                   />
                               } />
                               <Route path="/learn" element={<LearnPage />} />
+                              <Route path="/learn/magnitude-vs-intensity" element={<MagnitudeVsIntensityPage />} />
+                              <Route path="/learn/measuring-earthquakes" element={<MeasuringEarthquakesPage />} />
+                              <Route path="/learn/plate-tectonics" element={<PlateTectonicsPage />} />
 
                             </Routes>
                 </Suspense>

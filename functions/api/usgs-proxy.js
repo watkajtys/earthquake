@@ -440,7 +440,10 @@ async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
       console.error(`[${sourceName}] Failed to fetch earthquake data from ${detailUrl}: ${response.status}`);
       return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Earthquake data not found.</body></html>`, {
         status: 404,
-        headers: { "Content-Type": "text/html" },
+        headers: {
+            "Content-Type": "text/html",
+            "Cache-Control": "public, s-maxage=3600"
+        },
       });
     }
     const quakeData = await response.json();
@@ -449,7 +452,10 @@ async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
       console.error(`[${sourceName}] Invalid earthquake data structure from ${detailUrl}`);
       return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Invalid earthquake data.</body></html>`, {
         status: 500,
-        headers: { "Content-Type": "text/html" },
+        headers: {
+            "Content-Type": "text/html",
+            "Cache-Control": "public, s-maxage=3600"
+        },
       });
     }
 
@@ -471,7 +477,8 @@ async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
   <title>${escapeXml(title)}</title>
   <meta name="description" content="${escapeXml(description)}">
   <link rel="canonical" href="${escapeXml(canonicalUrl)}">
-  <!-- TODO: Add more meta tags (Open Graph, Twitter, JSON-LD) -->
+  <meta name="twitter:site" content="@builtbyvibes" />
+  <!-- TODO: Add more meta tags (Open Graph, JSON-LD) -->
 </head>
 <body>
   <h1>${escapeXml(title)}</h1>
@@ -484,13 +491,21 @@ async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
 </body>
 </html>`;
 
-    return new Response(html, { headers: { "Content-Type": "text/html" } });
+    return new Response(html, {
+        headers: {
+            "Content-Type": "text/html",
+            "Cache-Control": "public, s-maxage=3600"
+        }
+    });
 
   } catch (error) {
     console.error(`[${sourceName}] Error: ${error.message}`, error);
     return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error prerendering earthquake page.</body></html>`, {
       status: 500,
-      headers: { "Content-Type": "text/html" },
+      headers: {
+          "Content-Type": "text/html",
+          "Cache-Control": "public, s-maxage=3600"
+      },
     });
   }
 }
@@ -505,7 +520,10 @@ async function handlePrerenderCluster(context, clusterId) {
     console.error(`[${sourceName}] CLUSTER_KV not configured.`);
     return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Service configuration error.</body></html>`, {
       status: 500,
-      headers: { "Content-Type": "text/html" },
+      headers: {
+          "Content-Type": "text/html",
+          "Cache-Control": "public, s-maxage=3600"
+      },
     });
   }
 
@@ -517,7 +535,10 @@ async function handlePrerenderCluster(context, clusterId) {
       console.warn(`[${sourceName}] Cluster definition not found for ID: ${clusterId}`);
       return new Response(`<!DOCTYPE html><html><head><title>Not Found</title><meta name="robots" content="noindex"></head><body>Cluster not found.</body></html>`, {
         status: 404,
-        headers: { "Content-Type": "text/html" },
+        headers: {
+            "Content-Type": "text/html",
+            "Cache-Control": "public, s-maxage=3600"
+        },
       });
     }
 
@@ -537,7 +558,8 @@ async function handlePrerenderCluster(context, clusterId) {
   <title>${escapeXml(title)}</title>
   <meta name="description" content="${escapeXml(description)}">
   <link rel="canonical" href="${escapeXml(canonicalUrl)}">
-  <!-- TODO: Add more meta tags (Open Graph, Twitter, JSON-LD) -->
+  <meta name="twitter:site" content="@builtbyvibes" />
+  <!-- TODO: Add more meta tags (Open Graph, JSON-LD) -->
 </head>
 <body>
   <h1>${escapeXml(title)}</h1>
@@ -547,13 +569,21 @@ async function handlePrerenderCluster(context, clusterId) {
 </body>
 </html>`;
 
-    return new Response(html, { headers: { "Content-Type": "text/html" } });
+    return new Response(html, {
+        headers: {
+            "Content-Type": "text/html",
+            "Cache-Control": "public, s-maxage=3600"
+        }
+    });
 
   } catch (error) {
     console.error(`[${sourceName}] Error: ${error.message}`, error);
     return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error prerendering cluster page.</body></html>`, {
       status: 500,
-      headers: { "Content-Type": "text/html" },
+      headers: {
+          "Content-Type": "text/html",
+          "Cache-Control": "public, s-maxage=3600"
+      },
     });
   }
 }
