@@ -1,3 +1,9 @@
+// IMPORTANT SECURITY RECOMMENDATION:
+// Regularly scan project dependencies for known vulnerabilities.
+// For Node.js projects, you can use 'npm audit' or 'yarn audit'.
+// Example: Run 'npm audit --audit-level=high' to find high-severity issues.
+// Address any reported vulnerabilities promptly by updating packages or applying mitigations.
+
 // Helper to create JSON error responses
 const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefined) => {
   const errorBody = {
@@ -34,6 +40,27 @@ async function handleClusterDefinitionRequest(context, url) {
   }
 
   if (request.method === "POST") {
+    // --- API Key Authentication ---
+    const providedApiKey = request.headers.get("X-API-Key");
+    const expectedApiKey = env.CLUSTER_API_KEY;
+
+    if (!expectedApiKey) {
+      console.error(`[${sourceName}] CRITICAL: CLUSTER_API_KEY is not configured on the server.`);
+      return jsonErrorResponse("API key not configured on server. Cannot process POST request.", 500, sourceName);
+    }
+
+    if (!providedApiKey) {
+      console.warn(`[${sourceName}] Missing X-API-Key header for POST request.`);
+      return jsonErrorResponse("Missing API key.", 401, sourceName);
+    }
+
+    // Direct string comparison (timing attacks are less of a concern for non-crypto secrets of typical API key length)
+    if (providedApiKey !== expectedApiKey) {
+      console.warn(`[${sourceName}] Invalid API key provided for POST request.`);
+      return jsonErrorResponse("Invalid API key.", 403, sourceName);
+    }
+    // --- End API Key Authentication ---
+
     try {
       const { clusterId, earthquakeIds, strongestQuakeId } = await request.json();
       if (!clusterId || !earthquakeIds || !Array.isArray(earthquakeIds) || earthquakeIds.length === 0 || !strongestQuakeId) {
@@ -79,6 +106,42 @@ async function handleClusterDefinitionRequest(context, url) {
 
 async function handleUsgsProxyRequest(context, apiUrl) {
   const sourceName = "usgs-proxy-handler";
+
+  // --- SSRF Protection ---
+  const ALLOWED_HOSTNAME = "earthquake.usgs.gov";
+  const ALLOWED_PATH_PREFIXES = [
+    "/earthquakes/feed/v1.0/summary/",
+    "/earthquakes/feed/v1.0/detail/",
+    // Consider adding other paths if necessary, e.g.:
+    // "/fdsnws/event/1/query",
+    // "/ws/geoserve/"
+  ];
+
+  let parsedApiUrl;
+  try {
+    parsedApiUrl = new URL(apiUrl);
+  } catch (e) {
+    console.error(`[${sourceName}] Invalid apiUrl format: ${apiUrl}. Error: ${e.message}`);
+    return jsonErrorResponse(`Invalid apiUrl format: ${e.message}`, 400, sourceName);
+  }
+
+  if (parsedApiUrl.protocol !== "https:") {
+    console.warn(`[${sourceName}] Disallowed protocol: ${parsedApiUrl.protocol} for apiUrl: ${apiUrl}`);
+    return jsonErrorResponse("Invalid or disallowed apiUrl. Must use https.", 400, sourceName);
+  }
+
+  if (parsedApiUrl.hostname !== ALLOWED_HOSTNAME) {
+    console.warn(`[${sourceName}] Disallowed hostname: ${parsedApiUrl.hostname} for apiUrl: ${apiUrl}`);
+    return jsonErrorResponse("Invalid or disallowed apiUrl. Hostname not allowed.", 400, sourceName);
+  }
+
+  const isAllowedPath = ALLOWED_PATH_PREFIXES.some(prefix => parsedApiUrl.pathname.startsWith(prefix));
+  if (!isAllowedPath) {
+    console.warn(`[${sourceName}] Disallowed path: ${parsedApiUrl.pathname} for apiUrl: ${apiUrl}`);
+    return jsonErrorResponse("Invalid or disallowed apiUrl. Path not allowed.", 400, sourceName);
+  }
+  // --- End SSRF Protection ---
+
   const cacheKey = new Request(apiUrl, context.request);
   const cache = caches.default;
 
