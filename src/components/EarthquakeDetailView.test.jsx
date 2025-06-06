@@ -209,18 +209,18 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
   it('renders loading skeleton immediately on mount if detailUrl is provided', () => {
     fetchSpy.mockImplementationOnce(() => new Promise(() => {}));
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
-    expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
+    expect(screen.getByTestId('structural-skeleton-container')).toBeInTheDocument();
     expect(screen.queryByText(/Details Not Available/i)).not.toBeInTheDocument();
   });
 
   it('displays loading state initially, then renders fetched data', async () => {
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => deepClone(baseMockDetailData) });
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
-    expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
+    expect(screen.getByTestId('structural-skeleton-container')).toBeInTheDocument();
     expect(screen.queryByText(/Details Not Available/i)).not.toBeInTheDocument();
     await screen.findAllByText(baseMockDetailData.properties.title);
     expect(screen.getAllByText(baseMockDetailData.properties.title)[0]).toBeInTheDocument();
-    expect(screen.queryByTestId('loading-skeleton-container')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('structural-skeleton-container')).not.toBeInTheDocument();
     // ... (rest of the assertions for data display)
     expect(screen.getByTestId('mock-earthquake-map')).toBeInTheDocument();
   });
@@ -234,7 +234,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => mockDataScenarioA });
 
     const { rerender } = render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={`${mockDetailUrl}A`} />);
-    await waitFor(() => expect(screen.queryByTestId('loading-skeleton-container')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByTestId('structural-skeleton-container')).not.toBeInTheDocument());
     expect(screen.queryByTestId('mock-earthquake-map')).toBeNull(); // Map should not render due to panel's guard
     expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('MockEarthquakeMap received invalid mapCenterLatitude'));
 
@@ -248,7 +248,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => mockDataScenarioB });
 
     rerender(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={`${mockDetailUrl}B`} />);
-    await waitFor(() => expect(screen.queryByTestId('loading-skeleton-container')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByTestId('structural-skeleton-container')).not.toBeInTheDocument());
 
     const mapElement = screen.queryByTestId('mock-earthquake-map');
     expect(mapElement).toBeInTheDocument();

@@ -14,6 +14,18 @@ const REGIONAL_RADIUS_KM = 804.672; // 500 miles
 // MOVED to src/utils/detailViewUtils.js
 import SkeletonText from './skeletons/SkeletonText.jsx';
 import SkeletonBlock from './skeletons/SkeletonBlock.jsx';
+// After existing skeleton imports like SkeletonText, SkeletonBlock
+import SkeletonEarthquakeDetailHeader from './skeletons/SkeletonEarthquakeDetailHeader.jsx';
+import SkeletonEarthquakeSnapshotPanel from './skeletons/SkeletonEarthquakeSnapshotPanel.jsx';
+import SkeletonEarthquakeRegionalMapPanel from './skeletons/SkeletonEarthquakeRegionalMapPanel.jsx';
+import SkeletonEarthquakeEnergyPanel from './skeletons/SkeletonEarthquakeEnergyPanel.jsx';
+import SkeletonEarthquakeRegionalSeismicityPanel from './skeletons/SkeletonEarthquakeRegionalSeismicityPanel.jsx';
+import SkeletonEarthquakeDepthProfilePanel from './skeletons/SkeletonEarthquakeDepthProfilePanel.jsx';
+import SkeletonEarthquakeSeismicWavesPanel from './skeletons/SkeletonEarthquakeSeismicWavesPanel.jsx';
+import SkeletonEarthquakeLocationPanel from './skeletons/SkeletonEarthquakeLocationPanel.jsx';
+import SkeletonEarthquakeImpactPanel from './skeletons/SkeletonEarthquakeImpactPanel.jsx';
+// Import other necessary skeleton components if created for panels like CitizenScience, FaultDiagram, etc.
+// For now, we'll focus on the ones created.
 
 /**
  * A React component that displays detailed information about a specific earthquake event.
@@ -305,7 +317,46 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
 
     // MOVED: InteractiveFaultDiagram component definition was here
 
-    if (isLoading) return ( <div data-testid="loading-skeleton-container" className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-8 rounded-lg max-w-3xl w-full animate-pulse"><SkeletonText width="w-3/4" height="h-8 mb-6 mx-auto" /><SkeletonBlock height="h-40 mb-4" /><SkeletonBlock height="h-64" /></div></div> );
+    if (isLoading) {
+        const exhibitPanelClass = "bg-white rounded-xl p-3 md:p-4 shadow border-l-4"; // From actual component
+        const exhibitTitleClass = "text-lg md:text-xl font-bold mb-3 pb-1 border-b"; // From actual component
+
+        return (
+            <div
+                data-testid="structural-skeleton-container"
+                className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-[55] p-2 sm:p-4 pt-10 md:pt-16"
+                // onClick={onClose} // No actual close functionality needed for skeleton, but structure is similar
+            >
+                <div
+                    // ref={modalContentRef} // No ref needed for skeleton
+                    className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800 overflow-y-auto max-h-[calc(100svh-5rem)] animate-pulse"
+                    // onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Close button placeholder - visual only */}
+                    <div
+                        className="absolute top-1 right-1 md:top-3 md:right-3 text-gray-300 bg-gray-700 bg-opacity-50 rounded-full w-8 h-8 flex items-center justify-center text-2xl font-light z-50"
+                    ></div>
+
+                    <SkeletonEarthquakeDetailHeader />
+
+                    <div className="p-3 md:p-5 space-y-5 text-sm">
+                        <SkeletonEarthquakeSnapshotPanel exhibitPanelClass={exhibitPanelClass} exhibitTitleClass={exhibitTitleClass} />
+                        <SkeletonEarthquakeRegionalMapPanel exhibitPanelClass={exhibitPanelClass} exhibitTitleClass={exhibitTitleClass} />
+                        <SkeletonEarthquakeEnergyPanel exhibitPanelClass={exhibitPanelClass} exhibitTitleClass={exhibitTitleClass} />
+                        <SkeletonEarthquakeRegionalSeismicityPanel exhibitPanelClass={exhibitPanelClass} />
+                        <SkeletonEarthquakeDepthProfilePanel exhibitPanelClass={exhibitPanelClass} />
+                        <SkeletonEarthquakeSeismicWavesPanel exhibitPanelClass={exhibitPanelClass} exhibitTitleClass={exhibitTitleClass} />
+                        <SkeletonEarthquakeLocationPanel exhibitPanelClass={exhibitPanelClass} exhibitTitleClass={exhibitTitleClass} />
+                        <SkeletonEarthquakeImpactPanel exhibitPanelClass={exhibitPanelClass} exhibitTitleClass={exhibitTitleClass} />
+
+                        {/* Add more skeleton panels here if they were created and are part of the initial visible structure */}
+                        {/* For example, a generic block for the rest */}
+                        <SkeletonBlock height="h-64 w-full" />
+                    </div>
+                </div>
+            </div>
+        );
+    }
     if (error) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-red-600 mb-4">Error Loading Details</h3><p className="text-slate-700 mb-6">{error}</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div> );
     if (!detailData || !properties) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-slate-700 mb-4">Details Not Available</h3><p className="text-slate-600 mb-6">Could not retrieve or parse details.</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div> );
 
