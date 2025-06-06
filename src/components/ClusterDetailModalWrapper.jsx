@@ -123,6 +123,22 @@ function ClusterDetailModalWrapper({
                 setLoadingPhase('done');
                 return;
             }
+
+            // ---- Start of added ----
+            const willLikelyUseMonthly = hasAttemptedMonthlyLoad;
+
+            if (willLikelyUseMonthly && isLoadingMonthly) {
+                // console.log(`WRAPPER ${clusterId}: Monthly data is loading. Waiting... (worker_fetch)`);
+                return;
+            }
+
+            if (!willLikelyUseMonthly && (isLoadingWeekly || isInitialAppLoad)) {
+                // console.log(`WRAPPER ${clusterId}: Weekly/Initial data is loading. Waiting... (worker_fetch)`);
+                return;
+            }
+            // console.log(`WRAPPER ${clusterId}: Context data presumed loaded. Proceeding with worker_fetch.`);
+            // ---- End of added ----
+
             // console.log(`WRAPPER ${clusterId}: Calling fetchClusterDefinition.`); // Removed
             try {
                 const result = await fetchClusterDefinition(clusterId);
@@ -187,12 +203,26 @@ function ClusterDetailModalWrapper({
             }
         }
         fetchAndProcessClusterFromWorker();
-    }, [clusterId, formatDate, formatTimeAgo, formatTimeDuration, allEarthquakes, earthquakesLast72Hours, hasAttemptedMonthlyLoad]);
+    }, [clusterId, formatDate, formatTimeAgo, formatTimeDuration, allEarthquakes, earthquakesLast72Hours, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad, dynamicCluster]);
 
 
     // Effect 2: Attempt reconstruction from parsed ID if worker fetch failed/incomplete
     useEffect(() => {
         if (loadingPhase === 'reconstruct_from_id_attempt' && !dynamicCluster) {
+            // ---- Start of added ----
+            const willLikelyUseMonthly = hasAttemptedMonthlyLoad;
+
+            if (willLikelyUseMonthly && isLoadingMonthly) {
+                // console.log(`WRAPPER ${clusterId}: Monthly data is loading. Waiting... (reconstruct_from_id_attempt)`);
+                return;
+            }
+            if (!willLikelyUseMonthly && (isLoadingWeekly || isInitialAppLoad)) {
+                // console.log(`WRAPPER ${clusterId}: Weekly/Initial data is loading. Waiting... (reconstruct_from_id_attempt)`);
+                return;
+            }
+            // console.log(`WRAPPER ${clusterId}: Context data presumed loaded. Proceeding with reconstruct_from_id_attempt.`);
+            // ---- End of added ----
+
             // console.log(`WRAPPER ${clusterId}: Phase reconstruct_from_id_attempt.`); // Removed
             const parts = clusterId ? clusterId.split('_') : [];
             let parsedStrongestQuakeId = null;
@@ -277,7 +307,7 @@ function ClusterDetailModalWrapper({
                 setLoadingPhase('fallback_prop_check_attempt');
             }
         }
-    }, [loadingPhase, clusterId, allEarthquakes, earthquakesLast72Hours, formatDate, formatTimeAgo, formatTimeDuration, hasAttemptedMonthlyLoad, dynamicCluster]);
+    }, [loadingPhase, clusterId, allEarthquakes, earthquakesLast72Hours, formatDate, formatTimeAgo, formatTimeDuration, hasAttemptedMonthlyLoad, dynamicCluster, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]);
 
     // Effect 3: Fallback to overviewClusters prop
     useEffect(() => {
