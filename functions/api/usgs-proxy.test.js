@@ -57,8 +57,9 @@ const mockContextBase = {
 };
 let mockContext; // Will be reassigned in beforeEach
 
-const TEST_API_URL = 'https://example.com/api';
-const PROXY_SOURCE_NAME = "usgs-proxy-worker";
+const VALID_USGS_API_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson';
+const TEST_API_URL = VALID_USGS_API_URL; // Use a valid URL for most tests expecting success path
+const PROXY_SOURCE_NAME = "usgs-proxy-handler"; // Matching the sourceName in [[catchall]].js
 const DEFAULT_CACHE_DURATION_SECONDS = 600;
 
 describe('onRequest proxy function', () => {
@@ -90,8 +91,7 @@ describe('onRequest proxy function', () => {
     // Ensure the URL is correctly set for the first test which modifies it
     // This is a bit redundant if the test itself sets the specific URL,
     // but good for ensuring the default state of mockContext.request.url is what most tests expect.
-    // The test 'should return 400 JSON error if apiUrl query parameter is missing' will override this.
-    // mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${TEST_API_URL}`;
+    mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${encodeURIComponent(TEST_API_URL)}`;
 
 
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -110,10 +110,50 @@ describe('onRequest proxy function', () => {
     const response = await onRequest(mockContext);
     const responseBody = await response.json();
     expect(response.status).toBe(400);
-    // ... (rest of assertions remain the same)
-    expect(responseBody.message).toBe("Missing apiUrl query parameter for proxy request");
-    expect(responseBody.source).toBe("usgs-proxy-router"); // Also check the sourceName
+    const json = await response.json();
+    expect(json.message).toBe("Missing apiUrl query parameter for proxy request");
+    expect(json.source).toBe("usgs-proxy-router");
   });
+
+  it('should return 400 for malformed apiUrl', async () => {
+    mockContext.request.url = 'http://localhost/api/usgs-proxy?apiUrl=notaurl';
+    const response = await onRequest(mockContext);
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.message).toContain("Invalid apiUrl format");
+    expect(json.source).toBe(PROXY_SOURCE_NAME);
+  });
+
+  it('should return 400 for HTTP apiUrl', async () => {
+    const httpApiUrl = 'http://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson';
+    mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${encodeURIComponent(httpApiUrl)}`;
+    const response = await onRequest(mockContext);
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.message).toBe("Invalid or disallowed apiUrl. Must use https.");
+    expect(json.source).toBe(PROXY_SOURCE_NAME);
+  });
+
+  it('should return 400 for disallowed hostname', async () => {
+    const disallowedHostUrl = 'https://otherdomain.com/earthquakes/feed/v1.0/summary/all_hour.geojson';
+    mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${encodeURIComponent(disallowedHostUrl)}`;
+    const response = await onRequest(mockContext);
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.message).toBe("Invalid or disallowed apiUrl. Hostname not allowed.");
+    expect(json.source).toBe(PROXY_SOURCE_NAME);
+  });
+
+  it('should return 400 for disallowed path', async () => {
+    const disallowedPathUrl = 'https://earthquake.usgs.gov/some/other/path';
+    mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${encodeURIComponent(disallowedPathUrl)}`;
+    const response = await onRequest(mockContext);
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.message).toBe("Invalid or disallowed apiUrl. Path not allowed.");
+    expect(json.source).toBe(PROXY_SOURCE_NAME);
+  });
+
 
   it('should return cached response if available and log cache hit', async () => {
     const cachedData = { message: 'cached data' };
@@ -122,12 +162,20 @@ describe('onRequest proxy function', () => {
       headers: { 'Content-Type': 'application/json', 'Cache-Control': `s-maxage=${DEFAULT_CACHE_DURATION_SECONDS}`}
     });
     mockCache.match.mockResolvedValueOnce(mockCachedResponse);
-    await onRequest(mockContext); // Call the function
+    // Ensure the mockContext uses the valid TEST_API_URL for this successful path test
+    mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${encodeURIComponent(TEST_API_URL)}`;
+    const response = await onRequest(mockContext); // Call the function
+
+    expect(response.status).toBe(200);
+    const jsonData = await response.json();
+    expect(jsonData).toEqual(cachedData);
     expect(consoleLogSpy).toHaveBeenCalledWith(`Cache hit for: ${TEST_API_URL}`);
-    // ... (rest of assertions remain the same)
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   const testCacheBehavior = async ({ envValue, expectedDuration, expectWarning }) => {
+    // Ensure the mockContext uses the valid TEST_API_URL for these successful path tests
+    mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${encodeURIComponent(TEST_API_URL)}`;
     if (envValue !== undefined) {
       mockContext.env.WORKER_CACHE_DURATION_SECONDS = envValue;
     }

@@ -84,6 +84,9 @@ describe('onRequest (Main Router)', () => {
   // -- API: /api/usgs-proxy --
   describe('/api/usgs-proxy', () => {
     const proxyPath = '/api/usgs-proxy';
+    const VALID_USGS_API_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson';
+    const VALID_USGS_DETAIL_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc73649170.geojson';
+
 
     it('should return 400 if apiUrl is missing', async () => {
       const request = new Request(`http://localhost${proxyPath}`);
@@ -94,13 +97,51 @@ describe('onRequest (Main Router)', () => {
       expect(json.message).toBe("Missing apiUrl query parameter for proxy request");
     });
 
-    it('should proxy to apiUrl, cache miss, and cache the response', async () => {
-      const targetApiUrl = 'http://example.com/earthquakes';
-      const mockApiResponseData = { data: 'live earthquake data' };
+    it('should return 400 for malformed apiUrl', async () => {
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=notaurl`);
+      const context = createMockContext(request);
+      const response = await onRequest(context);
+      expect(response.status).toBe(400);
+      const json = await response.json();
+      expect(json.message).toContain("Invalid apiUrl format");
+    });
+
+    it('should return 400 for HTTP apiUrl', async () => {
+      const targetApiUrl = 'http://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson';
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+      const context = createMockContext(request);
+      const response = await onRequest(context);
+      expect(response.status).toBe(400);
+      const json = await response.json();
+      expect(json.message).toBe("Invalid or disallowed apiUrl. Must use https.");
+    });
+
+    it('should return 400 for disallowed hostname', async () => {
+      const targetApiUrl = 'https://otherdomain.com/earthquakes/feed/v1.0/summary/all_hour.geojson';
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+      const context = createMockContext(request);
+      const response = await onRequest(context);
+      expect(response.status).toBe(400);
+      const json = await response.json();
+      expect(json.message).toBe("Invalid or disallowed apiUrl. Hostname not allowed.");
+    });
+
+    it('should return 400 for disallowed path', async () => {
+      const targetApiUrl = 'https://earthquake.usgs.gov/some/other/path';
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+      const context = createMockContext(request);
+      const response = await onRequest(context);
+      expect(response.status).toBe(400);
+      const json = await response.json();
+      expect(json.message).toBe("Invalid or disallowed apiUrl. Path not allowed.");
+    });
+
+    it('should proxy to VALID_USGS_API_URL, cache miss, and cache the response', async () => {
+      const mockApiResponseData = { data: 'live earthquake data for summary' };
       fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockApiResponseData), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
 
-      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(VALID_USGS_API_URL)}`);
       const context = createMockContext(request, { WORKER_CACHE_DURATION_SECONDS: '300' });
 
       const response = await onRequest(context);
@@ -109,20 +150,38 @@ describe('onRequest (Main Router)', () => {
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(json).toEqual(mockApiResponseData);
-      expect(fetch).toHaveBeenCalledWith(targetApiUrl);
+      expect(fetch).toHaveBeenCalledWith(VALID_USGS_API_URL);
       expect(mockCache.match).toHaveBeenCalled();
       expect(mockCache.put).toHaveBeenCalled();
       const cachedResponse = mockCache.put.mock.calls[0][1];
       expect(cachedResponse.headers.get('Cache-Control')).toBe('s-maxage=300');
     });
 
-    it('should return cached response on cache hit', async () => {
-      const targetApiUrl = 'http://example.com/earthquakes_cached';
+    it('should proxy to VALID_USGS_DETAIL_URL, cache miss, and cache the response', async () => {
+        const mockApiResponseData = { data: 'live earthquake data for detail' };
+        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockApiResponseData), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+        mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
+
+        const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(VALID_USGS_DETAIL_URL)}`);
+        const context = createMockContext(request, { WORKER_CACHE_DURATION_SECONDS: '300' });
+
+        const response = await onRequest(context);
+        await context._awaitWaitUntilPromises(); // Wait for cache.put
+
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json).toEqual(mockApiResponseData);
+        expect(fetch).toHaveBeenCalledWith(VALID_USGS_DETAIL_URL);
+        expect(mockCache.match).toHaveBeenCalled();
+        expect(mockCache.put).toHaveBeenCalled();
+      });
+
+    it('should return cached response on cache hit for VALID_USGS_API_URL', async () => {
       const cachedData = { data: 'cached earthquake data' };
       const mockCachedResponse = new Response(JSON.stringify(cachedData), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 's-maxage=600' } });
       mockCache.match.mockResolvedValueOnce(mockCachedResponse);
 
-      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(VALID_USGS_API_URL)}`);
       const context = createMockContext(request);
 
       const response = await onRequest(context);
@@ -133,12 +192,11 @@ describe('onRequest (Main Router)', () => {
       expect(mockCache.put).not.toHaveBeenCalled();
     });
 
-    it('should handle fetch error during proxying', async () => {
-      const targetApiUrl = 'http://example.com/earthquakes_fetch_error';
+    it('should handle fetch error during proxying for VALID_USGS_API_URL', async () => {
       fetch.mockRejectedValueOnce(new Error('Network Failure XYZ'));
       mockCache.match.mockResolvedValueOnce(undefined);
 
-      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(VALID_USGS_API_URL)}`);
       const context = createMockContext(request);
 
       const response = await onRequest(context);
@@ -148,43 +206,34 @@ describe('onRequest (Main Router)', () => {
       expect(json.source).toBe('usgs-proxy-handler');
     });
 
-    it('should handle non-JSON response from upstream API', async () => {
-      const targetApiUrl = 'http://example.com/earthquakes_html_error';
-      // Simulate upstream returning HTML error page
+    it('should handle non-JSON response from upstream API for VALID_USGS_API_URL', async () => {
       fetch.mockResolvedValueOnce(new Response('<html><body>Error from USGS</body></html>', {
         status: 503,
         headers: { 'Content-Type': 'text/html' }
       }));
       mockCache.match.mockResolvedValueOnce(undefined);
 
-      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(VALID_USGS_API_URL)}`);
       const context = createMockContext(request);
 
       const response = await onRequest(context);
-      // The main [[catchall]].js tries to parse response.json(), which will fail.
-      // This failure then leads to a 500 error from the proxy handler itself.
-      // Correction: If upstream provides non-ok status (like 503 here), that status is returned.
-      // If upstream is ok (200) but content is not JSON, then .json() fails, leading to 500.
-      // The current mock is status 503, so response.ok is false.
       expect(response.status).toBe(503);
       const json = await response.json();
-      // statusText might be empty in some test environments for mocked Response
       const expectedMessagePart = `Error fetching data from USGS API: 503`;
       expect(json.message.startsWith(expectedMessagePart)).toBe(true);
       expect(json.source).toBe('usgs-proxy-handler');
       expect(json.upstream_status).toBe(503);
     });
 
-    it('should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid', async () => {
-      const targetApiUrl = 'http://example.com/earthquakes_invalid_ttl';
+    it('should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid for VALID_USGS_API_URL', async () => {
       fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'ok' }), { status: 200 }));
       mockCache.match.mockResolvedValueOnce(undefined);
       const consoleWarnSpy = vi.spyOn(console, 'warn');
 
-      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(VALID_USGS_API_URL)}`);
       const invalidTTLs = ['abc', '0', '-100'];
       for (const ttl of invalidTTLs) {
-        fetch.mockClear(); // Clear fetch for next iteration's call
+        fetch.mockClear();
         fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'ok' }), { status: 200 }));
         mockCache.put.mockClear();
         const context = createMockContext(request, { WORKER_CACHE_DURATION_SECONDS: ttl });
@@ -203,23 +252,22 @@ describe('onRequest (Main Router)', () => {
       consoleWarnSpy.mockRestore();
     });
 
-    it('should handle cache.put failure gracefully', async () => {
-      const targetApiUrl = 'http://example.com/earthquakes_cache_put_fail';
+    it('should handle cache.put failure gracefully for VALID_USGS_API_URL', async () => {
       fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'ok' }), { status: 200 }));
       mockCache.match.mockResolvedValueOnce(undefined);
       mockCache.put.mockRejectedValueOnce(new Error('KV is full'));
       const consoleErrorSpy = vi.spyOn(console, 'error');
 
-      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(VALID_USGS_API_URL)}`);
       const context = createMockContext(request);
 
       const response = await onRequest(context);
-      expect(response.status).toBe(200);
-      await context._awaitWaitUntilPromises();
+      expect(response.status).toBe(200); // Still returns 200 to client
+      await context._awaitWaitUntilPromises(); // Wait for cache.put to attempt and fail
 
       expect(mockCache.put).toHaveBeenCalled();
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining(`Failed to cache response for ${targetApiUrl}`),
+        expect.stringContaining(`Failed to cache response for ${VALID_USGS_API_URL}`),
         expect.any(Error)
       );
       consoleErrorSpy.mockRestore();
@@ -229,118 +277,170 @@ describe('onRequest (Main Router)', () => {
   // -- API: /api/cluster-definition --
   describe('/api/cluster-definition', () => {
     const clusterPath = '/api/cluster-definition';
+    const MOCK_API_KEY = 'test-secret-key';
 
-    it('POST should store valid cluster definition in KV', async () => {
-      const clusterData = { clusterId: 'c1', earthquakeIds: ['q1', 'q2'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clusterData),
-      });
-      const context = createMockContext(request);
-      context.env.CLUSTER_KV.put.mockResolvedValueOnce(undefined);
+    // --- POST Request Tests (with API Key Auth) ---
+    describe('POST requests', () => {
+      const validClusterData = { clusterId: 'c1', earthquakeIds: ['q1', 'q2'], strongestQuakeId: 'q1' };
 
-      const response = await onRequest(context);
-      expect(response.status).toBe(201);
-      const json = await response.json();
-      expect(json.message).toBe("Cluster definition stored.");
-
-      const expectedPutValue = {
-        earthquakeIds: clusterData.earthquakeIds,
-        strongestQuakeId: clusterData.strongestQuakeId,
-        updatedAt: expect.any(String), // Check that updatedAt is a string (ISO date)
-      };
-      const actualPutValueString = context.env.CLUSTER_KV.put.mock.calls[0][1];
-      const actualPutValue = JSON.parse(actualPutValueString);
-
-      expect(actualPutValue).toMatchObject(expectedPutValue);
-      expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
-        clusterData.clusterId,
-        expect.any(String), // Already checked content with toMatchObject
-        { expirationTtl: 21600 } // Default TTL
-      );
-    });
-
-    it('POST should use CLUSTER_DEFINITION_TTL_SECONDS from env if valid', async () => {
-      const clusterData = { clusterId: 'c_ttl_test', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clusterData),
-      });
-      const context = createMockContext(request, { CLUSTER_DEFINITION_TTL_SECONDS: '3600' });
-      await onRequest(context);
-      expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
-        clusterData.clusterId,
-        expect.any(String),
-        { expirationTtl: 3600 }
-      );
-    });
-
-    it('POST should use default TTL if CLUSTER_DEFINITION_TTL_SECONDS is invalid', async () => {
-      const clusterData = { clusterId: 'c_invalid_ttl', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const consoleWarnSpy = vi.spyOn(console, 'warn');
-
-      const invalidTTLs = ['abc', '0', '-100'];
-      for (const ttl of invalidTTLs) {
-        // Create new request for each iteration to avoid "body already used" error
+      it('should store valid cluster definition in KV with correct API key', async () => {
         const request = new Request(`http://localhost${clusterPath}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(clusterData),
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+          body: JSON.stringify(validClusterData),
         });
-        const context = createMockContext(request, { CLUSTER_DEFINITION_TTL_SECONDS: ttl });
-        // context.env.CLUSTER_KV.put is fresh in each context, no need to clear unless asserting across loop iterations with a shared mock
-        await onRequest(context);
+        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY });
+        context.env.CLUSTER_KV.put.mockResolvedValueOnce(undefined);
+
+        const response = await onRequest(context);
+        expect(response.status).toBe(201);
+        const json = await response.json();
+        expect(json.message).toBe("Cluster definition stored.");
+
+        const expectedPutValue = {
+          earthquakeIds: validClusterData.earthquakeIds,
+          strongestQuakeId: validClusterData.strongestQuakeId,
+          updatedAt: expect.any(String),
+        };
+        const actualPutValueString = context.env.CLUSTER_KV.put.mock.calls[0][1];
+        const actualPutValue = JSON.parse(actualPutValueString);
+
+        expect(actualPutValue).toMatchObject(expectedPutValue);
         expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
-          clusterData.clusterId,
+          validClusterData.clusterId,
           expect.any(String),
           { expirationTtl: 21600 } // Default TTL
         );
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Invalid CLUSTER_DEFINITION_TTL_SECONDS value: "${ttl}"`));
-      }
-      consoleWarnSpy.mockRestore();
-    });
-
-    it('POST should return 500 if CLUSTER_KV is not configured', async () => {
-      const clusterData = { clusterId: 'c1', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        body: JSON.stringify(clusterData), // Content-Type header missing, but function doesn't check it strictly
       });
-      const context = createMockContext(request, { CLUSTER_KV: undefined }); // Undefined KV
-      const response = await onRequest(context);
-      expect(response.status).toBe(500);
-      const json = await response.json();
-      expect(json.message).toBe("KV store not configured");
-    });
 
-    it('POST should return 500 if CLUSTER_KV.put throws an error', async () => {
-      const clusterData = { clusterId: 'c1', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clusterData),
+      it('should use CLUSTER_DEFINITION_TTL_SECONDS from env if valid (with API Key)', async () => {
+        const request = new Request(`http://localhost${clusterPath}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+          body: JSON.stringify(validClusterData),
+        });
+        const context = createMockContext(request, {
+          CLUSTER_API_KEY: MOCK_API_KEY,
+          CLUSTER_DEFINITION_TTL_SECONDS: '3600'
+        });
+        await onRequest(context);
+        expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
+          validClusterData.clusterId,
+          expect.any(String),
+          { expirationTtl: 3600 }
+        );
       });
-      const context = createMockContext(request);
-      context.env.CLUSTER_KV.put.mockRejectedValueOnce(new Error("KV Put Error"));
-      const response = await onRequest(context);
-      expect(response.status).toBe(500);
-      const json = await response.json();
-      expect(json.message).toContain("KV Put Error");
-    });
 
-    it('POST should return 400 for invalid data', async () => {
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clusterId: 'c1' }), // Missing fields
+      it('should use default TTL if CLUSTER_DEFINITION_TTL_SECONDS is invalid (with API Key)', async () => {
+        const consoleWarnSpy = vi.spyOn(console, 'warn');
+        const invalidTTLs = ['abc', '0', '-100'];
+        for (const ttl of invalidTTLs) {
+          const request = new Request(`http://localhost${clusterPath}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+            body: JSON.stringify(validClusterData),
+          });
+          const context = createMockContext(request, {
+            CLUSTER_API_KEY: MOCK_API_KEY,
+            CLUSTER_DEFINITION_TTL_SECONDS: ttl
+          });
+          await onRequest(context);
+          expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
+            validClusterData.clusterId,
+            expect.any(String),
+            { expirationTtl: 21600 } // Default TTL
+          );
+          expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Invalid CLUSTER_DEFINITION_TTL_SECONDS value: "${ttl}"`));
+          context.env.CLUSTER_KV.put.mockClear(); // Clear for next iteration
+          consoleWarnSpy.mockClear();
+        }
+        consoleWarnSpy.mockRestore();
       });
-      const context = createMockContext(request);
-      const response = await onRequest(context);
-      expect(response.status).toBe(400);
+
+      it('should return 401 if X-API-Key header is missing', async () => {
+        const request = new Request(`http://localhost${clusterPath}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }, // No X-API-Key
+          body: JSON.stringify(validClusterData),
+        });
+        // Server key IS configured
+        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY });
+        const response = await onRequest(context);
+        expect(response.status).toBe(401);
+        const json = await response.json();
+        expect(json.message).toBe("Missing API key.");
+      });
+
+      it('should return 403 if X-API-Key is incorrect', async () => {
+        const request = new Request(`http://localhost${clusterPath}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': 'wrong-key' },
+          body: JSON.stringify(validClusterData),
+        });
+        // Server key IS configured with the correct key
+        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY });
+        const response = await onRequest(context);
+        expect(response.status).toBe(403);
+        const json = await response.json();
+        expect(json.message).toBe("Invalid API key.");
+      });
+
+      it('should return 500 if CLUSTER_API_KEY is not configured on server', async () => {
+        const request = new Request(`http://localhost${clusterPath}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+          body: JSON.stringify(validClusterData),
+        });
+        // Server key is NOT configured
+        const context = createMockContext(request, { CLUSTER_API_KEY: undefined });
+        const response = await onRequest(context);
+        expect(response.status).toBe(500);
+        const json = await response.json();
+        expect(json.message).toBe("API key not configured on server. Cannot process POST request.");
+      });
+
+      it('should return 500 if CLUSTER_KV is not configured (and API key is valid)', async () => {
+        const request = new Request(`http://localhost${clusterPath}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+          body: JSON.stringify(validClusterData),
+        });
+        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY, CLUSTER_KV: undefined });
+        const response = await onRequest(context);
+        expect(response.status).toBe(500);
+        const json = await response.json();
+        expect(json.message).toBe("KV store not configured");
+      });
+
+      it('should return 500 if CLUSTER_KV.put throws an error (and API key is valid)', async () => {
+        const request = new Request(`http://localhost${clusterPath}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+          body: JSON.stringify(validClusterData),
+        });
+        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY });
+        context.env.CLUSTER_KV.put.mockRejectedValueOnce(new Error("KV Put Error"));
+        const response = await onRequest(context);
+        expect(response.status).toBe(500);
+        const json = await response.json();
+        expect(json.message).toContain("Error processing request: KV Put Error");
+      });
+
+      it('should return 400 for invalid data (and API key is valid)', async () => {
+        const request = new Request(`http://localhost${clusterPath}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+          body: JSON.stringify({ clusterId: 'c1' }), // Missing fields
+        });
+        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY });
+        const response = await onRequest(context);
+        expect(response.status).toBe(400);
+        const json = await response.json();
+        expect(json.message).toBe("Missing or invalid parameters for POST");
+      });
     });
 
+    // --- GET Request Tests (No API Key Auth needed for GET) ---
     it('GET should retrieve cluster definition from KV', async () => {
       const clusterId = 'c1';
       const storedValue = { earthquakeIds: ['q1', 'q2'], strongestQuakeId: 'q1', updatedAt: new Date().toISOString() };
@@ -682,11 +782,13 @@ describe('onRequest (Main Router)', () => {
     });
 
     it('should proxy if apiUrl param is present on an unhandled path and context.next is not defined/used', async () => {
-        const targetApiUrl = 'http://example.com/legacy';
         fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'legacy' }), { status: 200 }));
         mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
 
-        const request = new Request(`http://localhost/unknown/path?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+        const validUsgsUrlForFallbackTest = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
+
+        // This test now checks if a *valid* USGS URL on an unknown path is proxied
+        const request = new Request(`http://localhost/unknown/path?apiUrl=${encodeURIComponent(validUsgsUrlForFallbackTest)}`);
         // Create context without 'next' for this specific test
         const context = createMockContext(request);
         delete context.next;
@@ -695,7 +797,7 @@ describe('onRequest (Main Router)', () => {
         await context._awaitWaitUntilPromises();
 
         expect(response.status).toBe(200);
-        expect(fetch).toHaveBeenCalledWith(targetApiUrl);
+        expect(fetch).toHaveBeenCalledWith(validUsgsUrlForFallbackTest);
         expect(mockCache.put).toHaveBeenCalled();
     });
 
