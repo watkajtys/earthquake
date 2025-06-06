@@ -1,26 +1,12 @@
 {
   "version": 1,
-  "rules": [
-    {
-      "include": [
-        "/sitemap-index.xml",
-        "/sitemap-static-pages.xml",
-        "/sitemap-earthquakes.xml",
-        "/sitemap-clusters.xml"
-      ],
-      "handler": {
-        "function": "/functions/api/usgs-proxy.js"
-      }
-    },
-    {
-      "include": [
-        "/api/usgs-proxy",
-        "/api/cluster-definition"
-      ],
-      "handler": {
-        "function": "/functions/api/usgs-proxy.js"
-      }
-    }
+  "include": [
+    "/sitemap-index.xml",
+    "/sitemap-static-pages.xml",
+    "/sitemap-earthquakes.xml",
+    "/sitemap-clusters.xml",
+    "/api/usgs-proxy",
+    "/api/cluster-definition"
   ],
   "exclude": []
 }
