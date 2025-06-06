@@ -8,8 +8,12 @@
  */
 export async function registerClusterDefinition(clusterData) {
   if (!clusterData || !clusterData.clusterId || !clusterData.earthquakeIds || !clusterData.strongestQuakeId) {
-    console.error("registerClusterDefinition: Invalid clusterData provided.", clusterData);
-    return false;
+    return {
+      error: {
+        message: "Invalid cluster data provided.",
+        status: null // Or a specific status code like 400 if appropriate
+      }
+    };
   }
 
   try {
@@ -22,19 +26,24 @@ export async function registerClusterDefinition(clusterData) {
     });
 
     if (response.status === 201) {
-      console.log(`Cluster definition for ${clusterData.clusterId} registered successfully.`);
+      // console.log(`Cluster definition for ${clusterData.clusterId} registered successfully.`); // Logging handled by caller
       return true;
     } else {
-      const responseBody = await response.text(); // Using text() to avoid JSON parse error if body is not JSON
-      console.error(
-        `Failed to register cluster definition for ${clusterData.clusterId}. Status: ${response.status}`,
-        responseBody
-      );
-      return false;
+      // const responseBody = await response.text(); // Not needed unless we parse it for a more specific message
+      return {
+        error: {
+          message: "Failed to save earthquake cluster data.",
+          status: response.status
+        }
+      };
     }
   } catch (error) {
-    console.error(`Network error while registering cluster definition for ${clusterData.clusterId}:`, error);
-    return false;
+    return {
+      error: {
+        message: "Failed to save earthquake cluster data.", // Or a more generic network error message
+        status: null // Or error.status if available and relevant
+      }
+    };
   }
 }
 
@@ -47,8 +56,12 @@ export async function registerClusterDefinition(clusterData) {
  */
 export async function fetchClusterDefinition(clusterId) {
   if (!clusterId) {
-    console.error("fetchClusterDefinition: Invalid clusterId provided.");
-    throw new Error("Invalid clusterId");
+    return {
+      error: {
+        message: "Invalid clusterId provided.",
+        status: null // Or a specific status code like 400
+      }
+    };
   }
 
   try {
@@ -61,21 +74,32 @@ export async function fetchClusterDefinition(clusterId) {
 
     if (response.status === 200) {
       const data = await response.json();
-      console.log(`Cluster definition for ${clusterId} fetched successfully.`);
+      // console.log(`Cluster definition for ${clusterId} fetched successfully.`); // Logging handled by caller
       return data; // Expected { earthquakeIds, strongestQuakeId }
     } else if (response.status === 404) {
-      console.log(`Cluster definition for ${clusterId} not found (404).`);
-      return null;
+      // console.log(`Cluster definition for ${clusterId} not found (404).`); // Logging handled by caller
+      return {
+        error: {
+          message: "Earthquake cluster data not found.",
+          status: response.status
+        }
+      };
     } else {
-      const errorBody = await response.text();
-      console.error(
-        `Failed to fetch cluster definition for ${clusterId}. Status: ${response.status}`,
-        errorBody
-      );
-      throw new Error(`Failed to fetch cluster definition. Status: ${response.status}`);
+      // const errorBody = await response.text(); // Not needed unless we parse it for a more specific message
+      return {
+        error: {
+          message: "Failed to retrieve earthquake cluster data.",
+          status: response.status
+        }
+      };
     }
   } catch (error) {
-    console.error(`Network error while fetching cluster definition for ${clusterId}:`, error);
-    throw error; // Re-throw network errors or errors from response.json()
+    // This catches network errors or errors from response.json() if it fails
+    return {
+      error: {
+        message: "Failed to retrieve earthquake cluster data.", // Or a more specific message like "Network error" or "Invalid JSON response"
+        status: null // Or error.status if available
+      }
+    };
   }
 }

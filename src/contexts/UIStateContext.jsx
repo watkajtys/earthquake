@@ -78,6 +78,18 @@ export const UIStateProvider = ({ children }) => {
         setFocusedNotableQuake_internal(quake);
     }, []);
 
+    const clearActiveFeedPeriod = useCallback(() => {
+        const defaultPeriod = 'last_24_hours';
+        setActiveFeedPeriod_internal(defaultPeriod);
+        if (searchParams.get('activeFeedPeriod') !== defaultPeriod) {
+            setSearchParams(prevParams => {
+                const newSearchQuery = new URLSearchParams(prevParams);
+                newSearchQuery.set('activeFeedPeriod', defaultPeriod);
+                return newSearchQuery;
+            }, { replace: true });
+        }
+    }, [setSearchParams, searchParams]);
+
 
     const value = {
         activeSidebarView,
@@ -85,6 +97,7 @@ export const UIStateProvider = ({ children }) => {
         
         activeFeedPeriod,
         setActiveFeedPeriod: changeActiveFeedPeriod,
+        clearActiveFeedPeriod,
 
         globeFocusLng,
         setGlobeFocusLng,

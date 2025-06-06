@@ -1,9 +1,9 @@
 import React from 'react'; // React is needed
+import { useUIState } from '../../contexts/UIStateContext'; // Import useUIState
+
 // No PropTypes needed here as this is a simpler component for now
 
 const FeedSelector = ({
-  activeFeedPeriod,
-  setActiveFeedPeriod,
   // Props for conditional rendering of 14/30 day buttons
   hasAttemptedMonthlyLoad, // Corresponds to contextHasAttemptedMonthlyLoad
   allEarthquakes, // Corresponds to contextAllEarthquakes
@@ -11,6 +11,12 @@ const FeedSelector = ({
   FEELABLE_QUAKE_THRESHOLD,
   MAJOR_QUAKE_THRESHOLD,
 }) => {
+  const {
+    activeFeedPeriod,
+    setActiveFeedPeriod,
+    clearActiveFeedPeriod
+  } = useUIState();
+
   // The button group structure from FeedsPageLayout.jsx
   return (
     <div className="my-2 flex flex-wrap gap-2 pb-2">
@@ -75,6 +81,13 @@ const FeedSelector = ({
           </button>
         </React.Fragment>
       )}
+      <button
+        onClick={() => clearActiveFeedPeriod()}
+        className="text-xs px-3 py-1.5 font-medium rounded-md transition-colors whitespace-nowrap bg-red-600 hover:bg-red-500 text-white"
+        aria-label="Clear active feed filter and reset to default"
+      >
+        Clear Filters
+      </button>
     </div>
   );
 };
