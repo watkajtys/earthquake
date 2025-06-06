@@ -15,7 +15,8 @@ import BottomNav from "../components/BottomNav.jsx";
 import ClusterSummaryItem from '../components/ClusterSummaryItem';
 import ClusterDetailModal from '../components/ClusterDetailModal'; // This is for the cluster map point, not the route component
 // import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx'; // Removed static import, will use lazy loaded
-import { calculateDistance, getMagnitudeColor } from '../utils/utils.js';
+import { getMagnitudeColor } from '../utils/utils.js'; // calculateDistance removed
+import { findActiveClusters } from '../utils/clusterUtils.js'; // Import findActiveClusters
 
 // Import newly created components
 import SkeletonText from '../components/skeletons/SkeletonText';
@@ -35,6 +36,7 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 import { useUIState } from '../contexts/UIStateContext.jsx'; // Import the new hook
+import { registerClusterDefinition } from '../services/clusterApiService.js'; // Import the new service
 import {
     // USGS_API_URL_MONTH, // Now used inside useMonthlyEarthquakeData
     CLUSTER_MAX_DISTANCE_KM,
@@ -129,60 +131,6 @@ const GlobeLayout = (props) => {
   );
 };
 
-/**
- * Calculates the distance between two geographical coordinates using the Haversine formula.
- * @param {number} lat1 Latitude of the first point.
- * @param {number} lon1 Longitude of the first point.
- * @param {number} lat2 Latitude of the second point.
-/**
- * Finds clusters of earthquakes based on proximity and time.
- * @param {Array<object>} earthquakes - Array of earthquake objects. Expected to have `properties.time` and `geometry.coordinates`.
- * @param {number} maxDistanceKm - Maximum distance between quakes to be considered in the same cluster.
- * @param {number} minQuakes - Minimum number of quakes to form a valid cluster.
- * @returns {Array<Array<object>>} An array of clusters, where each cluster is an array of earthquake objects.
- */
-function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
-    const clusters = [];
-    const processedQuakeIds = new Set();
-
-    // Sort earthquakes by magnitude (descending) to potentially form clusters around stronger events first.
-    const sortedEarthquakes = [...earthquakes].sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-
-    for (const quake of sortedEarthquakes) {
-        if (processedQuakeIds.has(quake.id)) {
-            continue;
-        }
-
-        const newCluster = [quake];
-        processedQuakeIds.add(quake.id);
-        const baseLat = quake.geometry.coordinates[1];
-        const baseLon = quake.geometry.coordinates[0];
-
-        for (const otherQuake of sortedEarthquakes) {
-            if (processedQuakeIds.has(otherQuake.id) || otherQuake.id === quake.id) {
-                continue;
-            }
-
-            const dist = calculateDistance(
-                baseLat,
-                baseLon,
-                otherQuake.geometry.coordinates[1],
-                otherQuake.geometry.coordinates[0]
-            );
-
-            if (dist <= maxDistanceKm) {
-                newCluster.push(otherQuake);
-                processedQuakeIds.add(otherQuake.id);
-            }
-        }
-
-        if (newCluster.length >= minQuakes) {
-            clusters.push(newCluster);
-        }
-    }
-    return clusters;
-}
-
 // --- App Component ---
 /**
  * The main application component for the Global Seismic Activity Monitor.
@@ -200,6 +148,8 @@ function App() {
         globeFocusLng, setGlobeFocusLng,       // from UIStateContext
         setFocusedNotableQuake // focusedNotableQuake removed
     } = useUIState(); // Use the context hook
+
+    const [registeredIdsThisSession, setRegisteredIdsThisSession] = useState(new Set()); // Added state for tracking registered cluster IDs
 
     // appRenderTrigger removed (unused)
     // activeFeedPeriod is now from useUIState
@@ -629,7 +579,8 @@ function App() {
                 _maxMagInternal: maxMag,
                 _quakeCountInternal: cluster.length,
                 _earliestTimeInternal: earliestTime,
-                originalQuakes: cluster, // <-- Add this line
+                originalQuakes: cluster,
+                strongestQuakeId: strongestQuakeInCluster.id, // <-- Add this line
             };
         }).filter(Boolean); // Remove any nulls if a cluster was empty
 
@@ -644,6 +595,46 @@ function App() {
         return processed.slice(0, TOP_N_CLUSTERS_OVERVIEW);
 
     }, [activeClusters, formatDate, formatTimeAgo, formatTimeDuration]); // Include formatDate, formatTimeAgo, formatTimeDuration if they are from useCallback/component scope
+
+    // Effect to register cluster definitions
+    useEffect(() => {
+        if (overviewClusters && overviewClusters.length > 0) {
+            const registrationPromises = [];
+            const idsSuccessfullyRegisteredInEffect = new Set();
+
+            overviewClusters.forEach(cluster => {
+                if (!registeredIdsThisSession.has(cluster.id)) {
+                    const payload = {
+                        clusterId: cluster.id,
+                        earthquakeIds: cluster.originalQuakes.map(q => q.id),
+                        strongestQuakeId: cluster.strongestQuakeId,
+                    };
+                    const promise = registerClusterDefinition(payload)
+                        .then(success => {
+                            if (success) {
+                                idsSuccessfullyRegisteredInEffect.add(cluster.id);
+                            }
+                        })
+                        .catch(error => {
+                            console.error(`Error registering cluster ${cluster.id}:`, error);
+                        });
+                    registrationPromises.push(promise);
+                }
+            });
+
+            if (registrationPromises.length > 0) {
+                Promise.allSettled(registrationPromises).then(() => {
+                    if (idsSuccessfullyRegisteredInEffect.size > 0) {
+                        setRegisteredIdsThisSession(prevSet => {
+                            const newSet = new Set(prevSet);
+                            idsSuccessfullyRegisteredInEffect.forEach(id => newSet.add(id));
+                            return newSet;
+                        });
+                    }
+                });
+            }
+        }
+    }, [overviewClusters, registeredIdsThisSession]); // Added registeredIdsThisSession to dependencies
 
     // --- Event Handlers ---
     const navigate = useNavigate();
@@ -839,6 +830,8 @@ function App() {
                                       formatDate={formatDate}
                                       getMagnitudeColorStyle={getMagnitudeColorStyle}
                                       onIndividualQuakeSelect={handleQuakeClick}
+                                      formatTimeAgo={formatTimeAgo}
+                                      formatTimeDuration={formatTimeDuration}
                                     />
                                   }
                                 />
