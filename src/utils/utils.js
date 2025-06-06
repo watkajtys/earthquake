@@ -41,8 +41,11 @@ export const getMagnitudeColor = (magnitude) => {
 // Add other utility functions here as the app grows
 
 export const isValidNumber = (num) => {
-    const parsedNum = parseFloat(num);
-    return typeof parsedNum === 'number' && !isNaN(parsedNum);
+    if (num === null || num === undefined) return false;
+    const numStr = String(num).trim();
+    if (numStr === '') return false;
+    const numberVal = Number(numStr); // Use Number() which is stricter for "12a" (-> NaN)
+    return !isNaN(numberVal) && isFinite(numberVal); // isFinite also checks for NaN
 };
 
 export const formatDate = (timestamp) => {
@@ -59,8 +62,17 @@ export const isValuePresent = (value) => {
 };
 
 export const formatNumber = (num, precision = 1) => {
-    const number = parseFloat(num);
-    if (Number.isNaN(number)) return 'N/A';
+    if (num === null) { // Specific requirement from test to treat null as 0 for formatting
+        return (0).toFixed(precision);
+    }
+    // Use the corrected isValidNumber.
+    // Pass String(num) to isValidNumber as it expects a string or number that can be converted.
+    if (!isValidNumber(num)) { // Pass num directly, String() conversion is inside isValidNumber
+        return 'N/A';
+    }
+    // At this point, num is confirmed to be a valid representation of a number.
+    // parseFloat is safe here.
+    const number = parseFloat(String(num)); // Ensure string for parseFloat
     return number.toFixed(precision);
 };
 

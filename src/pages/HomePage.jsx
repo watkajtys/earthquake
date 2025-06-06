@@ -322,12 +322,12 @@ function App() {
         earthquakesLast30Days,
         prev7DayData,
         prev14DayData,
-        loadMonthlyData,
-        // New pre-filtered lists
-        feelableQuakes7Days_ctx,
-        significantQuakes7Days_ctx,
-        feelableQuakes30Days_ctx,
-        significantQuakes30Days_ctx
+        loadMonthlyData
+        // New pre-filtered lists - these were only used by the commented out currentFeedData
+        // feelableQuakes7Days_ctx,
+        // significantQuakes7Days_ctx,
+        // feelableQuakes30Days_ctx,
+        // significantQuakes30Days_ctx
     } = useEarthquakeDataState();
 
     // Unused currentFeedTitle, currentFeedisLoading, previousDataForCurrentFeed useMemo hooks will be removed below
@@ -340,29 +340,29 @@ function App() {
             .slice(0, 3);
     }, [earthquakesLast24Hours]);
 
-    const currentFeedData = useMemo(() => {
-        // const baseDataForFilters = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days; // Removed
-        switch (activeFeedPeriod) {
-            case 'last_hour': return earthquakesLastHour;
-            case 'last_24_hours': return earthquakesLast24Hours;
-            case 'last_7_days': return earthquakesLast7Days;
-            case 'last_14_days': return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast14Days : null;
-            case 'last_30_days': return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast30Days : null;
-            // Updated cases to use pre-filtered lists from context
-            case 'feelable_quakes': 
-                return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? feelableQuakes30Days_ctx : feelableQuakes7Days_ctx;
-            case 'significant_quakes': 
-                return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? significantQuakes30Days_ctx : significantQuakes7Days_ctx;
-            default: return earthquakesLast24Hours;
-        }
-    }, [
-        activeFeedPeriod, earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
-        earthquakesLast14Days, earthquakesLast30Days,
-        allEarthquakes, hasAttemptedMonthlyLoad, // Still needed for the conditional logic
-        // Added new context dependencies
-        feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
-        feelableQuakes30Days_ctx, significantQuakes30Days_ctx
-    ]);
+    // const currentFeedData = useMemo(() => { // Unused variable
+    // // const baseDataForFilters = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days; // Removed
+    // // switch (activeFeedPeriod) {
+    // // case 'last_hour': return earthquakesLastHour;
+    // // case 'last_24_hours': return earthquakesLast24Hours;
+    // // case 'last_7_days': return earthquakesLast7Days;
+    // // case 'last_14_days': return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast14Days : null;
+    // // case 'last_30_days': return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast30Days : null;
+    // // // Updated cases to use pre-filtered lists from context
+    // // case 'feelable_quakes':
+    // // return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? feelableQuakes30Days_ctx : feelableQuakes7Days_ctx;
+    // // case 'significant_quakes':
+    // // return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? significantQuakes30Days_ctx : significantQuakes7Days_ctx;
+    // // default: return earthquakesLast24Hours;
+    // // }
+    // }, [
+    // activeFeedPeriod, earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
+    // earthquakesLast14Days, earthquakesLast30Days,
+    // allEarthquakes, hasAttemptedMonthlyLoad, // Still needed for the conditional logic
+    // // Added new context dependencies
+    // feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
+    // feelableQuakes30Days_ctx, significantQuakes30Days_ctx
+    // // ]); // Unused variable
 
     // const currentFeedTitle = useMemo(() => { // Unused variable
     //     const filterPeriodSuffix = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? "(Last 30 Days)" : "(Last 7 Days)";

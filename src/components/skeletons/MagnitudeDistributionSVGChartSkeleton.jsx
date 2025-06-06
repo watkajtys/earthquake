@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import PropTypes from 'prop-types';
 
 /**
  * A skeleton loader component for the MagnitudeDistributionSVGChart.
@@ -79,9 +78,5 @@ const MagnitudeDistributionSVGChartSkeleton = React.memo(({ titleSuffix = "(Last
         </div>
     );
 });
-
-MagnitudeDistributionSVGChartSkeleton.propTypes = {
-    titleSuffix: PropTypes.string,
-};
 
 export default MagnitudeDistributionSVGChartSkeleton;

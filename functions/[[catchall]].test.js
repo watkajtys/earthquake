@@ -165,9 +165,11 @@ describe('onRequest (Main Router)', () => {
       // This failure then leads to a 500 error from the proxy handler itself.
       expect(response.status).toBe(500);
       const json = await response.json();
-      // The error message will be about failing to parse JSON, not the upstream status directly in message
-      expect(json.message).toMatch(/invalid json response body|Unexpected token/i);
+      // For a !response.ok, the message is about the upstream error status
+      // Assuming statusText might be empty in test environment for mock response
+      expect(json.message).toBe(`Error fetching data from USGS API: 503 `);
       expect(json.source).toBe('usgs-proxy-handler');
+      expect(json.upstream_status).toBe(503);
     });
 
     it('should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid', async () => {
@@ -274,18 +276,21 @@ describe('onRequest (Main Router)', () => {
 
     it('POST should use default TTL if CLUSTER_DEFINITION_TTL_SECONDS is invalid', async () => {
       const clusterData = { clusterId: 'c_invalid_ttl', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clusterData),
-      });
       const consoleWarnSpy = vi.spyOn(console, 'warn');
       // Test with various invalid values
       const invalidTTLs = ['abc', '0', '-100'];
       for (const ttl of invalidTTLs) {
-        context.env.CLUSTER_KV.put.mockClear(); // Clear put mock for next iteration
+        // Re-create the request for each iteration to ensure fresh body
+        const request = new Request(`http://localhost${clusterPath}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(clusterData),
+        });
         const context = createMockContext(request, { CLUSTER_DEFINITION_TTL_SECONDS: ttl });
+        // vi.resetAllMocks() in beforeEach should handle mock clearing for context.env.CLUSTER_KV.put
+
         await onRequest(context);
+
         expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
           clusterData.clusterId,
           expect.any(String),
@@ -569,7 +574,8 @@ describe('onRequest (Main Router)', () => {
         const response = await onRequest(context);
         expect(response.status).toBe(500); // Or specific error handling
         const text = await response.text();
-        expect(text).toContain("Error prerendering earthquake page");
+      // This test is for when the fetch itself fails. The inner catch block in handlePrerenderEarthquake should be hit.
+      expect(text).toContain("Error prerendering: Invalid earthquake data. Content or parsing issue.");
     });
 
     it('/quake/some-quake-id should handle non-JSON response during prerender', async () => {
@@ -591,7 +597,7 @@ describe('onRequest (Main Router)', () => {
         const response = await onRequest(context);
         expect(response.status).toBe(500);
         const text = await response.text();
-        expect(text).toContain("Invalid earthquake data");
+      expect(text).toContain("Error prerendering: Invalid earthquake data structure.");
     });
 
     it('/quake/some-quake-id should handle non-ok fetch response during prerender', async () => {
@@ -640,6 +646,7 @@ describe('onRequest (Main Router)', () => {
         const response = await onRequest(context);
         expect(response.status).toBe(500);
         const text = await response.text();
+      // This test is for when response.ok but response.json() fails (e.g. HTML instead of JSON)
         expect(text).toContain("Service configuration error.");
     });
 

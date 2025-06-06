@@ -457,7 +457,7 @@ export const EarthquakeDataProvider = ({ children }) => {
             isMounted = false;
             clearInterval(intervalId);
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }, [state.isInitialAppLoad]); // Dependency on isInitialAppLoad to re-initiate message cycling logic if app were to somehow reset to initial load state.
 
     // Loading message cycling effect

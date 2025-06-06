@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import PropTypes from 'prop-types';
 import SkeletonText from './skeletons/SkeletonText';
 import SkeletonTableRow from './skeletons/SkeletonTableRow';
 
@@ -185,20 +184,5 @@ const PaginatedEarthquakeTable = React.memo(({
         </div>
     );
 });
-
-PaginatedEarthquakeTable.propTypes = {
-    title: PropTypes.string.isRequired,
-    earthquakes: PropTypes.array,
-    isLoading: PropTypes.bool,
-    onQuakeClick: PropTypes.func.isRequired,
-    itemsPerPage: PropTypes.number,
-    defaultSortKey: PropTypes.string,
-    initialSortDirection: PropTypes.string,
-    periodName: PropTypes.string,
-    filterPredicate: PropTypes.func,
-    getMagnitudeColorStyle: PropTypes.func.isRequired,
-    formatTimeAgo: PropTypes.func.isRequired,
-    formatDate: PropTypes.func.isRequired,
-};
 
 export default PaginatedEarthquakeTable;

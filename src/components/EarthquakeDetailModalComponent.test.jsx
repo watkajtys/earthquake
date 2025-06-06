@@ -28,21 +28,24 @@ vi.mock('./SeoMetadata', () => ({
   default: vi.fn(() => null)
 }));
 
-const mockNavigate = vi.fn();
 // We need to ensure that MemoryRouter, Routes, Route are NOT from the mock,
 // but useParams and useNavigate ARE.
-// So, we selectively mock, and import the non-mocked parts directly.
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
+// import { useParams as actualUseParams } from 'react-router-dom'; // No longer needed with direct import for mocking
+
+const mockNavigate = vi.fn(); // This will be used by the useNavigate mock
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal();
   return {
-    ...actual, // Spread actual to ensure things like Link, MemoryRouter etc. are included
-    useParams: () => ({ detailUrlParam: encodeURIComponent('test-detail-url') }),
-    useNavigate: () => mockNavigate,
+    ...actual,
+    useParams: vi.fn(() => ({ detailUrlParam: encodeURIComponent('test-detail-url') })), // Default mock
+    useNavigate: () => mockNavigate, // Default mock for useNavigate
   };
 });
 // END MOCKS
 
 import EarthquakeDetailModalComponent from './EarthquakeDetailModalComponent';
+import { useParams } from 'react-router-dom'; // Import the mocked version for use in tests
 // These imports get the mocked versions because vi.mock is hoisted.
 import EarthquakeDetailView from './EarthquakeDetailView';
 import SeoMetadata from './SeoMetadata';
@@ -332,7 +335,7 @@ describe('EarthquakeDetailModalComponent', () => {
   describe('Handling of detailUrlParam', () => {
     test('does not render EarthquakeDetailView if detailUrlParam is missing/invalid', () => {
       // Override useParams mock for this test
-      vi.mocked(require('react-router-dom').useParams).mockReturnValueOnce({ detailUrlParam: undefined });
+      vi.mocked(useParams).mockReturnValueOnce({ detailUrlParam: "" }); // Use empty string
 
       render( // Render directly without initialEntries for this specific useParams case or provide matching route
         <MemoryRouter initialEntries={['/quake/']}> {/* Or a route that results in no param */}

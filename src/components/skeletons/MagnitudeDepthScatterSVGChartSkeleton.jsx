@@ -1,5 +1,4 @@
 import React, { useRef, useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
 
 /**
  * A skeleton loader component for the MagnitudeDepthScatterSVGChart.
@@ -95,9 +94,5 @@ const MagnitudeDepthScatterSVGChartSkeleton = React.memo(({ titleSuffix = "(Last
         </div>
     );
 });
-
-MagnitudeDepthScatterSVGChartSkeleton.propTypes = {
-    titleSuffix: PropTypes.string,
-};
 
 export default MagnitudeDepthScatterSVGChartSkeleton;

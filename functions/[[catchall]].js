@@ -102,7 +102,7 @@ async function handleUsgsProxyRequest(context, apiUrl) {
       console.error(`Error fetching data from USGS API (${apiUrl}): ${response.status} ${response.statusText}`);
       return jsonErrorResponse(
         `Error fetching data from USGS API: ${response.status} ${response.statusText}`,
-        response.status,
+        500, // Return 500 for upstream errors, include original status in body
         sourceName,
         response.status
       );
@@ -450,27 +450,31 @@ export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
 
     // Fetch earthquake data
     // For simplicity, direct fetch. Consider using handleUsgsProxyRequest's caching logic if needed.
-    const response = await fetch(detailUrl);
-    if (!response.ok) {
-      console.error(`[${sourceName}] Failed to fetch earthquake data from ${detailUrl}: ${response.status}`);
-      return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Earthquake data not found.</body></html>`, {
-        status: 404,
-        headers: {
-            "Content-Type": "text/html",
-            "Cache-Control": "public, s-maxage=3600"
-        },
-      });
+    let response;
+    let quakeData;
+    try {
+        response = await fetch(detailUrl);
+        if (!response.ok) {
+          console.error(`[${sourceName}] Failed to fetch earthquake data from ${detailUrl}: ${response.status}`);
+          return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Earthquake data not found. Status: ${response.status}</body></html>`, {
+            status: response.status, // Propagate original error status if it's a fetch issue like 404
+            headers: { "Content-Type": "text/html", "Cache-Control": "public, s-maxage=3600" },
+          });
+        }
+        quakeData = await response.json();
+    } catch (e) { // Catches fetch errors or response.json() errors
+        console.error(`[${sourceName}] Fetch or JSON Parse Error for ${detailUrl}: ${e.message}`);
+        return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error prerendering: Invalid earthquake data. Content or parsing issue.</body></html>`, {
+            status: 500,
+            headers: { "Content-Type": "text/html", "Cache-Control": "public, s-maxage=3600" },
+        });
     }
-    const quakeData = await response.json();
 
     if (!quakeData || !quakeData.properties || !quakeData.geometry) {
-      console.error(`[${sourceName}] Invalid earthquake data structure from ${detailUrl}`);
-      return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Invalid earthquake data.</body></html>`, {
+      console.error(`[${sourceName}] Invalid earthquake data structure from ${detailUrl} after successful fetch/parse.`);
+      return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error prerendering: Invalid earthquake data structure.</body></html>`, {
         status: 500,
-        headers: {
-            "Content-Type": "text/html",
-            "Cache-Control": "public, s-maxage=3600"
-        },
+        headers: { "Content-Type": "text/html", "Cache-Control": "public, s-maxage=3600" },
       });
     }
 

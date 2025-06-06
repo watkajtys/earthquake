@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import PropTypes from 'prop-types';
 
 /**
  * A skeleton loader component for the EarthquakeTimelineSVGChart.
@@ -94,10 +93,5 @@ const EarthquakeTimelineSVGChartSkeleton = React.memo(({ days = 7, titleSuffix =
         </div>
     );
 });
-
-EarthquakeTimelineSVGChartSkeleton.propTypes = {
-    days: PropTypes.number,
-    titleSuffix: PropTypes.string,
-};
 
 export default EarthquakeTimelineSVGChartSkeleton;

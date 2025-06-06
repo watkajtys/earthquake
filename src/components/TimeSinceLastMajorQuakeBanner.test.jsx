@@ -17,7 +17,7 @@ vi.mock('./SkeletonText', () => ({
 }));
 
 const mockFormatTimeDuration = vi.fn(duration => `formatted:${duration}`);
-const mockGetMagnitudeColor = vi.fn(mag => 'text-red-500'); // Example color
+const mockGetMagnitudeColor = vi.fn(_mag => 'text-red-500'); // Example color
 
 const mockLastMajorQuake = {
     properties: {

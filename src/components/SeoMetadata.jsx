@@ -1,6 +1,5 @@
 // src/SeoMetadata.jsx
 import React, { useEffect } from 'react';
-import PropTypes from 'prop-types'; // Optional: for prop type validation
 
 /**
  * A React component that dynamically updates SEO-related meta tags in the document's head.
@@ -168,21 +167,6 @@ const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', 
   }, [title, description, imageUrl, pageUrl, type, locale, canonicalUrl, publishedTime, modifiedTime, keywords, eventJsonLd]);
 
   return null; // This component does not render anything to the DOM itself
-};
-
-// Optional: PropTypes for development-time validation
-SeoMetadata.propTypes = {
-  title: PropTypes.string.isRequired,
-  description: PropTypes.string.isRequired,
-  imageUrl: PropTypes.string,
-  pageUrl: PropTypes.string,
-  type: PropTypes.oneOf(['website', 'article']),
-  locale: PropTypes.string,
-  canonicalUrl: PropTypes.string,
-  publishedTime: PropTypes.string,
-  modifiedTime: PropTypes.string,
-  keywords: PropTypes.string,
-  eventJsonLd: PropTypes.object,
 };
 
 export default SeoMetadata;

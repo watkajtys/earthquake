@@ -168,8 +168,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                 if (isMounted) {
                     setDetailData(data);
                     if (onDataLoadedForSeo && data) {
-                        const props = data.properties;
-                        const geom = data.geometry;
+                        // const props = data.properties; // Unused
+                        // const geom = data.geometry; // Unused
                         // Derive shakemapIntensityImageUrl directly here before calling callback
                         // Pass the entire 'data' object (which is the full GeoJSON feature)
                         // Also, pass shakemapIntensityImageUrl explicitly if it's derived and needed directly by consumer,

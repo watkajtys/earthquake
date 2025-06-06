@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import PropTypes from 'prop-types';
 import SkeletonListItem from './skeletons/SkeletonListItem';
 import { REGIONS } from '../constants/appConstants';
 
@@ -35,13 +34,5 @@ const RegionalDistributionList = React.memo(({earthquakes, titleSuffix = "(Last 
 
     return (<div className={`${cardBg} p-3 rounded-lg mt-4 border ${borderColor} shadow-md`}> <h3 className={`text-md font-semibold mb-2 ${titleColor}`}>Regional Distribution {titleSuffix}</h3> <ul className="space-y-1 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">{regionalData.map(region => (<li key={region.name} className={`flex items-center justify-between p-1.5 ${itemBg} rounded ${itemHoverBg} transition-colors`}> <div className="flex items-center min-w-0 mr-2"><span className="w-3 h-3 rounded-sm mr-2 flex-shrink-0" style={{backgroundColor: region.color}}></span><span className={`text-xs ${textColor} truncate`} title={region.name}>{region.name}</span></div> <span className={`text-xs font-medium ${countColor} flex-shrink-0`}>{region.count}</span></li>))}</ul> </div>);
 });
-
-RegionalDistributionList.propTypes = {
-    earthquakes: PropTypes.array,
-    titleSuffix: PropTypes.string,
-    isLoading: PropTypes.bool,
-    // REGIONS is now imported
-    getRegionForEarthquake: PropTypes.func.isRequired,
-};
 
 export default RegionalDistributionList;

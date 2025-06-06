@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext';
 // import SkeletonBlock from './skeletons/SkeletonBlock'; // Comment out or remove
 import MagnitudeDistributionSVGChartSkeleton from './skeletons/MagnitudeDistributionSVGChartSkeleton'; // New import
@@ -101,11 +100,5 @@ const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(
         </div>
     );
 });
-
-MagnitudeDistributionSVGChart.propTypes = {
-    earthquakes: PropTypes.array,
-    titleSuffix: PropTypes.string,
-    isLoading: PropTypes.bool,
-};
 
 export default MagnitudeDistributionSVGChart;

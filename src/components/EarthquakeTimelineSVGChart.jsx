@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext';
 // Remove old SkeletonBlock import if no longer used, or keep if other skeletons are used from it.
 // For now, assume it's only for this specific skeleton.
@@ -122,12 +121,5 @@ const EarthquakeTimelineSVGChart = React.memo(({earthquakes, days = 7, titleSuff
         </div>
     );
 });
-
-EarthquakeTimelineSVGChart.propTypes = {
-    earthquakes: PropTypes.array,
-    days: PropTypes.number,
-    titleSuffix: PropTypes.string,
-    isLoading: PropTypes.bool,
-};
 
 export default EarthquakeTimelineSVGChart;
