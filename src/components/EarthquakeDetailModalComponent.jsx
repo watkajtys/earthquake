@@ -43,7 +43,10 @@ const EarthquakeDetailModalComponent = () => { // Removed dataSourceTimespanDays
 
     const { detailUrlParam } = useParams();
     const navigate = useNavigate();
-    const detailUrl = decodeURIComponent(detailUrlParam);
+    let detailUrl = null; // Initialize detailUrl
+    if (detailUrlParam) { // Only decode if detailUrlParam is present
+        detailUrl = decodeURIComponent(detailUrlParam);
+    }
     const [seoProps, setSeoProps] = useState(null); // Renamed from seoData to seoProps
 
     const handleClose = () => {

@@ -1,4 +1,14 @@
-import { formatTimeAgo, calculateDistance, getMagnitudeColor } from './utils';
+import {
+  formatTimeAgo,
+  calculateDistance,
+  getMagnitudeColor,
+  isValidNumber,
+  formatDate,
+  isValidString,
+  isValuePresent,
+  formatNumber,
+  formatLargeNumber
+} from './utils';
 
 describe('formatTimeAgo', () => {
   const MOCKED_NOW = 1678886400000; // March 15, 2023, 12:00:00 PM UTC
@@ -446,8 +456,8 @@ describe('formatNumber', () => {
     expect(formatNumber(null)).toBe("N/A"); // parseFloat(null) is 0, so this will be "0.0"
   });
 
-  it('should handle null by returning "0.0" due to parseFloat(null) === 0', () => {
-    expect(formatNumber(null)).toBe("0.0");
+  it('should handle null by returning "N/A" as parseFloat(null) is NaN', () => {
+    expect(formatNumber(null)).toBe("N/A");
   });
 });
 

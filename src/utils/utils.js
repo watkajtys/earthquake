@@ -41,8 +41,34 @@ export const getMagnitudeColor = (magnitude) => {
 // Add other utility functions here as the app grows
 
 export const isValidNumber = (num) => {
-    const parsedNum = parseFloat(num);
-    return typeof parsedNum === 'number' && !isNaN(parsedNum);
+    if (num === null || num === undefined || typeof num === 'boolean') {
+        return false;
+    }
+    // Regex to check if the string is a valid number (integer or decimal, positive or negative)
+    // Allows: "123", "123.45", "-123", "-123.45", ".5", "-.5"
+    // Disallows: "12a", "abc", "", "  " (after trim), "1.2.3"
+    const numStr = String(num).trim();
+    if (numStr === "") {
+        return false;
+    }
+    // Regex to check if the string is a valid number, including scientific notation.
+    // It should match:
+    // - integers: "123", "-123"
+    // - decimals: "123.45", "-.5", "0.5"
+    // - scientific notation: "1.23e+5", "-1E-5"
+    const regex = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
+
+    if (regex.test(numStr)) {
+        // If regex passes, parse it to ensure it's a finite number.
+        // parseFloat is still needed because regex can match strings like "1." or ".E1"
+        // which are not strictly valid numbers by themselves.
+        const parsedNum = parseFloat(numStr);
+        return !isNaN(parsedNum) && isFinite(parsedNum);
+    }
+
+    // If regex fails, it means the string is not in a standard numeric format.
+    // This will correctly reject "12a", "abc", etc.
+    return false;
 };
 
 export const formatDate = (timestamp) => {

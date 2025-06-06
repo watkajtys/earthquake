@@ -31,17 +31,22 @@ vi.mock('./SeoMetadata', () => ({
 const mockNavigate = vi.fn();
 // We need to ensure that MemoryRouter, Routes, Route are NOT from the mock,
 // but useParams and useNavigate ARE.
+
+// const mockNavigate = vi.fn(); // Already defined globally in the original file for mockOnCloseCallback
+
 // So, we selectively mock, and import the non-mocked parts directly.
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual, // Spread actual to ensure things like Link, MemoryRouter etc. are included
-    useParams: () => ({ detailUrlParam: encodeURIComponent('test-detail-url') }),
-    useNavigate: () => mockNavigate,
+    useParams: vi.fn(() => ({ detailUrlParam: encodeURIComponent('test-detail-url') })), // Default mock is a spy
+    useNavigate: () => mockNavigate, // mockNavigate is already a vi.fn() from global scope
   };
 });
 // END MOCKS
 
+// Import after mocks
+import { useParams } from 'react-router-dom'; // This will be the vi.fn() spy from the factory
 import EarthquakeDetailModalComponent from './EarthquakeDetailModalComponent';
 // These imports get the mocked versions because vi.mock is hoisted.
 import EarthquakeDetailView from './EarthquakeDetailView';
@@ -332,7 +337,7 @@ describe('EarthquakeDetailModalComponent', () => {
   describe('Handling of detailUrlParam', () => {
     test('does not render EarthquakeDetailView if detailUrlParam is missing/invalid', () => {
       // Override useParams mock for this test
-      vi.mocked(require('react-router-dom').useParams).mockReturnValueOnce({ detailUrlParam: undefined });
+      vi.mocked(useParams).mockReturnValueOnce({ detailUrlParam: undefined });
 
       render( // Render directly without initialEntries for this specific useParams case or provide matching route
         <MemoryRouter initialEntries={['/quake/']}> {/* Or a route that results in no param */}

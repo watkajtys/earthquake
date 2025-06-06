@@ -569,7 +569,12 @@ export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
 
   } catch (error) {
     console.error(`[${sourceName}] Error: ${error.message}`, error);
-    return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error prerendering earthquake page.</body></html>`, {
+    let bodyMessage = "Error prerendering earthquake page."; // Default for general fetch errors
+    // Check if the error is likely due to JSON parsing (e.g. upstream sent HTML with 200 OK, or actual invalid JSON)
+    if (error instanceof SyntaxError || (error.message && error.message.toLowerCase().includes("unexpected token"))) {
+      bodyMessage = "Invalid earthquake data.";
+    }
+    return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>${bodyMessage}</body></html>`, {
       status: 500,
       headers: {
           "Content-Type": "text/html",

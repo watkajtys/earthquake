@@ -150,9 +150,12 @@ describe('onRequest (Main Router)', () => {
 
     it('should handle non-JSON response from upstream API', async () => {
       const targetApiUrl = 'http://example.com/earthquakes_html_error';
+      const upstreamStatus = 503;
+      const upstreamStatusText = "Service Unavailable HTML";
       // Simulate upstream returning HTML error page
       fetch.mockResolvedValueOnce(new Response('<html><body>Error from USGS</body></html>', {
-        status: 503,
+        status: upstreamStatus,
+        statusText: upstreamStatusText,
         headers: { 'Content-Type': 'text/html' }
       }));
       mockCache.match.mockResolvedValueOnce(undefined);
@@ -161,13 +164,11 @@ describe('onRequest (Main Router)', () => {
       const context = createMockContext(request);
 
       const response = await onRequest(context);
-      // The main [[catchall]].js tries to parse response.json(), which will fail.
-      // This failure then leads to a 500 error from the proxy handler itself.
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(upstreamStatus); // Expect original status
       const json = await response.json();
-      // The error message will be about failing to parse JSON, not the upstream status directly in message
-      expect(json.message).toMatch(/invalid json response body|Unexpected token/i);
+      expect(json.message).toBe(`Error fetching data from USGS API: ${upstreamStatus} ${upstreamStatusText}`);
       expect(json.source).toBe('usgs-proxy-handler');
+      expect(json.upstream_status).toBe(upstreamStatus);
     });
 
     it('should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid', async () => {
@@ -274,16 +275,17 @@ describe('onRequest (Main Router)', () => {
 
     it('POST should use default TTL if CLUSTER_DEFINITION_TTL_SECONDS is invalid', async () => {
       const clusterData = { clusterId: 'c_invalid_ttl', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clusterData),
-      });
       const consoleWarnSpy = vi.spyOn(console, 'warn');
       // Test with various invalid values
       const invalidTTLs = ['abc', '0', '-100'];
       for (const ttl of invalidTTLs) {
-        context.env.CLUSTER_KV.put.mockClear(); // Clear put mock for next iteration
+        const request = new Request(`http://localhost${clusterPath}`, { // Create new request for each iteration
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(clusterData),
+        });
+        // context.env.CLUSTER_KV.put.mockClear(); // This was causing the error and is likely not needed
+                                                // as createMockContext should provide a fresh mock.
         const context = createMockContext(request, { CLUSTER_DEFINITION_TTL_SECONDS: ttl });
         await onRequest(context);
         expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
