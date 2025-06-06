@@ -402,11 +402,11 @@ function App() {
 
     // Calculate activeClusters using useMemo
     const activeClusters = useMemo(() => {
-        if (earthquakesLast72Hours && earthquakesLast72Hours.length > 0) {
-            return findActiveClusters(earthquakesLast72Hours, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
+    if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
+      return findActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
         }
         return [];
-    }, [earthquakesLast72Hours]);
+  }, [earthquakesLast7Days]);
 
     useEffect(() => {
         const timerId = setInterval(() => setAppCurrentTime(Date.now()), HEADER_TIME_UPDATE_INTERVAL_MS);
@@ -592,7 +592,10 @@ function App() {
             return b._quakeCountInternal - a._quakeCountInternal;
         });
 
-        return processed.slice(0, TOP_N_CLUSTERS_OVERVIEW);
+        // Filter clusters to include only those with a max magnitude >= MAJOR_QUAKE_THRESHOLD
+        const significantClusters = processed.filter(cluster => cluster._maxMagInternal >= MAJOR_QUAKE_THRESHOLD);
+
+        return significantClusters;
 
     }, [activeClusters, formatDate, formatTimeAgo, formatTimeDuration]); // Include formatDate, formatTimeAgo, formatTimeDuration if they are from useCallback/component scope
 
