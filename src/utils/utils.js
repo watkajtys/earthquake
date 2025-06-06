@@ -41,13 +41,35 @@ export const getMagnitudeColor = (magnitude) => {
 // Add other utility functions here as the app grows
 
 export const isValidNumber = (num) => {
+    // Check if num is null, as parseFloat(null) is NaN but typeof null is 'object'
+    if (num === null) return false;
+    // Check if num is an empty string, as parseFloat('') is NaN
+    if (typeof num === 'string' && num.trim() === '') return false;
+
     const parsedNum = parseFloat(num);
-    return typeof parsedNum === 'number' && !isNaN(parsedNum);
+    // Check if it's a number and not NaN, and also finite.
+    return typeof parsedNum === 'number' && !Number.isNaN(parsedNum) && Number.isFinite(parsedNum);
 };
 
 export const formatDate = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    return new Date(timestamp).toLocaleString([], { dateStyle: 'full', timeStyle: 'long' });
+    // Explicitly check for non-numeric types that would yield NaN or invalid Date
+    if (typeof timestamp !== 'number' || Number.isNaN(timestamp)) {
+        return 'N/A';
+    }
+    if (!timestamp && timestamp !== 0) return 'N/A'; // Handles null, undefined, empty string, false, but allows 0
+
+    // For timestamp 0 (epoch), it's a valid date.
+    // The previous `!timestamp` check would incorrectly return 'N/A' for 0.
+    const date = new Date(timestamp);
+    // Check if the date is valid after construction, as new Date(NaN) is "Invalid Date"
+    // but its getTime() is NaN. new Date(null) is epoch.
+    if (Number.isNaN(date.getTime())) return 'N/A';
+
+    return date.toLocaleString([], {
+        dateStyle: 'full',
+        timeStyle: 'long',
+        // timeZone: 'UTC' // Consider adding for consistency if required by tests/app
+    });
 };
 
 export const isValidString = (str) => {

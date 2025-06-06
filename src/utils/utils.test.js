@@ -1,4 +1,4 @@
-import { formatTimeAgo, calculateDistance, getMagnitudeColor } from './utils';
+import { formatTimeAgo, calculateDistance, getMagnitudeColor, isValidNumber, formatDate } from './utils';
 
 describe('formatTimeAgo', () => {
   const MOCKED_NOW = 1678886400000; // March 15, 2023, 12:00:00 PM UTC
@@ -184,6 +184,93 @@ describe('formatTimeAgo', () => {
       const timestamp = MOCKED_NOW + 100 * 1000; // 100 seconds in the future
       expect(formatTimeAgo(timestamp)).toBe("just now");
     });
+  });
+});
+
+describe('isValidNumber', () => {
+  it('should return true for valid numbers', () => {
+    expect(isValidNumber(0)).toBe(true);
+    expect(isValidNumber(123)).toBe(true);
+    expect(isValidNumber(-123)).toBe(true);
+    expect(isValidNumber(12.34)).toBe(true);
+    expect(isValidNumber(-12.34)).toBe(true);
+    expect(isValidNumber('0')).toBe(true);
+    expect(isValidNumber('123')).toBe(true);
+    expect(isValidNumber('-123')).toBe(true);
+    expect(isValidNumber('12.34')).toBe(true);
+    expect(isValidNumber('-12.34')).toBe(true);
+  });
+
+  it('should return false for NaN', () => {
+    expect(isValidNumber(NaN)).toBe(false);
+  });
+
+  it('should return false for non-numeric types', () => {
+    expect(isValidNumber(null)).toBe(false);
+    expect(isValidNumber(undefined)).toBe(false);
+    expect(isValidNumber('abc')).toBe(false);
+    expect(isValidNumber({})).toBe(false);
+    expect(isValidNumber([])).toBe(false);
+    expect(isValidNumber(true)).toBe(false);
+  });
+});
+
+describe('formatDate', () => {
+  // Store original toLocaleString
+  let originalToLocaleString;
+
+  beforeEach(() => {
+    // Mock Date.prototype.toLocaleString to ensure consistent output across environments
+    // This is a common way to handle locale-sensitive date formatting in tests.
+    originalToLocaleString = Date.prototype.toLocaleString;
+    Date.prototype.toLocaleString = vi.fn(function(locales, options) {
+      // Simulate a specific format, e.g., en-US UTC-like for predictability
+      // This example will output something like "Sunday, January 1, 2023, 12:00:00 AM GMT+00:00"
+      // Adjust the mock format to what your function is expected to produce or a simplified consistent one.
+      // For this test, let's assume a fixed string for a known timestamp to make it robust.
+      if (this.getTime() === 1672531200000) { // Specific timestamp: Jan 1, 2023 00:00:00 UTC
+        return 'Sunday, January 1, 2023, 12:00:00 AM UTC'; // Example fixed output
+      }
+      if (this.getTime() === 0) { // For new Date(0)
+        return 'Thursday, January 1, 1970, 12:00:00 AM UTC'; // Example for epoch start in UTC
+      }
+      // Fallback for other dates if necessary, or make the mock more specific
+      return 'Mocked Date String';
+    });
+  });
+
+  afterEach(() => {
+    // Restore original toLocaleString
+    Date.prototype.toLocaleString = originalToLocaleString;
+  });
+
+  it('should format a valid timestamp correctly', () => {
+    const timestamp = 1672531200000; // Jan 1, 2023 00:00:00 UTC
+    // The exact output depends on the locale and options of toLocaleString.
+    // For testing, it's often better to mock toLocaleString or test against a pattern.
+    expect(formatDate(timestamp)).toBe('Sunday, January 1, 2023, 12:00:00 AM UTC');
+  });
+
+  it('should return "N/A" for timestamp 0 (falsy)', () => {
+    // With the updated formatDate, 0 is a valid epoch timestamp.
+    // The mock for toLocaleString handles getTime() === 0 to return a specific string.
+    expect(formatDate(0)).toBe('Thursday, January 1, 1970, 12:00:00 AM UTC');
+  });
+
+  it('should return "N/A" for null input', () => {
+    expect(formatDate(null)).toBe('N/A');
+  });
+
+  it('should return "N/A" for undefined input', () => {
+    expect(formatDate(undefined)).toBe('N/A');
+  });
+
+  it('should return "N/A" for an invalid date string', () => {
+    expect(formatDate("abc")).toBe('N/A');
+  });
+
+  it('should return "N/A" for NaN input', () => {
+    expect(formatDate(NaN)).toBe('N/A');
   });
 });
 

@@ -26,7 +26,7 @@ const AVERAGE_S_WAVE_VELOCITY_KM_S = 3.75;
  * @returns {number} The estimated P-wave travel time in seconds. Returns 0 if distance is 0.
  */
 export function calculatePWaveTravelTime(distanceKm) {
-    if (typeof distanceKm !== 'number' || distanceKm < 0) {
+    if (typeof distanceKm !== 'number' || Number.isNaN(distanceKm) || distanceKm < 0) {
         // Or throw an error, depending on desired error handling
         console.warn(`Invalid distanceKm: ${distanceKm}. Returning 0.`);
         return 0;
@@ -46,7 +46,7 @@ export function calculatePWaveTravelTime(distanceKm) {
  * @returns {number} The estimated S-wave travel time in seconds. Returns 0 if distance is 0.
  */
 export function calculateSWaveTravelTime(distanceKm) {
-    if (typeof distanceKm !== 'number' || distanceKm < 0) {
+    if (typeof distanceKm !== 'number' || Number.isNaN(distanceKm) || distanceKm < 0) {
         // Or throw an error, depending on desired error handling
         console.warn(`Invalid distanceKm: ${distanceKm}. Returning 0.`);
         return 0;
