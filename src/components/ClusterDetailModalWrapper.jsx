@@ -78,25 +78,44 @@ function ClusterDetailModalWrapper({
 
         const eventJsonLd = {
             '@context': 'https://schema.org',
-            '@type': 'EventSeries',
+            '@type': 'CollectionPage', // Changed from EventSeries
             name: pageTitle,
             description: pageDescription,
-            startDate: earliestTime !== Infinity && earliestTime ? new Date(earliestTime).toISOString() : undefined,
-            endDate: latestTime !== -Infinity && latestTime ? new Date(latestTime).toISOString() : undefined,
-            location: { '@type': 'Place', name: locationName || 'Unknown Area' },
             url: canonicalPageUrl,
-            identifier: idToUse,
-            subjectOf: { '@type': 'WebPage', url: canonicalPageUrl },
+            keywords: pageKeywords.toLowerCase(), // Added keywords
+            // datePublished: earliestTime !== Infinity && earliestTime ? new Date(earliestTime).toISOString() : undefined, // Optional: if CollectionPage has a start
+            dateModified: clusterData.updatedAt ? new Date(clusterData.updatedAt).toISOString() : (latestTime !== -Infinity && latestTime ? new Date(latestTime).toISOString() : undefined),
+            // Optional: mainEntity or hasPart if we want to list some items, for now 'about' is simpler
         };
-        // Add representative GeoCoordinates if strongest quake data is easily accessible and makes sense
-        // For example, if clusterData contains strongestQuake.geometry.coordinates:
-        // if (clusterData.strongestQuake?.geometry?.coordinates) {
-        // eventJsonLd.location.geo = {
-        // '@type': 'GeoCoordinates',
-        // latitude: clusterData.strongestQuake.geometry.coordinates[1],
-        // longitude: clusterData.strongestQuake.geometry.coordinates[0],
-        //     };
-        // }
+
+        // Add 'about' if strongest quake info is available
+        if (clusterData.strongestQuakeId && locationName && maxMagnitude) {
+            eventJsonLd.about = {
+                "@type": "Event", // Describing the main event defining the cluster
+                "name": `M ${maxMagnitude.toFixed(1)} - ${locationName}`,
+                "identifier": clusterData.strongestQuakeId,
+                // Potentially add "startDate" for the strongest quake if its specific time is easily available here
+                // "location": { "@type": "Place", "name": locationName } // Or even GeoCoordinates if available
+            };
+        }
+
+        // Add location with GeoCoordinates if strongest quake details are available and parsed
+        // This part depends on how `strongestQuakeDetails` would be populated and passed to this function.
+        // For now, assuming `clusterData.strongestQuake` might hold these if fetched by parent.
+        // If `clusterData.strongestQuake` (an object with geometry) is part of `clusterData`:
+        if (clusterData.strongestQuake?.geometry?.coordinates) {
+             eventJsonLd.location = {
+                 "@type": "Place",
+                 "name": locationName || "Unknown Area",
+                 "geo": {
+                     "@type": "GeoCoordinates",
+                     "latitude": clusterData.strongestQuake.geometry.coordinates[1],
+                     "longitude": clusterData.strongestQuake.geometry.coordinates[0]
+                 }
+             };
+        } else if (locationName) {
+            eventJsonLd.location = { "@type": "Place", "name": locationName || 'Unknown Area' };
+        }
 
 
         return {
@@ -106,14 +125,13 @@ function ClusterDetailModalWrapper({
             canonicalUrl: canonicalPageUrl,
             pageUrl: canonicalPageUrl,
             eventJsonLd: eventJsonLd,
-            type: 'website', // As per requirement for cluster pages
+            type: 'website',
         };
     };
 
     // Effect 1: Fetch from worker
     useEffect(() => {
         setDynamicCluster(null);
-        // setClusterSeoProps(null); // Moved to dedicated SEO effect
         setErrorMessage('');
         setLoadingPhase('worker_fetch');
 
@@ -124,43 +142,27 @@ function ClusterDetailModalWrapper({
                 return;
             }
 
-            // ---- Start of added ----
             const willLikelyUseMonthly = hasAttemptedMonthlyLoad;
+            if (willLikelyUseMonthly && isLoadingMonthly) return;
+            if (!willLikelyUseMonthly && (isLoadingWeekly || isInitialAppLoad)) return;
 
-            if (willLikelyUseMonthly && isLoadingMonthly) {
-                // console.log(`WRAPPER ${clusterId}: Monthly data is loading. Waiting... (worker_fetch)`);
-                return;
-            }
-
-            if (!willLikelyUseMonthly && (isLoadingWeekly || isInitialAppLoad)) {
-                // console.log(`WRAPPER ${clusterId}: Weekly/Initial data is loading. Waiting... (worker_fetch)`);
-                return;
-            }
-            // console.log(`WRAPPER ${clusterId}: Context data presumed loaded. Proceeding with worker_fetch.`);
-            // ---- End of added ----
-
-            // console.log(`WRAPPER ${clusterId}: Calling fetchClusterDefinition.`); // Removed
             try {
-                const result = await fetchClusterDefinition(clusterId);
-                // console.log(`WRAPPER ${clusterId}: Raw fetch result: `, result); // Removed
+                const result = await fetchClusterDefinition(clusterId); // result includes { earthquakeIds, strongestQuakeId, updatedAt }
 
                 if (result) {
-                    const { earthquakeIds, strongestQuakeId: defStrongestQuakeId } = result;
+                    const { earthquakeIds, strongestQuakeId: defStrongestQuakeId, updatedAt: kvUpdatedAt } = result;
                     const sourceQuakes = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0)
                                          ? allEarthquakes
                                          : earthquakesLast72Hours;
                     if (!sourceQuakes || sourceQuakes.length === 0) {
-                        console.warn("Source quakes not available for reconstruction from worker def."); // Kept warn
-                        // console.log(`WRAPPER ${clusterId}: Worker data stale/incomplete. Transitioning to reconstruct_from_id_attempt.`); // Removed
+                        console.warn("Source quakes not available for reconstruction from worker def.");
                         setLoadingPhase('reconstruct_from_id_attempt');
                         return;
                     }
-                    // console.log(`WRAPPER ${clusterId}: Reconstructing from worker data. Found ${earthquakeIds.length} quake IDs in definition.`); // Removed
                     const foundQuakes = earthquakeIds.map(id => sourceQuakes.find(q => q.id === id)).filter(Boolean);
 
                     if (foundQuakes.length < earthquakeIds.length) {
-                        // console.log(`WRAPPER ${clusterId}: Worker data stale/incomplete. Found ${foundQuakes.length} of ${earthquakeIds.length} quakes. Transitioning to reconstruct_from_id_attempt.`); // Removed
-                        console.warn(`Cluster ${clusterId}: Worker data may be stale. Found ${foundQuakes.length} of ${earthquakeIds.length} quakes.`); // Kept warn
+                        console.warn(`Cluster ${clusterId}: Worker data may be stale. Found ${foundQuakes.length} of ${earthquakeIds.length} quakes.`);
                         setLoadingPhase('reconstruct_from_id_attempt');
                     } else {
                         let earliestTime = Infinity;
@@ -169,41 +171,37 @@ function ClusterDetailModalWrapper({
                             if (quake.properties.time < earliestTime) earliestTime = quake.properties.time;
                             if (quake.properties.time > latestTime) latestTime = quake.properties.time;
                         });
-                        const strongestQuake = foundQuakes.find(q => q.id === defStrongestQuakeId) || foundQuakes[0];
-                        if (!strongestQuake) {
-                             // console.log(`WRAPPER ${clusterId}: Could not find strongest quake in fetched worker data. Transitioning to reconstruct_from_id_attempt.`); // Removed
+                        const strongestQuakeInList = foundQuakes.find(q => q.id === defStrongestQuakeId) || foundQuakes[0];
+                        if (!strongestQuakeInList) {
                              setLoadingPhase('reconstruct_from_id_attempt'); return;
                         }
                         const reconstructedClusterData = {
                             id: clusterId,
                             originalQuakes: foundQuakes,
                             quakeCount: foundQuakes.length,
-                            strongestQuakeId: strongestQuake.id,
+                            strongestQuakeId: strongestQuakeInList.id,
+                            strongestQuake: strongestQuakeInList, // Keep the strongest quake object for geo coords
                             maxMagnitude: Math.max(...foundQuakes.map(q => q.properties.mag).filter(m => m !== null && m !== undefined)),
-                            locationName: strongestQuake.properties.place || 'Unknown Location',
+                            locationName: strongestQuakeInList.properties.place || 'Unknown Location',
                             _earliestTimeInternal: earliestTime,
                             _latestTimeInternal: latestTime,
                             timeRange: calculateClusterTimeRange(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, foundQuakes.length),
-                            _maxMagInternal: Math.max(...foundQuakes.map(q => q.properties.mag).filter(m => m !== null && m !== undefined)),
-                            _quakeCountInternal: foundQuakes.length,
+                            updatedAt: kvUpdatedAt, // Store the KV updatedAt
                         };
-                        // console.log(`WRAPPER ${clusterId}: Success from worker data. dynamicCluster set.`); // Removed
                         setDynamicCluster(reconstructedClusterData);
                         setClusterSeoProps(generateClusterSeoProps(reconstructedClusterData, clusterId));
                         setLoadingPhase('done');
                     }
                 } else {
-                    // console.log(`WRAPPER ${clusterId}: Worker fetch failed or no definition. Transitioning to reconstruct_from_id_attempt.`); // Removed
                     setLoadingPhase('reconstruct_from_id_attempt');
                 }
             } catch (error) {
-                console.error(`Error fetching cluster definition ${clusterId} from worker:`, error); // Kept error
-                // console.log(`WRAPPER ${clusterId}: Worker fetch failed or no definition. Transitioning to reconstruct_from_id_attempt.`); // Removed
+                console.error(`Error fetching cluster definition ${clusterId} from worker:`, error);
                 setLoadingPhase('reconstruct_from_id_attempt');
             }
         }
         fetchAndProcessClusterFromWorker();
-    }, [clusterId, formatDate, formatTimeAgo, formatTimeDuration, allEarthquakes, earthquakesLast72Hours, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]);
+    }, [clusterId, formatDate, formatTimeAgo, formatTimeDuration, allEarthquakes, earthquakesLast72Hours, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]); // Removed generateClusterSeoProps from deps
 
 
     // Effect 2: Attempt reconstruction from parsed ID if worker fetch failed/incomplete
@@ -245,23 +243,17 @@ function ClusterDetailModalWrapper({
                                  : earthquakesLast72Hours;
 
             if (!sourceQuakes || sourceQuakes.length === 0) {
-                // console.log(`WRAPPER ${clusterId}: No sourceQuakes for ID recon. Transitioning to fallback_prop_check_attempt.`); // Removed
                 setLoadingPhase('fallback_prop_check_attempt');
                 return;
             }
 
-            const strongestQuakeObject = sourceQuakes.find(q => q.id === parsedStrongestQuakeId);
-            // console.log(`WRAPPER ${clusterId}: Strongest quake for ID recon (${parsedStrongestQuakeId}) found: ${strongestQuakeObject ? 'Yes' : 'No'}.`); // Removed
-            if (!strongestQuakeObject) {
-                // console.log(`WRAPPER ${clusterId}: ID Recon no match. Transitioning to fallback_prop_check_attempt.`); // Removed
+            const strongestQuakeObjectFromId = sourceQuakes.find(q => q.id === parsedStrongestQuakeId);
+            if (!strongestQuakeObjectFromId) {
                 setLoadingPhase('fallback_prop_check_attempt');
                 return;
             }
 
-            // console.log(`WRAPPER ${clusterId}: Calling findActiveClusters for ID recon. Source length: ${sourceQuakes ? sourceQuakes.length : 0}.`); // Removed
             const allNewlyFormedClusters = findActiveClusters(sourceQuakes, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
-            // console.log(`WRAPPER ${clusterId}: findActiveClusters for ID recon returned ${allNewlyFormedClusters.length} clusters.`); // Removed
-
             let matchFound = false;
             for (const newClusterArray of allNewlyFormedClusters) {
                 if (!newClusterArray || newClusterArray.length === 0) continue;
@@ -272,7 +264,6 @@ function ClusterDetailModalWrapper({
                 if (!newStrongestQuakeInCluster) continue;
 
                 const newGeneratedId = `overview_cluster_${newStrongestQuakeInCluster.id}_${newClusterArray.length}`;
-                // console.log(`WRAPPER ${clusterId}: ID Recon - Checking newGeneratedId: ${newGeneratedId}.`); // Removed
                 if (newGeneratedId === clusterId) {
                     let earliestTime = Infinity;
                     let latestTime = -Infinity;
@@ -286,15 +277,14 @@ function ClusterDetailModalWrapper({
                         originalQuakes: newClusterArray,
                         quakeCount: newClusterArray.length,
                         strongestQuakeId: newStrongestQuakeInCluster.id,
+                        strongestQuake: newStrongestQuakeInCluster, // Keep the strongest quake object
                         maxMagnitude: Math.max(...newClusterArray.map(q => q.properties.mag).filter(m => m !== null && m !== undefined)),
                         locationName: newStrongestQuakeInCluster.properties.place || 'Unknown Location',
                         _earliestTimeInternal: earliestTime,
                         _latestTimeInternal: latestTime,
                         timeRange: calculateClusterTimeRange(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, newClusterArray.length),
-                        _maxMagInternal: Math.max(...newClusterArray.map(q => q.properties.mag).filter(m => m !== null && m !== undefined)),
-                        _quakeCountInternal: newClusterArray.length,
+                        // No kvUpdatedAt available for this reconstruction method
                     };
-                    // console.log(`WRAPPER ${clusterId}: ID Recon success! Match found. dynamicCluster set.`); // Removed
                     setDynamicCluster(reconstructedCluster);
                     setClusterSeoProps(generateClusterSeoProps(reconstructedCluster, clusterId));
                     setLoadingPhase('done');
@@ -303,85 +293,73 @@ function ClusterDetailModalWrapper({
                 }
             }
             if (!matchFound) {
-                // console.log(`WRAPPER ${clusterId}: ID Recon no match. Transitioning to fallback_prop_check_attempt.`); // Removed
                 setLoadingPhase('fallback_prop_check_attempt');
             }
         }
-    }, [loadingPhase, clusterId, allEarthquakes, earthquakesLast72Hours, formatDate, formatTimeAgo, formatTimeDuration, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]);
+    }, [loadingPhase, clusterId, allEarthquakes, earthquakesLast72Hours, formatDate, formatTimeAgo, formatTimeDuration, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]); // Removed generateClusterSeoProps from deps
 
     // Effect 3: Fallback to overviewClusters prop
     useEffect(() => {
         if (loadingPhase === 'fallback_prop_check_attempt' && !dynamicCluster) {
-            // console.log(`WRAPPER ${clusterId}: Phase fallback_prop_check_attempt.`); // Removed
             const clusterFromProp = overviewClusters?.find(c => c.id === clusterId);
             if (clusterFromProp) {
-                // console.log(`WRAPPER ${clusterId}: Prop fallback success. dynamicCluster set from overviewClusters.`); // Removed
-                setDynamicCluster(clusterFromProp);
+                setDynamicCluster(clusterFromProp); // This clusterFromProp might not have 'strongestQuake' object or 'updatedAt'
                 setClusterSeoProps(generateClusterSeoProps(clusterFromProp, clusterId));
                 setLoadingPhase('done');
             } else {
-                // If not found in props, and data is still loading, wait.
                 if (isInitialAppLoad || isLoadingWeekly || (hasAttemptedMonthlyLoad && isLoadingMonthly && !allEarthquakes.length)) {
                     setLoadingPhase('fallback_loading');
                 } else {
-                    // If data loading is complete and still not found, then it's a genuine "Not Found"
                     const currentErrorMessage = 'Cluster details could not be found after all checks.';
                     setErrorMessage(currentErrorMessage);
                     setLoadingPhase('done');
                 }
             }
         }
-    }, [loadingPhase, dynamicCluster, overviewClusters, clusterId, isInitialAppLoad, isLoadingWeekly, isLoadingMonthly, hasAttemptedMonthlyLoad, allEarthquakes]); // Removed errorMessage from deps as it's set here
+    }, [loadingPhase, dynamicCluster, overviewClusters, clusterId, isInitialAppLoad, isLoadingWeekly, isLoadingMonthly, hasAttemptedMonthlyLoad, allEarthquakes]); // Removed generateClusterSeoProps & errorMessage
 
     // Effect to manage SEO props for loading, error, and not found states
     useEffect(() => {
-        const currentCanonicalUrl = `https://earthquakeslive.com/cluster/${clusterId}`;
-        // Clear SEO props initially on clusterId change or when moving to a loading phase without dynamic data yet
-        if (!dynamicCluster || (loadingPhase !== 'done' && loadingPhase !== 'fallback_prop_check_attempt')) {
-             setClusterSeoProps(null);
-        }
+        const currentCanonicalUrl = clusterId ? `https://earthquakeslive.com/cluster/${clusterId}` : "https://earthquakeslive.com/clusters";
 
         if (!clusterId) {
             setClusterSeoProps({
-                title: "Invalid Cluster Request | Seismic Monitor",
+                title: "Invalid Cluster Request | Earthquakes Live",
                 description: "No cluster ID was provided for the request.",
-                canonicalUrl: "https://earthquakeslive.com/clusters", // A sensible fallback
-                pageUrl: "https://earthquakeslive.com/clusters",
-                noindex: true,
+                canonicalUrl: currentCanonicalUrl,
+                pageUrl: currentCanonicalUrl,
+                noindex: true, // Good to add noindex for invalid requests
             });
-            return; // Stop further processing if no clusterId
+            return;
         }
 
-        if (loadingPhase !== 'done' && !errorMessage && !dynamicCluster) {
-            // Loading state (initial load or fallback_loading)
-            setClusterSeoProps({
-                title: "Loading Cluster... | Seismic Monitor",
-                description: "Loading earthquake cluster details.",
-                canonicalUrl: currentCanonicalUrl,
-                pageUrl: currentCanonicalUrl,
-            });
-        } else if (loadingPhase === 'done' && errorMessage && !dynamicCluster) {
-            // Error state / Explicit Not Found from errorMessage
-            setClusterSeoProps({
-                title: "Cluster Not Found | Seismic Monitor",
-                description: errorMessage,
-                canonicalUrl: currentCanonicalUrl,
-                pageUrl: currentCanonicalUrl,
-                noindex: true,
-            });
-        } else if (loadingPhase === 'done' && !dynamicCluster && !errorMessage) {
-            // Implicit Not Found (all checks done, no cluster, no specific error message)
-            setClusterSeoProps({
-                title: "Cluster Not Found | Seismic Monitor",
-                description: "The requested earthquake cluster could not be located.",
-                canonicalUrl: currentCanonicalUrl,
-                pageUrl: currentCanonicalUrl,
-                noindex: true,
-            });
+        // If dynamicCluster is already set, its specific SEO props should have been generated.
+        // This effect handles states where dynamicCluster is NOT yet set or an error occurred.
+        if (!dynamicCluster) {
+            if (loadingPhase !== 'done' && !errorMessage) {
+                // Loading state
+                setClusterSeoProps({
+                    title: "Loading Cluster... | Earthquakes Live",
+                    description: "Loading earthquake cluster details.",
+                    canonicalUrl: currentCanonicalUrl,
+                    pageUrl: currentCanonicalUrl,
+                });
+            } else if (errorMessage || (loadingPhase === 'done' && !dynamicCluster)) {
+                // Error state or Not Found
+                setClusterSeoProps({
+                    title: "Cluster Not Found | Earthquakes Live",
+                    description: errorMessage || "The requested earthquake cluster could not be located.",
+                    canonicalUrl: currentCanonicalUrl,
+                    pageUrl: currentCanonicalUrl,
+                    noindex: true,
+                });
+            }
         }
-        // If dynamicCluster is found, its SEO props are set by the effects that found it.
-        // This effect primarily handles the non-data states.
-    }, [clusterId, loadingPhase, errorMessage, dynamicCluster]); // Added dynamicCluster to dependencies
+        // If dynamicCluster IS set, generateClusterSeoProps has already been called by the effect that set it.
+        // No need to call setClusterSeoProps(generateClusterSeoProps(dynamicCluster, clusterId)) here again,
+        // as it would create a loop if generateClusterSeoProps is a dependency.
+
+    }, [clusterId, loadingPhase, errorMessage, dynamicCluster]);
 
 
     const handleClose = () => navigate(-1);

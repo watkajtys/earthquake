@@ -171,20 +171,52 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         const props = data.properties;
                         const geom = data.geometry;
                         // Derive shakemapIntensityImageUrl directly here before calling callback
-                        const shakemapProduct = props?.products?.shakemap?.[0];
+                        // Pass the entire 'data' object (which is the full GeoJSON feature)
+                        // Also, pass shakemapIntensityImageUrl explicitly if it's derived and needed directly by consumer,
+                        // though consumer can also derive it if given the full 'data'.
+                        // For simplicity and to ensure consumer has what it needs, we can pass both.
+                        // The `EarthquakeDetailModalComponent` will then have access to `data.id` and `data.properties.detail`.
+                        const shakemapProduct = data.properties?.products?.shakemap?.[0];
                         const shakemapIntensityImageUrl = shakemapProduct?.contents?.['download/intensity.jpg']?.url;
 
+                        // Construct an object that includes the full 'data' and any specifically derived values
+                        // that the parent component might expect separately.
+                        // Or, more simply, ensure the parent component knows to look inside 'data' for everything.
+                        // Given the existing structure of onDataLoadedForSeo in EarthquakeDetailModalComponent,
+                        // it expects specific top-level fields. Let's adapt to pass what it needs, plus the raw data.
+                        // The best approach is to pass the full `data` (GeoJSON feature) and let the consumer (ModalComponent) destructure it.
+                        // So, `onDataLoadedForSeo(data)` would be the cleanest.
+                        // The `EarthquakeDetailModalComponent` already expects `loadedData.id`, `loadedData.properties`, `loadedData.geometry`.
+                        // It also expects `shakemapIntensityImageUrl` directly.
+
+                        const seoDataPayload = {
+                            ...data, // This includes id, properties, geometry
+                            // Explicitly pass fields that EarthquakeDetailModalComponent's onDataLoadedForSeo was originally structured to receive directly,
+                            // if they are not easily derivable or for convenience.
+                            // However, the new version of onDataLoadedForSeo in ModalComponent is already set up to use data.properties, data.id etc.
+                            // So, just passing 'data' and 'shakemapIntensityImageUrl' separately should be fine.
+                            // Let's ensure the modal component's `onDataLoadedForSeo` receives an object that has `id`, `properties`, `geometry`, and `shakemapIntensityImageUrl`.
+                            // The simplest is to pass the full `data` object and let the callback in ModalComponent handle it.
+                            // The callback in EarthquakeDetailModalComponent expects `loadedData.id`, `loadedData.properties.detail`, etc.
+                            // So, onDataLoadedForSeo(data) is correct.
+                            // The `shakemapIntensityImageUrl` is also needed by the modal component.
+                            // It can be derived from `data.properties.products` there, or passed for convenience.
+                            // The current `EarthquakeDetailModalComponent` expects `loadedData.shakemapIntensityImageUrl`.
+                            // So we should add it to the `data` object before passing if it's not naturally there, or pass it alongside.
+                            // Let's pass the full `data` and add `shakemapIntensityImageUrl` to its root for convenience if not already there.
+                        };
+                        // Actually, the simplest is to call it with an object that has the properties
+                        // `EarthquakeDetailModalComponent` expects.
+                        // `EarthquakeDetailModalComponent` expects `loadedData.id`, `loadedData.properties.detail` etc.
+                        // The `data` object here *is* what `loadedData` will be.
+                        // So `data.id` is `loadedData.id`. `data.properties.detail` is `loadedData.properties.detail`.
+                        // The `shakemapIntensityImageUrl` is something `EarthquakeDetailModalComponent` also expects at top level of the passed object.
+
                         onDataLoadedForSeo({
-                            title: props?.title,
-                            place: props?.place,
-                            time: props?.time,
-                            mag: props?.mag,
-                            updated: props?.updated,
-                            depth: geom?.coordinates?.[2],
-                            latitude: geom?.coordinates?.[1],
-                            longitude: geom?.coordinates?.[0],
-                            shakemapIntensityImageUrl: shakemapIntensityImageUrl,
-                            // Potentially add other fields if needed by SEO in App.jsx
+                            id: data.id, // USGS Event ID
+                            properties: data.properties, // All properties
+                            geometry: data.geometry, // All geometry
+                            shakemapIntensityImageUrl: shakemapIntensityImageUrl // Derived shakemap URL
                         });
                     }
                 }
