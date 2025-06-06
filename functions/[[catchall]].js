@@ -535,6 +535,7 @@ export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeXml(title)}</title>
   <meta name="description" content="${escapeXml(description)}">
+  <meta name="keywords" content="${escapeXml(keywords.toLowerCase())}">
   <link rel="canonical" href="${escapeXml(canonicalUrl)}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@builtbyvibes">
@@ -542,7 +543,7 @@ export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
   <meta property="og:description" content="${escapeXml(description)}">
   <meta property="og:url" content="${escapeXml(canonicalUrl)}">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://earthquakeslive.com/social-share-placeholder.png">
+  <meta property="og:image" content="https://earthquakeslive.com/social-default-earthquake.png">
   <script type="application/ld+json">${JSON.stringify(jsonLd, null, 2)}</script>
 </head>
 <body>
@@ -715,6 +716,7 @@ export async function handlePrerenderCluster(context, clusterId) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeXml(title)}</title>
   <meta name="description" content="${escapeXml(description)}">
+  <meta name="keywords" content="${escapeXml(keywords.toLowerCase())}">
   <link rel="canonical" href="${escapeXml(canonicalUrl)}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@builtbyvibes">
@@ -722,7 +724,7 @@ export async function handlePrerenderCluster(context, clusterId) {
   <meta property="og:description" content="${escapeXml(description)}">
   <meta property="og:url" content="${escapeXml(canonicalUrl)}">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://earthquakeslive.com/social-share-placeholder.png">
+  <meta property="og:image" content="https://earthquakeslive.com/social-default-earthquake.png">
   <script type="application/ld+json">${JSON.stringify(jsonLd, null, 2)}</script>
 </head>
 <body>
