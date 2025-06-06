@@ -1,7 +1,9 @@
 // src/InteractiveGlobeView.jsx
+// src/InteractiveGlobeView.jsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
+import faultLinesData from '../assets/FaultLines.json'; // Import fault lines
 
 /**
  * Takes a color string (hex or rgba) and returns a new rgba string with reduced opacity.
@@ -357,8 +359,20 @@ const InteractiveGlobeView = ({
                     return { id: `plate-${f.properties?.OBJECTID || i}`, coords: f.geometry.coordinates, color, stroke: 1, label: `Plate Boundary: ${type || 'Unknown'}`, properties: f.properties };
                 }));
         }
+        if (faultLinesData?.type === "FeatureCollection" && Array.isArray(faultLinesData.features)) {
+            processedPaths = processedPaths.concat(faultLinesData.features
+                .filter(f => f.type === "Feature" && f.geometry?.type === "LineString" && Array.isArray(f.geometry.coordinates))
+                .map((f, i) => ({
+                    id: `fault-${f.properties?.Name || i}`, // Use Name property if available, otherwise index
+                    coords: f.geometry.coordinates,
+                    color: 'rgba(255, 0, 0, 0.7)', // Red color for fault lines
+                    stroke: 0.5, // Thinner stroke for fault lines
+                    label: `Fault Line: ${f.properties?.Name || 'Unknown'}`,
+                    properties: f.properties
+                })));
+        }
         setPaths(processedPaths);
-    }, [coastlineGeoJson, tectonicPlatesGeoJson]);
+    }, [coastlineGeoJson, tectonicPlatesGeoJson, faultLinesData]); // Added faultLinesData to dependencies
 
     useEffect(() => {
         if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json';
+import faultLinesData from '../assets/FaultLines.json'; // Import fault lines
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
@@ -41,6 +42,14 @@ const createEpicenterIcon = (magnitude) => {
     iconSize: [60, 60],
     iconAnchor: [30, 30],
   });
+};
+
+/**
+ * Style for fault lines.
+ * @returns {object} Leaflet path style options.
+ */
+const getFaultLineStyle = () => {
+  return { color: 'red', weight: 1, opacity: 0.7 };
 };
 
 /**
@@ -222,6 +231,7 @@ const EarthquakeMap = ({
       })}
 
       <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
+      <GeoJSON data={faultLinesData} style={getFaultLineStyle} /> {/* Add fault lines layer */}
     </MapContainer>
   );
 };
