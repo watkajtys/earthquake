@@ -163,11 +163,16 @@ describe('onRequest (Main Router)', () => {
       const response = await onRequest(context);
       // The main [[catchall]].js tries to parse response.json(), which will fail.
       // This failure then leads to a 500 error from the proxy handler itself.
-      expect(response.status).toBe(500);
+      // Correction: If upstream provides non-ok status (like 503 here), that status is returned.
+      // If upstream is ok (200) but content is not JSON, then .json() fails, leading to 500.
+      // The current mock is status 503, so response.ok is false.
+      expect(response.status).toBe(503);
       const json = await response.json();
-      // The error message will be about failing to parse JSON, not the upstream status directly in message
-      expect(json.message).toMatch(/invalid json response body|Unexpected token/i);
+      // statusText might be empty in some test environments for mocked Response
+      const expectedMessagePart = `Error fetching data from USGS API: 503`;
+      expect(json.message.startsWith(expectedMessagePart)).toBe(true);
       expect(json.source).toBe('usgs-proxy-handler');
+      expect(json.upstream_status).toBe(503);
     });
 
     it('should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid', async () => {
@@ -274,17 +279,18 @@ describe('onRequest (Main Router)', () => {
 
     it('POST should use default TTL if CLUSTER_DEFINITION_TTL_SECONDS is invalid', async () => {
       const clusterData = { clusterId: 'c_invalid_ttl', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clusterData),
-      });
       const consoleWarnSpy = vi.spyOn(console, 'warn');
-      // Test with various invalid values
+
       const invalidTTLs = ['abc', '0', '-100'];
       for (const ttl of invalidTTLs) {
-        context.env.CLUSTER_KV.put.mockClear(); // Clear put mock for next iteration
+        // Create new request for each iteration to avoid "body already used" error
+        const request = new Request(`http://localhost${clusterPath}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(clusterData),
+        });
         const context = createMockContext(request, { CLUSTER_DEFINITION_TTL_SECONDS: ttl });
+        // context.env.CLUSTER_KV.put is fresh in each context, no need to clear unless asserting across loop iterations with a shared mock
         await onRequest(context);
         expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
           clusterData.clusterId,
@@ -578,9 +584,9 @@ describe('onRequest (Main Router)', () => {
         const request = new Request(`http://localhost/quake/${encodeURIComponent(quakeDetailUrl)}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
-        expect(response.status).toBe(500);
+        expect(response.status).toBe(500); // Correct: response.json() fails, leading to catch block
         const text = await response.text();
-        expect(text).toContain("Invalid earthquake data"); // From JSON parse failure
+        expect(text).toContain("Error prerendering earthquake page"); // Corrected assertion
     });
 
     it('/quake/some-quake-id should handle invalid quake data structure during prerender', async () => {
