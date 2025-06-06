@@ -38,6 +38,21 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * **Tailwind CSS**: Utility-first CSS framework for styling.
 * **Vite**: Frontend build tool.
 * **JavaScript (ES6+)**
+* **Cloudflare Pages**: For hosting and deployment.
+* **Cloudflare Workers**: For serverless backend functions.
+
+## Deployment / Infrastructure
+
+The application leverages Cloudflare's robust infrastructure for both frontend hosting and backend serverless functions:
+
+*   **Frontend**: The React-based user interface is deployed and hosted using **Cloudflare Pages**. This provides a fast, secure, and reliable way to serve static assets globally.
+*   **Backend**: Serverless backend logic, such as the proxy for the USGS earthquake data feed, is implemented using **Cloudflare Workers**. This allows for efficient and scalable handling of API requests without managing traditional server infrastructure.
+    *   Worker configuration, including routes, environment variables, and build steps, is managed through the `wrangler.toml` file, which is part of the Cloudflare Workers development toolkit.
+*   **Benefits**: This setup offers significant advantages, including:
+    *   **Scalability**: Both Pages and Workers scale automatically to handle traffic load.
+    *   **Performance**: Cloudflare's extensive Content Delivery Network (CDN) ensures that the application and its data are delivered quickly to users worldwide.
+    *   **Cost-Effectiveness**: Serverless architecture can be more cost-effective as you only pay for what you use.
+    *   **Simplified DevOps**: CI/CD for the frontend is streamlined through Cloudflare Pages' integration with Git repositories.
 
 ## Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
 
@@ -93,6 +108,16 @@ To run this project locally:
 
 5.  **Open your browser and navigate to the local URL provided by Vite (usually `http://localhost:5173` or similar).**
 
+**Developing Cloudflare Workers:**
+
+The backend Cloudflare Workers (e.g., for the USGS proxy) can be developed and tested locally using the Wrangler CLI. While the primary local development for the frontend is done via `npm run dev` (which uses Vite), you can run a local development server for your Worker functions if you need to test them in isolation or develop new Worker-specific features.
+
+*   Navigate to your functions directory (e.g., `functions/`) or the project root if your `wrangler.toml` is configured for it.
+*   Use the command `npx wrangler dev` to start the local server for the Worker.
+*   Refer to the [Cloudflare Wrangler documentation](https://developers.cloudflare.com/workers/wrangler/commands/#dev) for more details on local development and testing of Workers.
+
+Note: For this project, the Vite development server is often sufficient for end-to-end testing, as it proxies requests to the live or a locally-served Worker. Direct Worker development with `wrangler dev` is typically needed for more complex Worker logic or when initially setting up new Worker routes and functionalities.
+
 ## Project Structure
 
 The `src/` directory contains the core source code for the application, organized as follows:
@@ -100,6 +125,7 @@ The `src/` directory contains the core source code for the application, organize
 -   **`assets/`**: Static assets like images, JSON data files (e.g., tectonic plate boundaries, coastline data), and other resources.
 -   **`components/`**: Reusable React components that make up the user interface. Each component is typically in its own `.jsx` file.
 -   **`constants/`**: Contains constant values used throughout the application, such as API endpoints, thresholds, or configuration settings (e.g., `appConstants.js`).
+-   **`functions/`**: Contains the source code for Cloudflare Workers, which handle backend logic such as the USGS data proxy. Each subdirectory within `functions/` may represent a different Worker.
 -   **`features/`**: Intended for modules or components related to specific application features. Currently, this directory is set up with a `.gitkeep` file and is awaiting future development or is not actively used.
 -   **`hooks/`**: Intended for custom React hooks that encapsulate reusable stateful logic. Currently, this directory is set up with a `.gitkeep` file and is awaiting future development or is not actively used.
 -   **`pages/`**: Top-level React components that represent different "pages" or views of the application (e.g., `HomePage.jsx`).
@@ -107,6 +133,10 @@ The `src/` directory contains the core source code for the application, organize
 -   **`App.jsx`**: The root application component.
 -   **`main.jsx`**: The main entry point for the React application.
 -   **`index.css`**: Global styles for the application.
+
+Additionally, at the project root:
+
+-   **`wrangler.toml`**: The configuration file for Cloudflare Workers and Cloudflare Pages projects. It defines build settings, environments, routes for Workers, and compatibility settings.
 
 This structure helps in organizing the codebase logically, making it easier to navigate and maintain. JSDoc comments are used throughout these files to provide detailed documentation for components, functions, and hooks.
 
