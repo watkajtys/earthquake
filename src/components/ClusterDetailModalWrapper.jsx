@@ -336,10 +336,9 @@ function ClusterDetailModalWrapper({
     // Effect to manage SEO props for loading, error, and not found states
     useEffect(() => {
         const currentCanonicalUrl = `https://earthquakeslive.com/cluster/${clusterId}`;
-        // Clear SEO props initially on clusterId change or when moving to a loading phase without dynamic data yet
-        if (!dynamicCluster || (loadingPhase !== 'done' && loadingPhase !== 'fallback_prop_check_attempt')) {
-             setClusterSeoProps(null);
-        }
+        // This effect primarily handles SEO for states where dynamicCluster is NOT yet available,
+        // or when an error occurs. If dynamicCluster is successfully set,
+        // the data-fetching effects are responsible for setting the correct SEO props.
 
         if (!clusterId) {
             setClusterSeoProps({
@@ -349,39 +348,40 @@ function ClusterDetailModalWrapper({
                 pageUrl: "https://earthquakeslive.com/clusters",
                 noindex: true,
             });
-            return; // Stop further processing if no clusterId
+            return;
         }
 
-        if (loadingPhase !== 'done' && !errorMessage && !dynamicCluster) {
-            // Loading state (initial load or fallback_loading)
-            setClusterSeoProps({
-                title: "Loading Cluster... | Seismic Monitor",
-                description: "Loading earthquake cluster details.",
-                canonicalUrl: currentCanonicalUrl,
-                pageUrl: currentCanonicalUrl,
-            });
-        } else if (loadingPhase === 'done' && errorMessage && !dynamicCluster) {
-            // Error state / Explicit Not Found from errorMessage
-            setClusterSeoProps({
-                title: "Cluster Not Found | Seismic Monitor",
-                description: errorMessage,
-                canonicalUrl: currentCanonicalUrl,
-                pageUrl: currentCanonicalUrl,
-                noindex: true,
-            });
-        } else if (loadingPhase === 'done' && !dynamicCluster && !errorMessage) {
-            // Implicit Not Found (all checks done, no cluster, no specific error message)
-            setClusterSeoProps({
-                title: "Cluster Not Found | Seismic Monitor",
-                description: "The requested earthquake cluster could not be located.",
-                canonicalUrl: currentCanonicalUrl,
-                pageUrl: currentCanonicalUrl,
-                noindex: true,
-            });
+        // Only set SEO if dynamicCluster is NOT YET available or if there's an error
+        if (!dynamicCluster) {
+            if (loadingPhase !== 'done' && !errorMessage) { // General Loading (worker_fetch, reconstruct, fallback_loading etc.)
+                setClusterSeoProps({
+                    title: "Loading Cluster... | Seismic Monitor",
+                    description: "Loading earthquake cluster details.",
+                    canonicalUrl: currentCanonicalUrl,
+                    pageUrl: currentCanonicalUrl,
+                });
+            } else if (loadingPhase === 'done' && errorMessage) { // Explicit Error (e.g. from !clusterId)
+                setClusterSeoProps({
+                    title: "Cluster Error | Seismic Monitor", // Generic error title
+                    description: errorMessage,
+                    canonicalUrl: currentCanonicalUrl,
+                    pageUrl: currentCanonicalUrl,
+                    noindex: true,
+                });
+            } else if (loadingPhase === 'done' && !errorMessage) { // Implicit Not Found (all checks done, no cluster)
+                setClusterSeoProps({
+                    title: "Cluster Not Found | Seismic Monitor",
+                    description: "The requested earthquake cluster could not be located.",
+                    canonicalUrl: currentCanonicalUrl,
+                    pageUrl: currentCanonicalUrl,
+                    noindex: true,
+                });
+            }
         }
-        // If dynamicCluster is found, its SEO props are set by the effects that found it.
-        // This effect primarily handles the non-data states.
-    }, [clusterId, loadingPhase, errorMessage, dynamicCluster]); // Added dynamicCluster to dependencies
+        // If dynamicCluster IS found and loadingPhase is 'done', the data-fetching effects
+        // are responsible for setting the definitive SEO props via their own setClusterSeoProps call.
+        // This effect should not interfere in that success case.
+    }, [clusterId, loadingPhase, errorMessage, dynamicCluster]);
 
 
     const handleClose = () => navigate(-1);

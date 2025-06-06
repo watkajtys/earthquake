@@ -51,6 +51,7 @@ const mockContextBase = {
   waitUntil: vi.fn((promise) => Promise.resolve(promise)),
   request: {
     url: 'http://localhost/api/usgs-proxy?apiUrl=https://example.com/api',
+    headers: new Headers({ 'User-Agent': 'test-agent' }), // Add a default headers object
     clone: vi.fn(() => mockContextBase.request) // Point to the base object
   },
   // env will be set per test or in beforeEach
@@ -72,7 +73,12 @@ describe('onRequest proxy function', () => {
     mockContext = JSON.parse(JSON.stringify(mockContextBase));
     // mockContext.request.clone = vi.fn(() => mockContext.request); // Re-attach mock function if lost in stringify/parse
     // A bit manual for clone, but ensures env is fresh. For more complex request mocking, a better deep clone is needed.
-    mockContext.request = { ...mockContextBase.request, clone: vi.fn(() => mockContext.request) };
+    // Ensure headers are part of the cloned request object in beforeEach
+    mockContext.request = {
+      ...mockContextBase.request,
+      headers: new Headers(mockContextBase.request.headers), // Clone headers
+      clone: vi.fn(() => mockContext.request)
+    };
     mockContext.waitUntil = vi.fn((promise) => Promise.resolve(promise)); // Ensure waitUntil is a fresh mock
     mockContext.env = {}; // Default to no env variables
     mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${TEST_API_URL}`;
