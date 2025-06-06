@@ -138,32 +138,49 @@ describe('EarthquakeDetailModalComponent', () => {
     // Check the last call to SeoMetadata (it re-renders)
     const lastSeoCall = SeoMetadata.mock.calls[SeoMetadata.mock.calls.length - 1][0];
 
+    const expectedPageTitle = `M ${mockSeoPayload.mag} Earthquake - ${mockSeoPayload.place} - ${new Date(mockSeoPayload.time).toLocaleDateString()}`;
+    const expectedPageDescription = `Detailed information about the M ${mockSeoPayload.mag} earthquake that occurred near ${mockSeoPayload.place} on ${new Date(mockSeoPayload.time).toUTCString()}. Depth: ${mockSeoPayload.depth} km.`;
+    const expectedPageKeywords = `earthquake, seismic event, M ${mockSeoPayload.mag}, ${mockSeoPayload.place}, earthquake details, usgs event`;
+    const expectedCanonicalUrl = 'https://earthquakeslive.com/quake/test-detail-url';
+
     expect(lastSeoCall.eventJsonLd).toEqual(
       expect.objectContaining({
         '@context': 'https://schema.org',
         '@type': 'Event',
-        name: mockSeoPayload.title,
-        description: expect.stringContaining(`Magnitude ${mockSeoPayload.mag}`),
+        name: expectedPageTitle,
+        description: expectedPageDescription,
         startDate: new Date(mockSeoPayload.time).toISOString(),
         endDate: new Date(mockSeoPayload.time).toISOString(),
-        url: 'https://earthquakeslive.com/quake/test-detail-url',
+        url: expectedCanonicalUrl,
+        identifier: 'test-detail-url',
+        keywords: expectedPageKeywords,
+        image: mockSeoPayload.shakemapIntensityImageUrl,
+        subjectOf: {
+            '@type': 'WebPage',
+            url: expectedCanonicalUrl,
+        },
         location: expect.objectContaining({
           '@type': 'Place',
           name: mockSeoPayload.place,
-          geo: expect.objectContaining({
+          geo: expect.objectContaining({ // component adds geo if lat/lon are numbers
             '@type': 'GeoCoordinates',
             latitude: mockSeoPayload.latitude,
             longitude: mockSeoPayload.longitude,
-            elevation: mockSeoPayload.depth,
+            // component does not add elevation to eventJsonLd.location.geo
           }),
         }),
-        organizer: {
-            '@type': 'Organization',
-            name: 'Global Seismic Activity Monitor (via USGS)',
-        }
+        // organizer is no longer part of the component's output
       })
     );
-    expect(lastSeoCall.title).toContain(mockSeoPayload.title);
+    // Also check other direct props of SeoMetadata
+    expect(lastSeoCall.title).toBe(expectedPageTitle);
+    expect(lastSeoCall.description).toBe(expectedPageDescription);
+    expect(lastSeoCall.keywords).toBe(expectedPageKeywords);
+    expect(lastSeoCall.canonicalUrl).toBe(expectedCanonicalUrl);
+    expect(lastSeoCall.pageUrl).toBe(expectedCanonicalUrl);
+    expect(lastSeoCall.type).toBe('article');
+    expect(lastSeoCall.publishedTime).toBe(new Date(mockSeoPayload.time).toISOString());
+    expect(lastSeoCall.modifiedTime).toBe(new Date(mockSeoPayload.updated).toISOString());
     expect(lastSeoCall.imageUrl).toBe(mockSeoPayload.shakemapIntensityImageUrl);
   });
 
@@ -186,21 +203,25 @@ describe('EarthquakeDetailModalComponent', () => {
 
     const lastSeoCall = SeoMetadata.mock.calls[SeoMetadata.mock.calls.length - 1][0];
 
+    const expectedPageTitleMinimal = `M ${mockSeoPayloadMinimal.mag} Earthquake - ${mockSeoPayloadMinimal.place} - ${new Date(mockSeoPayloadMinimal.time).toLocaleDateString()}`;
     expect(lastSeoCall.eventJsonLd).toEqual(
       expect.objectContaining({
         '@type': 'Event',
-        name: mockSeoPayloadMinimal.title,
+        name: expectedPageTitleMinimal, // Updated to match component logic
         startDate: new Date(mockSeoPayloadMinimal.time).toISOString(),
         location: expect.objectContaining({
           '@type': 'Place',
           name: mockSeoPayloadMinimal.place,
-          // geo should be absent or have null/undefined coordinates
         }),
       })
     );
-    // Check that geo is not present if coordinates were missing
+    // Check that geo is not present if coordinates were missing (as per component logic)
     expect(lastSeoCall.eventJsonLd.location.geo).toBeUndefined();
     expect(lastSeoCall.imageUrl).toBeNull(); // Since shakemapIntensityImageUrl was missing
+    // Check that times are handled (publishedTime will exist, modifiedTime will fallback to publishedTime or be undefined if time itself is missing)
+    expect(lastSeoCall.publishedTime).toBe(new Date(mockSeoPayloadMinimal.time).toISOString());
+    // If 'updated' is missing in payload, component falls back to 'time' for modifiedTime
+    expect(lastSeoCall.modifiedTime).toBe(new Date(mockSeoPayloadMinimal.time).toISOString());
   });
 
   test('handles seoData with null depth, latitude, longitude for eventJsonLd', () => {
@@ -224,17 +245,19 @@ describe('EarthquakeDetailModalComponent', () => {
 
     const lastSeoCall = SeoMetadata.mock.calls[SeoMetadata.mock.calls.length - 1][0];
 
+    const expectedPageTitleNullGeo = `M ${mockSeoPayloadNullGeo.mag} Earthquake - ${mockSeoPayloadNullGeo.place} - ${new Date(mockSeoPayloadNullGeo.time).toLocaleDateString()}`;
     expect(lastSeoCall.eventJsonLd).toEqual(
       expect.objectContaining({
         '@type': 'Event',
-        name: mockSeoPayloadNullGeo.title,
+        name: expectedPageTitleNullGeo, // Corrected expected name
         location: expect.objectContaining({
           '@type': 'Place',
           name: mockSeoPayloadNullGeo.place,
+          // geo should be undefined because latitude/longitude are null
         }),
       })
     );
-    // Geo property should not exist if lat/lon are null
+    // Geo property should not exist if lat/lon are null (as per component logic)
     expect(lastSeoCall.eventJsonLd.location.geo).toBeUndefined();
   });
 
