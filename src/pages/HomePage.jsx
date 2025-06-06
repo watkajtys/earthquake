@@ -8,8 +8,8 @@ import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
 import NotableQuakeFeature from '../components/NotableQuakeFeature';
 import PreviousNotableQuakeFeature from '../components/PreviousNotableQuakeFeature';
 import InfoSnippet from '../components/InfoSnippet';
-import coastlineData from '../assets/ne_110m_coastline.json';
-import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json';
+// import coastlineData from '../assets/ne_110m_coastline.json'; // Removed for dynamic import
+// import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import GlobalLastMajorQuakeTimer from "../components/GlobalLastMajorQuakeTimer.jsx";
 import BottomNav from "../components/BottomNav.jsx";
 import ClusterSummaryItem from '../components/ClusterSummaryItem';
@@ -78,30 +78,38 @@ const GlobeLayout = (props) => {
     globeFocusLng,
     handleQuakeClick,
     getMagnitudeColor, // This is the function itself
-    coastlineData,
-    tectonicPlatesData,
+    // coastlineData, // Will be passed as props
+    // tectonicPlatesData, // Will be passed as props
     activeClusters,
     lastMajorQuake,
     formatTimeDuration,
     handleNotableQuakeSelect,
-    keyStatsForGlobe
+    keyStatsForGlobe,
+    // Props for GeoJSON data and loading state
+    coastlineData,
+    tectonicPlatesData,
+    areGeoJsonAssetsLoading
   } = props;
 
   return (
     <div className="block h-full w-full"> {/* Base container for the globe and its fixed UI elements */}
-      <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe...</div>}>
-        <InteractiveGlobeView
-          defaultFocusLat={20}
-          defaultFocusLng={globeFocusLng}
-          onQuakeClick={handleQuakeClick}
-          getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
-          allowUserDragRotation={true}
-          enableAutoRotation={true}
-          globeAutoRotateSpeed={0.1}
-          coastlineGeoJson={coastlineData}
-          tectonicPlatesGeoJson={tectonicPlatesData}
-          activeClusters={activeClusters}
-        />
+      <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
+        {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
+           <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
+        ) : (
+          <InteractiveGlobeView
+            defaultFocusLat={20}
+            defaultFocusLng={globeFocusLng}
+            onQuakeClick={handleQuakeClick}
+            getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
+            allowUserDragRotation={true}
+            enableAutoRotation={true}
+            globeAutoRotateSpeed={0.1}
+            coastlineGeoJson={coastlineData}
+            tectonicPlatesGeoJson={tectonicPlatesData}
+            activeClusters={activeClusters}
+          />
+        )}
       </Suspense>
 
       {/* Absolutely positioned UI elements over the globe */}
@@ -288,6 +296,11 @@ function App() {
     // activeSidebarView, activeFeedPeriod, globeFocusLng, focusedNotableQuake are from useUIState()
     // const [activeClusters, setActiveClusters] = useState([]); // REPLACED with useMemo below
 
+    // State for GeoJSON data
+    const [coastlineData, setCoastlineData] = useState(null);
+    const [tectonicPlatesData, setTectonicPlatesData] = useState(null);
+    const [areGeoJsonAssetsLoading, setAreGeoJsonAssetsLoading] = useState(true);
+
     // --- Data Fetching Callbacks ---
     // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
 
@@ -413,6 +426,37 @@ function App() {
         }
         return [];
   }, [earthquakesLast7Days]);
+
+    // Effect to load GeoJSON assets
+    useEffect(() => {
+      let isMounted = true;
+      const loadGeoJsonAssets = async () => {
+        setAreGeoJsonAssetsLoading(true);
+        try {
+          const [coastline, tectonic] = await Promise.all([
+            import('../assets/ne_110m_coastline.json'),
+            import('../assets/TectonicPlateBoundaries.json')
+          ]);
+          if (isMounted) {
+            setCoastlineData(coastline.default); // .default is needed for dynamic import of JSON
+            setTectonicPlatesData(tectonic.default);
+          }
+        } catch (error) {
+          console.error("Error loading GeoJSON assets:", error);
+          // Optionally, set error state here
+        } finally {
+          if (isMounted) {
+            setAreGeoJsonAssetsLoading(false);
+          }
+        }
+      };
+
+      loadGeoJsonAssets();
+
+      return () => {
+        isMounted = false;
+      };
+    }, []); // Empty dependency array to run once on mount
 
     useEffect(() => {
         const timerId = setInterval(() => setAppCurrentTime(Date.now()), HEADER_TIME_UPDATE_INTERVAL_MS);
@@ -815,8 +859,10 @@ function App() {
                                       globeFocusLng={globeFocusLng}
                                       handleQuakeClick={handleQuakeClick}
                                       getMagnitudeColor={getMagnitudeColor}
+                                      // Pass new state for GeoJSON
                                       coastlineData={coastlineData}
                                       tectonicPlatesData={tectonicPlatesData}
+                                      areGeoJsonAssetsLoading={areGeoJsonAssetsLoading}
                                       activeClusters={activeClusters}
                                       lastMajorQuake={lastMajorQuake}
                                       formatTimeDuration={formatTimeDuration}
