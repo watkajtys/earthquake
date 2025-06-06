@@ -41,8 +41,12 @@ export const getMagnitudeColor = (magnitude) => {
 // Add other utility functions here as the app grows
 
 export const isValidNumber = (num) => {
-    const parsedNum = parseFloat(num);
-    return typeof parsedNum === 'number' && !isNaN(parsedNum);
+    // Handles actual numbers, numeric strings. Rejects mixed strings, null, undefined, empty/whitespace, arrays.
+    if (num === null || typeof num === 'boolean' || num === undefined || Array.isArray(num)) return false;
+    if (typeof num === 'string' && num.trim() === '') return false;
+    // Number() converts empty array [] to 0, so Array.isArray check is important.
+    // Number() converts "12a" to NaN.
+    return !isNaN(Number(num));
 };
 
 export const formatDate = (timestamp) => {
@@ -59,6 +63,7 @@ export const isValuePresent = (value) => {
 };
 
 export const formatNumber = (num, precision = 1) => {
+    // parseFloat(null) is NaN, so it will correctly return 'N/A' without special handling for null.
     const number = parseFloat(num);
     if (Number.isNaN(number)) return 'N/A';
     return number.toFixed(precision);
