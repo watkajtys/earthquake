@@ -203,7 +203,7 @@ function ClusterDetailModalWrapper({
             }
         }
         fetchAndProcessClusterFromWorker();
-    }, [clusterId, formatDate, formatTimeAgo, formatTimeDuration, allEarthquakes, earthquakesLast72Hours, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad, dynamicCluster]);
+    }, [clusterId, formatDate, formatTimeAgo, formatTimeDuration, allEarthquakes, earthquakesLast72Hours, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]);
 
 
     // Effect 2: Attempt reconstruction from parsed ID if worker fetch failed/incomplete
@@ -307,7 +307,7 @@ function ClusterDetailModalWrapper({
                 setLoadingPhase('fallback_prop_check_attempt');
             }
         }
-    }, [loadingPhase, clusterId, allEarthquakes, earthquakesLast72Hours, formatDate, formatTimeAgo, formatTimeDuration, hasAttemptedMonthlyLoad, dynamicCluster, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]);
+    }, [loadingPhase, clusterId, allEarthquakes, earthquakesLast72Hours, formatDate, formatTimeAgo, formatTimeDuration, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]);
 
     // Effect 3: Fallback to overviewClusters prop
     useEffect(() => {
