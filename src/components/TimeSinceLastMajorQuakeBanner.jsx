@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
 import SkeletonText from './skeletons/SkeletonText';
 import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
@@ -124,17 +123,5 @@ if (!lastMajorQuake && !isLoadingInitialData && !isEffectivelyLoadingMonthly) {
                         )}
     </div>);
 });
-
-TimeSinceLastMajorQuakeBanner.propTypes = {
-    // lastMajorQuake: PropTypes.object, // From context
-    // previousMajorQuake: PropTypes.object, // From context
-    // timeBetweenPreviousMajorQuakes: PropTypes.number, // From context
-    // isLoadingInitial: PropTypes.bool, // From context (isLoadingInitialData)
-    // isLoadingMonthly: PropTypes.bool, // From context (contextIsLoadingMonthly & hasAttemptedMonthlyLoad)
-    formatTimeDuration: PropTypes.func.isRequired,
-    // getRegionForEarthquake: PropTypes.func, // Removed as it's unused
-    handleQuakeClick: PropTypes.func.isRequired,
-    getMagnitudeColor: PropTypes.func.isRequired,
-};
 
 export default TimeSinceLastMajorQuakeBanner;

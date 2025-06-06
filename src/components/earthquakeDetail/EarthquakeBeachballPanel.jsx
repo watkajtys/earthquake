@@ -33,7 +33,7 @@ function EarthquakeBeachballPanel({
 
                         const orientationStrike = parseFloat(np1Data.strike);
                         const rake = parseFloat(selectedPlane.rake);
-                        const dip = parseFloat(selectedPlane.dip);
+                        // const dip = parseFloat(selectedPlane.dip); // Unused
 
                         if (!isValidNumber(orientationStrike) || !isValidNumber(rake)) {
                             return (

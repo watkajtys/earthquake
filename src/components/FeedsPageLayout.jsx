@@ -1,5 +1,4 @@
 import React, { useMemo, memo } from 'react'; // Added useMemo, memo
-import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 import { useUIState } from '../contexts/UIStateContext'; // Import context
 import SeoMetadata from './SeoMetadata';
@@ -164,25 +163,6 @@ const FeedsPageLayout = ({
             </div>
         </>
     );
-};
-
-FeedsPageLayout.propTypes = {
-    // currentFeedTitle: PropTypes.string.isRequired, // Derived
-    // activeFeedPeriod: PropTypes.string.isRequired, // From context
-    // currentFeedData: PropTypes.array, // Derived
-    // currentFeedisLoading: PropTypes.bool, // Derived
-    // previousDataForCurrentFeed: PropTypes.array, // Derived
-    handleQuakeClick: PropTypes.func.isRequired,
-    // setActiveFeedPeriod: PropTypes.func.isRequired, // From context
-    // handleLoadMonthlyData: PropTypes.func.isRequired, // From context (loadMonthlyData)
-    // hasAttemptedMonthlyLoad: PropTypes.bool, // From context
-    // isLoadingMonthly: PropTypes.bool, // From context
-    // allEarthquakes: PropTypes.array, // From context (contextAllEarthquakes)
-    getFeedPageSeoInfo: PropTypes.func.isRequired,
-    calculateStats: PropTypes.func.isRequired,
-    getMagnitudeColorStyle: PropTypes.func.isRequired,
-    formatTimeAgo: PropTypes.func.isRequired,
-    formatDate: PropTypes.func.isRequired,
 };
 
 export default memo(FeedsPageLayout);

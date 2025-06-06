@@ -1,6 +1,5 @@
 // src/GlobalLastMajorQuakeTimer.jsx
 import React, { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
 import { getMagnitudeColor } from '../utils/utils.js';
 import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 import SkeletonText from './skeletons/SkeletonText';
@@ -71,18 +70,6 @@ const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, formatTimeDuration, handleT
             )}
         </div>
     );
-};
-
-GlobalLastMajorQuakeTimer.propTypes = {
-    lastMajorQuake: PropTypes.shape({
-        properties: PropTypes.shape({
-            time: PropTypes.number.isRequired,
-            place: PropTypes.string,
-            mag: PropTypes.number,
-        }),
-    }),
-    formatTimeDuration: PropTypes.func.isRequired,
-    handleTimerClick: PropTypes.func,
 };
 
 export default GlobalLastMajorQuakeTimer;

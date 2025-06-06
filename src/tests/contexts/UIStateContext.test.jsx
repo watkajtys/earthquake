@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderHook, act } from '@testing-library/react';
 import { UIStateProvider, useUIState } from '../../contexts/UIStateContext';
-import { useSearchParams } from 'react-router-dom';
+// import { useSearchParams } from 'react-router-dom'; // Unused direct import
 import { vi } from 'vitest'; // Import vi for Vitest specific functions
 
 // Mock react-router-dom's useSearchParams

@@ -1,7 +1,6 @@
 // src/ClusterDetailModal.jsx
 import React from 'react';
 import ClusterMiniMap from './ClusterMiniMap'; // Added import for the mini-map
-import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor
 
 /**
  * A modal component to display detailed information about an earthquake cluster.

@@ -16,7 +16,7 @@ const mockGlobeRefActions = {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   })),
-  toGlobeCoords: vi.fn((x,y) => ({lat: 0, lng: 0})), // Simulate returning some coords
+  toGlobeCoords: vi.fn((_x,_y) => ({lat: 0, lng: 0})), // Simulate returning some coords
 };
 vi.mock('react-globe.gl', () => ({
   default: vi.fn((props) => {
@@ -41,7 +41,7 @@ vi.mock('react-globe.gl', () => ({
 }));
 
 // Mock context
-const mockUseEarthquakeDataState = vi.fn();
+// const mockUseEarthquakeDataState = vi.fn(); // Unused
 
 const renderWithContext = (ui, { providerProps, ...renderOptions }) => {
   return render(

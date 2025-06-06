@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Added useMemo and useCallback
-import PropTypes from 'prop-types';
+import React, { useState, useMemo, useCallback } from 'react'; // Added useMemo and useCallback
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 import { useParams, useNavigate } from 'react-router-dom';
 import EarthquakeDetailView from './EarthquakeDetailView'; // Path relative to src/components/

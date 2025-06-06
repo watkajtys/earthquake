@@ -1,13 +1,12 @@
 import React, { memo } from 'react';
-import PropTypes from 'prop-types';
 import { calculatePWaveTravelTime, calculateSWaveTravelTime } from '../../utils/seismicUtils.js';
 
 function EarthquakeSeismicWavesPanel({
     exhibitPanelClass,
     exhibitTitleClass,
-    captionClass,
-    eventTime, // Not used in current calculations, but available
-    eventDepth // Not used in current calculations, but available
+    captionClass
+    // eventTime, // Not used in current calculations, but available
+    // eventDepth // Not used in current calculations, but available
 }) {
     const hypotheticalDistances = [50, 150, 300, 500]; // in km
 
@@ -373,13 +372,5 @@ function EarthquakeSeismicWavesPanel({
         </div>
     );
 }
-
-EarthquakeSeismicWavesPanel.propTypes = {
-    exhibitPanelClass: PropTypes.string,
-    exhibitTitleClass: PropTypes.string,
-    captionClass: PropTypes.string,
-    eventTime: PropTypes.number,
-    eventDepth: PropTypes.number,
-};
 
 export default memo(EarthquakeSeismicWavesPanel);
