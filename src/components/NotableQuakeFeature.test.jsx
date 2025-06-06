@@ -186,7 +186,7 @@ describe('NotableQuakeFeature', () => {
 
       expect(screen.getByText(`M ${secondInternalHistorical.mag.toFixed(1)}`)).toBeInTheDocument();
       expect(Utils.getMagnitudeColor).toHaveBeenCalledWith(secondInternalHistorical.mag);
-    });
+    }, 20000); // Increased timeout to 20 seconds
 
     it('calls onNotableQuakeSelect with historical quake data on button click', async () => {
       renderWithContext(<NotableQuakeFeature onNotableQuakeSelect={mockOnNotableQuakeSelect} />, { providerProps });

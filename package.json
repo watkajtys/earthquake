@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "NODE_OPTIONS=--max-old-space-size=4096 vitest"
   },
   "dependencies": {
     "inquirer": "^12.6.3",
