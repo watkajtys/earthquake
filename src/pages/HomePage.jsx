@@ -25,6 +25,8 @@ import SkeletonListItem from '../components/skeletons/SkeletonListItem';
 import SkeletonTableRow from '../components/skeletons/SkeletonTableRow';
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
+import SeismicEnergyDisplay from '../components/SeismicEnergyDisplay';
+import EnergyTrendChart from '../components/EnergyTrendChart';
 // RegionalDistributionList will be lazy loaded
 // MagnitudeDistributionSVGChart will be lazy loaded
 // EarthquakeTimelineSVGChart will be lazy loaded
@@ -939,6 +941,8 @@ function App() {
                                 handleQuakeClick={handleQuakeClick}
                                 getMagnitudeColor={getMagnitudeColor}
                             />
+                            <SeismicEnergyDisplay />
+                            <EnergyTrendChart title="Daily Energy Trend (Last 30 Days)" />
                             <SummaryStatisticsCard
                                 title="Overview (Last 24 Hours)"
                                 currentPeriodData={earthquakesLast24Hours}

@@ -6,13 +6,14 @@ import {
     USGS_API_URL_WEEK,
     USGS_API_URL_MONTH,
     REFRESH_INTERVAL_MS,
-    FEELABLE_QUAKE_THRESHOLD, // Added
+    FEELABLE_QUAKE_THRESHOLD,
     MAJOR_QUAKE_THRESHOLD,
     ALERT_LEVELS,
     INITIAL_LOADING_MESSAGES,
     LOADING_MESSAGE_INTERVAL_MS
 } from '../constants/appConstants';
-import { getMagnitudeColor } from '../utils/utils.js'; // Added import
+import { getMagnitudeColor } from '../utils/utils.js';
+import { sumEnergyForEarthquakes } from '../utils/seismicUtils.js'; // Added import for energy calculation
 
 const EarthquakeDataContext = createContext(null);
 
@@ -202,6 +203,12 @@ const initialState = {
     dailyCounts7Days: [],
     sampledEarthquakesLast7Days: [],
     magnitudeDistribution7Days: [],
+    energyToday: 0,
+    energyYesterday: 0,
+    energyThisWeek: 0,
+    energyLastWeek: 0,
+    energyComparisonError: null,
+    dailyEnergyTrend: [],
 };
 
 const actionTypes = {
@@ -223,7 +230,20 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
             return { ...state, ...action.payload };
         case actionTypes.DAILY_DATA_PROCESSED: {
             const { features, metadata, fetchTime } = action.payload;
+            let calculatedEnergyToday = 0;
+            let calculatedEnergyYesterday = 0;
+            let energyError = null;
+
             const l24 = filterByTime(features, 24, 0, fetchTime);
+            try {
+                calculatedEnergyToday = sumEnergyForEarthquakes(l24);
+                const yesterdayQuakes = filterByTime(features, 48, 24, fetchTime);
+                calculatedEnergyYesterday = sumEnergyForEarthquakes(yesterdayQuakes);
+            } catch (e) {
+                console.error("Error calculating daily energy:", e);
+                energyError = "Failed to calculate daily energy values.";
+            }
+
             const alertsIn24hr = l24.map(q => q.properties.alert).filter(a => a && a !== 'green' && ALERT_LEVELS[a.toUpperCase()]);
             const currentHighestAlert = alertsIn24hr.length > 0 ? alertsIn24hr.sort((a,b) => ({ 'red':0, 'orange':1, 'yellow':2 }[a] - { 'red':0, 'orange':1, 'yellow':2 }[b]))[0] : null;
             
@@ -233,6 +253,9 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
             return {
                 ...state,
                 isLoadingDaily: false,
+                energyToday: calculatedEnergyToday,
+                energyYesterday: calculatedEnergyYesterday,
+                energyComparisonError: energyError ? (state.energyComparisonError ? `${state.energyComparisonError} ${energyError}` : energyError) : state.energyComparisonError,
                 dataFetchTime: fetchTime,
                 lastUpdated: new Date(metadata?.generated || fetchTime).toLocaleString(),
                 earthquakesLastHour: filterByTime(features, 1, 0, fetchTime),
@@ -246,6 +269,9 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
         }
         case actionTypes.WEEKLY_DATA_PROCESSED: {
             const { features, fetchTime } = action.payload;
+            let calculatedEnergyThisWeek = 0;
+            let energyError = null;
+
             const last72HoursData = filterByTime(features, 72, 0, fetchTime);
 
             // Deduplication step
@@ -259,6 +285,13 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
             });
 
             const currentEarthquakesLast7Days = filterByTime(features, 7 * 24, 0, fetchTime);
+
+            try {
+                calculatedEnergyThisWeek = sumEnergyForEarthquakes(currentEarthquakesLast7Days);
+            } catch (e) {
+                console.error("Error calculating weekly energy:", e);
+                energyError = "Failed to calculate weekly energy values.";
+            }
 
             const weeklyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
             const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, weeklyMajors);
@@ -294,11 +327,16 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
                 dailyCounts7Days,
                 sampledEarthquakesLast7Days,
                 magnitudeDistribution7Days,
+                energyThisWeek: calculatedEnergyThisWeek,
+                energyComparisonError: energyError ? (state.energyComparisonError ? `${state.energyComparisonError} ${energyError}` : energyError) : state.energyComparisonError,
                 ...majorQuakeUpdates,
             };
         }
         case actionTypes.MONTHLY_DATA_PROCESSED: {
             const { features, fetchTime } = action.payload;
+            let calculatedEnergyLastWeek = 0;
+            let energyError = null;
+
             const monthlyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
             const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, monthlyMajors);
 
@@ -311,6 +349,15 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
 
             const currentEarthquakesLast30Days = filterMonthlyByTime(features, 30, 0, fetchTime);
             const currentEarthquakesLast14Days = filterMonthlyByTime(features, 14, 0, fetchTime);
+
+            try {
+                // prev7DayData (7-14 days ago) is calculated from monthly data.
+                const lastWeekQuakesMonthly = filterMonthlyByTime(features, 14, 7, fetchTime);
+                calculatedEnergyLastWeek = sumEnergyForEarthquakes(lastWeekQuakesMonthly);
+            } catch (e) {
+                console.error("Error calculating monthly energy (for last week):", e);
+                energyError = "Failed to calculate last week's energy values.";
+            }
 
             const magnitudeDistribution30Days = calculateMagnitudeDistribution(currentEarthquakesLast30Days);
             const magnitudeDistribution14Days = calculateMagnitudeDistribution(currentEarthquakesLast14Days);
@@ -349,9 +396,42 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
                 dailyCounts30Days, // Add to state
                 magnitudeDistribution14Days, // Add to state
                 magnitudeDistribution30Days, // Add to state
-                prev7DayData: filterMonthlyByTime(features, 14, 7, fetchTime),
+                prev7DayData: filterMonthlyByTime(features, 14, 7, fetchTime), // This is used for other things, ensure it's still populated
                 prev14DayData: filterMonthlyByTime(features, 28, 14, fetchTime),
+                energyLastWeek: calculatedEnergyLastWeek,
+                energyComparisonError: energyError ? (state.energyComparisonError ? `${state.energyComparisonError} ${energyError}` : energyError) : state.energyComparisonError,
                 ...majorQuakeUpdates,
+                dailyEnergyTrend: (() => {
+                    try {
+                        const trend = [];
+                        for (let i = 0; i < 30; i++) { // Last 30 days
+                            const dayStart = new Date(fetchTime);
+                            dayStart.setDate(dayStart.getDate() - i);
+                            dayStart.setHours(0, 0, 0, 0);
+
+                            const dayEnd = new Date(fetchTime); // Create a new Date object for dayEnd
+                            dayEnd.setDate(dayEnd.getDate() - i);
+                            dayEnd.setHours(23, 59, 59, 999);
+
+                            const quakesOnDay = features.filter(q => {
+                                const quakeTime = q.properties.time;
+                                return quakeTime >= dayStart.getTime() && quakeTime <= dayEnd.getTime();
+                            });
+
+                            const energyForDay = sumEnergyForEarthquakes(quakesOnDay);
+                            trend.push({
+                                dateString: formatDateForTimeline(dayStart.getTime()),
+                                energy: energyForDay,
+                            });
+                        }
+                        return trend.reverse(); // Chronological order
+                    } catch (e) {
+                        console.error("Error calculating daily energy trend:", e);
+                        // Optionally update energyComparisonError or a new specific error state for trends
+                        // For now, returning empty array or current state's trend if calculation fails
+                        return state.dailyEnergyTrend; // Or [] if preferred on error
+                    }
+                })(),
             };
         }
         case actionTypes.SET_INITIAL_LOAD_COMPLETE:
@@ -551,13 +631,20 @@ export const EarthquakeDataProvider = ({ children }) => {
         dailyCounts7Days: state.dailyCounts7Days,
         sampledEarthquakesLast7Days: state.sampledEarthquakesLast7Days,
         magnitudeDistribution7Days: state.magnitudeDistribution7Days,
+        // Add new energy values
+        energyToday: state.energyToday,
+        energyYesterday: state.energyYesterday,
+        energyThisWeek: state.energyThisWeek,
+        energyLastWeek: state.energyLastWeek,
+        energyComparisonError: state.energyComparisonError,
     }), [
-        state, // Main state object from reducer
-        isLoadingInitialData, 
-        currentLoadingMessage, 
-        loadMonthlyData, // useCallback ensures this is stable if its deps are empty
+        state, // Main state object from reducer. Includes all new energy fields now.
+        isLoadingInitialData,
+        currentLoadingMessage,
+        loadMonthlyData,
         feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
         feelableQuakes30Days_ctx, significantQuakes30Days_ctx
+        // state.energyToday, state.energyYesterday, state.energyThisWeek, state.energyLastWeek, state.energyComparisonError are part of `state`
     ]);
 
     return (
