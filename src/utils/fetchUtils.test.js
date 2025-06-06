@@ -14,7 +14,6 @@ describe('fetchDataCb', () => {
     vi.restoreAllMocks();
   });
 
-  // TODO: Add tests here
   it('should fetch and sanitize earthquake data correctly', async () => {
     const mockData = {
       features: [
