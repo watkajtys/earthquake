@@ -38,7 +38,7 @@ const createEpicenterIcon = (magnitude) => {
     </circle>
   `).join('');
   return new L.DivIcon({
-    html: `<svg width="60" height="60" viewBox="0 0 72 72"><g transform="translate(36,36)">${rings}<circle cx="0" cy="0" r="6" fill="${fillColor}" stroke="#FFFFFF" stroke-width="1.5"/></g></svg>`,
+    html: `<div aria-label="Earthquake epicenter"><svg width="60" height="60" viewBox="0 0 72 72"><g transform="translate(36,36)">${rings}<circle cx="0" cy="0" r="6" fill="${fillColor}" stroke="#FFFFFF" stroke-width="1.5"/></g></svg></div>`,
     className: 'custom-pulsing-icon',
     iconSize: [60, 60],
     iconAnchor: [30, 30],
@@ -46,15 +46,15 @@ const createEpicenterIcon = (magnitude) => {
 };
 
 const stationIconDefault = new L.DivIcon({
-    html: `<svg viewBox="0 0 20 32" width="20" height="32" xmlns="http://www.w3.org/2000/svg"><path d="M10 0C4.48 0 0 4.48 0 10c0 8.04 10 22 10 22s10-13.96 10-22c0-5.52-4.48-10-10-10zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" fill="#60A5FA"/></svg>`,
+    html: `<div aria-label="Seismic station"><svg viewBox="0 0 20 32" width="20" height="32" xmlns="http://www.w3.org/2000/svg"><path d="M10 0C4.48 0 0 4.48 0 10c0 8.04 10 22 10 22s10-13.96 10-22c0-5.52-4.48-10-10-10zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" fill="#60A5FA"/></svg></div>`,
     className: 'custom-station-icon', iconSize: [20, 32], iconAnchor: [10, 32], popupAnchor: [0, -32]
 });
 const stationIconPArrived = new L.DivIcon({
-    html: `<svg viewBox="0 0 20 32" width="20" height="32" xmlns="http://www.w3.org/2000/svg"><path d="M10 0C4.48 0 0 4.48 0 10c0 8.04 10 22 10 22s10-13.96 10-22c0-5.52-4.48-10-10-10zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" fill="#2563EB"/></svg>`,
+    html: `<div aria-label="Seismic station P-wave arrived"><svg viewBox="0 0 20 32" width="20" height="32" xmlns="http://www.w3.org/2000/svg"><path d="M10 0C4.48 0 0 4.48 0 10c0 8.04 10 22 10 22s10-13.96 10-22c0-5.52-4.48-10-10-10zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" fill="#2563EB"/></svg></div>`,
     className: 'custom-station-icon p-arrived', iconSize: [20, 32], iconAnchor: [10, 32], popupAnchor: [0, -32]
 });
 const stationIconSArrived = new L.DivIcon({
-    html: `<svg viewBox="0 0 20 32" width="20" height="32" xmlns="http://www.w3.org/2000/svg"><path d="M10 0C4.48 0 0 4.48 0 10c0 8.04 10 22 10 22s10-13.96 10-22c0-5.52-4.48-10-10-10zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" fill="#EF4444"/></svg>`,
+    html: `<div aria-label="Seismic station S-wave arrived"><svg viewBox="0 0 20 32" width="20" height="32" xmlns="http://www.w3.org/2000/svg"><path d="M10 0C4.48 0 0 4.48 0 10c0 8.04 10 22 10 22s10-13.96 10-22c0-5.52-4.48-10-10-10zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" fill="#EF4444"/></svg></div>`,
     className: 'custom-station-icon s-arrived', iconSize: [20, 32], iconAnchor: [10, 32], popupAnchor: [0, -32]
 });
 
@@ -312,7 +312,11 @@ const PSWaveAnimationMap = ({ earthquake, stations }) => { // Added stations pro
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
         />
-        <Marker position={epicenterPosition} icon={createEpicenterIcon(earthquakeMagnitude)}>
+        <Marker
+          position={epicenterPosition}
+          icon={createEpicenterIcon(earthquakeMagnitude)}
+          alt="Earthquake epicenter" // Added alt prop
+        >
           <Popup> Epicenter: {properties.title || 'Earthquake'} <br /> Magnitude: {earthquakeMagnitude} <br /> Depth: {epicenterDepth.toFixed(1)} km </Popup>
         </Marker>
         {stationData.map(station => {
@@ -320,7 +324,12 @@ const PSWaveAnimationMap = ({ earthquake, stations }) => { // Added stations pro
           if (station.sWaveArrived) currentIcon = stationIconSArrived;
           else if (station.pWaveArrived) currentIcon = stationIconPArrived;
           return (
-            <Marker key={station.id} position={station.position} icon={currentIcon}>
+            <Marker
+              key={station.id}
+              position={station.position}
+              icon={currentIcon}
+              alt={station.name ? `Seismic station: ${station.name}` : 'Seismic station'} // Added alt prop
+            >
               <Popup>
                 <b>{station.name}</b> <br />
                 Distance: {station.distance ? station.distance.toFixed(0) : 'N/A'} km <br />

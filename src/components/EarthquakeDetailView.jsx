@@ -4,8 +4,10 @@ import RegionalSeismicityChart from './RegionalSeismicityChart';
 import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
-import { useUIState } from '../contexts/UIStateContext'; // Import useUIState
-import { calculateDistance } from '../utils/utils.js'; // isValidNumber import removed
+// import { useUIState } from '../contexts/UIStateContext'; // No longer needed if only used for setCurrentEarthquakeForAnimation
+import { calculateDistance } from '../utils/seismicUtils.js'; // Corrected import path
+import { MAJOR_CITIES } from '../utils/majorCities'; // Import MAJOR_CITIES
+import PSWaveAnimationMap from './PSWaveAnimationMap'; // Import PSWaveAnimationMap
 // getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
 
 // Define REGIONAL_RADIUS_KM
@@ -51,6 +53,23 @@ import EarthquakeStressAxesPanel from './earthquakeDetail/EarthquakeStressAxesPa
 import EarthquakeBeachballPanel from './earthquakeDetail/EarthquakeBeachballPanel'; // Import the new beachball panel
 import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfoPanel'; // Import the new further info panel
 
+// Define getNearbyCities function
+const getNearbyCities = (epicenterLat, epicenterLon, citiesList, count = 5) => {
+    if (typeof epicenterLat !== 'number' || typeof epicenterLon !== 'number' || !citiesList) return [];
+    const citiesWithDistances = citiesList.map(city => ({
+        ...city,
+        distance: calculateDistance(epicenterLat, epicenterLon, city.latitude, city.longitude)
+    }));
+
+    citiesWithDistances.sort((a, b) => a.distance - b.distance);
+
+    return citiesWithDistances.slice(0, count).map(city => ({
+        id: city.name.replace(/\s+/g, '-').toLowerCase(), // simple ID
+        name: city.name,
+        position: [city.latitude, city.longitude]
+    }));
+};
+
 /**
  * A React component that displays detailed information about a specific earthquake event.
  * It fetches data from a provided URL, parses it, and presents it in a structured,
@@ -68,7 +87,7 @@ import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfo
  * @returns {JSX.Element} The rendered EarthquakeDetailView component.
  */
 function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) { // Add dataSourceTimespanDays
-    const { setCurrentEarthquakeForAnimation } = useUIState(); // Get the setter
+    // const { setCurrentEarthquakeForAnimation } = useUIState(); // Removed
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(!!detailUrl);
     const [error, setError] = useState(null);
@@ -169,7 +188,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                 const data = await response.json();
                 if (isMounted) {
                     setDetailData(data);
-                    setCurrentEarthquakeForAnimation(data); // Set the fetched earthquake data in context
+                    // setCurrentEarthquakeForAnimation(data); // Removed
                     if (onDataLoadedForSeo && data) {
                         const props = data.properties;
                         const geom = data.geometry;
@@ -204,7 +223,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
         return () => {
             isMounted = false;
         };
-    }, [detailUrl, onDataLoadedForSeo, setCurrentEarthquakeForAnimation]); // Added setCurrentEarthquakeForAnimation
+    }, [detailUrl, onDataLoadedForSeo]); // Removed setCurrentEarthquakeForAnimation
 
     // New useEffect for investigating phase-data
     useEffect(() => {
@@ -306,6 +325,13 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     // energyJoules will be NaN if scalarMomentValue is NaN.
     const energyJoules = scalarMomentValue;
 
+    const nearbyStationsForAnimation = useMemo(() => {
+        if (typeof mainQuakeLat === 'number' && typeof mainQuakeLon === 'number') {
+            return getNearbyCities(mainQuakeLat, mainQuakeLon, MAJOR_CITIES, 5);
+        }
+        return [];
+    }, [mainQuakeLat, mainQuakeLon]); // MAJOR_CITIES is stable
+
     // MOVED: InteractiveFaultDiagram component definition was here
 
     if (isLoading) return ( <div data-testid="loading-skeleton-container" className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-8 rounded-lg max-w-3xl w-full animate-pulse"><SkeletonText width="w-3/4" height="h-8 mb-6 mx-auto" /><SkeletonBlock height="h-40 mb-4" /><SkeletonBlock height="h-64" /></div></div> );
@@ -405,6 +431,21 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         exhibitTitleClass={exhibitTitleClass}
                         captionClass={captionClass}
                     />
+
+                    {/* P&S Wave Animation Panel */}
+                    {detailData && nearbyStationsForAnimation.length > 0 && (
+                        <section className={`${exhibitPanelClass} border-sky-500`}>
+                            <h3 className={`${exhibitTitleClass} text-sky-700`}>P & S Wave Travel Animation (Illustrative)</h3>
+                            <p className="text-xs text-slate-600 mb-3">
+                                Watch how P-waves and S-waves propagate from this earthquake's epicenter to nearby major cities.
+                            </p>
+                            <PSWaveAnimationMap
+                                earthquake={detailData}
+                                stations={nearbyStationsForAnimation}
+                            />
+                        </section>
+                    )}
+
                     <EarthquakeLocationPanel
                         properties={properties}
                         originProductProps={originProductProps}

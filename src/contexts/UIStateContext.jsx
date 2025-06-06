@@ -23,9 +23,6 @@ export const UIStateProvider = ({ children }) => {
     // Focused Notable Quake State
     const [focusedNotableQuake, setFocusedNotableQuake_internal] = useState(null);
 
-    // New state for P&S Wave Animation
-    const [currentEarthquakeForAnimation, setCurrentEarthquakeForAnimation_internal] = useState(null);
-
 
     // Effect for activeSidebarView URL sync
     useEffect(() => {
@@ -81,11 +78,6 @@ export const UIStateProvider = ({ children }) => {
         setFocusedNotableQuake_internal(quake);
     }, []);
 
-    // Setter for the new state
-    const setCurrentEarthquakeForAnimation = useCallback((quake) => {
-        setCurrentEarthquakeForAnimation_internal(quake);
-    }, []);
-
 
     const value = {
         activeSidebarView,
@@ -99,10 +91,6 @@ export const UIStateProvider = ({ children }) => {
 
         focusedNotableQuake,
         setFocusedNotableQuake,
-
-        // Expose new state and setter
-        currentEarthquakeForAnimation,
-        setCurrentEarthquakeForAnimation,
     };
 
     return (
