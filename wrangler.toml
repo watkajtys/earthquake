@@ -31,7 +31,7 @@ pages_build_output_dir = "./dist"
 #    with `wrangler pages dev`.
 # -----------------------------------------------------------------------------------------
 kv_namespaces = [
-  { binding = "CLUSTER_KV", id = "REPLACE_WITH_PRODUCTION_KV_ID", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
+  { binding = "CLUSTER_KV", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
 ]
 
 # Example of other potential configurations (uncomment and adjust if needed):
