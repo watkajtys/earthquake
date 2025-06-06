@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "include": [
+    "/sitemap-index.xml",
+    "/sitemap-static-pages.xml",
+    "/sitemap-earthquakes.xml",
+    "/sitemap-clusters.xml"
+  ],
+  "exclude": [
+    "/api/usgs-proxy"
+  ],
+  "handler": {
+    "function": "/functions/api/usgs-proxy.js"
+  }
+}
