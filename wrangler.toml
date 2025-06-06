@@ -1,5 +1,5 @@
 # wrangler.toml
-name = "earthquake"
+name = "your-pages-project-name" # TODO: Replace with your actual Cloudflare Pages project name
 compatibility_date = "2024-06-05" # Feel free to update to a more recent date
 
 # Configuration for Cloudflare Pages Functions
@@ -14,7 +14,7 @@ pages_build_output_dir = "./dist"
 #    separate namespaces for production and preview/local development.
 #    Run these commands in your terminal:
 #      wrangler kv:namespace create CLUSTER_KV
-#      wrangler kv namespace create CLUSTER_KV_PREVIEW
+#      wrangler kv:namespace create CLUSTER_KV_PREVIEW
 #
 # 2. Update IDs Below:
 #    Wrangler will output an 'id' for each namespace created.
@@ -31,7 +31,7 @@ pages_build_output_dir = "./dist"
 #    with `wrangler pages dev`.
 # -----------------------------------------------------------------------------------------
 kv_namespaces = [
-  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
+  { binding = "CLUSTER_KV", id = "REPLACE_WITH_PRODUCTION_KV_ID", preview_id = "REPLACE_WITH_PREVIEW_KV_ID" }
 ]
 
 # Example of other potential configurations (uncomment and adjust if needed):

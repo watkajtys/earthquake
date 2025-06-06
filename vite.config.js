@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '', // Added this line
+  base: '/', // Changed from '' to '/'
   plugins: [react()],
   test: {
     globals: true,
