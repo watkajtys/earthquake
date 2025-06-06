@@ -283,17 +283,27 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
 
   it('calls onDataLoadedForSeo with correct data when details are fetched', async () => {
     const mockOnDataLoadedForSeo = vi.fn();
-    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => deepClone(baseMockDetailData) });
+    // Ensure baseMockDetailData.properties includes 'detail' for completeness, though not strictly tested here.
+    const currentMockData = deepClone(baseMockDetailData);
+    if (!currentMockData.properties.detail) {
+      currentMockData.properties.detail = `https://earthquake.usgs.gov/earthquakes/eventpage/${currentMockData.id}`;
+    }
+
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} onDataLoadedForSeo={mockOnDataLoadedForSeo} />);
     await waitFor(() => expect(mockOnDataLoadedForSeo).toHaveBeenCalledTimes(1));
-    const shakemapProduct = baseMockDetailData.properties.products?.shakemap?.[0];
+
+    const shakemapProduct = currentMockData.properties.products?.shakemap?.[0];
     const expectedShakemapUrl = shakemapProduct?.contents?.['download/intensity.jpg']?.url;
-    const expectedSeoData = {
-      title: baseMockDetailData.properties.title, place: baseMockDetailData.properties.place, time: baseMockDetailData.properties.time,
-      mag: baseMockDetailData.properties.mag, updated: baseMockDetailData.properties.updated, depth: baseMockDetailData.geometry.coordinates[2],
+
+    // Updated expectation to match the new structure passed by onDataLoadedForSeo
+    const expectedPayload = {
+      id: currentMockData.id,
+      properties: currentMockData.properties,
+      geometry: currentMockData.geometry,
       shakemapIntensityImageUrl: expectedShakemapUrl,
     };
-    expect(mockOnDataLoadedForSeo).toHaveBeenCalledWith(expect.objectContaining(expectedSeoData));
+    expect(mockOnDataLoadedForSeo).toHaveBeenCalledWith(expect.objectContaining(expectedPayload));
   });
 
   // --- Other tests (formatDate, formatNumber, etc.) remain unchanged ---
