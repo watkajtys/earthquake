@@ -68,14 +68,31 @@ describe('onRequest proxy function', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Deep clone or reset mockContext for each test to ensure env isolation
-    mockContext = JSON.parse(JSON.stringify(mockContextBase));
-    // mockContext.request.clone = vi.fn(() => mockContext.request); // Re-attach mock function if lost in stringify/parse
-    // A bit manual for clone, but ensures env is fresh. For more complex request mocking, a better deep clone is needed.
-    mockContext.request = { ...mockContextBase.request, clone: vi.fn(() => mockContext.request) };
-    mockContext.waitUntil = vi.fn((promise) => Promise.resolve(promise)); // Ensure waitUntil is a fresh mock
-    mockContext.env = {}; // Default to no env variables
-    mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${TEST_API_URL}`;
+    // Reconstruct mockContext for each test to ensure env isolation and proper mock functions
+    mockContext = {
+      request: {
+        url: `http://localhost/api/usgs-proxy?apiUrl=${TEST_API_URL}`,
+        headers: {
+          get: vi.fn((headerName) => {
+            // Provide a default User-Agent or specific ones for tests if needed
+            if (headerName === 'User-Agent') {
+              return 'Mozilla/5.0 (compatible; VitestTestBot/1.0)';
+            }
+            return null; // Default for other headers
+          }),
+        },
+        clone: vi.fn(function() { return this; }), // Return the request object itself for clone
+      },
+      waitUntil: vi.fn((promise) => Promise.resolve(promise)),
+      env: {}, // Default to no env variables, tests can override
+    };
+
+    // Ensure the URL is correctly set for the first test which modifies it
+    // This is a bit redundant if the test itself sets the specific URL,
+    // but good for ensuring the default state of mockContext.request.url is what most tests expect.
+    // The test 'should return 400 JSON error if apiUrl query parameter is missing' will override this.
+    // mockContext.request.url = `http://localhost/api/usgs-proxy?apiUrl=${TEST_API_URL}`;
+
 
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
