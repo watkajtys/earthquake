@@ -33,6 +33,8 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // PaginatedEarthquakeTable will be lazy loaded
 // FeedsPageLayoutComponent will be lazy loaded
 // EarthquakeDetailModalComponent will be lazy loaded
+// FaultInformationPanel will be imported directly
+import FaultInformationPanel from '../components/FaultInformationPanel.jsx'; // Import FaultInformationPanel
 const InteractiveGlobeView = lazy(() => import('../components/InteractiveGlobeView'));
 // import useEarthquakeData from '../hooks/useEarthquakeData'; // Will use context instead
 // import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
@@ -161,7 +163,8 @@ function App() {
         activeSidebarView, setActiveSidebarView,
         activeFeedPeriod, // setActiveFeedPeriod removed
         globeFocusLng, setGlobeFocusLng,       // from UIStateContext
-        setFocusedNotableQuake // focusedNotableQuake removed
+        setFocusedNotableQuake, // focusedNotableQuake removed
+        selectedFaultData, setSelectedFaultData // For FaultInformationPanel
     } = useUIState(); // Use the context hook
 
     const [registeredIdsThisSession, setRegisteredIdsThisSession] = useState(new Set()); // Added state for tracking registered cluster IDs
@@ -1147,6 +1150,12 @@ function App() {
             </div> {/* End of main flex container (main + aside) */}
 
             <BottomNav onNavClick={setActiveSidebarView} activeView={activeSidebarView} />
+
+            {/* Fault Information Panel - Renders globally based on selectedFaultData */}
+            <FaultInformationPanel
+                faultData={selectedFaultData}
+                onClose={() => setSelectedFaultData(null)}
+            />
 
             {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
         </div>

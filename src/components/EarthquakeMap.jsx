@@ -6,7 +6,8 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 // import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
-import { createFaultTooltipContent } from '../utils/detailViewUtils.js';
+// import { createFaultTooltipContent } from '../utils/detailViewUtils.js'; // Tooltip functionality removed
+import { useUIState } from '../contexts/UIStateContext.jsx'; // Import useUIState
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -112,17 +113,26 @@ const EarthquakeMap = ({
   fitMapToBounds = false,
   defaultZoom = 8,
   faultLineDataUrl = null, // New prop
+  // onFaultSelect, // Prop removed, will use context directly
 }) => {
   const mapRef = useRef(null);
+  const { setSelectedFaultData } = useUIState(); // Get setSelectedFaultData from context
 
-  // Function to handle actions for each fault feature
+  // New function to handle click events on each fault feature
   const onEachFaultFeature = (feature, layer) => {
-    if (feature && feature.properties) {
-      const tooltipContent = createFaultTooltipContent(feature.properties);
-      if (tooltipContent && tooltipContent !== '<div>No data available</div>') {
-        layer.bindTooltip(tooltipContent, { sticky: true });
+    layer.on('click', () => {
+      if (feature && feature.properties && typeof setSelectedFaultData === 'function') {
+        setSelectedFaultData(feature.properties); // Call context setter
       }
-    }
+    });
+
+    // // Previous tooltip logic (now removed/commented):
+    // if (feature && feature.properties) {
+    //   const tooltipContent = createFaultTooltipContent(feature.properties);
+    //   if (tooltipContent && tooltipContent !== '<div>No data available</div>') {
+    //     layer.bindTooltip(tooltipContent, { sticky: true });
+    //   }
+    // }
   };
 
   const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);

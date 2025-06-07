@@ -23,6 +23,9 @@ export const UIStateProvider = ({ children }) => {
     // Focused Notable Quake State
     const [focusedNotableQuake, setFocusedNotableQuake_internal] = useState(null);
 
+    // Selected Fault Data State
+    const [selectedFaultData, setSelectedFaultData_internal] = useState(null);
+
 
     // Effect for activeSidebarView URL sync
     useEffect(() => {
@@ -78,6 +81,11 @@ export const UIStateProvider = ({ children }) => {
         setFocusedNotableQuake_internal(quake);
     }, []);
 
+    // Setter for selectedFaultData (no URL sync)
+    const setSelectedFaultData = useCallback((faultProps) => {
+        setSelectedFaultData_internal(faultProps);
+    }, []);
+
 
     const value = {
         activeSidebarView,
@@ -91,6 +99,9 @@ export const UIStateProvider = ({ children }) => {
 
         focusedNotableQuake,
         setFocusedNotableQuake,
+
+        selectedFaultData,
+        setSelectedFaultData,
     };
 
     return (
