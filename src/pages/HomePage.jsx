@@ -15,7 +15,7 @@ import BottomNav from "../components/BottomNav.jsx";
 import ClusterSummaryItem from '../components/ClusterSummaryItem';
 import ClusterDetailModal from '../components/ClusterDetailModal'; // This is for the cluster map point, not the route component
 // import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx'; // Removed static import, will use lazy loaded
-import { getMagnitudeColor } from '../utils/utils.js'; // calculateDistance removed
+import { getMagnitudeColor, getMagnitudeColorStyle } from '../utils/utils.js';
 // import { findActiveClusters } from '../utils/clusterUtils.js'; // Import findActiveClusters - REMOVED
 
 // Import newly created components
@@ -223,23 +223,7 @@ function App() {
     // getMagnitudeColor is now imported from utils.js and used directly where needed,
     // or passed as a prop if a component needs it but App itself doesn't use it directly in a useCallback here.
     // The useCallback wrapper for getMagnitudeColor previously here is removed.
-
-    /**
-     * Returns Tailwind CSS class strings for background and text color based on earthquake magnitude.
-     * @param {number | null | undefined} magnitude - The earthquake magnitude.
-     * @returns {string} Tailwind CSS class strings.
-     */
-    const getMagnitudeColorStyle = useCallback((magnitude) => {
-        if (magnitude === null || magnitude === undefined) return 'bg-slate-600 text-slate-100';
-        if (magnitude < 1.0) return 'bg-cyan-800 bg-opacity-50 text-cyan-100';
-        if (magnitude < 2.5) return 'bg-cyan-700 bg-opacity-50 text-cyan-100';
-        if (magnitude < 4.0) return 'bg-emerald-700 bg-opacity-50 text-emerald-100';
-        if (magnitude < 5.0) return 'bg-yellow-700 bg-opacity-50 text-yellow-100';
-        if (magnitude < 6.0) return 'bg-orange-700 bg-opacity-50 text-orange-100';
-        if (magnitude < 7.0) return 'bg-orange-800 bg-opacity-60 text-orange-50';
-        if (magnitude < 8.0) return 'bg-red-800 bg-opacity-60 text-red-50';
-        return 'bg-red-900 bg-opacity-70 text-red-50';
-    }, []);
+    // getMagnitudeColorStyle was moved to src/utils/utils.js
 
     const REGIONS = useMemo(() => [
         { name: "Alaska & W. Canada", latMin: 50, latMax: 72, lonMin: -170, lonMax: -125, color: "#A78BFA" },
