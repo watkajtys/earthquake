@@ -46,9 +46,3 @@ kv_namespaces = [
 
 # If you have other bindings (like D1, R2, Services), define them here too.
 # Refer to Cloudflare Wrangler documentation for more details.
-
-# Configuration for scheduled functions (for local testing with `wrangler pages dev --test-scheduled`)
-# For deployed functions, the schedule MUST be configured in the Cloudflare Pages dashboard
-# under Settings -> Functions -> Scheduled Functions for the specific function module.
-[triggers]
-  crons = ["0 * * * *"] # Run hourly (at the start of the hour)
