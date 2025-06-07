@@ -16,7 +16,7 @@ import ClusterSummaryItem from '../components/ClusterSummaryItem';
 import ClusterDetailModal from '../components/ClusterDetailModal'; // This is for the cluster map point, not the route component
 // import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx'; // Removed static import, will use lazy loaded
 import { getMagnitudeColor } from '../utils/utils.js'; // calculateDistance removed
-import { findActiveClusters } from '../utils/clusterUtils.js'; // Import findActiveClusters
+// import { findActiveClusters } from '../utils/clusterUtils.js'; // Import findActiveClusters - REMOVED
 
 // Import newly created components
 import SkeletonText from '../components/skeletons/SkeletonText';
@@ -38,7 +38,7 @@ const InteractiveGlobeView = lazy(() => import('../components/InteractiveGlobeVi
 // import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 import { useUIState } from '../contexts/UIStateContext.jsx'; // Import the new hook
-import { registerClusterDefinition } from '../services/clusterApiService.js'; // Import the new service
+import { registerClusterDefinition, fetchActiveClusters } from '../services/clusterApiService.js'; // Import the new service & fetchActiveClusters
 import {
     // USGS_API_URL_MONTH, // Now used inside useMonthlyEarthquakeData
     CLUSTER_MAX_DISTANCE_KM,
@@ -295,7 +295,7 @@ function App() {
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Kept local
     // activeSidebarView, activeFeedPeriod, globeFocusLng, focusedNotableQuake are from useUIState()
-    // const [activeClusters, setActiveClusters] = useState([]); // REPLACED with useMemo below
+    const [calculatedClusters, setCalculatedClusters] = useState([]); // NEW state for API fetched clusters
 
     // State for GeoJSON data
     const [coastlineData, setCoastlineData] = useState(null);
@@ -420,13 +420,26 @@ function App() {
 
     // Old handleLoadMonthlyData is removed. `loadMonthlyData` from the hook is used instead.
 
-    // Calculate activeClusters using useMemo
-    const activeClusters = useMemo(() => {
-    if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
-      return findActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
+    // Effect to fetch active clusters from the API
+    useEffect(() => {
+        if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
+            fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
+                .then(clusters => {
+                    setCalculatedClusters(clusters);
+                })
+                .catch(error => {
+                    console.error("Error fetching active clusters:", error);
+                    setCalculatedClusters([]); // Set to empty array on error
+                });
+        } else {
+            setCalculatedClusters([]); // Clear if no earthquake data
         }
-        return [];
-  }, [earthquakesLast7Days]);
+    }, [earthquakesLast7Days]); // Dependencies: earthquakesLast7Days
+
+    // Use calculatedClusters for the activeClusters memo
+    const activeClusters = useMemo(() => {
+        return calculatedClusters;
+    }, [calculatedClusters]);
 
     // Effect to load GeoJSON assets
     useEffect(() => {
@@ -864,7 +877,7 @@ function App() {
                                       coastlineData={coastlineData}
                                       tectonicPlatesData={tectonicPlatesData}
                                       areGeoJsonAssetsLoading={areGeoJsonAssetsLoading}
-                                      activeClusters={activeClusters}
+                                      activeClusters={activeClusters} // This now uses calculatedClusters
                                       lastMajorQuake={lastMajorQuake}
                                       formatTimeDuration={formatTimeDuration}
                                       handleNotableQuakeSelect={handleNotableQuakeSelect}
