@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "deploy": "wrangler deploy src/worker.js",
+    "preview:worker": "wrangler dev src/worker.js --local"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
