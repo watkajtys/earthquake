@@ -6,8 +6,11 @@
  *                            On success: { data: processedData, error: null }
  *                            On failure: { data: null, error: { message: string, status?: number } }
  */
-export const fetchProcessedEarthquakeData = async () => {
-  const endpoint = '/api/processed-earthquake-data'; // The new worker endpoint
+export const fetchProcessedEarthquakeData = async (maxPeriod) => {
+  let endpoint = '/api/processed-earthquake-data'; // The new worker endpoint
+  if (maxPeriod && ["24h", "7d", "30d"].includes(maxPeriod)) {
+    endpoint += `?maxPeriod=${maxPeriod}`;
+  }
 
   try {
     const response = await fetch(endpoint);
