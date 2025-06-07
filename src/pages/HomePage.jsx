@@ -37,7 +37,7 @@ const InteractiveGlobeView = lazy(() => import('../components/InteractiveGlobeVi
 // import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 import { useUIState } from '../contexts/UIStateContext.jsx'; // Import the new hook
-import { registerClusterDefinition } from '../services/clusterApiService.js'; // Import the new service
+// import { registerClusterDefinition } from '../services/clusterApiService.js'; // Import the new service
 import {
     // USGS_API_URL_MONTH, // Now used inside useMonthlyEarthquakeData
     CLUSTER_MAX_DISTANCE_KM,
@@ -163,7 +163,7 @@ function App() {
         setFocusedNotableQuake // focusedNotableQuake removed
     } = useUIState(); // Use the context hook
 
-    const [registeredIdsThisSession, setRegisteredIdsThisSession] = useState(new Set()); // Added state for tracking registered cluster IDs
+    // const [registeredIdsThisSession, setRegisteredIdsThisSession] = useState(new Set()); // Added state for tracking registered cluster IDs
 
     // appRenderTrigger removed (unused)
     // activeFeedPeriod is now from useUIState
@@ -648,46 +648,6 @@ function App() {
         return significantClusters;
 
     }, [activeClusters, formatDate, formatTimeAgo, formatTimeDuration]); // Include formatDate, formatTimeAgo, formatTimeDuration if they are from useCallback/component scope
-
-    // Effect to register cluster definitions
-    useEffect(() => {
-        if (overviewClusters && overviewClusters.length > 0) {
-            const registrationPromises = [];
-            const idsSuccessfullyRegisteredInEffect = new Set();
-
-            overviewClusters.forEach(cluster => {
-                if (!registeredIdsThisSession.has(cluster.id)) {
-                    const payload = {
-                        clusterId: cluster.id,
-                        earthquakeIds: cluster.originalQuakes.map(q => q.id),
-                        strongestQuakeId: cluster.strongestQuakeId,
-                    };
-                    const promise = registerClusterDefinition(payload)
-                        .then(success => {
-                            if (success) {
-                                idsSuccessfullyRegisteredInEffect.add(cluster.id);
-                            }
-                        })
-                        .catch(error => {
-                            console.error(`Error registering cluster ${cluster.id}:`, error);
-                        });
-                    registrationPromises.push(promise);
-                }
-            });
-
-            if (registrationPromises.length > 0) {
-                Promise.allSettled(registrationPromises).then(() => {
-                    if (idsSuccessfullyRegisteredInEffect.size > 0) {
-                        setRegisteredIdsThisSession(prevSet => {
-                            const newSet = new Set(prevSet);
-                            idsSuccessfullyRegisteredInEffect.forEach(id => newSet.add(id));
-                            return newSet;
-                        });
-                    }
-                });
-            }
-        }
-    }, [overviewClusters, registeredIdsThisSession]); // Added registeredIdsThisSession to dependencies
 
     // --- Event Handlers ---
     const navigate = useNavigate();

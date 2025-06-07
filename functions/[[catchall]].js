@@ -20,69 +20,6 @@ const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefin
   });
 };
 
-async function handleClusterDefinitionRequest(context, url) {
-  const sourceName = "cluster-definition-handler";
-  const { request, env } = context;
-  const CLUSTER_KV = env.CLUSTER_KV;
-
-  if (!CLUSTER_KV) {
-    return jsonErrorResponse("KV store not configured", 500, sourceName);
-  }
-
-  let ttl_seconds = 6 * 60 * 60; // 6 hours (21600 seconds)
-  if (env.CLUSTER_DEFINITION_TTL_SECONDS) {
-    const parsed = parseInt(env.CLUSTER_DEFINITION_TTL_SECONDS, 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      ttl_seconds = parsed;
-    } else {
-      console.warn(`Invalid CLUSTER_DEFINITION_TTL_SECONDS value: "${env.CLUSTER_DEFINITION_TTL_SECONDS}". Using default: ${ttl_seconds}s.`);
-    }
-  }
-
-  if (request.method === "POST") {
-    try {
-      const { clusterId, earthquakeIds, strongestQuakeId } = await request.json();
-      if (!clusterId || !earthquakeIds || !Array.isArray(earthquakeIds) || earthquakeIds.length === 0 || !strongestQuakeId) {
-        return jsonErrorResponse("Missing or invalid parameters for POST", 400, sourceName);
-      }
-      const valueToStore = {
-        earthquakeIds,
-        strongestQuakeId,
-        updatedAt: new Date().toISOString()
-      };
-      const kvValue = JSON.stringify(valueToStore);
-      await CLUSTER_KV.put(clusterId, kvValue, { expirationTtl: ttl_seconds });
-      return new Response(JSON.stringify({ status: "success", message: "Cluster definition stored." }), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (e) {
-      console.error("Error processing POST for cluster definition:", e);
-      return jsonErrorResponse(`Error processing request: ${e.message}`, 500, sourceName);
-    }
-  } else if (request.method === "GET") {
-    const clusterId = url.searchParams.get("id");
-    if (!clusterId) {
-      return jsonErrorResponse("Missing 'id' query parameter for GET", 400, sourceName);
-    }
-    try {
-      const kvValue = await CLUSTER_KV.get(clusterId);
-      if (kvValue === null) {
-        return jsonErrorResponse("Cluster definition not found.", 404, sourceName);
-      }
-      return new Response(kvValue, {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (e) {
-      console.error("Error processing GET for cluster definition:", e);
-      return jsonErrorResponse(`Error processing request: ${e.message}`, 500, sourceName);
-    }
-  } else {
-    return jsonErrorResponse("Method not allowed", 405, sourceName);
-  }
-}
-
 async function handleUsgsProxyRequest(context, apiUrl) {
   const sourceName = "usgs-proxy-handler";
 
@@ -833,9 +770,7 @@ export async function onRequest(context) {
   }
 
   // Existing API routes
-  else if (pathname === "/api/cluster-definition") {
-    return handleClusterDefinitionRequest(context, url);
-  } else if (pathname === "/api/usgs-proxy") {
+  else if (pathname === "/api/usgs-proxy") {
     const apiUrl = url.searchParams.get("apiUrl");
     if (!apiUrl) {
       return jsonErrorResponse("Missing apiUrl query parameter for proxy request", 400, "usgs-proxy-router");
