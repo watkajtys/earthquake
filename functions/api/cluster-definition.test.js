@@ -46,7 +46,11 @@ describe('Cluster Definition API (/api/cluster-definition)', () => {
         earthquakeIds: validClusterData.earthquakeIds,
         strongestQuakeId: validClusterData.strongestQuakeId,
       });
-      expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(validClusterData.clusterId, expectedStoredValue);
+      expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
+        validClusterData.clusterId,
+        expectedStoredValue,
+        { metadata: { lastUpdated: expect.any(Number) } }
+      );
     });
 
     it('should return 400 for invalid JSON payload', async () => {

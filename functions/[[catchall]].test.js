@@ -431,23 +431,29 @@ describe('onRequest (Main Router)', () => {
     });
 
     it('/sitemap-clusters.xml should list keys from KV and return XML', async () => {
-        const mockKeys = [{ name: "cluster1" }, { name: "cluster2" }];
-        const mockKVData = { updatedAt: new Date().toISOString() };
+        const testDate1 = new Date(Date.UTC(2023, 0, 15, 10, 30, 0)); // Jan 15, 2023, 10:30:00 UTC
+        const testDate2 = new Date(Date.UTC(2023, 0, 16, 12, 0, 0)); // Jan 16, 2023, 12:00:00 UTC
+
+        const mockKeys = [
+            { name: "cluster1", metadata: { lastUpdated: testDate1.getTime() } },
+            { name: "cluster2", metadata: { lastUpdated: testDate2.getTime() } }
+        ];
+        // No longer need mockKVData for .get() as it won't be called for updatedAt.
         const request = new Request('http://localhost/sitemap-clusters.xml');
         const context = createMockContext(request);
         context.env.CLUSTER_KV.list.mockResolvedValueOnce({ keys: mockKeys });
-        context.env.CLUSTER_KV.get.mockResolvedValue(JSON.stringify(mockKVData)); // For each key
 
         const response = await onRequest(context);
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('application/xml');
         const text = await response.text();
         expect(text).toContain('<urlset');
-        expect(text).toContain('/cluster/cluster1');
-        expect(text).toContain('/cluster/cluster2');
+        expect(text).toContain('<loc>https://earthquakeslive.com/cluster/cluster1</loc>');
+        expect(text).toContain(`<lastmod>${testDate1.toISOString()}</lastmod>`);
+        expect(text).toContain('<loc>https://earthquakeslive.com/cluster/cluster2</loc>');
+        expect(text).toContain(`<lastmod>${testDate2.toISOString()}</lastmod>`);
         expect(context.env.CLUSTER_KV.list).toHaveBeenCalled();
-        expect(context.env.CLUSTER_KV.get).toHaveBeenCalledWith("cluster1");
-        expect(context.env.CLUSTER_KV.get).toHaveBeenCalledWith("cluster2");
+        expect(context.env.CLUSTER_KV.get).not.toHaveBeenCalled(); // Ensure .get is NOT called
     });
 
     it('/sitemap-earthquakes.xml should handle fetch error', async () => {
@@ -510,20 +516,26 @@ describe('onRequest (Main Router)', () => {
       expect(text).not.toContain("<loc>");
     });
 
-    it('/sitemap-clusters.xml should handle CLUSTER_KV.get failure for a key', async () => {
-      const mockKeys = [{ name: "cluster1" }];
+    // This test is obsolete because CLUSTER_KV.get is no longer called in a loop for each key
+    // to determine 'lastmod'. The 'lastmod' is now derived from key.metadata.
+    it.skip('/sitemap-clusters.xml should handle CLUSTER_KV.get failure for a key', async () => {
+      const mockKeys = [{ name: "cluster1", metadata: { /* potentially no lastUpdated here to simulate old data */ } }];
       const request = new Request('http://localhost/sitemap-clusters.xml');
       const context = createMockContext(request);
       context.env.CLUSTER_KV.list.mockResolvedValueOnce({ keys: mockKeys });
-      context.env.CLUSTER_KV.get.mockRejectedValueOnce(new Error("KV Get Error for key")); // get fails
+      // If we were to test a scenario where .get was used for something else for this key,
+      // this mock would be relevant. But for lastmod, it's not.
+      // context.env.CLUSTER_KV.get.mockRejectedValueOnce(new Error("KV Get Error for key"));
       const consoleErrorSpy = vi.spyOn(console, 'error');
 
       const response = await onRequest(context);
       expect(response.status).toBe(200);
       const text = await response.text();
-      // It should still build the URL for cluster1 but might use current date for lastmod
       expect(text).toContain("<loc>https://earthquakeslive.com/cluster/cluster1</loc>");
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Error parsing KV value for cluster key cluster1"), expect.any(Error));
+      // Depending on the new logic, consoleErrorSpy might be called if metadata is missing/invalid.
+      // This specific error "Error parsing KV value for cluster key cluster1" will not be logged
+      // as the parsing path is removed. A different warning might appear if metadata is bad.
+      // expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Metadata or lastUpdated field missing/invalid for key: cluster1"));
       consoleErrorSpy.mockRestore();
     });
   });
