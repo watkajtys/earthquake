@@ -14,3 +14,39 @@
   outline-offset: 2px;
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2); /* Softer outer glow */
 }
+
+/* Custom Leaflet Popup Styling */
+.leaflet-popup-content-wrapper {
+  @apply rounded-lg shadow-lg bg-white border border-gray-300; /* Added border for better definition */
+}
+
+.leaflet-popup-content {
+  @apply p-3 text-sm text-slate-800; /* Adjusted padding and text color to match Tailwind palette */
+  line-height: 1.5; /* Adjusted line-height */
+  max-width: 320px; /* Increased max-width slightly */
+  max-height: 220px; /* Adjusted max-height */
+  @apply overflow-y-auto;
+}
+
+.leaflet-popup-content div {
+  @apply mb-1.5; /* Adjusted margin for more space */
+}
+
+.leaflet-popup-content strong {
+  @apply font-semibold text-slate-900; /* Adjusted text color */
+}
+
+/* Styling for the explanation text within popups */
+.leaflet-popup-content em {
+  @apply text-xs text-slate-600 block mt-0.5 italic; /* Ensured italic is applied if not default */
+}
+
+.leaflet-popup-close-button {
+  @apply text-slate-500 hover:text-slate-700 text-lg; /* Adjusted text color and size */
+  padding: 0.3rem; /* Increased padding for easier interaction */
+}
+
+/* Ensure the tip (arrow) of the popup matches the new background */
+.leaflet-popup-tip {
+  @apply bg-white;
+}

@@ -6,7 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 // import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
-// import { createFaultTooltipContent } from '../utils/detailViewUtils.js'; // Tooltip functionality removed
+import { createFaultTooltipContent } from '../utils/detailViewUtils.js'; // Re-added for popups
 import { useUIState } from '../contexts/UIStateContext.jsx'; // Import useUIState
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
@@ -120,18 +120,28 @@ const EarthquakeMap = ({
 
   // New function to handle click events on each fault feature
   const onEachFaultFeature = (feature, layer) => {
+    // Existing click handler for updating side panel (or other UI elements)
     layer.on('click', () => {
       if (feature && feature.properties && typeof setSelectedFaultData === 'function') {
         setSelectedFaultData(feature.properties); // Call context setter
       }
+      // Note: bindPopup typically opens on click by default.
+      // No need to call layer.openPopup() unless specific conditions require it.
     });
 
-    // // Previous tooltip logic (now removed/commented):
-    // if (feature && feature.properties) {
-    //   const tooltipContent = createFaultTooltipContent(feature.properties);
-    //   if (tooltipContent && tooltipContent !== '<div>No data available</div>') {
-    //     layer.bindTooltip(tooltipContent, { sticky: true });
-    //   }
+    // Bind popup for click/tap interaction
+    if (feature && feature.properties) {
+      const popupContent = createFaultTooltipContent(feature.properties);
+      // Ensure content is valid HTML before binding
+      if (typeof popupContent === 'string' && popupContent.trim().length > 0 && popupContent !== '<div>No data available</div>') {
+        layer.bindPopup(popupContent);
+      }
+    }
+
+    // Optional: If hover tooltip is also desired IN ADDITION to click/tap popup
+    // const tooltipContent = createFaultTooltipContent(feature.properties);
+    // if (tooltipContent && tooltipContent !== '<div>No data available</div>') {
+    //   layer.bindTooltip(tooltipContent, { sticky: true, direction: 'auto' });
     // }
   };
 
