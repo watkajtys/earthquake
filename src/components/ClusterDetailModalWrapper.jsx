@@ -205,6 +205,7 @@ function ClusterDetailModalWrapper({
                         };
                         setDynamicCluster(reconstructedClusterData);
                         setClusterSeoProps(generateClusterSeoProps(reconstructedClusterData, clusterId));
+                        setErrorMessage(''); // Clear any previous error
                         setLoadingPhase('done');
                     }
                 } else { // This 'else' corresponds to resultFromApiOrCache being null (either not in cache and fetch failed, or fetch returned null)
@@ -224,7 +225,12 @@ function ClusterDetailModalWrapper({
 
     // Effect 2: Attempt reconstruction from parsed ID if worker fetch failed/incomplete
     useEffect(() => {
-        if (loadingPhase === 'reconstruct_from_id_attempt' && !dynamicCluster) {
+        if (dynamicCluster || loadingPhase !== 'reconstruct_from_id_attempt') {
+            return;
+        }
+        // Original condition was: if (loadingPhase === 'reconstruct_from_id_attempt' && !dynamicCluster)
+        // The new condition above covers !dynamicCluster implicitly for this phase.
+        // If dynamicCluster is already set, this effect should not run.
             // ---- Start of added ----
             const willLikelyUseMonthly = hasAttemptedMonthlyLoad;
 
@@ -314,11 +320,15 @@ function ClusterDetailModalWrapper({
                 setLoadingPhase('fallback_prop_check_attempt');
             }
         }
-    }, [loadingPhase, clusterId, allEarthquakes, earthquakesLast72Hours, formatDate, formatTimeAgo, formatTimeDuration, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]); // Removed generateClusterSeoProps from deps
+    }, [loadingPhase, dynamicCluster, clusterId, allEarthquakes, earthquakesLast72Hours, formatDate, formatTimeAgo, formatTimeDuration, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]); // Added dynamicCluster
 
     // Effect 3: Fallback to overviewClusters prop
     useEffect(() => {
-        if (loadingPhase === 'fallback_prop_check_attempt' && !dynamicCluster) {
+        if (dynamicCluster || loadingPhase !== 'fallback_prop_check_attempt') {
+            return;
+        }
+        // Original condition was: if (loadingPhase === 'fallback_prop_check_attempt' && !dynamicCluster)
+        // The new condition above covers !dynamicCluster implicitly for this phase.
             const clusterFromProp = overviewClusters?.find(c => c.id === clusterId);
             if (clusterFromProp) {
                 setDynamicCluster(clusterFromProp); // This clusterFromProp might not have 'strongestQuake' object or 'updatedAt'
