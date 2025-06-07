@@ -156,7 +156,9 @@ export const EarthquakeDataProvider = ({ children }) => {
                 dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
             }, LOADING_MESSAGE_INTERVAL_MS);
         }
-        return () => clearInterval(messageInterval);
+        return () => {
+            if (messageInterval) clearInterval(messageInterval);
+        };
     }, [state.isInitialAppLoad, state.isLoadingData]);
 
     const isLoadingInitialData = useMemo(() => state.isLoadingData && state.isInitialAppLoad, [state.isLoadingData, state.isInitialAppLoad]);

@@ -31,6 +31,51 @@ class IntersectionObserver {
 
 vi.stubGlobal('IntersectionObserver', IntersectionObserver);
 
+// --- Mock for processedDataService ---
+// import { vi as jestVi } from 'vitest'; // No need for alias if vi is consistently used
+
+// Mock the service and its function. vi.mock is hoisted.
+vi.mock('../services/processedDataService', () => ({
+  fetchProcessedEarthquakeData: vi.fn(),
+}));
+
+// Import the service AFTER vi.mock to get the mocked version.
+// This handle will point to the vi.fn() defined in the factory above.
+import { fetchProcessedEarthquakeData } from '../services/processedDataService';
+
+const getMockContextData = () => ({
+  data: {
+    isLoadingData: false,
+    isInitialAppLoad: false,
+    error: null,
+    dataFetchTime: Date.now(),
+    lastUpdated: new Date().toISOString(),
+    earthquakesLastHour: [], earthquakesPriorHour: [], earthquakesLast24Hours: [],
+    earthquakesLast72Hours: [], earthquakesLast7Days: [], earthquakesLast14Days: [],
+    earthquakesLast30Days: [],
+    allEarthquakesMonth: { features: [] }, // Corrected: ensure this matches expected structure if it's not an array
+    prev24HourData: [], prev7DayData: [], prev14DayData: [],
+    globeEarthquakes: [], hasRecentTsunamiWarning: false, highestRecentAlert: null,
+    activeAlertTriggeringQuakes: [], lastMajorQuake: null, previousMajorQuake: null,
+    timeBetweenPreviousMajorQuakes: null, tsunamiTriggeringQuake: null,
+    dailyCounts7Days: [], dailyCounts14Days: [], dailyCounts30Days: [],
+    sampledEarthquakesLast7Days: [], sampledEarthquakesLast14Days: [], sampledEarthquakesLast30Days: [],
+    magnitudeDistribution7Days: [], magnitudeDistribution14Days: [], magnitudeDistribution30Days: [],
+    feelableQuakes7Days_ctx: [], significantQuakes7Days_ctx: [],
+    feelableQuakes30Days_ctx: [], significantQuakes30Days_ctx: [],
+  },
+  error: null,
+});
+
+// Default mock implementation before each test in the suite
+beforeEach(() => {
+  fetchProcessedEarthquakeData.mockResolvedValue(getMockContextData());
+});
+
+afterEach(() => {
+  fetchProcessedEarthquakeData.mockReset();
+});
+// --- End Mock for processedDataService ---
 
 // Mock matchMedia
 window.matchMedia = window.matchMedia || function() {
