@@ -1,6 +1,8 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import AlertDisplay from './AlertDisplay'; // Assuming the component is in the same folder
+import { MemoryRouter } from 'react-router-dom'; // Import MemoryRouter
+import AlertDisplay from './AlertDisplay';
+import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext'; // Import the context
 
 // Mock ALERT_LEVELS constant as it's used by the component
 const ALERT_LEVELS = {
@@ -8,13 +10,31 @@ const ALERT_LEVELS = {
   YELLOW: { text: 'YELLOW', colorClass: 'bg-yellow-500', detailsColorClass: 'border-yellow-700' },
   ORANGE: { text: 'ORANGE', colorClass: 'bg-orange-500', detailsColorClass: 'border-orange-700' },
   RED: { text: 'RED', colorClass: 'bg-red-500', detailsColorClass: 'border-red-700' },
-  // Add any other levels your component might use
+};
+
+// Helper function to render with providers
+const renderWithProviders = (ui, { providerProps, ...renderOptions } = {}) => {
+  return render(
+    <MemoryRouter>
+      <EarthquakeDataContext.Provider value={providerProps}>
+        {ui}
+      </EarthquakeDataContext.Provider>
+    </MemoryRouter>,
+    renderOptions
+  );
 };
 
 describe('AlertDisplay', () => {
+  const mockProviderProps = {
+    tsunamiTriggeringQuake: null,
+    activeAlertTriggeringQuakes: [],
+    // Add other context values if AlertDisplay starts using them
+  };
+
   it('renders null when no alert config and no tsunami warning', () => {
-    const { container } = render(
-      <AlertDisplay currentAlertConfig={null} hasRecentTsunamiWarning={false} ALERT_LEVELS={ALERT_LEVELS} />
+    const { container } = renderWithProviders(
+      <AlertDisplay currentAlertConfig={null} hasRecentTsunamiWarning={false} ALERT_LEVELS={ALERT_LEVELS} />,
+      { providerProps: mockProviderProps }
     );
     expect(container.firstChild).toBeNull();
   });
@@ -24,16 +44,29 @@ describe('AlertDisplay', () => {
       text: 'RED',
       description: 'Significant event ongoing.',
     };
-    render(<AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={false} ALERT_LEVELS={ALERT_LEVELS} />);
+    const providerPropsWithAlertQuake = {
+      ...mockProviderProps,
+      activeAlertTriggeringQuakes: [{ id: 'testquake1', properties: { detail: 'some/url/testquake1.geojson' } }],
+    };
+    renderWithProviders(
+      <AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={false} ALERT_LEVELS={ALERT_LEVELS} />,
+      { providerProps: providerPropsWithAlertQuake }
+    );
     expect(screen.getByText('Active USGS Alert: RED')).toBeInTheDocument();
     expect(screen.getByText('Significant event ongoing.')).toBeInTheDocument();
-    // Check for color class (optional, depends on how strict you want to be)
     const alertDiv = screen.getByText('Active USGS Alert: RED').parentElement;
     expect(alertDiv).toHaveClass(ALERT_LEVELS.RED.detailsColorClass);
   });
 
   it('renders tsunami warning message when hasRecentTsunamiWarning is true and no currentAlertConfig', () => {
-    render(<AlertDisplay currentAlertConfig={null} hasRecentTsunamiWarning={true} ALERT_LEVELS={ALERT_LEVELS} />);
+    const providerPropsWithTsunamiQuake = {
+      ...mockProviderProps,
+      tsunamiTriggeringQuake: { id: 'tsunamiquake1', properties: { detail: 'some/url/tsunamiquake1.geojson' } },
+    };
+    renderWithProviders(
+      <AlertDisplay currentAlertConfig={null} hasRecentTsunamiWarning={true} ALERT_LEVELS={ALERT_LEVELS} />,
+      { providerProps: providerPropsWithTsunamiQuake }
+    );
     expect(screen.getByText('Tsunami Information')).toBeInTheDocument();
     expect(screen.getByText('Recent quakes may indicate tsunami activity. Please check official channels for alerts.')).toBeInTheDocument();
     const warningDiv = screen.getByText('Tsunami Information').parentElement;
@@ -45,9 +78,17 @@ describe('AlertDisplay', () => {
       text: 'YELLOW',
       description: 'Minor event advisory.',
     };
-    render(<AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={true} ALERT_LEVELS={ALERT_LEVELS} />);
+    const providerPropsWithBoth = {
+      ...mockProviderProps,
+      activeAlertTriggeringQuakes: [{ id: 'testquake2', properties: { detail: 'some/url/testquake2.geojson' } }],
+      tsunamiTriggeringQuake: { id: 'tsunamiquake2', properties: { detail: 'some/url/tsunamiquake2.geojson' } },
+    };
+    renderWithProviders(
+      <AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={true} ALERT_LEVELS={ALERT_LEVELS} />,
+      { providerProps: providerPropsWithBoth }
+    );
     expect(screen.getByText('Active USGS Alert: YELLOW')).toBeInTheDocument();
-    expect(screen.queryByText('Tsunami Information')).toBeNull(); // Tsunami info should not be shown
+    expect(screen.queryByText('Tsunami Information')).toBeNull();
   });
 
   it('uses default color class if alert level text does not match ALERT_LEVELS keys', () => {
@@ -55,12 +96,13 @@ describe('AlertDisplay', () => {
       text: 'PURPLE', // Not in our mocked ALERT_LEVELS
       description: 'Unknown alert level.',
     };
-    render(<AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={false} ALERT_LEVELS={ALERT_LEVELS} />);
+    // No specific quake needed for this color test, but provider is still needed
+    renderWithProviders(
+      <AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={false} ALERT_LEVELS={ALERT_LEVELS} />,
+      { providerProps: mockProviderProps }
+    );
     expect(screen.getByText('Active USGS Alert: PURPLE')).toBeInTheDocument();
     const alertDiv = screen.getByText('Active USGS Alert: PURPLE').parentElement;
-    // Assuming a default class or lack of specific color class if not found
-    // The component uses: ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass
-    // If both are undefined, it will not have those specific classes. Let's test that it doesn't have a known one.
     expect(alertDiv).not.toHaveClass(ALERT_LEVELS.RED.detailsColorClass);
     expect(alertDiv).not.toHaveClass(ALERT_LEVELS.YELLOW.colorClass);
   });
