@@ -382,20 +382,19 @@ export async function handleClustersSitemapRequest(context) {
         const loc = `https://earthquakeslive.com/cluster/${escapeXml(key.name)}`;
         let lastmod = currentDate; // Fallback to current date
 
-        try {
-          const kvValueString = await CLUSTER_KV.get(key.name);
-          if (kvValueString) {
-            const kvValue = JSON.parse(kvValueString);
-            if (kvValue && kvValue.updatedAt) {
-              lastmod = kvValue.updatedAt;
-            } else {
-              console.warn(`[${sourceName}] Missing updatedAt for cluster key: ${key.name}. Falling back to currentDate.`);
-            }
-          } else {
-            console.warn(`[${sourceName}] No KV value found for cluster key: ${key.name} during sitemap generation. Falling back to currentDate.`);
+        if (key.metadata && typeof key.metadata.lastUpdated === 'number') {
+          lastmod = new Date(key.metadata.lastUpdated).toISOString();
+        } else {
+          // Log if metadata is present but lastUpdated is not a number, or if metadata itself is missing.
+          // This helps identify new entries that might be missing the metadata or older entries.
+          if (key.metadata && typeof key.metadata.lastUpdated !== 'number') {
+            console.warn(`[${sourceName}] lastUpdated field in metadata is not a number for key: ${key.name}. Value: ${JSON.stringify(key.metadata.lastUpdated)}. Using current date for sitemap.`);
+          } else if (!key.metadata) {
+            // This case means the KV entry itself has no metadata. Could be an older entry.
+            // console.log(`[${sourceName}] Metadata missing for key: ${key.name}. Using current date for sitemap. This might be an older entry.`);
           }
-        } catch (e) {
-          console.error(`[${sourceName}] Error parsing KV value for cluster key ${key.name}: ${e.message}. Falling back to currentDate.`, e);
+          // If key.metadata.lastUpdated is simply undefined (but key.metadata exists), it's implicitly handled by falling back to currentDate.
+          // No specific log for "undefined" `lastUpdated` if `metadata` object exists, to reduce noise for new entries not yet having this specific metadata.
         }
 
         clustersXml += `

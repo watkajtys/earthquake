@@ -20,7 +20,9 @@ export async function onRequest(context) {
 
       const { clusterId, earthquakeIds, strongestQuakeId } = clusterData;
       const dataToStore = JSON.stringify({ earthquakeIds, strongestQuakeId });
-      await env.CLUSTER_KV.put(clusterId, dataToStore);
+      await env.CLUSTER_KV.put(clusterId, dataToStore, {
+          metadata: { lastUpdated: Date.now() }
+      });
       return new Response(`Cluster definition for ${clusterId} registered successfully.`, { status: 201 });
     } catch (e) {
       if (e instanceof SyntaxError) {
@@ -49,7 +51,10 @@ export async function onRequest(context) {
       // but we stored as string.
       return new Response(storedData, {
         status: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=900' // 15 minutes
+        },
       });
     } catch (e) {
       console.error('Error processing GET request:', e);

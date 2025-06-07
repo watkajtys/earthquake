@@ -8,6 +8,9 @@ import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
 import { findActiveClusters } from '../utils/clusterUtils.js';
 import { CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES } from '../constants/appConstants.js';
 
+const clusterCache = new Map();
+const CACHE_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
 function calculateClusterTimeRange(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, clusterLength = 0) {
     if (earliestTime === Infinity || latestTime === -Infinity || !earliestTime || !latestTime) return 'Time N/A';
     const now = Date.now();
@@ -147,17 +150,29 @@ function ClusterDetailModalWrapper({
             if (!willLikelyUseMonthly && (isLoadingWeekly || isInitialAppLoad)) return;
 
             try {
-                const result = await fetchClusterDefinition(clusterId); // result includes { earthquakeIds, strongestQuakeId, updatedAt }
+                let resultFromApiOrCache = null;
+                const cachedEntry = clusterCache.get(clusterId);
 
-                if (result) {
-                    const { earthquakeIds, strongestQuakeId: defStrongestQuakeId, updatedAt: kvUpdatedAt } = result;
+                if (cachedEntry && (Date.now() - cachedEntry.timestamp < CACHE_DURATION_MS)) {
+                    resultFromApiOrCache = cachedEntry.data;
+                    // console.log(`Cluster ${clusterId}: Using cached definition.`); // For debugging
+                } else {
+                    resultFromApiOrCache = await fetchClusterDefinition(clusterId);
+                    if (resultFromApiOrCache) {
+                        clusterCache.set(clusterId, { data: resultFromApiOrCache, timestamp: Date.now() });
+                        // console.log(`Cluster ${clusterId}: Fetched and cached definition.`); // For debugging
+                    }
+                }
+
+                if (resultFromApiOrCache) {
+                    const { earthquakeIds, strongestQuakeId: defStrongestQuakeId, updatedAt: kvUpdatedAt } = resultFromApiOrCache;
                     const sourceQuakes = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0)
                                          ? allEarthquakes
                                          : earthquakesLast72Hours;
                     if (!sourceQuakes || sourceQuakes.length === 0) {
                         console.warn("Source quakes not available for reconstruction from worker def.");
                         setLoadingPhase('reconstruct_from_id_attempt');
-                        return;
+                        return; // Exit if sourceQuakes aren't ready
                     }
                     const foundQuakes = earthquakeIds.map(id => sourceQuakes.find(q => q.id === id)).filter(Boolean);
 
@@ -173,7 +188,7 @@ function ClusterDetailModalWrapper({
                         });
                         const strongestQuakeInList = foundQuakes.find(q => q.id === defStrongestQuakeId) || foundQuakes[0];
                         if (!strongestQuakeInList) {
-                             setLoadingPhase('reconstruct_from_id_attempt'); return;
+                             setLoadingPhase('reconstruct_from_id_attempt'); return; // Exit if strongest quake not found
                         }
                         const reconstructedClusterData = {
                             id: clusterId,
@@ -192,11 +207,14 @@ function ClusterDetailModalWrapper({
                         setClusterSeoProps(generateClusterSeoProps(reconstructedClusterData, clusterId));
                         setLoadingPhase('done');
                     }
-                } else {
+                } else { // This 'else' corresponds to resultFromApiOrCache being null (either not in cache and fetch failed, or fetch returned null)
                     setLoadingPhase('reconstruct_from_id_attempt');
                 }
             } catch (error) {
-                console.error(`Error fetching cluster definition ${clusterId} from worker:`, error);
+                console.error(`Error in fetchAndProcessClusterFromWorker for ${clusterId}:`, error);
+                // If fetchClusterDefinition failed, it would be caught here.
+                // If cache is used, this catch block is for errors in processing cached data (less likely)
+                // or if fetchClusterDefinition itself throws an error not handled by returning null.
                 setLoadingPhase('reconstruct_from_id_attempt');
             }
         }
