@@ -5,6 +5,7 @@ import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 import { calculateDistance } from '../utils/utils.js'; // isValidNumber import removed
+import regionalFaultsData from '../../assets/gem_active_faults_harmonized.json'; // Import fault line data
 // getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
 
 // Define REGIONAL_RADIUS_KM
@@ -399,6 +400,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         shakemapIntensityImageUrl={shakemapIntensityImageUrl}
                         regionalQuakes={regionalQuakes}
                         detailUrl={detailUrl}
+                        faultLineDataUrl={regionalFaultsData} // Pass fault line data
                         // isValidNumber is now imported by child
                         exhibitPanelClass={exhibitPanelClass}
                         exhibitTitleClass={exhibitTitleClass}

@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
+import regionalFaults from '../assets/gem_active_faults_harmonized.json'; // Import fault line data
 
 /**
  * Renders a mini map for a cluster of earthquakes.
@@ -128,6 +129,7 @@ const ClusterMiniMap = ({ cluster }) => {
     mainQuakeDetailUrl: null,                                   // No single detail URL for the entire cluster view.
                                                                 // Could potentially link to the latestQuake's detail if available.
     defaultZoom: 8,                                             // Default zoom for EarthquakeMap (used if not fitting bounds or single point).
+    faultLineDataUrl: regionalFaults,                           // Pass the imported regional faults data
   };
 
   // Render the EarthquakeMap with the prepared props, wrapped in a div to maintain fixed height.

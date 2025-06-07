@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import EarthquakeMap from '../EarthquakeMap';
 import { isValidNumber } from '../../utils/utils.js';
+// import regionalFaults from '../../assets/gem_active_faults_harmonized.json'; // Will be passed as prop
 
 function EarthquakeRegionalMapPanel({
     geometry,
@@ -9,7 +10,8 @@ function EarthquakeRegionalMapPanel({
     regionalQuakes,
     detailUrl,
     exhibitPanelClass,
-    exhibitTitleClass
+    exhibitTitleClass,
+    faultLineDataUrl // Added prop
 }) {
     console.log("--- [EarthquakeRegionalMapPanel] START ---");
     try {
@@ -78,6 +80,7 @@ function EarthquakeRegionalMapPanel({
         nearbyQuakes: regionalQuakes,
         mainQuakeDetailUrl: detailUrl,
         fitMapToBounds: false,
+        faultLineDataUrl: faultLineDataUrl, // Use the prop
         // defaultZoom is handled by EarthquakeMap's defaults
     };
 

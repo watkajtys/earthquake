@@ -100,6 +100,7 @@ const EarthquakeMap = ({
   mainQuakeDetailUrl = null,
   fitMapToBounds = false,
   defaultZoom = 8,
+  faultLineDataUrl = null, // New prop
 }) => {
   const mapRef = useRef(null);
   const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);
@@ -163,12 +164,27 @@ const EarthquakeMap = ({
     const loadTectonicPlates = async () => {
       setIsTectonicPlatesLoading(true);
       try {
-        const platesData = await import('../assets/TectonicPlateBoundaries.json');
+        let platesDataJson;
+        if (faultLineDataUrl) {
+          const response = await fetch(faultLineDataUrl);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          platesDataJson = await response.json();
+        } else {
+          // Fallback to default local file
+          const platesDataModule = await import('../assets/TectonicPlateBoundaries.json');
+          platesDataJson = platesDataModule.default;
+        }
         if (isMounted) {
-          setTectonicPlatesDataJson(platesData.default);
+          setTectonicPlatesDataJson(platesDataJson);
         }
       } catch (error) {
         console.error("Error loading tectonic plates data:", error);
+        if (isMounted) {
+          // Optionally set to null or some error state to prevent rendering GeoJSON with bad data
+          setTectonicPlatesDataJson(null);
+        }
       } finally {
         if (isMounted) {
           setIsTectonicPlatesLoading(false);
@@ -179,7 +195,7 @@ const EarthquakeMap = ({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [faultLineDataUrl]); // Added faultLineDataUrl as a dependency
 
   return (
     <MapContainer
