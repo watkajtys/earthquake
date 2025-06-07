@@ -79,3 +79,53 @@ export async function fetchClusterDefinition(clusterId) {
     throw error; // Re-throw network errors or errors from response.json()
   }
 }
+
+/**
+ * Fetches active earthquake clusters from the backend.
+ * @param {Array<object>} earthquakes - Array of earthquake objects.
+ * @param {number} maxDistanceKm - Maximum distance for clustering.
+ * @param {number} minQuakes - Minimum quakes to form a cluster.
+ * @returns {Promise<Array<Array<object>>>} An array of clusters.
+ * @throws {Error} If the request fails or the response is not ok.
+ */
+export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
+  if (!Array.isArray(earthquakes)) {
+    console.error("fetchActiveClusters: Invalid earthquakes array provided.");
+    throw new Error("Invalid earthquakes array");
+  }
+  if (typeof maxDistanceKm !== 'number' || maxDistanceKm <= 0) {
+    console.error("fetchActiveClusters: Invalid maxDistanceKm provided.");
+    throw new Error("Invalid maxDistanceKm");
+  }
+  if (typeof minQuakes !== 'number' || minQuakes <= 0) {
+    console.error("fetchActiveClusters: Invalid minQuakes provided.");
+    throw new Error("Invalid minQuakes");
+  }
+
+  try {
+    const response = await fetch('/api/calculate-clusters', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ earthquakes, maxDistanceKm, minQuakes }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      // console.log('Active clusters fetched successfully:', data);
+      return data;
+    } else {
+      const errorBody = await response.text();
+      console.error(
+        `Failed to fetch active clusters. Status: ${response.status}`,
+        errorBody
+      );
+      throw new Error(`Failed to fetch active clusters. Status: ${response.status}`);
+    }
+  } catch (error) {
+    console.error('Network error while fetching active clusters:', error);
+    throw error; // Re-throw network errors or errors from response.json()
+  }
+}
