@@ -423,16 +423,62 @@ function App() {
     // Effect to fetch active clusters from the API
     useEffect(() => {
         if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
-            fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
-                .then(clusters => {
-                    setCalculatedClusters(clusters);
-                })
-                .catch(error => {
-                    console.error("Error fetching active clusters:", error);
-                    setCalculatedClusters([]); // Set to empty array on error
-                });
+            const validEarthquakesForClustering = [];
+            const invalidCoordQuakesInfo = [];
+
+            earthquakesLast7Days.forEach(q => {
+                let isValid = false;
+                const coords = q.geometry?.coordinates; // Optional chaining for geometry
+
+                if (q.geometry && Array.isArray(coords)) {
+                    if ((coords.length === 2 || coords.length === 3) &&
+                        typeof coords[0] === 'number' &&
+                        typeof coords[1] === 'number') {
+                        if (coords.length === 3) {
+                            // If length is 3, the third element (depth) must also be a number
+                            if (typeof coords[2] === 'number') {
+                                isValid = true;
+                            }
+                        } else { // Length is 2, already validated lon/lat as numbers
+                            isValid = true;
+                        }
+                    }
+                }
+
+                if (isValid) {
+                    validEarthquakesForClustering.push(q);
+                } else {
+                    // Collect info for logging, even if q.id or q.geometry.coordinates is undefined
+                    invalidCoordQuakesInfo.push({
+                        id: q.id || 'Unknown ID',
+                        coords: q.geometry?.coordinates // Log current state of coordinates
+                    });
+                }
+            });
+
+            if (invalidCoordQuakesInfo.length > 0) {
+                console.warn(
+                    `[HomePage - Clustering] Filtered out ${invalidCoordQuakesInfo.length} earthquakes from clustering due to invalid geometry.coordinates. See details below:`,
+                    invalidCoordQuakesInfo
+                );
+            }
+
+            // Only proceed if there are valid earthquakes to cluster
+            if (validEarthquakesForClustering.length > 0) {
+                fetchActiveClusters(validEarthquakesForClustering, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
+                    .then(clusters => {
+                        setCalculatedClusters(clusters);
+                    })
+                    .catch(error => {
+                        console.error("Error fetching active clusters:", error);
+                        setCalculatedClusters([]); // Set to empty array on API error
+                    });
+            } else {
+                // earthquakesLast7Days was not empty, but after filtering, no valid quakes remain.
+                setCalculatedClusters([]);
+            }
         } else {
-            setCalculatedClusters([]); // Clear if no earthquake data
+            setCalculatedClusters([]); // Clear if no initial earthquake data
         }
     }, [earthquakesLast7Days]); // Dependencies: earthquakesLast7Days
 

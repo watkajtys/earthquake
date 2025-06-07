@@ -128,9 +128,25 @@ export async function onRequestPost(context) {
           headers: { 'Content-Type': 'application/json' },
         });
       }
-      if (!Array.isArray(quake.geometry.coordinates) || quake.geometry.coordinates.length !== 2 ||
-          typeof quake.geometry.coordinates[0] !== 'number' || typeof quake.geometry.coordinates[1] !== 'number') {
-        return new Response(JSON.stringify({ error: `Invalid earthquake element at index ${i} (id: ${quake.id}): missing or invalid geometry.coordinates` }), {
+
+      const coords = quake.geometry.coordinates;
+      let coordError = null;
+
+      if (!Array.isArray(coords)) {
+        coordError = "must be an array";
+      } else if (coords.length !== 2 && coords.length !== 3) {
+        coordError = "must have 2 or 3 elements (longitude, latitude, [depth])";
+      } else if (typeof coords[0] !== 'number' || typeof coords[1] !== 'number') {
+        coordError = "longitude (index 0) and latitude (index 1) must be numbers";
+      } else if (coords.length === 3 && typeof coords[2] !== 'number') {
+        // This makes the depth optional if 3 elements are provided, but if it exists, it must be a number.
+        // If depth is not critical or can be non-numeric, this check can be softened or removed.
+        // For now, enforcing number if 3rd element is present.
+        coordError = "depth (index 2) must be a number if present";
+      }
+
+      if (coordError) {
+        return new Response(JSON.stringify({ error: `Invalid earthquake element at index ${i} (id: ${quake.id}): geometry.coordinates ${coordError}` }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
         });

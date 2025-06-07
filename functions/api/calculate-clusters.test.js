@@ -4,10 +4,10 @@ import { onRequestPost } from './calculate-clusters';
 
 // Sample valid earthquake data
 const sampleEarthquakes = [
-  { id: 'eq1', properties: { mag: 5.0, time: 1678886400000 }, geometry: { coordinates: [-122.0, 37.0] } },
-  { id: 'eq2', properties: { mag: 4.5, time: 1678886500000 }, geometry: { coordinates: [-122.1, 37.1] } }, // ~15km away
-  { id: 'eq3', properties: { mag: 6.0, time: 1678886600000 }, geometry: { coordinates: [-125.0, 39.0] } }, // Far away
-  { id: 'eq4', properties: { mag: null, time: 1678886700000 }, geometry: { coordinates: [-122.05, 37.05] } }, // Near eq1 & eq2, null mag
+  { id: 'eq1', properties: { mag: 5.0, time: 1678886400000 }, geometry: { coordinates: [-122.0, 37.0, 5.0] } },
+  { id: 'eq2', properties: { mag: 4.5, time: 1678886500000 }, geometry: { coordinates: [-122.1, 37.1, 6.0] } }, // ~15km away
+  { id: 'eq3', properties: { mag: 6.0, time: 1678886600000 }, geometry: { coordinates: [-125.0, 39.0, 7.0] } }, // Far away
+  { id: 'eq4', properties: { mag: null, time: 1678886700000 }, geometry: { coordinates: [-122.05, 37.05, 8.0] } }, // Near eq1 & eq2, null mag
 ];
 
 const mockKvStore = {
@@ -216,36 +216,56 @@ describe('onRequestPost - /api/calculate-clusters', () => {
       expect(responseBody.error).toContain('missing or invalid geometry');
     });
 
-    it('should return 400 if an earthquake geometry.coordinates is missing', async () => {
-      context.request.json.mockResolvedValue(createInvalidPayload(0, { ...sampleEarthquakes[0], geometry: {} }));
+    it('should return 400 if an earthquake geometry.coordinates is missing (not an array)', async () => {
+      context.request.json.mockResolvedValue(createInvalidPayload(0, { ...sampleEarthquakes[0], geometry: {} })); // coordinates would be undefined
       const response = await onRequestPost(context);
       const responseBody = await response.json();
       expect(response.status).toBe(400);
-      expect(responseBody.error).toContain('missing or invalid geometry.coordinates');
+      expect(responseBody.error).toContain('geometry.coordinates must be an array');
     });
 
-    it('should return 400 if an earthquake geometry.coordinates is not an array of two numbers (case 1: not array)', async () => {
-      context.request.json.mockResolvedValue(createInvalidPayload(0, { ...sampleEarthquakes[0], geometry: { coordinates: "123,456" } }));
+    it('should return 400 if an earthquake geometry.coordinates is not an array', async () => {
+      context.request.json.mockResolvedValue(createInvalidPayload(0, { ...sampleEarthquakes[0], geometry: { coordinates: "not-an-array" } }));
       const response = await onRequestPost(context);
       const responseBody = await response.json();
       expect(response.status).toBe(400);
-      expect(responseBody.error).toContain('missing or invalid geometry.coordinates');
+      expect(responseBody.error).toContain('geometry.coordinates must be an array');
     });
 
-    it('should return 400 if an earthquake geometry.coordinates is not an array of two numbers (case 2: wrong length)', async () => {
-      context.request.json.mockResolvedValue(createInvalidPayload(0, { ...sampleEarthquakes[0], geometry: { coordinates: [1,2,3] } }));
-      const response = await onRequestPost(context);
-      const responseBody = await response.json();
-      expect(response.status).toBe(400);
-      expect(responseBody.error).toContain('missing or invalid geometry.coordinates');
-    });
+    // New specific tests for coordinate validation
+    const coordValidationTestCases = [
+      { name: 'valid length 2', coords: [-122.0, 37.0], expectError: false },
+      { name: 'valid length 3', coords: [-122.0, 37.0, 10.0], expectError: false },
+      { name: 'invalid length 1', coords: [-122.0], errorMessage: 'must have 2 or 3 elements' },
+      { name: 'invalid length 4', coords: [-122.0, 37.0, 10.0, 20.0], errorMessage: 'must have 2 or 3 elements' },
+      { name: 'invalid type for longitude (length 2)', coords: ['invalid', 37.0], errorMessage: 'longitude (index 0) and latitude (index 1) must be numbers' },
+      { name: 'invalid type for latitude (length 2)', coords: [-122.0, 'invalid'], errorMessage: 'longitude (index 0) and latitude (index 1) must be numbers' },
+      { name: 'invalid type for longitude (length 3)', coords: ['invalid', 37.0, 10.0], errorMessage: 'longitude (index 0) and latitude (index 1) must be numbers' },
+      { name: 'invalid type for latitude (length 3)', coords: [-122.0, 'invalid', 10.0], errorMessage: 'longitude (index 0) and latitude (index 1) must be numbers' },
+      { name: 'invalid type for depth (length 3)', coords: [-122.0, 37.0, 'invalid'], errorMessage: 'depth (index 2) must be a number if present' },
+    ];
 
-    it('should return 400 if an earthquake geometry.coordinates is not an array of two numbers (case 3: wrong type in array)', async () => {
-      context.request.json.mockResolvedValue(createInvalidPayload(0, { ...sampleEarthquakes[0], geometry: { coordinates: [1, "string"] } }));
-      const response = await onRequestPost(context);
-      const responseBody = await response.json();
-      expect(response.status).toBe(400);
-      expect(responseBody.error).toContain('missing or invalid geometry.coordinates');
+    coordValidationTestCases.forEach(tc => {
+      it(`should handle geometry.coordinates with ${tc.name}`, async () => {
+        const payload = createInvalidPayload(0, { ...sampleEarthquakes[0], geometry: { coordinates: tc.coords } });
+        context.request.json.mockResolvedValue(payload);
+        const response = await onRequestPost(context);
+
+        if (tc.expectError === false) {
+          // This test case expects success, but it's part of "Input Validation Failures"
+          // This setup is for checking specific errors. For valid cases, they are covered in "Valid Requests"
+          // However, to ensure this specific valid case passes through validation:
+           if (response.status === 400) { // if it did error
+             const body = await response.json();
+             throw new Error(`Expected valid coordinates ${JSON.stringify(tc.coords)} to pass, but got error: ${body.error}`);
+           }
+           expect(response.status).not.toBe(400); // Should not be 400
+        } else {
+          expect(response.status).toBe(400);
+          const responseBody = await response.json();
+          expect(responseBody.error).toContain(`geometry.coordinates ${tc.errorMessage}`);
+        }
+      });
     });
   });
 
