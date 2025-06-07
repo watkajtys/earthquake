@@ -24,43 +24,64 @@ async function handleClusterDefinitionRequest(context, url) {
   }
 
   let ttl_seconds = 6 * 60 * 60; // 6 hours (21600 seconds)
-  if (env.CLUSTER_DEFINITION_TTL_SECONDS) {
-    const parsed = parseInt(env.CLUSTER_DEFINITION_TTL_SECONDS, 10);
+  const envTtl = env.CLUSTER_DEFINITION_TTL_SECONDS;
+  if (envTtl) {
+    const parsed = parseInt(envTtl, 10);
     if (!isNaN(parsed) && parsed > 0) {
       ttl_seconds = parsed;
     } else {
-      console.warn(`Invalid CLUSTER_DEFINITION_TTL_SECONDS value: "${env.CLUSTER_DEFINITION_TTL_SECONDS}". Using default: ${ttl_seconds}s.`);
+      console.warn(`[${sourceName}] Invalid CLUSTER_DEFINITION_TTL_SECONDS value: "${envTtl}". Using default: ${ttl_seconds}s.`);
     }
   }
 
   if (request.method === "POST") {
     try {
-      const { clusterId, earthquakeIds, strongestQuakeId } = await request.json();
-      if (!clusterId || !earthquakeIds || !Array.isArray(earthquakeIds) || earthquakeIds.length === 0 || !strongestQuakeId) {
-        return jsonErrorResponse("Missing or invalid parameters for POST", 400, sourceName);
+      const payload = await request.json();
+      const { clusterId, earthquakeIds, strongestQuakeId } = payload;
+
+      // Enhanced Input Validation
+      if (!clusterId || typeof clusterId !== 'string' || clusterId.trim() === "") {
+        return jsonErrorResponse("Missing or invalid 'clusterId': must be a non-empty string.", 400, sourceName);
       }
+      if (!strongestQuakeId || typeof strongestQuakeId !== 'string' || strongestQuakeId.trim() === "") {
+        return jsonErrorResponse("Missing or invalid 'strongestQuakeId': must be a non-empty string.", 400, sourceName);
+      }
+      if (!earthquakeIds || !Array.isArray(earthquakeIds) || earthquakeIds.length === 0) {
+        return jsonErrorResponse("Missing or invalid 'earthquakeIds': must be a non-empty array.", 400, sourceName);
+      }
+      if (!earthquakeIds.every(id => typeof id === 'string' && id.trim() !== "")) {
+        return jsonErrorResponse("Invalid 'earthquakeIds': all elements must be non-empty strings.", 400, sourceName);
+      }
+
       const valueToStore = {
         earthquakeIds,
         strongestQuakeId,
         updatedAt: new Date().toISOString()
       };
       const kvValue = JSON.stringify(valueToStore);
-      await CLUSTER_KV.put(clusterId, kvValue, { expirationTtl: ttl_seconds });
+      await CLUSTER_KV.put(clusterId.trim(), kvValue, { expirationTtl: ttl_seconds });
+
       return new Response(JSON.stringify({ status: "success", message: "Cluster definition stored." }), {
         status: 201,
         headers: { "Content-Type": "application/json" },
       });
     } catch (e) {
-      console.error("Error processing POST for cluster definition:", e);
+      // Differentiate JSON parsing errors from other errors
+      if (e instanceof SyntaxError) {
+        return jsonErrorResponse("Invalid JSON payload.", 400, sourceName);
+      }
+      console.error(`[${sourceName}] Error processing POST request:`, e);
       return jsonErrorResponse(`Error processing request: ${e.message}`, 500, sourceName);
     }
   } else if (request.method === "GET") {
-    const clusterId = url.searchParams.get("id");
-    if (!clusterId) {
-      return jsonErrorResponse("Missing 'id' query parameter for GET", 400, sourceName);
+    const clusterIdQuery = url.searchParams.get("id");
+
+    if (!clusterIdQuery || typeof clusterIdQuery !== 'string' || clusterIdQuery.trim() === "") {
+      return jsonErrorResponse("Missing or invalid 'id' query parameter: must be a non-empty string.", 400, sourceName);
     }
+
     try {
-      const kvValue = await CLUSTER_KV.get(clusterId);
+      const kvValue = await CLUSTER_KV.get(clusterIdQuery.trim()); // Use trimmed ID
       if (kvValue === null) {
         return jsonErrorResponse("Cluster definition not found.", 404, sourceName);
       }
@@ -69,11 +90,22 @@ async function handleClusterDefinitionRequest(context, url) {
         headers: { "Content-Type": "application/json" },
       });
     } catch (e) {
-      console.error("Error processing GET for cluster definition:", e);
+      console.error(`[${sourceName}] Error processing GET request:`, e);
       return jsonErrorResponse(`Error processing request: ${e.message}`, 500, sourceName);
     }
   } else {
-    return jsonErrorResponse("Method not allowed", 405, sourceName);
+    // Directly construct Response for 405 to include Allow header
+    return new Response(JSON.stringify({
+      status: "error",
+      message: "Method not allowed. Allowed methods: GET, POST.",
+      source: sourceName,
+    }), {
+      status: 405,
+      headers: {
+        "Content-Type": "application/json",
+        "Allow": "GET, POST"
+      },
+    });
   }
 }
 
@@ -430,6 +462,9 @@ export async function handleClustersSitemapRequest(context) {
 
 
 // --- End Sitemap Handler Functions ---
+
+// Import the new handler
+import { onRequestGet as handleProcessedEarthquakeDataRequest } from './api/processed-earthquake-data.js';
 
 // Helper function to detect crawlers
 export function isCrawler(request) {
@@ -799,6 +834,19 @@ export async function onRequest(context) {
       return jsonErrorResponse("Missing apiUrl query parameter for proxy request", 400, "usgs-proxy-router");
     }
     return handleUsgsProxyRequest(context, apiUrl);
+  }
+
+  // --- Add New Route for Processed Data ---
+  else if (pathname === "/api/processed-earthquake-data") {
+    if (context.request.method === "GET") {
+        return handleProcessedEarthquakeDataRequest(context);
+    } else {
+        return new Response(
+            JSON.stringify({status: "error", message: "Method not allowed. Only GET is supported for this endpoint.", source: "processed-data-router"}), {
+            status: 405,
+            headers: { "Allow": "GET", "Content-Type": "application/json" },
+        });
+    }
   }
 
   // If it's not a crawler and not an API/Sitemap route,

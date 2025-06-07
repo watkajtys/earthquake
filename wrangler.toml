@@ -31,16 +31,23 @@ pages_build_output_dir = "./dist"
 #    with `wrangler pages dev`.
 # -----------------------------------------------------------------------------------------
 kv_namespaces = [
-  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
+  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" },
+  # New KV Namespace for Processed Earthquake Data
+  # IMPORTANT: User needs to create this namespace:
+  # wrangler kv:namespace create PROCESSED_DATA_KV
+  # wrangler kv:namespace create PROCESSED_DATA_KV_PREVIEW
+  # And update the IDs below.
+  { binding = "PROCESSED_DATA_KV", id = "REPLACE_WITH_PRODUCTION_PROCESSED_KV_ID", preview_id = "REPLACE_WITH_PREVIEW_PROCESSED_KV_ID" }
 ]
 
 # Example of other potential configurations (uncomment and adjust if needed):
 # [vars]
-# MY_VARIABLE = "production_value"
+# CLUSTER_DEFINITION_TTL_SECONDS = "21600" # 6 hours
+# WORKER_CACHE_DURATION_SECONDS = "600"   # 10 minutes for USGS proxy
+# PROCESSED_DATA_TTL_SECONDS = "300"      # 5 minutes for new processed data worker
 #
 # [env.preview.vars]
 # MY_VARIABLE = "preview_value"
-#
 # [env.dev.vars] # For 'wrangler pages dev'
 # MY_VARIABLE = "dev_value"
 
