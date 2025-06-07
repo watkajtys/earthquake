@@ -277,19 +277,19 @@ describe('onRequest (Main Router)', () => {
   // -- API: /api/cluster-definition --
   describe('/api/cluster-definition', () => {
     const clusterPath = '/api/cluster-definition';
-    const MOCK_API_KEY = 'test-secret-key';
 
-    // --- POST Request Tests (with API Key Auth) ---
+    // --- POST Request Tests (API Key Auth Removed) ---
     describe('POST requests', () => {
       const validClusterData = { clusterId: 'c1', earthquakeIds: ['q1', 'q2'], strongestQuakeId: 'q1' };
 
-      it('should store valid cluster definition in KV with correct API key', async () => {
+      it('should store valid cluster definition in KV', async () => {
         const request = new Request(`http://localhost${clusterPath}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+          headers: { 'Content-Type': 'application/json' }, // No X-API-Key
           body: JSON.stringify(validClusterData),
         });
-        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY });
+        // No CLUSTER_API_KEY in env
+        const context = createMockContext(request, {});
         context.env.CLUSTER_KV.put.mockResolvedValueOnce(undefined);
 
         const response = await onRequest(context);
@@ -313,14 +313,13 @@ describe('onRequest (Main Router)', () => {
         );
       });
 
-      it('should use CLUSTER_DEFINITION_TTL_SECONDS from env if valid (with API Key)', async () => {
+      it('should use CLUSTER_DEFINITION_TTL_SECONDS from env if valid', async () => {
         const request = new Request(`http://localhost${clusterPath}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(validClusterData),
         });
         const context = createMockContext(request, {
-          CLUSTER_API_KEY: MOCK_API_KEY,
           CLUSTER_DEFINITION_TTL_SECONDS: '3600'
         });
         await onRequest(context);
@@ -331,17 +330,16 @@ describe('onRequest (Main Router)', () => {
         );
       });
 
-      it('should use default TTL if CLUSTER_DEFINITION_TTL_SECONDS is invalid (with API Key)', async () => {
+      it('should use default TTL if CLUSTER_DEFINITION_TTL_SECONDS is invalid', async () => {
         const consoleWarnSpy = vi.spyOn(console, 'warn');
         const invalidTTLs = ['abc', '0', '-100'];
         for (const ttl of invalidTTLs) {
           const request = new Request(`http://localhost${clusterPath}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(validClusterData),
           });
           const context = createMockContext(request, {
-            CLUSTER_API_KEY: MOCK_API_KEY,
             CLUSTER_DEFINITION_TTL_SECONDS: ttl
           });
           await onRequest(context);
@@ -351,88 +349,47 @@ describe('onRequest (Main Router)', () => {
             { expirationTtl: 21600 } // Default TTL
           );
           expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Invalid CLUSTER_DEFINITION_TTL_SECONDS value: "${ttl}"`));
-          context.env.CLUSTER_KV.put.mockClear(); // Clear for next iteration
+          context.env.CLUSTER_KV.put.mockClear();
           consoleWarnSpy.mockClear();
         }
         consoleWarnSpy.mockRestore();
       });
 
-      it('should return 401 if X-API-Key header is missing', async () => {
+      it('should return 500 if CLUSTER_KV is not configured', async () => {
         const request = new Request(`http://localhost${clusterPath}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }, // No X-API-Key
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(validClusterData),
         });
-        // Server key IS configured
-        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY });
-        const response = await onRequest(context);
-        expect(response.status).toBe(401);
-        const json = await response.json();
-        expect(json.message).toBe("Missing API key.");
-      });
-
-      it('should return 403 if X-API-Key is incorrect', async () => {
-        const request = new Request(`http://localhost${clusterPath}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': 'wrong-key' },
-          body: JSON.stringify(validClusterData),
-        });
-        // Server key IS configured with the correct key
-        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY });
-        const response = await onRequest(context);
-        expect(response.status).toBe(403);
-        const json = await response.json();
-        expect(json.message).toBe("Invalid API key.");
-      });
-
-      it('should return 500 if CLUSTER_API_KEY is not configured on server', async () => {
-        const request = new Request(`http://localhost${clusterPath}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
-          body: JSON.stringify(validClusterData),
-        });
-        // Server key is NOT configured
-        const context = createMockContext(request, { CLUSTER_API_KEY: undefined });
-        const response = await onRequest(context);
-        expect(response.status).toBe(500);
-        const json = await response.json();
-        expect(json.message).toBe("API key not configured on server. Cannot process POST request.");
-      });
-
-      it('should return 500 if CLUSTER_KV is not configured (and API key is valid)', async () => {
-        const request = new Request(`http://localhost${clusterPath}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
-          body: JSON.stringify(validClusterData),
-        });
-        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY, CLUSTER_KV: undefined });
+        const context = createMockContext(request, { CLUSTER_KV: undefined });
         const response = await onRequest(context);
         expect(response.status).toBe(500);
         const json = await response.json();
         expect(json.message).toBe("KV store not configured");
       });
 
-      it('should return 500 if CLUSTER_KV.put throws an error (and API key is valid)', async () => {
+      it('should return 500 if CLUSTER_KV.put throws an error', async () => {
         const request = new Request(`http://localhost${clusterPath}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(validClusterData),
         });
-        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY });
+        const context = createMockContext(request, {}); // No API key in env
         context.env.CLUSTER_KV.put.mockRejectedValueOnce(new Error("KV Put Error"));
         const response = await onRequest(context);
         expect(response.status).toBe(500);
         const json = await response.json();
+        // The error message now comes from the direct catch block around KV operations
         expect(json.message).toContain("Error processing request: KV Put Error");
       });
 
-      it('should return 400 for invalid data (and API key is valid)', async () => {
+      it('should return 400 for invalid data', async () => {
         const request = new Request(`http://localhost${clusterPath}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': MOCK_API_KEY },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ clusterId: 'c1' }), // Missing fields
         });
-        const context = createMockContext(request, { CLUSTER_API_KEY: MOCK_API_KEY });
+        const context = createMockContext(request, {}); // No API key in env
         const response = await onRequest(context);
         expect(response.status).toBe(400);
         const json = await response.json();

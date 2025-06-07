@@ -40,27 +40,6 @@ async function handleClusterDefinitionRequest(context, url) {
   }
 
   if (request.method === "POST") {
-    // --- API Key Authentication ---
-    const providedApiKey = request.headers.get("X-API-Key");
-    const expectedApiKey = env.CLUSTER_API_KEY;
-
-    if (!expectedApiKey) {
-      console.error(`[${sourceName}] CRITICAL: CLUSTER_API_KEY is not configured on the server.`);
-      return jsonErrorResponse("API key not configured on server. Cannot process POST request.", 500, sourceName);
-    }
-
-    if (!providedApiKey) {
-      console.warn(`[${sourceName}] Missing X-API-Key header for POST request.`);
-      return jsonErrorResponse("Missing API key.", 401, sourceName);
-    }
-
-    // Direct string comparison (timing attacks are less of a concern for non-crypto secrets of typical API key length)
-    if (providedApiKey !== expectedApiKey) {
-      console.warn(`[${sourceName}] Invalid API key provided for POST request.`);
-      return jsonErrorResponse("Invalid API key.", 403, sourceName);
-    }
-    // --- End API Key Authentication ---
-
     try {
       const { clusterId, earthquakeIds, strongestQuakeId } = await request.json();
       if (!clusterId || !earthquakeIds || !Array.isArray(earthquakeIds) || earthquakeIds.length === 0 || !strongestQuakeId) {
