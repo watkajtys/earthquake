@@ -70,18 +70,28 @@ const createNearbyQuakeIcon = (magnitude, time) => {
 };
 
 /**
- * Determines the style for tectonic plate boundary lines on the map.
- * Color varies based on the boundary type (Convergent, Divergent, Transform).
- * @param {object} feature - The GeoJSON feature representing a tectonic plate boundary.
+ * Determines the style for fault lines on the map based on slip_type property.
+ * Color varies based on the slip type.
+ * @param {object} feature - The GeoJSON feature representing a fault line.
  * @returns {object} Leaflet path style options for the feature.
  */
-const getTectonicPlateStyle = (feature) => {
-  let color = 'rgba(255, 165, 0, 0.8)';
-  const type = feature?.properties?.Boundary_Type;
-  if (type === 'Convergent') color = 'rgba(220, 20, 60, 0.8)';
-  else if (type === 'Divergent') color = 'rgba(60, 179, 113, 0.8)';
-  else if (type === 'Transform') color = 'rgba(70, 130, 180, 0.8)';
-  return { color, weight: 1, opacity: 0.8 };
+const getFaultLineStyle = (feature) => {
+  const slipType = feature?.properties?.slip_type;
+  console.log('Processing slip_type:', slipType); // Added for debugging
+  let color = 'rgba(255, 165, 0, 0.8)'; // Default orange for other types
+
+  if (slipType === 'Reverse') {
+    color = 'rgba(220, 20, 60, 0.8)'; // Crimson for Reverse
+  } else if (slipType === 'Normal') {
+    color = 'rgba(60, 179, 113, 0.8)'; // Medium sea green for Normal
+  } else if (slipType === 'Dextral' || slipType === 'Sinistral') {
+    // Steel blue for Dextral and Sinistral (Treat as Transform)
+    color = 'rgba(70, 130, 180, 0.8)';
+  }
+  // It's good practice to also handle the case where feature or feature.properties is undefined
+  // For now, we assume valid GeoJSON structure as per previous checks.
+  console.log('Returning color:', color, 'for slip_type:', slipType); // Added for debugging
+  return { color, weight: 2, opacity: 0.8 }; // Adjusted weight for better visibility
 };
 
 /**
@@ -162,6 +172,7 @@ const EarthquakeMap = ({
   useEffect(() => {
     let isMounted = true;
     const loadTectonicPlates = async () => {
+      console.log('faultLineDataUrl prop:', faultLineDataUrl); // Added for debugging
       setIsTectonicPlatesLoading(true);
       try {
         let platesDataJson;
@@ -190,6 +201,7 @@ const EarthquakeMap = ({
         }
         if (isMounted) {
           setTectonicPlatesDataJson(platesDataJson);
+          console.log('Loaded fault data (platesDataJson):', platesDataJson); // Added for debugging
         }
       } catch (error) {
         console.error("Error loading tectonic plates data:", error);
@@ -276,7 +288,7 @@ const EarthquakeMap = ({
       })}
 
       {!isTectonicPlatesLoading && tectonicPlatesDataJson && (
-        <GeoJSON data={tectonicPlatesDataJson} style={getTectonicPlateStyle} />
+        <GeoJSON data={tectonicPlatesDataJson} style={getFaultLineStyle} />
       )}
     </MapContainer>
   );
