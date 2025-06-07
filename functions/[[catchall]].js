@@ -35,10 +35,40 @@ async function handleClusterDefinitionRequest(context, url) {
 
   if (request.method === "POST") {
     try {
-      const { clusterId, earthquakeIds, strongestQuakeId } = await request.json();
-      if (!clusterId || !earthquakeIds || !Array.isArray(earthquakeIds) || earthquakeIds.length === 0 || !strongestQuakeId) {
-        return jsonErrorResponse("Missing or invalid parameters for POST", 400, sourceName);
+      const body = await request.json();
+      const { clusterId, earthquakeIds, strongestQuakeId } = body;
+
+      // Validate clusterId
+      if (typeof clusterId !== 'string' || clusterId.trim() === "") {
+        return jsonErrorResponse("clusterId must be a non-empty string.", 400, sourceName);
       }
+      if (clusterId.length > 255) {
+        return jsonErrorResponse("clusterId exceeds maximum length of 255 characters.", 400, sourceName);
+      }
+
+      // Validate strongestQuakeId
+      if (typeof strongestQuakeId !== 'string' || strongestQuakeId.trim() === "") {
+        return jsonErrorResponse("strongestQuakeId must be a non-empty string.", 400, sourceName);
+      }
+      if (strongestQuakeId.length > 255) {
+        return jsonErrorResponse("strongestQuakeId exceeds maximum length of 255 characters.", 400, sourceName);
+      }
+
+      // Validate earthquakeIds
+      if (!Array.isArray(earthquakeIds)) {
+        return jsonErrorResponse("earthquakeIds must be an array.", 400, sourceName);
+      }
+      if (earthquakeIds.length === 0) { // Though the original check also covered this, making it explicit.
+        return jsonErrorResponse("earthquakeIds must not be empty.", 400, sourceName);
+      }
+      for (let i = 0; i < earthquakeIds.length; i++) {
+        const id = earthquakeIds[i];
+        if (typeof id !== 'string' || id.trim() === "") {
+          return jsonErrorResponse(`Invalid earthquakeId at index ${i}: must be a non-empty string.`, 400, sourceName);
+        }
+        // No max length specified for individual earthquakeIds in the requirement.
+      }
+
       const valueToStore = {
         earthquakeIds,
         strongestQuakeId,
@@ -56,9 +86,15 @@ async function handleClusterDefinitionRequest(context, url) {
     }
   } else if (request.method === "GET") {
     const clusterId = url.searchParams.get("id");
-    if (!clusterId) {
-      return jsonErrorResponse("Missing 'id' query parameter for GET", 400, sourceName);
+
+    // Validate clusterId (from 'id' query parameter)
+    if (typeof clusterId !== 'string' || clusterId.trim() === "") {
+      return jsonErrorResponse("Query parameter 'id' must be a non-empty string.", 400, sourceName);
     }
+    if (clusterId.length > 255) {
+      return jsonErrorResponse("Query parameter 'id' exceeds maximum length of 255 characters.", 400, sourceName);
+    }
+
     try {
       const kvValue = await CLUSTER_KV.get(clusterId);
       if (kvValue === null) {
@@ -83,6 +119,19 @@ async function handleUsgsProxyRequest(context, apiUrl) {
   const cache = caches.default;
 
   try {
+    // Validate apiUrl hostname
+    let parsedApiUrl;
+    try {
+      parsedApiUrl = new URL(apiUrl);
+    } catch (e) {
+      return jsonErrorResponse(`Invalid apiUrl format: ${e.message}`, 400, sourceName);
+    }
+
+    const hostname = parsedApiUrl.hostname;
+    if (hostname !== "earthquake.usgs.gov" && !hostname.endsWith(".usgs.gov")) {
+      return jsonErrorResponse("Proxying requests to this domain is not allowed.", 403, sourceName);
+    }
+
     const cachedResponse = await cache.match(cacheKey);
     if (cachedResponse) {
       console.log(`Cache hit for: ${apiUrl}`);

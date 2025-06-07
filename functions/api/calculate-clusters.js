@@ -95,6 +95,48 @@ export async function onRequestPost(context) {
       });
     }
 
+    // Detailed validation for earthquakes array elements
+    for (let i = 0; i < earthquakes.length; i++) {
+      const quake = earthquakes[i];
+      if (typeof quake !== 'object' || quake === null) {
+        return new Response(JSON.stringify({ error: `Invalid earthquake element at index ${i}: not an object` }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (typeof quake.id !== 'string' && typeof quake.id !== 'number') {
+        return new Response(JSON.stringify({ error: `Invalid earthquake element at index ${i}: missing or invalid id` }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (typeof quake.properties !== 'object' || quake.properties === null) {
+        return new Response(JSON.stringify({ error: `Invalid earthquake element at index ${i} (id: ${quake.id}): missing or invalid properties` }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (typeof quake.properties.mag !== 'number' && quake.properties.mag !== null) {
+        return new Response(JSON.stringify({ error: `Invalid earthquake element at index ${i} (id: ${quake.id}): missing or invalid properties.mag` }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (typeof quake.geometry !== 'object' || quake.geometry === null) {
+        return new Response(JSON.stringify({ error: `Invalid earthquake element at index ${i} (id: ${quake.id}): missing or invalid geometry` }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (!Array.isArray(quake.geometry.coordinates) || quake.geometry.coordinates.length !== 2 ||
+          typeof quake.geometry.coordinates[0] !== 'number' || typeof quake.geometry.coordinates[1] !== 'number') {
+        return new Response(JSON.stringify({ error: `Invalid earthquake element at index ${i} (id: ${quake.id}): missing or invalid geometry.coordinates` }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Generate a cache key
     const cacheKey = `clusters-${earthquakes.length}-${maxDistanceKm}-${minQuakes}`;
 
