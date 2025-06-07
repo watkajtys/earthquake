@@ -6,6 +6,7 @@ import InfoSnippet                                          from "./InfoSnippet.
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 import { calculateDistance } from '../utils/utils.js'; // isValidNumber import removed
 import regionalFaultsData from '../assets/gem_active_faults_harmonized.json'; // Import fault line data
+import { filterGeoJSONFeaturesByDistance } from '../../utils/geoUtils.js'; // Import the filter function
 // getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
 
 // Define REGIONAL_RADIUS_KM
@@ -338,6 +339,17 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
 
     // MOVED: InteractiveFaultDiagram component definition was here
 
+    const filteredRegionalFaults = useMemo(() => {
+      if (typeof mainQuakeLat === 'number' && typeof mainQuakeLon === 'number' && regionalFaultsData) {
+        return filterGeoJSONFeaturesByDistance(
+          regionalFaultsData,
+          { latitude: mainQuakeLat, longitude: mainQuakeLon },
+          REGIONAL_RADIUS_KM
+        );
+      }
+      return { type: 'FeatureCollection', features: [] }; // Default empty GeoJSON
+    }, [mainQuakeLat, mainQuakeLon, regionalFaultsData]); // REGIONAL_RADIUS_KM is a constant
+
     if (isLoading) return ( <div data-testid="loading-skeleton-container" className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-8 rounded-lg max-w-3xl w-full animate-pulse"><SkeletonText width="w-3/4" height="h-8 mb-6 mx-auto" /><SkeletonBlock height="h-40 mb-4" /><SkeletonBlock height="h-64" /></div></div> );
     if (error) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-red-600 mb-4">Error Loading Details</h3><p className="text-slate-700 mb-6">{error}</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div> );
     if (!detailData || !properties) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-slate-700 mb-4">Details Not Available</h3><p className="text-slate-600 mb-6">Could not retrieve or parse details.</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div> );
@@ -400,7 +412,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         shakemapIntensityImageUrl={shakemapIntensityImageUrl}
                         regionalQuakes={regionalQuakes}
                         detailUrl={detailUrl}
-                        faultLineDataUrl={regionalFaultsData} // Pass fault line data
+                        faultLineDataUrl={filteredRegionalFaults} // Pass filtered fault line data
                         // isValidNumber is now imported by child
                         exhibitPanelClass={exhibitPanelClass}
                         exhibitTitleClass={exhibitTitleClass}

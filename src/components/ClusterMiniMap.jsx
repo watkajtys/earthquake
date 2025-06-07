@@ -1,6 +1,9 @@
 import React, { memo } from 'react';
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 import regionalFaults from '../assets/gem_active_faults_harmonized.json'; // Import fault line data
+import { filterGeoJSONFeaturesByDistance } from '../utils/geoUtils.js'; // Import the filter function
+
+const REGIONAL_RADIUS_KM = 804.672; // 500 miles, consistent with EarthquakeDetailView
 
 /**
  * Renders a mini map for a cluster of earthquakes.
@@ -115,6 +118,16 @@ const ClusterMiniMap = ({ cluster }) => {
   // This prevents rendering the same quake twice if EarthquakeMap doesn't de-duplicate.
   const otherQuakes = originalQuakes.filter(quake => quake.id !== latestQuake.id);
 
+  // Section: Filter Fault Line Data
+  let filteredFaults = { type: 'FeatureCollection', features: [] };
+  if (avgLat !== null && avgLng !== null && regionalFaults) {
+    filteredFaults = filterGeoJSONFeaturesByDistance(
+      regionalFaults,
+      { latitude: avgLat, longitude: avgLng },
+      REGIONAL_RADIUS_KM
+    );
+  }
+
   // Section: Prepare Props for EarthquakeMap
   const mapProps = {
     mapCenterLatitude: avgLat,                                  // Center the map on the geographic average of the cluster.
@@ -129,7 +142,7 @@ const ClusterMiniMap = ({ cluster }) => {
     mainQuakeDetailUrl: null,                                   // No single detail URL for the entire cluster view.
                                                                 // Could potentially link to the latestQuake's detail if available.
     defaultZoom: 8,                                             // Default zoom for EarthquakeMap (used if not fitting bounds or single point).
-    faultLineDataUrl: regionalFaults,                           // Pass the imported regional faults data
+    faultLineDataUrl: filteredFaults,                           // Pass the filtered regional faults data
   };
 
   // Render the EarthquakeMap with the prepared props, wrapped in a div to maintain fixed height.
