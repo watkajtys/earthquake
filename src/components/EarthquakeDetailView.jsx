@@ -6,7 +6,7 @@ import InfoSnippet                                          from "./InfoSnippet.
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 import { calculateDistance } from '../utils/utils.js'; // isValidNumber import removed
 import regionalFaultsData from '../assets/gem_active_faults_harmonized.json'; // Import fault line data
-import { filterGeoJSONFeaturesByDistance } from '../../utils/geoUtils.js'; // Import the filter function
+import { filterGeoJSONFeaturesByDistance } from '../utils/geoUtils.js'; // Import the filter function
 // getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
 
 // Define REGIONAL_RADIUS_KM
