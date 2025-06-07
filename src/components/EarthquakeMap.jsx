@@ -166,15 +166,27 @@ const EarthquakeMap = ({
       try {
         let platesDataJson;
         if (faultLineDataUrl) {
-          const response = await fetch(faultLineDataUrl);
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+          if (typeof faultLineDataUrl === 'string') {
+            // It's a URL, fetch it
+            const response = await fetch(faultLineDataUrl);
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status} for URL: ${faultLineDataUrl}`);
+            }
+            platesDataJson = await response.json();
+          } else if (typeof faultLineDataUrl === 'object' && faultLineDataUrl !== null) {
+            // It's already a JS object (parsed JSON), use it directly
+            platesDataJson = faultLineDataUrl;
+          } else {
+            // Log a warning for unexpected type and fallback
+            console.warn(`faultLineDataUrl is of an unexpected type (${typeof faultLineDataUrl}) or is null. Falling back to default.`);
+            const platesDataModule = await import('../assets/TectonicPlateBoundaries.json');
+            platesDataJson = platesDataModule.default;
           }
-          platesDataJson = await response.json();
         } else {
-          // Fallback to default local file
+          // Fallback to default local file because faultLineDataUrl is null or undefined
+          console.log('faultLineDataUrl is not provided (null or undefined), using fallback TectonicPlateBoundaries.json');
           const platesDataModule = await import('../assets/TectonicPlateBoundaries.json');
-          platesDataJson = platesDataModule.default;
+          platesDataJson = platesDataModule.default; // .default is important for Vite JSON imports
         }
         if (isMounted) {
           setTectonicPlatesDataJson(platesDataJson);
