@@ -38,6 +38,23 @@ export const getMagnitudeColor = (magnitude) => {
     return '#B91C1C'; // red-700
 };
 
+/**
+ * Returns Tailwind CSS class strings for background and text color based on earthquake magnitude.
+ * @param {number | null | undefined} magnitude - The earthquake magnitude.
+ * @returns {string} Tailwind CSS class strings.
+ */
+export const getMagnitudeColorStyle = (magnitude) => {
+    if (magnitude === null || magnitude === undefined) return 'bg-slate-600 text-slate-100';
+    if (magnitude < 1.0) return 'bg-cyan-800 bg-opacity-50 text-cyan-100';
+    if (magnitude < 2.5) return 'bg-cyan-700 bg-opacity-50 text-cyan-100';
+    if (magnitude < 4.0) return 'bg-emerald-700 bg-opacity-50 text-emerald-100';
+    if (magnitude < 5.0) return 'bg-yellow-700 bg-opacity-50 text-yellow-100';
+    if (magnitude < 6.0) return 'bg-orange-700 bg-opacity-50 text-orange-100';
+    if (magnitude < 7.0) return 'bg-orange-800 bg-opacity-60 text-orange-50';
+    if (magnitude < 8.0) return 'bg-red-800 bg-opacity-60 text-red-50';
+    return 'bg-red-900 bg-opacity-70 text-red-50';
+};
+
 // Add other utility functions here as the app grows
 
 export const isValidNumber = (num) => {
