@@ -23,6 +23,7 @@ import SkeletonText from '../components/skeletons/SkeletonText';
 import SkeletonBlock from '../components/skeletons/SkeletonBlock';
 import SkeletonListItem from '../components/skeletons/SkeletonListItem';
 import SkeletonTableRow from '../components/skeletons/SkeletonTableRow';
+import AlertDisplay from '../components/AlertDisplay';
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // RegionalDistributionList will be lazy loaded
@@ -955,29 +956,28 @@ function App() {
                         )}
                         {activeSidebarView === 'overview_panel' && (
                             <>
-                            {currentAlertConfig && (
-                                <div
-                                    className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}
-                                    role="region"
-                                    aria-live="polite"
-                                    aria-labelledby="usgs-alert-title"
-                                >
-                                    <p id="usgs-alert-title" className="font-bold text-sm">Active USGS Alert: {currentAlertConfig.text}</p>
-                                    <p>{currentAlertConfig.description}</p>
-                                    {activeAlertTriggeringQuakes.length > 0 && (<Suspense fallback={<ChartLoadingFallback message="Loading alert quakes table..." />}><PaginatedEarthquakeTable title={`Alert Triggering Quakes (${currentAlertConfig.text})`} earthquakes={activeAlertTriggeringQuakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={3} periodName="alerting" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} SkeletonText={SkeletonText} SkeletonTableRow={SkeletonTableRow} /></Suspense> )}
-                                </div>
-                            )}
-                            {hasRecentTsunamiWarning && !currentAlertConfig && (
-                                <div
-                                    className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs"
-                                    role="region"
-                                    aria-live="polite"
-                                    aria-labelledby="tsunami-warning-title"
-                                >
-                                    <p id="tsunami-warning-title" className="font-bold">Tsunami Info</p>
-                                    <p>Recent quakes indicate potential tsunami activity. Check official channels.</p>
-                                </div>
-                            )}
+                            <AlertDisplay
+                                currentAlertConfig={currentAlertConfig}
+                                hasRecentTsunamiWarning={hasRecentTsunamiWarning}
+                                ALERT_LEVELS={ALERT_LEVELS}
+                            />
+                            {(currentAlertConfig && activeAlertTriggeringQuakes && activeAlertTriggeringQuakes.length > 0 && (
+                                <Suspense fallback={<ChartLoadingFallback message="Loading alert quakes table..." />}>
+                                    <PaginatedEarthquakeTable
+                                        title={`Alert Triggering Quakes (${currentAlertConfig.text})`}
+                                        earthquakes={activeAlertTriggeringQuakes}
+                                        isLoading={false} // Assuming data is loaded if activeAlertTriggeringQuakes is populated
+                                        onQuakeClick={handleQuakeClick}
+                                        itemsPerPage={3}
+                                        periodName="alerting"
+                                        getMagnitudeColorStyle={getMagnitudeColorStyle}
+                                        formatTimeAgo={formatTimeAgo}
+                                        formatDate={formatDate}
+                                        SkeletonText={SkeletonText} // Pass SkeletonText
+                                        SkeletonTableRow={SkeletonTableRow} // Pass SkeletonTableRow
+                                    />
+                                </Suspense>
+                            ))}
                             <TimeSinceLastMajorQuakeBanner
                                     // Props sourced from context are removed
                                 formatTimeDuration={formatTimeDuration}
