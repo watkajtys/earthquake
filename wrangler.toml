@@ -40,6 +40,12 @@ kv_namespaces = [
   { binding = "PROCESSED_DATA_KV", id = "REPLACE_WITH_PRODUCTION_PROCESSED_KV_ID", preview_id = "REPLACE_WITH_PREVIEW_PROCESSED_KV_ID" }
 ]
 
+[[d1_databases]]
+binding = "DB" # i.e. env.DB
+database_name = "earthquake_data"
+database_id = "REPLACE_WITH_PRODUCTION_D1_ID"
+preview_database_id = "REPLACE_WITH_PREVIEW_D1_ID"
+
 # Example of other potential configurations (uncomment and adjust if needed):
 # [vars]
 # CLUSTER_DEFINITION_TTL_SECONDS = "21600" # 6 hours

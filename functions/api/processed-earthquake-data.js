@@ -186,35 +186,50 @@ const calculateMagnitudeDistribution = (earthquakes) => {
 export async function onRequestGet(context) {
   const sourceName = "processed-earthquake-data-worker";
   const { request, env } = context;
-  const PROCESSED_DATA_KV = env.PROCESSED_DATA_KV;
+  const DB = env.DB; // Access D1 binding
+
+  // CLUSTER_KV is still used by other parts of the application or could be.
+  // PROCESSED_DATA_KV specific logic has been removed from this function.
+
+  if (!DB) {
+    console.warn(`[${sourceName}] D1 database binding (env.DB) not available. Data will not be cached in D1. Performance may be affected.`);
+  }
 
   const url = new URL(request.url);
   const requestedPeriod = url.searchParams.get("maxPeriod") || "30d";
   const validPeriods = ["24h", "7d", "30d"];
   const maxPeriod = validPeriods.includes(requestedPeriod) ? requestedPeriod : "30d";
-  const currentKvKey = getProcessedDataKvKey(maxPeriod);
+  const currentDataPeriodKey = getProcessedDataKvKey(maxPeriod); // Key used for D1 period column
+  const D1_CACHE_TTL_SECONDS = 300; // 5 minutes, effective TTL for D1 data freshness check
 
-  // 1. Check KV Cache first
-  if (PROCESSED_DATA_KV) {
+  // 1. Check D1 Cache first
+  if (DB) {
     try {
-      const cachedData = await PROCESSED_DATA_KV.get(currentKvKey);
-      if (cachedData) {
-        console.log(`[${sourceName}] Cache hit for processed data (maxPeriod: ${maxPeriod}).`);
-        return new Response(cachedData, {
-          headers: {
-            "Content-Type": "application/json",
-            "X-Cache-Status": "hit",
-            "Cache-Control": "public, max-age=60" // Add this line
-          },
-        });
+      const sql = `SELECT data, timestamp FROM processed_data WHERE period = ?1`;
+      const stmt = DB.prepare(sql).bind(currentDataPeriodKey);
+      const result = await stmt.first();
+
+      if (result && result.data && result.timestamp) {
+        const currentTimeSeconds = Math.floor(Date.now() / 1000);
+        if ((currentTimeSeconds - result.timestamp) < D1_CACHE_TTL_SECONDS) {
+          console.log(`[${sourceName}] D1 Cache hit for processed data (period: ${maxPeriod}).`);
+          return new Response(result.data, {
+            headers: {
+              "Content-Type": "application/json",
+              "X-Cache-Status": "hit-d1",
+              "Cache-Control": "public, max-age=60" // Client-side cache
+            },
+          });
+        } else {
+          console.log(`[${sourceName}] D1 Cache stale for period: ${maxPeriod}. Fetching fresh data.`);
+        }
+      } else {
+        console.log(`[${sourceName}] D1 Cache miss for period: ${maxPeriod}.`);
       }
-      console.log(`[${sourceName}] Cache miss for processed data (maxPeriod: ${maxPeriod}).`);
     } catch (e) {
-      console.error(`[${sourceName}] KV GET error for key ${currentKvKey}: ${e.message}`, e);
-      // Non-fatal, proceed to compute
+      console.error(`[${sourceName}] D1 SELECT error for period ${currentDataPeriodKey}: ${e.message}`, e);
+      // Non-fatal, proceed to compute and fetch fresh data
     }
-  } else {
-    console.warn(`[${sourceName}] PROCESSED_DATA_KV not configured. Skipping cache check.`);
   }
 
   // 2. Fetch data from USGS Proxy
@@ -425,32 +440,27 @@ export async function onRequestGet(context) {
 
     const responseBody = JSON.stringify(allProcessedData);
 
-    if (PROCESSED_DATA_KV) {
+    // Store in D1
+    if (DB) {
       try {
-        let kvTtl = 300;
-        if (env.PROCESSED_DATA_TTL_SECONDS) {
-          const parsedTtl = parseInt(env.PROCESSED_DATA_TTL_SECONDS, 10);
-          if (!isNaN(parsedTtl) && parsedTtl > 0) {
-            kvTtl = parsedTtl;
-          } else {
-            console.warn(`[${sourceName}] Invalid PROCESSED_DATA_TTL_SECONDS for key ${currentKvKey}. Using default ${kvTtl}s.`);
-          }
-        }
+        const currentTimestampSeconds = Math.floor(Date.now() / 1000);
+        const sql = `INSERT OR REPLACE INTO processed_data (period, data, timestamp) VALUES (?1, ?2, ?3)`;
+        const stmt = DB.prepare(sql).bind(currentDataPeriodKey, responseBody, currentTimestampSeconds);
         context.waitUntil(
-            PROCESSED_DATA_KV.put(currentKvKey, responseBody, { expirationTtl: kvTtl })
-                .then(() => console.log(`[${sourceName}] Successfully cached processed data for key ${currentKvKey} (TTL: ${kvTtl}s).`))
-                .catch(e => console.error(`[${sourceName}] KV PUT error for key ${currentKvKey}: ${e.message}`, e))
+          stmt.run()
+            .then(() => console.log(`[${sourceName}] Successfully stored processed data in D1 for period: ${currentDataPeriodKey}.`))
+            .catch(e => console.error(`[${sourceName}] D1 INSERT/REPLACE error for period ${currentDataPeriodKey}: ${e.message}`, e))
         );
       } catch (e) {
-        console.error(`[${sourceName}] Error initiating KV PUT for key ${currentKvKey}: ${e.message}`, e);
+        console.error(`[${sourceName}] Error initiating D1 WRITE for period ${currentDataPeriodKey}: ${e.message}`, e);
       }
     }
 
     return new Response(responseBody, {
       headers: {
         "Content-Type": "application/json",
-        "X-Cache-Status": "miss",
-        "Cache-Control": "public, max-age=60" // Add this line
+        "X-Cache-Status": "miss-d1", // Changed from "miss"
+        "Cache-Control": "public, max-age=60"
       },
     });
 
