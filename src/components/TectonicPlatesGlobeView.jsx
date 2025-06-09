@@ -1,7 +1,96 @@
 // src/components/TectonicPlatesGlobeView.jsx
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'; // Added useMemo
 import Globe from 'react-globe.gl';
 
+// --- Module Scope Constants and Validation Functions ---
+
+const RAW_MAJOR_PLATES_DATA = [
+  { lat: 0, lng: -150, name: 'Pacific Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: 45, lng: -100, name: 'North American Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: 50, lng: 50, name: 'Eurasian Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: 0, lng: 20, name: 'African Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: -80, lng: 0, name: 'Antarctic Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: -25, lng: 135, name: 'Australian Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: 10, lng: 77, name: 'Indian Plate', size: 0.7, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: -20, lng: -60, name: 'South American Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: -15, lng: -90, name: 'Nazca Plate', size: 0.7, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: 30, lng: 5, name: 'Arabian Plate', size: 0.6, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: 15, lng: -75, name: 'Caribbean Plate', size: 0.7, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: 5, lng: 128, name: 'Philippine Sea Plate', size: 0.6, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: 40, lng: -120, name: 'Juan de Fuca Plate', size: 0.5, color: 'rgba(255, 255, 255, 0.85)' },
+  { lat: -57, lng: -45, name: 'Scotia Plate', size: 0.6, color: 'rgba(255, 255, 255, 0.85)' },
+];
+
+const RAW_PLATE_MOVEMENT_ARROWS_DATA = [
+  { lat: 15, lng: -140, name: 'Pacific Plate Arrow', rotation: 315, htmlElementString: '➔' },
+  { lat: 50, lng: -90, name: 'North American Plate Arrow', rotation: 240, htmlElementString: '➔' },
+  { lat: 50, lng: 75, name: 'Eurasian Plate Arrow (East)', rotation: 90, htmlElementString: '➔' },
+  { lat: 10, lng: 30, name: 'African Plate Arrow', rotation: 45, htmlElementString: '➔' },
+  { lat: -20, lng: 125, name: 'Australian Plate Arrow', rotation: 45, htmlElementString: '➔' },
+  { lat: 20, lng: 77, name: 'Indian Plate Arrow', rotation: 45, htmlElementString: '➔' },
+  { lat: -15, lng: -50, name: 'South American Plate Arrow', rotation: 270, htmlElementString: '➔' },
+  { lat: -10, lng: -80, name: 'Nazca Plate Arrow', rotation: 75, htmlElementString: '➔' },
+  { lat: 25, lng: 48, name: 'Arabian Plate Arrow', rotation: 30, htmlElementString: '➔' },
+  { lat: 15, lng: -70, name: 'Caribbean Plate Arrow', rotation: 90, htmlElementString: '➔' },
+  { lat: 10, lng: 120, name: 'Philippine Sea Plate Arrow', rotation: 300, htmlElementString: '➔' },
+  { lat: 45, lng: -126, name: 'Juan de Fuca Plate Arrow', rotation: 65, htmlElementString: '➔' },
+  { lat: -57, lng: -40, name: 'Scotia Plate Arrow', rotation: 90, htmlElementString: '➔' },
+];
+
+const validatePlateLabelData = (plate) => {
+    if (!plate) {
+        console.warn("Filtering out undefined/null plate object for labels.");
+        return false;
+    }
+    if (typeof plate.lat !== 'number' || isNaN(plate.lat) || plate.lat < -90 || plate.lat > 90) {
+        console.warn(`Invalid 'lat' property for plate label '${plate.name || JSON.stringify(plate)}'. Latitude: ${plate.lat}`);
+        return false;
+    }
+    if (typeof plate.lng !== 'number' || isNaN(plate.lng) || plate.lng < -180 || plate.lng > 180) {
+        console.warn(`Invalid 'lng' property for plate label '${plate.name || JSON.stringify(plate)}'. Longitude: ${plate.lng}`);
+        return false;
+    }
+    if (typeof plate.name !== 'string' || plate.name.trim() === '') {
+        console.warn(`Invalid 'name' property for plate label: ${typeof plate.name !== 'string' || plate.name.trim() === '' ? JSON.stringify(plate) : plate.name}. Name: '${plate.name}'`);
+        return false;
+    }
+    if (typeof plate.size !== 'number' || isNaN(plate.size) || plate.size <= 0) {
+        console.warn(`Invalid 'size' property for plate label '${plate.name}'. Size: ${plate.size}`);
+        return false;
+    }
+    if (typeof plate.color !== 'string' || plate.color.trim() === '') {
+        console.warn(`Invalid 'color' property for plate label '${plate.name}'. Color: '${plate.color}'`);
+        return false;
+    }
+    return true;
+};
+
+const validatePlateArrowData = (arrow) => {
+    if (!arrow) {
+        console.warn("Filtering out undefined/null arrow object.");
+        return false;
+    }
+    if (typeof arrow.lat !== 'number' || isNaN(arrow.lat) || arrow.lat < -90 || arrow.lat > 90) {
+        console.warn(`Invalid 'lat' for arrow '${arrow.name || JSON.stringify(arrow)}'. Latitude: ${arrow.lat}`);
+        return false;
+    }
+    if (typeof arrow.lng !== 'number' || isNaN(arrow.lng) || arrow.lng < -180 || arrow.lng > 180) {
+        console.warn(`Invalid 'lng' for arrow '${arrow.name || JSON.stringify(arrow)}'. Longitude: ${arrow.lng}`);
+        return false;
+    }
+    if (typeof arrow.rotation !== 'number' || isNaN(arrow.rotation)) {
+        console.warn(`Invalid 'rotation' for arrow '${arrow.name || JSON.stringify(arrow)}'. Rotation: ${arrow.rotation}`);
+        return false;
+    }
+    if (typeof arrow.htmlElementString !== 'string' || arrow.htmlElementString.trim() === '') {
+        console.warn(`Invalid 'htmlElementString' for arrow '${arrow.name || JSON.stringify(arrow)}'. Content: ${arrow.htmlElementString}`);
+        return false;
+    }
+    return true;
+};
+
+
+// --- Component Definition ---
 const TectonicPlatesGlobeView = ({
                                   coastlineGeoJson,
                                   tectonicPlatesGeoJson,
@@ -14,70 +103,19 @@ const TectonicPlatesGlobeView = ({
                                   globeAutoRotateSpeed = 0.1
                               }) => {
 
-    const rawMajorPlatesData = [
-      { lat: 0, lng: -150, name: 'Pacific Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: 45, lng: -100, name: 'North American Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: 50, lng: 50, name: 'Eurasian Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: 0, lng: 20, name: 'African Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: -80, lng: 0, name: 'Antarctic Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: -25, lng: 135, name: 'Australian Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: 10, lng: 77, name: 'Indian Plate', size: 0.7, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: -20, lng: -60, name: 'South American Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: -15, lng: -90, name: 'Nazca Plate', size: 0.7, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: 30, lng: 5, name: 'Arabian Plate', size: 0.6, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: 15, lng: -75, name: 'Caribbean Plate', size: 0.7, color: 'rgba(255, 255, 255, 0.85)' }, // Corrected
-      { lat: 5, lng: 128, name: 'Philippine Sea Plate', size: 0.6, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: 40, lng: -120, name: 'Juan de Fuca Plate', size: 0.5, color: 'rgba(255, 255, 255, 0.85)' },
-      { lat: -57, lng: -45, name: 'Scotia Plate', size: 0.6, color: 'rgba(255, 255, 255, 0.85)' }, // Corrected
-    ];
+    const validMajorPlatesData = useMemo(() => {
+        return RAW_MAJOR_PLATES_DATA.filter(validatePlateLabelData);
+    }, []); // Empty dependency array as RAW_MAJOR_PLATES_DATA and validatePlateLabelData are stable (module scope)
 
-    // Validation function
-    const validatePlateData = (plate) => {
-        const isValid = plate &&
-               typeof plate.lat === 'number' && !isNaN(plate.lat) && plate.lat >= -90 && plate.lat <= 90 &&
-               typeof plate.lng === 'number' && !isNaN(plate.lng) && plate.lng >= -180 && plate.lng <= 180 &&
-               plate.name && typeof plate.name === 'string' &&
-               typeof plate.size === 'number' && !isNaN(plate.size) && plate.size > 0 &&
-               plate.color && typeof plate.color === 'string';
-        if (!isValid) {
-            console.warn("Filtering out invalid major plate data:", plate);
-        }
-        return isValid;
-    };
+    const validPlateMovementArrowsData = useMemo(() => {
+        return RAW_PLATE_MOVEMENT_ARROWS_DATA
+            .filter(validatePlateArrowData)
+            .map(arrow => ({
+                ...arrow, // Spread validated properties
+                htmlElement: `<span class="plate-arrow" style="transform: rotate(${arrow.rotation}deg); display:inline-block;">${arrow.htmlElementString}</span>`
+            }));
+    }, []); // Empty dependency array for similar reasons
 
-    const validMajorPlatesData = rawMajorPlatesData.filter(validatePlateData);
-
-    const rawPlateMovementArrowsData = [
-      { lat: 15, lng: -140, name: 'Pacific Plate Arrow', rotation: 315, htmlElementString: '➔' },
-      { lat: 50, lng: -90, name: 'North American Plate Arrow', rotation: 240, htmlElementString: '➔' },
-      { lat: 50, lng: 75, name: 'Eurasian Plate Arrow (East)', rotation: 90, htmlElementString: '➔' },
-      { lat: 10, lng: 30, name: 'African Plate Arrow', rotation: 45, htmlElementString: '➔' },
-      { lat: -20, lng: 125, name: 'Australian Plate Arrow', rotation: 45, htmlElementString: '➔' },
-      { lat: 20, lng: 77, name: 'Indian Plate Arrow', rotation: 45, htmlElementString: '➔' },
-      { lat: -15, lng: -50, name: 'South American Plate Arrow', rotation: 270, htmlElementString: '➔' },
-      { lat: -10, lng: -80, name: 'Nazca Plate Arrow', rotation: 75, htmlElementString: '➔' },
-      { lat: 25, lng: 48, name: 'Arabian Plate Arrow', rotation: 30, htmlElementString: '➔' },
-      { lat: 15, lng: -70, name: 'Caribbean Plate Arrow', rotation: 90, htmlElementString: '➔' }, // Arrow for Caribbean
-      { lat: 10, lng: 120, name: 'Philippine Sea Plate Arrow', rotation: 300, htmlElementString: '➔' },
-      { lat: 45, lng: -126, name: 'Juan de Fuca Plate Arrow', rotation: 65, htmlElementString: '➔' },
-      // Arrow for Scotia Plate - assuming an eastward movement for now
-      { lat: -57, lng: -40, name: 'Scotia Plate Arrow', rotation: 90, htmlElementString: '➔' },
-    ];
-
-    const validPlateMovementArrowsData = rawPlateMovementArrowsData.filter(arrow => {
-        const isValid = arrow &&
-               typeof arrow.lat === 'number' && !isNaN(arrow.lat) && arrow.lat >= -90 && arrow.lat <= 90 &&
-               typeof arrow.lng === 'number' && !isNaN(arrow.lng) && arrow.lng >= -180 && arrow.lng <= 180 &&
-               typeof arrow.rotation === 'number' && !isNaN(arrow.rotation) &&
-               arrow.htmlElementString && typeof arrow.htmlElementString === 'string';
-        if (!isValid) {
-            console.warn("Filtering out invalid plate movement arrow data:", arrow);
-        }
-        return isValid;
-    }).map(arrow => ({
-        ...arrow,
-        htmlElement: `<span class="plate-arrow" style="transform: rotate(${arrow.rotation}deg); display:inline-block;">${arrow.htmlElementString}</span>`
-    }));
 
     const globeRef = useRef();
     const containerRef = useRef(null);
@@ -247,7 +285,7 @@ const TectonicPlatesGlobeView = ({
         return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Globe...</div>;
     }
 
-    console.log("Debug: Final validMajorPlatesData being passed to Globe (Caribbean and Scotia corrected):", JSON.stringify(validMajorPlatesData, null, 2));
+    // console.log("Debug: Final validMajorPlatesData being passed to Globe (Caribbean and Scotia corrected):", JSON.stringify(validMajorPlatesData, null, 2));
 
     return (
         <div
