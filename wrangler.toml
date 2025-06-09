@@ -42,7 +42,7 @@ kv_namespaces = [
 
 [[d1_databases]]
 binding = "DB"
-database_name = "earthquake_data_prod"
+database_name = "earthquake_data_production"
 database_id = "25b7734a-8239-4aca-b359-af8bb33af982"
 
 # Example of other potential configurations (uncomment and adjust if needed):
