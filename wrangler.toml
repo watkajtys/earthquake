@@ -37,7 +37,7 @@ kv_namespaces = [
   # wrangler kv namespace create PROCESSED_DATA_KV
   # wrangler kv namespace create PROCESSED_DATA_KV_PREVIEW
   # And update the IDs below.
-  { binding = "PROCESSED_DATA_KV", id = "PROCESSED_DATA_KV_PRODUCTION", preview_id = "PROCESSED_DATA_KV_ID_PREVIEW" }
+  { binding = "PROCESSED_DATA_KV", id = "PROCESSED_DATA_KV_ID_PRODUCTION", preview_id = "PROCESSED_DATA_KV_ID_PREVIEW" }
 ]
 
 [[d1_databases]]
