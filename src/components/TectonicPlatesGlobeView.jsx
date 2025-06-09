@@ -196,7 +196,7 @@ const TectonicPlatesGlobeView = ({
         if (coastlineGeoJson?.type === "GeometryCollection" && Array.isArray(coastlineGeoJson.geometries)) {
             processedPaths = processedPaths.concat(
                 coastlineGeoJson.geometries
-                .filter(g => g && g.type === "LineString" && Array.isArray(g.coordinates) && g.coordinates.length > 1 && g.coordinates.every(coord => Array.isArray(coord) && coord.length >= 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number'))
+                .filter(g => g && g.type === "LineString" && Array.isArray(g.coordinates) && g.coordinates.length > 1 && g.coordinates.every(coord => Array.isArray(coord) && coord.length >= 2 && typeof coord[0] === 'number' && Number.isFinite(coord[0]) && coord[0] >= -180 && coord[0] <= 180 && typeof coord[1] === 'number' && Number.isFinite(coord[1]) && coord[1] >= -90 && coord[1] <= 90))
                 .map((g, i) => ({ id: `coastline-${i}`, coords: g.coordinates, color: 'rgb(208,208,214)', stroke: 0.25, label: 'Coastline', properties: { Boundary_Type: 'Coastline' } }))
             );
         } else if (coastlineGeoJson) {
@@ -205,7 +205,7 @@ const TectonicPlatesGlobeView = ({
         if (tectonicPlatesGeoJson?.type === "FeatureCollection" && Array.isArray(tectonicPlatesGeoJson.features)) {
             processedPaths = processedPaths.concat(
                 tectonicPlatesGeoJson.features
-                .filter(f => f && f.type === "Feature" && f.geometry?.type === "LineString" && Array.isArray(f.geometry.coordinates) && f.geometry.coordinates.length > 1 && f.geometry.coordinates.every(coord => Array.isArray(coord) && coord.length >= 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number'))
+                .filter(f => f && f.type === "Feature" && f.geometry?.type === "LineString" && Array.isArray(f.geometry.coordinates) && f.geometry.coordinates.length > 1 && f.geometry.coordinates.every(coord => Array.isArray(coord) && coord.length >= 2 && typeof coord[0] === 'number' && Number.isFinite(coord[0]) && coord[0] >= -180 && coord[0] <= 180 && typeof coord[1] === 'number' && Number.isFinite(coord[1]) && coord[1] >= -90 && coord[1] <= 90))
                 .map((f, i) => {
                     let color = 'rgba(0, 255, 255, 0.9)';
                     const type = f.properties?.Boundary_Type;
