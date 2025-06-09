@@ -56,6 +56,11 @@ const LearnPage = () => {
                                 Plate Tectonics and Earthquakes
                             </Link>
                         </li>
+                        <li>
+                            <Link to="/learn/why-earthquakes-happen" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                Why Do Earthquakes Happen? The Big Picture
+                            </Link>
+                        </li>
                     </ul>
                 </div>
                  {/* ... other content from /learn route ... */}

@@ -1,0 +1,110 @@
+.mantle-convection-container {
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #f0f8ff; /* Light AliceBlue background */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 10px; /* Added some margin */
+}
+
+.mantle-convection-title {
+  font-size: 1.4em;
+  margin-bottom: 15px;
+  color: #333;
+  text-align: center;
+}
+
+.mantle-animation-svg {
+  width: 500px;
+  height: 400px;
+  border: 1px solid #aaa; /* Slightly darker border for SVG area */
+  background-color: #ffffff; /* White background for the SVG content itself */
+}
+
+/* SVG Layer Styles */
+.inner-core {
+  fill: #fffacd; /* LemonChiffon (light yellow) */
+  stroke: #f0e68c; /* Khaki */
+  stroke-width: 1;
+}
+
+.outer-core {
+  fill: #ffcc66; /* Lighter Orange */
+  stroke: #ffa500; /* Orange */
+  stroke-width: 1;
+}
+
+.mantle {
+  fill: #e07a5f; /* Reddish-brown / Terracotta */
+  stroke: #d46a4d;
+  stroke-width: 1;
+}
+
+.crust {
+  fill: #8b4513; /* SaddleBrown (dark brown) */
+  stroke: #7a3c10;
+  stroke-width: 0.5;
+}
+
+/* SVG Label Styles */
+.layer-label {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  fill: #000000; /* Black text */
+  text-anchor: middle; /* Center text horizontally */
+  dominant-baseline: middle; /* Center text vertically if possible, or adjust y */
+  pointer-events: none; /* Labels should not interfere with mouse events on layers */
+}
+
+.inner-core-label {
+  font-weight: bold;
+}
+
+.outer-core-label {
+  /* fill: #333; */
+}
+
+.mantle-label {
+  fill: #fff; /* White text for better contrast on darker mantle */
+  font-weight: bold;
+}
+
+.crust-label {
+   font-size: 10px;
+   fill: #fff; /* White text for better contrast on dark crust */
+}
+
+/* Styles for future animation elements */
+.convection-cell-path { /* This class is not used for the invisible paths, but good for visible ones */
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.7); /* White arrows for convection */
+  stroke-width: 2;
+  stroke-dasharray: 4, 4; /* Dashed lines for paths */
+}
+
+/* .particle class is not strictly needed if using .hot-particle and .cool-particle directly */
+.hot-particle {
+  fill: orangered;
+  /* r attribute is set in SVG, but can be overridden here if needed, e.g. r: 5px; */
+  /* Adding a subtle stroke for definition against mantle */
+  stroke: #ffeda0; /* Light yellow stroke */
+  stroke-width: 0.5px;
+  opacity: 0.9;
+}
+
+.cool-particle {
+  fill: cornflowerblue;
+  /* r attribute is set in SVG */
+  stroke: #add8e6; /* Light blue stroke */
+  stroke-width: 0.5px;
+  opacity: 0.9;
+}
+
+.tectonic-plate {
+  fill: #A0522D; /* Sienna */
+  stroke: #5E2C04; /* Darker brown for border */
+  stroke-width: 1px;
+  opacity: 0.9;
+}

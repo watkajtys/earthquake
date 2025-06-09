@@ -1,0 +1,105 @@
+/* Basic styles for the learning page */
+.learn-page-container {
+  max-width: 900px;
+  margin: auto;
+  padding: 20px;
+  font-family: sans-serif;
+}
+
+h1, h2, h3 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+h1 {
+  font-size: 2em;
+  margin-bottom: 20px;
+}
+
+h2 {
+  font-size: 1.5em;
+  margin-top: 30px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 5px;
+}
+
+h3 {
+  font-size: 1.2em;
+  margin-top: 25px;
+  margin-bottom: 8px;
+  color: #555;
+}
+
+p {
+  line-height: 1.6;
+  margin-bottom: 15px;
+  color: #444;
+}
+
+blockquote {
+  margin-left: 20px;
+  padding-left: 15px;
+  border-left: 3px solid #ccc;
+  font-style: italic;
+  color: #666;
+  margin-bottom: 20px;
+  margin-top: 10px;
+}
+
+/* Styles for animation placeholders */
+#animation-drifting-continents-placeholder {
+  /* Background color removed to allow globe's own background to show */
+  /* Border and text styling removed as it now hosts the globe component */
+  min-height: 200px; /* Minimum height, actual height controlled by inline style in JSX for now */
+  margin-top: 20px;
+  margin-bottom: 20px;
+  width: 100%; /* Ensure it takes full width if not already */
+}
+
+.plate-arrow {
+  color: yellow; /* Or cyan, or another bright contrasting color */
+  font-size: 24px; /* Adjust as needed for visibility */
+  /* display: inline-block; and transform: rotate() are set in the inline style for each arrow in the JSX */
+  animation: pulse-scale-opacity 2s infinite ease-in-out;
+  text-shadow: 0 0 5px #000, 0 0 8px #000; /* Optional: adds a dark outline for better visibility on bright globe parts */
+  pointer-events: none; /* So they don't interfere with globe interaction */
+}
+
+/* Renamed animation to be more specific */
+@keyframes pulse-scale-opacity {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.95); /* Only scale and opacity handled by animation */
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05); /* Rotation is handled by inline style */
+  }
+  100% {
+    opacity: 0.6;
+    transform: scale(0.95); /* Rotation is handled by inline style */
+  }
+}
+
+#animation-stress-release-placeholder {
+  /* Styles removed as it now hosts the StickSlipAnimation component */
+  /* Retain margins if desired, or let the component manage its own spacing */
+  margin-top: 20px;
+  margin-bottom: 20px;
+  /* The StickSlipAnimation component will define its own appearance */
+  /* Ensure it doesn't have flex properties that might constrain the inner component */
+  display: block; /* Or remove display:flex if it was there */
+  width: 100%; /* Or ensure it allows child to define width */
+}
+
+#animation-mantle-convection-placeholder {
+  /* Styles removed as it now hosts the MantleConvectionAnimation component */
+  /* Retain margins if desired, or let the component manage its own spacing */
+  margin-top: 20px;
+  margin-bottom: 20px;
+  /* The MantleConvectionAnimation component will define its own appearance */
+  /* Ensure it allows child to define width and doesn't impose flex constraints */
+  display: block; /* Or remove display:flex if it was there */
+  width: 100%;
+}

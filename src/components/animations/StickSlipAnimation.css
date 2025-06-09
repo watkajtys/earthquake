@@ -1,0 +1,230 @@
+.stick-slip-container {
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stick-slip-title {
+  font-size: 1.4em;
+  margin-bottom: 15px;
+  color: #333;
+  text-align: center;
+}
+
+.animation-area {
+  width: 450px; /* Increased width to accommodate arrows and text */
+  height: 200px;
+  position: relative;
+  border: 1px solid #888; /* More visible border */
+  overflow: hidden;
+  background-color: #e0e0e0; /* Light gray background for contrast */
+}
+
+.plate {
+  width: 50%;
+  height: 100%;
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #555;
+  background-color: #D2B48C; /* Tan color */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.1em;
+  transition: transform 0.3s ease-out; /* For smooth slip */
+}
+
+.plate-a {
+  left: 0;
+  border-right: 2px dashed #cc0000; /* Darker Dashed red line for fault */
+}
+.plate-a.deforming {
+  transform-origin: bottom right; /* Deform from the fault line edge */
+  transform: skewX(-1.5deg); /* Subtle skew, adjust as needed */
+}
+.plate-a.slipped {
+  transform: translateX(-20px); /* Slip amount */
+}
+
+.plate-b {
+  left: 50%;
+  border-left: none; /* Plate A defines the fault line visually */
+}
+.plate-b.deforming {
+  transform-origin: bottom left; /* Deform from the fault line edge */
+  transform: skewX(1.5deg); /* Subtle skew, adjust as needed */
+}
+.plate-b.slipped {
+  transform: translateX(20px); /* Slip amount */
+}
+
+.wave-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none; /* Waves are visual only */
+  z-index: 5; /* Above plates but below fault line label if it needs to be on top */
+}
+
+.wave {
+  position: absolute;
+  left: 50%; /* Centered on the fault line */
+  top: 50%;
+  border: 2px solid rgba(255, 69, 0, 0.8); /* Orange-Red, adjust as needed */
+  border-radius: 50%;
+  width: 20px; /* Initial size */
+  height: 20px;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.1);
+  /* animation-fill-mode: forwards; is set by .radiating */
+}
+
+.wave.radiating {
+  animation: radiate-wave 2s ease-out forwards;
+}
+
+.wave-2.radiating {
+  animation-delay: 0.4s;
+}
+
+.wave-3.radiating {
+  animation-delay: 0.8s;
+}
+
+@keyframes radiate-wave {
+  0% {
+    opacity: 0.8; /* Start more visible */
+    transform: translate(-50%, -50%) scale(0.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(25); /* Adjusted scale based on area size approx 450px */
+  }
+}
+
+
+/* Glowing effect for plates when stressing */
+.plate.glowing {
+  /* Using box-shadow for glow; could also use a pseudo-element overlay */
+  animation: glow-animation 1.5s infinite alternate ease-in-out;
+}
+
+@keyframes glow-animation {
+  from {
+    box-shadow: 0 0 5px #ff4500, 0 0 10px #ff4500, inset 0 0 3px #ff8c00;
+  }
+  to {
+    box-shadow: 0 0 15px #ff4500, 0 0 25px #ff4500, inset 0 0 5px #ffa500;
+  }
+}
+
+
+.arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 2.5em; /* Larger arrows */
+  color: #333;
+  padding: 5px;
+}
+
+/* Arrow for Plate A (left plate), pushing it left */
+.arrow-a {
+  left: 5px; /* Position outside Plate A, to its left */
+}
+.arrow-a span {
+   display: inline-block;
+}
+/* Arrow animation when stressing */
+.state-stressing .arrow-a span {
+  animation: push-arrow-left 0.4s infinite alternate ease-in-out;
+}
+
+/* Arrow for Plate B (right plate), pushing it right */
+.arrow-b {
+  right: 5px; /* Position outside Plate B, to its right */
+}
+.arrow-b span {
+  display: inline-block;
+}
+.state-stressing .arrow-b span {
+  animation: push-arrow-right 0.4s infinite alternate ease-in-out;
+}
+
+@keyframes push-arrow-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-4px); }
+}
+
+@keyframes push-arrow-right {
+  from { transform: translateX(0); }
+  to { transform: translateX(4px); }
+}
+
+.fault-line-label {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0,0,0,0.6);
+  color: white;
+  padding: 2px 6px;
+  font-size: 0.8em;
+  border-radius: 3px;
+  z-index: 10;
+}
+
+.stress-meter {
+  margin-top: 15px;
+  display: flex;
+  align-items: center;
+  width: 80%;
+}
+
+.stress-label {
+  font-size: 1em;
+  margin-right: 10px;
+}
+
+.stress-bar-container {
+  flex-grow: 1;
+  height: 20px;
+  background-color: #e0e0e0;
+  border: 1px solid #bbb;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.stress-bar {
+  width: 0%; /* Starts empty */
+  height: 100%;
+  background-color: #ff4500; /* Orange-red */
+  transition: width 0.2s linear; /* Smooth stress buildup */
+}
+
+.controls {
+  margin-top: 15px;
+}
+
+#stick-slip-button {
+  padding: 10px 15px;
+  font-size: 1em;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#stick-slip-button:hover {
+  background-color: #0056b3;
+}
