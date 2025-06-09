@@ -37,14 +37,14 @@ kv_namespaces = [
   # wrangler kv namespace create PROCESSED_DATA_KV
   # wrangler kv namespace create PROCESSED_DATA_KV_PREVIEW
   # And update the IDs below.
-  { binding = "PROCESSED_DATA_KV", id = "PROCESSED_DATA_KV_ID_PRODUCTION", preview_id = "PROCESSED_DATA_KV_ID_PREVIEW" }
+  { binding = "PROCESSED_DATA_KV", id = "843ec534f4eb4051835df746538a7fb6", preview_id = "56cac0d955fb4dc3bb2081721ff66933" }
 ]
 
 [[d1_databases]]
 binding = "DB" # i.e. env.DB
 database_name = "earthquake_data"
 database_id = "PRODUCTION_DB_ID"
-preview_database_id = "PREVIEW_DB_ID"
+preview_database_id = "270f5d3b-1c15-43cf-9ee9-bb3fcf4a01ec"
 
 # Example of other potential configurations (uncomment and adjust if needed):
 # [vars]
