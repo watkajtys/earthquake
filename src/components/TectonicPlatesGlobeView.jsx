@@ -34,7 +34,8 @@ const TectonicPlatesGlobeView = ({
                                   globeAutoRotateSpeed = 0.1
                               }) => {
 
-    const majorPlatesData = [
+    // 1. Fortify majorPlatesData
+    const rawMajorPlatesData = [
       { lat: 0, lng: -150, name: 'Pacific Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
       { lat: 45, lng: -100, name: 'North American Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
       { lat: 50, lng: 50, name: 'Eurasian Plate', size: 0.8, color: 'rgba(255, 255, 255, 0.85)' },
@@ -70,6 +71,50 @@ const TectonicPlatesGlobeView = ({
       // Scotia plate has complex movement, often shown as rotating or transform.
       // { lat: -57, lng: -40, name: 'Scotia Plate Arrow', rotation: 90, htmlElement: '<span class="plate-arrow" style="transform: rotate(90deg); display:inline-block;">➔</span>' }, // E
     ];
+
+    const validMajorPlatesData = rawMajorPlatesData.filter(plate => {
+        const isValid = typeof plate.lat === 'number' && !isNaN(plate.lat) && plate.lat >= -90 && plate.lat <= 90 &&
+               typeof plate.lng === 'number' && !isNaN(plate.lng) && plate.lng >= -180 && plate.lng <= 180 &&
+               plate.name && typeof plate.name === 'string' &&
+               typeof plate.size === 'number' && !isNaN(plate.size) &&
+               plate.color && typeof plate.color === 'string';
+        if (!isValid) {
+            console.warn("Filtering out invalid major plate data:", plate);
+        }
+        return isValid;
+    });
+
+    // 2. Fortify plateMovementArrowsData
+    const rawPlateMovementArrowsData = [
+      { lat: 15, lng: -140, name: 'Pacific Plate Arrow', rotation: 315, htmlElementString: '➔' }, // NW
+      { lat: 50, lng: -90, name: 'North American Plate Arrow', rotation: 240, htmlElementString: '➔' }, // SW (generalized)
+      { lat: 50, lng: 75, name: 'Eurasian Plate Arrow (East)', rotation: 90, htmlElementString: '➔' }, // E
+      { lat: 10, lng: 30, name: 'African Plate Arrow', rotation: 45, htmlElementString: '➔' }, // NE
+      { lat: -20, lng: 125, name: 'Australian Plate Arrow', rotation: 45, htmlElementString: '➔' }, // NE
+      { lat: 20, lng: 77, name: 'Indian Plate Arrow', rotation: 45, htmlElementString: '➔' }, // NE
+      { lat: -15, lng: -50, name: 'South American Plate Arrow', rotation: 270, htmlElementString: '➔' }, // W
+      { lat: -10, lng: -80, name: 'Nazca Plate Arrow', rotation: 75, htmlElementString: '➔' }, // ENE
+      { lat: 25, lng: 48, name: 'Arabian Plate Arrow', rotation: 30, htmlElementString: '➔' }, // NNE
+      { lat: 15, lng: -70, name: 'Caribbean Plate Arrow', rotation: 90, htmlElementString: '➔' }, // E
+      { lat: 10, lng: 120, name: 'Philippine Sea Plate Arrow', rotation: 300, htmlElementString: '➔' }, // NW
+      { lat: 45, lng: -126, name: 'Juan de Fuca Plate Arrow', rotation: 65, htmlElementString: '➔' }, // ENE (subducting under N.America)
+    ];
+
+    const validPlateMovementArrowsData = rawPlateMovementArrowsData.filter(arrow => {
+        const isValid = typeof arrow.lat === 'number' && !isNaN(arrow.lat) && arrow.lat >= -90 && arrow.lat <= 90 &&
+               typeof arrow.lng === 'number' && !isNaN(arrow.lng) && arrow.lng >= -180 && arrow.lng <= 180 &&
+               typeof arrow.rotation === 'number' && !isNaN(arrow.rotation) &&
+               arrow.htmlElementString && typeof arrow.htmlElementString === 'string';
+        if (!isValid) {
+            console.warn("Filtering out invalid plate movement arrow data:", arrow);
+        }
+        return isValid;
+    }).map(arrow => ({
+        ...arrow,
+        // Ensure the htmlElement is correctly formatted with the rotation
+        htmlElement: `<span class="plate-arrow" style="transform: rotate(${arrow.rotation}deg); display:inline-block;">${arrow.htmlElementString}</span>`
+    }));
+
 
     // Removed: useEarthquakeDataState hook
 
@@ -169,30 +214,52 @@ const TectonicPlatesGlobeView = ({
 
     useEffect(() => {
         let processedPaths = [];
+        // 3. Fortify pathsData generation for coastlines
         if (coastlineGeoJson?.type === "GeometryCollection" && Array.isArray(coastlineGeoJson.geometries)) {
-            processedPaths = processedPaths.concat(coastlineGeoJson.geometries
-                .filter(g => g.type === "LineString" && Array.isArray(g.coordinates))
-                .map((g, i) => ({ id: `coastline-${i}`, coords: g.coordinates, color: 'rgb(208,208,214)', stroke: 0.25, label: 'Coastline', properties: { Boundary_Type: 'Coastline' } })));
+            processedPaths = processedPaths.concat(
+                coastlineGeoJson.geometries
+                .filter(g =>
+                    g.type === "LineString" &&
+                    Array.isArray(g.coordinates) &&
+                    g.coordinates.length > 1 &&
+                    g.coordinates.every(coord => Array.isArray(coord) && coord.length >= 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number')
+                )
+                .map((g, i) => ({ id: `coastline-${i}`, coords: g.coordinates, color: 'rgb(208,208,214)', stroke: 0.25, label: 'Coastline', properties: { Boundary_Type: 'Coastline' } }))
+            );
+        } else if (coastlineGeoJson) {
+            console.warn("Coastline GeoJSON is not in the expected GeometryCollection format or is invalid:", coastlineGeoJson);
         }
+
+        // 3. Fortify pathsData generation for tectonic plates
         if (tectonicPlatesGeoJson?.type === "FeatureCollection" && Array.isArray(tectonicPlatesGeoJson.features)) {
-            processedPaths = processedPaths.concat(tectonicPlatesGeoJson.features
-                .filter(f => f.type === "Feature" && f.geometry?.type === "LineString" && Array.isArray(f.geometry.coordinates))
+            processedPaths = processedPaths.concat(
+                tectonicPlatesGeoJson.features
+                .filter(f =>
+                    f.type === "Feature" &&
+                    f.geometry?.type === "LineString" &&
+                    Array.isArray(f.geometry.coordinates) &&
+                    f.geometry.coordinates.length > 1 &&
+                    f.geometry.coordinates.every(coord => Array.isArray(coord) && coord.length >= 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number')
+                )
                 .map((f, i) => {
-                    // Default color for tectonic plates, can be customized later for "glowing" effect
-                    let color = 'rgba(0, 255, 255, 0.9)'; // Bright cyan for glowing effect
+                    let color = 'rgba(0, 255, 255, 0.9)'; // Bright cyan
                     const type = f.properties?.Boundary_Type;
-                    // Example of varying glowing colors by type:
-                    // if (type === 'Convergent') color = 'rgba(255, 0, 0, 0.9)'; // Glowing Red
-                    // else if (type === 'Divergent') color = 'rgba(0, 255, 0, 0.9)'; // Glowing Green
-                    // else if (type === 'Transform') color = 'rgba(255, 165, 0, 0.9)'; // Glowing Orange
                     return { id: `plate-${f.properties?.OBJECTID || i}`, coords: f.geometry.coordinates, color, stroke: 1.8, label: `Plate Boundary: ${type || 'Unknown'}`, properties: f.properties };
-                }));
+                })
+            );
+        } else if (tectonicPlatesGeoJson) {
+            console.warn("Tectonic Plates GeoJSON is not in the expected FeatureCollection format or is invalid:", tectonicPlatesGeoJson);
         }
+
         setPaths(processedPaths);
     }, [coastlineGeoJson, tectonicPlatesGeoJson]);
 
+    // 4. Review Globe Dimensions Effect (Check existing logic)
     useEffect(() => {
-        if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {
+        // This effect for pointOfView already depends on globeDimensions.width and .height.
+        // It also checks globeRef.current.pointOfView, implicitly checking globeRef.current.
+        // Adding explicit non-zero checks for width/height for robustness.
+        if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.width > 0 && globeDimensions.height && globeDimensions.height > 0) {
             const targetLatitude = (typeof defaultFocusLat === 'number' && !isNaN(defaultFocusLat)) ? defaultFocusLat : 20;
             const targetLongitude = (typeof defaultFocusLng === 'number' && !isNaN(defaultFocusLng)) ? defaultFocusLng : 0;
             globeRef.current.pointOfView({ lat: targetLatitude, lng: targetLongitude, altitude: defaultFocusAltitude }, 0);
@@ -314,7 +381,7 @@ const TectonicPlatesGlobeView = ({
 
                     // ringsData removed
 
-                    labelsData={majorPlatesData}
+                    labelsData={validMajorPlatesData}
                     labelLat="lat"
                     labelLng="lng"
                     labelText="name"
@@ -324,7 +391,7 @@ const TectonicPlatesGlobeView = ({
                     labelResolution={2}
                     labelsTransitionDuration={500}
 
-                    htmlElementsData={plateMovementArrowsData}
+                    htmlElementsData={validPlateMovementArrowsData}
                     htmlLat="lat"
                     htmlLng="lng"
                     htmlElement="htmlElement"

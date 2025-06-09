@@ -17,16 +17,26 @@ const MantleConvectionAnimation = () => {
 
 
   return (
-    <div className="mantle-convection-container">
-      <h3 className="mantle-convection-title">Mantle Convection Engine (Static SVG)</h3>
+    // Container styling moved to WhyEarthquakesHappenPage.jsx's animationContainerStyle
+    // For direct application if this component is used elsewhere:
+    // className={`bg-slate-800 rounded-lg p-4 border border-slate-700 text-slate-300`}
+    <div className="mantle-convection-animation-wrapper">
+      <h3 className="text-lg font-semibold text-indigo-400 mb-4 text-center">Mantle Convection Engine</h3>
       <svg
         width={svgWidth}
         height={svgHeight}
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        className="mantle-animation-svg"
+        className="mantle-animation-svg bg-slate-700 border border-slate-600 rounded mx-auto block"
       >
         <defs>
-          {/* Could add gradients or patterns here later */}
+          {/* SVG filter for a slight glow or depth, optional */ }
+          <filter id="inner-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
         </defs>
 
         {/* Mantle */}

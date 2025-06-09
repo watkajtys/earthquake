@@ -108,43 +108,51 @@ const StickSlipAnimation = () => {
   // else if (stressLevel > 66) glowClass = 'stress-glow-high';
 
   return (
-    <div className={`stick-slip-container state-${animationState}`}>
-      <h3 className="stick-slip-title">The Stick-Slip Cycle</h3>
-      <div className="animation-area">
+    // Container styling moved to WhyEarthquakesHappenPage.jsx's animationContainerStyle
+    // For direct application if this component is used elsewhere:
+    // className={`bg-slate-800 rounded-lg p-4 border border-slate-700 text-slate-300 state-${animationState}`}
+    <div className={`stick-slip-animation-wrapper state-${animationState}`}>
+      <h3 className="text-lg font-semibold text-indigo-400 mb-4 text-center">The Stick-Slip Cycle</h3>
+      <div className="animation-area bg-slate-700 border-slate-600 relative w-[450px] h-[200px] border overflow-hidden mx-auto">
         <div className="wave-container" id="wave-container">
           {/* Waves are always in DOM, visibility controlled by CSS animation + .radiating class */}
           <div className="wave wave-1"></div>
           <div className="wave wave-2"></div>
           <div className="wave wave-3"></div>
         </div>
-        <div className="arrow arrow-a">
+        <div className="arrow arrow-a text-3xl text-slate-400">
           <span>&larr;</span> {/* Force pushing Plate A to the left */}
         </div>
         <div
-          className={`plate plate-a`}
+          className={`plate plate-a bg-amber-700 border-amber-900 text-white`}
           id="plate-a"
         >
           Plate A
         </div>
         <div
-          className={`plate plate-b`}
+          className={`plate plate-b bg-amber-700 border-amber-900 text-white`}
           id="plate-b"
         >
           Plate B
         </div>
-        <div className="arrow arrow-b">
+        <div className="arrow arrow-b text-3xl text-slate-400">
           <span>&rarr;</span> {/* Force pushing Plate B to the right */}
         </div>
-        <div className="fault-line-label">Fault Line</div>
+        <div className="fault-line-label bg-black bg-opacity-60 text-white text-xs px-2 py-0.5 rounded">Fault Line</div>
       </div>
-      <div className="stress-meter">
-        <span className="stress-label">Stress: </span>
-        <div className="stress-bar-container">
-          <div className="stress-bar" id="stress-bar-level" style={{ width: `${stressLevel}%` }}></div>
+      <div className="stress-meter mt-4 flex items-center w-full max-w-md mx-auto">
+        <span className="stress-label text-sm text-slate-300 mr-2">Stress: </span>
+        <div className="stress-bar-container flex-grow h-5 bg-slate-600 border border-slate-500 rounded overflow-hidden">
+          <div className="stress-bar bg-red-500 h-full" id="stress-bar-level" style={{ width: `${stressLevel}%` }}></div>
         </div>
       </div>
-      <div className="controls">
-        <button id="stick-slip-button" onClick={handleButtonClick} disabled={animationState === 'stressing'}>
+      <div className="controls mt-4 text-center">
+        <button
+          id="stick-slip-button"
+          onClick={handleButtonClick}
+          disabled={animationState === 'stressing'}
+          className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-4 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
           {animationState === 'stressing' ? 'Building Stress...' :
            (animationState === 'idle' || animationState === 'resetting') ? 'Start Animation Cycle' :
            'Restart Cycle'}
