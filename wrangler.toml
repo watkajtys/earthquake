@@ -1,6 +1,6 @@
 # wrangler.toml
 name = "earthquake"
-compatibility_date = "2024-06-05" # Feel free to update to a more recent date
+compatibility_date = "2024-06-08" # Feel free to update to a more recent date
 
 # Configuration for Cloudflare Pages Functions
 # Ensure this matches your project's build output directory (e.g., "dist", "build", "public")
@@ -41,10 +41,9 @@ kv_namespaces = [
 ]
 
 [[d1_databases]]
-binding = "DB" # i.e. env.DB
-database_name = "earthquake_data"
+binding = "DB"
+database_name = "earthquake_data_prod"
 database_id = "25b7734a-8239-4aca-b359-af8bb33af982"
-preview_database_id = "270f5d3b-1c15-43cf-9ee9-bb3fcf4a01ec"
 
 # Example of other potential configurations (uncomment and adjust if needed):
 # [vars]
