@@ -45,16 +45,21 @@ binding = "DB"
 database_name = "earthquake_data_production"
 database_id = "25b7734a-8239-4aca-b359-af8bb33af982"
 
-# Example of other potential configurations (uncomment and adjust if needed):
-# [vars]
-# CLUSTER_DEFINITION_TTL_SECONDS = "21600" # 6 hours
-# WORKER_CACHE_DURATION_SECONDS = "600"   # 10 minutes for USGS proxy
-# PROCESSED_DATA_TTL_SECONDS = "300"      # 5 minutes for new processed data worker
-#
+[triggers]
+crons = ["*/15 * * * *"] # Runs any scheduled export every 15 minutes
+
+[vars]
+# CLUSTER_DEFINITION_TTL_SECONDS = "21600" # 6 hours (existing example, keep if uncommented)
+# WORKER_CACHE_DURATION_SECONDS = "600"   # 10 minutes for USGS proxy (existing example)
+# PROCESSED_DATA_TTL_SECONDS = "300"      # 5 minutes for new processed data worker (existing example)
+PROXY_BASE_URL = "https://your-production-site.pages.dev" # USER: Replace with your actual production domain
+
 # [env.preview.vars]
-# MY_VARIABLE = "preview_value"
-# [env.dev.vars] # For 'wrangler pages dev'
-# MY_VARIABLE = "dev_value"
+# MY_VARIABLE = "preview_value" # (existing example)
+
+[env.dev.vars] # For 'wrangler pages dev'
+# MY_VARIABLE = "dev_value" # (existing example)
+PROXY_BASE_URL = "/" # For local development, ensures proxy path is relative to origin
 
 # If you have other bindings (like D1, R2, Services), define them here too.
 # Refer to Cloudflare Wrangler documentation for more details.
