@@ -1,9 +1,32 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+/**
+ * React Context for managing global UI state across the application.
+ * This includes states like the active sidebar view, selected feed period,
+ * globe focusing parameters, and any currently focused notable earthquake.
+ *
+ * @type {React.Context<Object|undefined>}
+ */
 export const UIStateContext = createContext();
 
-// Provider component
+/**
+ * Provides UI state to its children components via the UIStateContext.
+ * It manages several pieces of UI state:
+ * - `activeSidebarView`: The currently active view/panel in the sidebar. Synced with URL search parameter `sidebarActiveView`.
+ * - `activeFeedPeriod`: The currently selected earthquake feed period (e.g., 'last_24_hours'). Synced with URL search parameter `activeFeedPeriod`.
+ * - `globeFocusLng`: The target longitude for focusing the interactive globe. Not URL synced.
+ * - `focusedNotableQuake`: Data object for a notable earthquake that should be highlighted or focused. Not URL synced.
+ *
+ * The provider uses `useState` for managing these states and `useSearchParams` from `react-router-dom`
+ * to read initial values from and sync changes back to the URL for relevant states.
+ * Setter functions for these states are memoized using `useCallback`.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {React.ReactNode} props.children - The child components that will have access to this context.
+ * @returns {JSX.Element} The UIStateProvider component.
+ */
 export const UIStateProvider = ({ children }) => {
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -11,27 +34,24 @@ export const UIStateProvider = ({ children }) => {
     const [activeSidebarView, setActiveSidebarView_internal] = useState(
         searchParams.get('sidebarActiveView') || 'overview_panel'
     );
-
-    // Active Feed Period State
     const [activeFeedPeriod, setActiveFeedPeriod_internal] = useState(
-        searchParams.get('activeFeedPeriod') || 'last_24_hours' // Default feed period
+        searchParams.get('activeFeedPeriod') || 'last_24_hours'
     );
-
-    // Globe Focus Longitude State
     const [globeFocusLng, setGlobeFocusLng_internal] = useState(0);
-
-    // Focused Notable Quake State
     const [focusedNotableQuake, setFocusedNotableQuake_internal] = useState(null);
 
-
-    // Effect for activeSidebarView URL sync
+    // Effect to update activeSidebarView from URL search parameter.
     useEffect(() => {
         const currentQueryParam = searchParams.get('sidebarActiveView');
         if (currentQueryParam && currentQueryParam !== activeSidebarView) {
             setActiveSidebarView_internal(currentQueryParam);
         }
-    }, [searchParams]); // Removed activeSidebarView from dependencies
+    }, [searchParams, activeSidebarView]); // activeSidebarView added back as it's used in comparison
 
+    /**
+     * Changes the active sidebar view and updates the URL search parameter.
+     * @param {string} view - The identifier for the new sidebar view. Defaults to 'overview_panel'.
+     */
     const changeSidebarView = useCallback((view) => {
         const newView = view || 'overview_panel';
         setActiveSidebarView_internal(newView);
@@ -40,55 +60,58 @@ export const UIStateProvider = ({ children }) => {
                 const newSearchQuery = new URLSearchParams(prevParams);
                 newSearchQuery.set('sidebarActiveView', newView);
                 return newSearchQuery;
-            }, { replace: true }); // Using replace to avoid multiple history entries for simple UI changes
+            }, { replace: true });
         }
     }, [setSearchParams, searchParams]);
 
-
-    // Effect for activeFeedPeriod URL sync
+    // Effect to update activeFeedPeriod from URL search parameter.
     useEffect(() => {
         const currentQueryParam = searchParams.get('activeFeedPeriod');
         if (currentQueryParam && currentQueryParam !== activeFeedPeriod) {
             setActiveFeedPeriod_internal(currentQueryParam);
         }
-    }, [searchParams]); // Removed activeFeedPeriod from dependencies
+    }, [searchParams, activeFeedPeriod]); // activeFeedPeriod added back
 
+    /**
+     * Changes the active earthquake feed period and updates the URL search parameter.
+     * @param {string} period - The identifier for the new feed period. Defaults to 'last_24_hours'.
+     */
     const changeActiveFeedPeriod = useCallback((period) => {
-        const newPeriod = period || 'last_24_hours'; // Default if null/empty
+        const newPeriod = period || 'last_24_hours';
         setActiveFeedPeriod_internal(newPeriod);
         if (searchParams.get('activeFeedPeriod') !== newPeriod) {
             setSearchParams(prevParams => {
                 const newSearchQuery = new URLSearchParams(prevParams);
                 newSearchQuery.set('activeFeedPeriod', newPeriod);
-                // Preserve other params like sidebarActiveView
-                // const currentSidebarView = prevParams.get('sidebarActiveView');
-                // if (currentSidebarView) newSearchQuery.set('sidebarActiveView', currentSidebarView);
                 return newSearchQuery;
             }, { replace: true });
         }
     }, [setSearchParams, searchParams]);
 
-    // Setter for globeFocusLng (no URL sync)
+    /**
+     * Sets the target longitude for focusing the interactive globe. This state is not synced with URL.
+     * @param {number} lng - The longitude value.
+     */
     const setGlobeFocusLng = useCallback((lng) => {
         setGlobeFocusLng_internal(lng);
     }, []);
 
-    // Setter for focusedNotableQuake (no URL sync)
+    /**
+     * Sets the data for a notable earthquake to be focused/highlighted. This state is not synced with URL.
+     * @param {Object|null} quake - The earthquake data object, or null to clear focus.
+     */
     const setFocusedNotableQuake = useCallback((quake) => {
         setFocusedNotableQuake_internal(quake);
     }, []);
 
-
+    // Context value includes current states and their respective updater functions.
     const value = {
         activeSidebarView,
         setActiveSidebarView: changeSidebarView,
-        
         activeFeedPeriod,
         setActiveFeedPeriod: changeActiveFeedPeriod,
-
         globeFocusLng,
         setGlobeFocusLng,
-
         focusedNotableQuake,
         setFocusedNotableQuake,
     };
@@ -100,6 +123,22 @@ export const UIStateProvider = ({ children }) => {
     );
 };
 
+/**
+ * Custom hook to consume the UIStateContext.
+ * Provides easy access to UI states (like active sidebar view, feed period) and their setters.
+ * Throws an error if used outside of a `UIStateProvider`.
+ *
+ * @returns {Object} The context value, containing UI states and setter functions.
+ * @property {string} activeSidebarView - Current active view in the sidebar.
+ * @property {function(string): void} setActiveSidebarView - Function to change the active sidebar view.
+ * @property {string} activeFeedPeriod - Current selected earthquake feed period.
+ * @property {function(string): void} setActiveFeedPeriod - Function to change the active feed period.
+ * @property {number} globeFocusLng - Current target longitude for globe focus.
+ * @property {function(number): void} setGlobeFocusLng - Function to set the globe focus longitude.
+ * @property {Object|null} focusedNotableQuake - Data of the currently focused notable earthquake.
+ * @property {function((Object|null)): void} setFocusedNotableQuake - Function to set or clear the focused notable quake.
+ * @throws {Error} If the hook is used outside a UIStateProvider.
+ */
 export const useUIState = () => {
     const context = useContext(UIStateContext);
     if (context === undefined) {
@@ -107,6 +146,3 @@ export const useUIState = () => {
     }
     return context;
 };
-
-// Trivial change to attempt to bust cache
-// [end of src/contexts/UIStateContext.jsx]

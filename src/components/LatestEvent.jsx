@@ -1,7 +1,25 @@
 import React, { memo } from 'react';
 
+/**
+ * Displays a summary card for the latest significant earthquake event.
+ * This component is memoized using `React.memo` for performance optimization.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {Object|null} props.lastMajorQuake - The earthquake object for the latest significant event.
+ *   If null or undefined, the component will render nothing. Expected structure:
+ *   - `properties`:
+ *     - `mag` (number): Magnitude of the earthquake.
+ *     - `place` (string): Location string of the earthquake.
+ *     - `time` (number): Timestamp of the earthquake event.
+ *   - `geometry.coordinates` (Array<number>, optional): Coordinates array `[lng, lat, depth]`. Depth is used if available.
+ * @param {function(number):string} props.getMagnitudeColor - Function that returns a color string based on earthquake magnitude.
+ * @param {function(number):string} props.formatDate - Function to format a timestamp into a human-readable date/time string.
+ * @param {function(Object):void} props.handleQuakeClick - Callback function triggered when the "View Details" button is clicked.
+ *   Receives the `lastMajorQuake` object as an argument.
+ * @returns {JSX.Element|null} The LatestEvent component, or null if `lastMajorQuake` is not provided.
+ */
 const LatestEvent = ({ lastMajorQuake, getMagnitudeColor, formatDate, handleQuakeClick }) => {
-  // Logic for displaying the latest event will be added here
   if (!lastMajorQuake) {
     return null;
   }

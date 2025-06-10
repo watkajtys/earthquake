@@ -15,58 +15,59 @@ const REGIONAL_RADIUS_KM = 804.672; // 500 miles
 import SkeletonText from './skeletons/SkeletonText.jsx';
 import SkeletonBlock from './skeletons/SkeletonBlock.jsx';
 
-/**
- * A React component that displays detailed information about a specific earthquake event.
- * It fetches data from a provided URL, parses it, and presents it in a structured,
- * user-friendly modal view with various informational panels and diagrams.
- *
- * @param {object} props - The component's props.
- * @param {string} props.detailUrl - The URL to fetch detailed earthquake data from.
- * @param {function(): void} props.onClose - Callback function to close the detail view.
- * @param {function(object): void} [props.onDataLoadedForSeo] - Optional callback. Receives an object with key data points (title, place, time, mag, depth, etc.) once details are loaded, intended for SEO updates.
- * @param {Array<object>} props.broaderEarthquakeData - Array of earthquake objects (matching USGS GeoJSON feature structure) for nearby/regional events, used by the RegionalSeismicityChart.
- * @param {number} props.dataSourceTimespanDays - The timespan (e.g., 7 or 30 days) of the `broaderEarthquakeData` source, used by RegionalSeismicityChart for context.
- * @param {function(): void} [props.handleLoadMonthlyData] - Optional callback function to trigger loading of broader monthly data if not already loaded or in progress.
- * @param {boolean} [props.hasAttemptedMonthlyLoad] - Optional boolean indicating if an attempt to load monthly data has already been made.
- * @param {boolean} [props.isLoadingMonthly] - Optional boolean indicating if monthly data is currently being loaded.
- * @returns {JSX.Element} The rendered EarthquakeDetailView component.
- */
 import ErrorBoundary from './ErrorBoundary'; // Assuming ErrorBoundary.jsx is in the same components folder
-import EarthquakeDetailHeader from './earthquakeDetail/EarthquakeDetailHeader'; // Import the new header
-import EarthquakeSnapshotPanel from './earthquakeDetail/EarthquakeSnapshotPanel'; // Import the new snapshot panel
-import EarthquakeRegionalMapPanel from './earthquakeDetail/EarthquakeRegionalMapPanel'; // Import the new regional map panel
-import EarthquakeEnergyPanel from './earthquakeDetail/EarthquakeEnergyPanel'; // Import the new energy panel
-import EarthquakeRegionalSeismicityPanel from './earthquakeDetail/EarthquakeRegionalSeismicityPanel'; // Import the new regional seismicity panel
-import EarthquakeDepthProfilePanel from './earthquakeDetail/EarthquakeDepthProfilePanel'; // Import the new depth profile panel
-import EarthquakeSeismicWavesPanel from './earthquakeDetail/EarthquakeSeismicWavesPanel'; // Import the new seismic waves panel
-import EarthquakeLocationPanel from './earthquakeDetail/EarthquakeLocationPanel'; // Import the new location panel
-import EarthquakeImpactPanel from './earthquakeDetail/EarthquakeImpactPanel'; // Import the new impact panel
-import EarthquakeCitizenSciencePanel from './earthquakeDetail/EarthquakeCitizenSciencePanel'; // Import the new citizen science panel
-import EarthquakeFaultDiagramPanel from './earthquakeDetail/EarthquakeFaultDiagramPanel'; // Added back the missing import
-import EarthquakeFaultParamsPanel from './earthquakeDetail/EarthquakeFaultParamsPanel'; // Import the new fault params panel
-import EarthquakeMwwPanel from './earthquakeDetail/EarthquakeMwwPanel'; // Import the new Mww panel
-import EarthquakeMagnitudeComparisonPanel from './earthquakeDetail/EarthquakeMagnitudeComparisonPanel'; // Import the new magnitude comparison panel
-import EarthquakeStressAxesPanel from './earthquakeDetail/EarthquakeStressAxesPanel'; // Import the new stress axes panel
-import EarthquakeBeachballPanel from './earthquakeDetail/EarthquakeBeachballPanel'; // Import the new beachball panel
-import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfoPanel'; // Import the new further info panel
+// earthquakeDetail/* panel imports are correct and extensive, listed below.
+import EarthquakeDetailHeader from './earthquakeDetail/EarthquakeDetailHeader';
+import EarthquakeSnapshotPanel from './earthquakeDetail/EarthquakeSnapshotPanel';
+import EarthquakeRegionalMapPanel from './earthquakeDetail/EarthquakeRegionalMapPanel';
+import EarthquakeEnergyPanel from './earthquakeDetail/EarthquakeEnergyPanel';
+import EarthquakeRegionalSeismicityPanel from './earthquakeDetail/EarthquakeRegionalSeismicityPanel';
+import EarthquakeDepthProfilePanel from './earthquakeDetail/EarthquakeDepthProfilePanel';
+import EarthquakeSeismicWavesPanel from './earthquakeDetail/EarthquakeSeismicWavesPanel';
+import EarthquakeLocationPanel from './earthquakeDetail/EarthquakeLocationPanel';
+import EarthquakeImpactPanel from './earthquakeDetail/EarthquakeImpactPanel';
+import EarthquakeCitizenSciencePanel from './earthquakeDetail/EarthquakeCitizenSciencePanel';
+import EarthquakeFaultDiagramPanel from './earthquakeDetail/EarthquakeFaultDiagramPanel';
+import EarthquakeFaultParamsPanel from './earthquakeDetail/EarthquakeFaultParamsPanel';
+import EarthquakeMwwPanel from './earthquakeDetail/EarthquakeMwwPanel';
+import EarthquakeMagnitudeComparisonPanel from './earthquakeDetail/EarthquakeMagnitudeComparisonPanel';
+import EarthquakeStressAxesPanel from './earthquakeDetail/EarthquakeStressAxesPanel';
+import EarthquakeBeachballPanel from './earthquakeDetail/EarthquakeBeachballPanel';
+import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfoPanel';
 
 /**
- * A React component that displays detailed information about a specific earthquake event.
- * It fetches data from a provided URL, parses it, and presents it in a structured,
- * user-friendly modal view with various informational panels and diagrams.
+ * Orchestrates the display of comprehensive details for a single earthquake event.
+ * This component fetches detailed data for a specific earthquake from a provided USGS GeoJSON URL.
+ * It then processes this data and passes relevant pieces to a collection of specialized child panel components,
+ * each responsible for visualizing a particular aspect of the earthquake (e.g., location, energy, regional seismicity, fault mechanics).
  *
- * @param {object} props - The component's props.
- * @param {string} props.detailUrl - The URL to fetch detailed earthquake data from.
- * @param {function(): void} props.onClose - Callback function to close the detail view.
- * @param {function(object): void} [props.onDataLoadedForSeo] - Optional callback. Receives an object with key data points (title, place, time, mag, depth, etc.) once details are loaded, intended for SEO updates.
- * @param {Array<object>} props.broaderEarthquakeData - Array of earthquake objects (matching USGS GeoJSON feature structure) for nearby/regional events, used by the RegionalSeismicityChart.
- * @param {number} props.dataSourceTimespanDays - The timespan (e.g., 7 or 30 days) of the `broaderEarthquakeData` source, used by RegionalSeismicityChart for context.
- * @param {function(): void} [props.handleLoadMonthlyData] - Optional callback function to trigger loading of broader monthly data if not already loaded or in progress.
- * @param {boolean} [props.hasAttemptedMonthlyLoad] - Optional boolean indicating if an attempt to load monthly data has already been made.
- * @param {boolean} [props.isLoadingMonthly] - Optional boolean indicating if monthly data is currently being loaded.
- * @returns {JSX.Element} The rendered EarthquakeDetailView component.
+ * Key responsibilities include:
+ * - Fetching and managing the state of detailed earthquake data (`detailUrl`).
+ * - Handling loading and error states during data fetching.
+ * - Invoking `onDataLoadedForSeo` callback with key event details for SEO purposes.
+ * - Triggering `handleLoadMonthlyData` if necessary for broader regional context.
+ * - Implementing accessibility features like focus trapping within the modal and an Escape key listener for closing.
+ * - Utilizing `useMemo` and `useCallback` extensively to optimize performance due to the complexity and number of derived calculations.
+ * - Wrapping its content in an `ErrorBoundary` to gracefully handle potential rendering errors in child components.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {string} props.detailUrl - The URL to fetch the detailed earthquake GeoJSON data from (typically a USGS endpoint).
+ * @param {function} props.onClose - Callback function invoked when the detail view should be closed (e.g., by user action).
+ * @param {function} [props.onDataLoadedForSeo] - Optional callback function. It's called with the fully loaded GeoJSON data
+ *   (specifically an object containing `id`, `properties`, `geometry`, and `shakemapIntensityImageUrl`) of the earthquake
+ *   once it's successfully fetched. This allows parent components to update SEO metadata.
+ * @param {Array<Object>} props.broaderEarthquakeData - An array of earthquake objects (USGS GeoJSON feature structure)
+ *   representing a broader dataset (e.g., last 7 or 30 days) for contextual information, primarily used by the regional seismicity panel.
+ * @param {number} props.dataSourceTimespanDays - The timespan (e.g., 7 or 30) corresponding to `broaderEarthquakeData`,
+ *   providing context for components like the regional seismicity chart.
+ * @param {function} [props.handleLoadMonthlyData] - Optional callback to request loading of more extensive (e.g., monthly)
+ *   earthquake data if it hasn't been loaded or attempted yet. This is often used to enrich regional context.
+ * @param {boolean} [props.hasAttemptedMonthlyLoad] - Flag indicating if an attempt to load monthly data has already been made.
+ * @param {boolean} [props.isLoadingMonthly] - Flag indicating if monthly data is currently being loaded.
+ * @returns {JSX.Element} The EarthquakeDetailView component, typically rendered within a modal structure.
  */
-function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) { // Add dataSourceTimespanDays
+function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) {
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(!!detailUrl);
     const [error, setError] = useState(null);

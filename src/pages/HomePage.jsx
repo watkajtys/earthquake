@@ -34,26 +34,22 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // FeedsPageLayoutComponent will be lazy loaded
 // EarthquakeDetailModalComponent will be lazy loaded
 const InteractiveGlobeView = lazy(() => import('../components/InteractiveGlobeView'));
-// import useEarthquakeData from '../hooks/useEarthquakeData'; // Will use context instead
-// import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
-import { useUIState } from '../contexts/UIStateContext.jsx'; // Import the new hook
-import { registerClusterDefinition, fetchActiveClusters } from '../services/clusterApiService.js'; // Import the new service & fetchActiveClusters
+import { useUIState } from '../contexts/UIStateContext.jsx';
+import { registerClusterDefinition, fetchActiveClusters } from '../services/clusterApiService.js';
 import {
-    // USGS_API_URL_MONTH, // Now used inside useMonthlyEarthquakeData
     CLUSTER_MAX_DISTANCE_KM,
     CLUSTER_MIN_QUAKES,
-    FELT_REPORTS_THRESHOLD,
-    SIGNIFICANCE_THRESHOLD,
+    // FELT_REPORTS_THRESHOLD, // Directly used in PaginatedEarthquakeTable, not here
+    // SIGNIFICANCE_THRESHOLD, // Directly used in PaginatedEarthquakeTable, not here
     HEADER_TIME_UPDATE_INTERVAL_MS,
-    TOP_N_CLUSTERS_OVERVIEW,
-    // MONTHLY_LOADING_MESSAGES, // Will be managed by useMonthlyEarthquakeData or component
-    REGIONS,
-    FEELABLE_QUAKE_THRESHOLD,
-    MAJOR_QUAKE_THRESHOLD,
-    ALERT_LEVELS,
-    LOADING_MESSAGE_INTERVAL_MS, // Used by useEarthquakeData for initial load messages
-    INITIAL_LOADING_MESSAGES // Used by useEarthquakeData for initial load messages
+    // TOP_N_CLUSTERS_OVERVIEW, // Used in App component
+    REGIONS, // Used in App component
+    FEELABLE_QUAKE_THRESHOLD, // Used in App component
+    MAJOR_QUAKE_THRESHOLD, // Used in App component
+    ALERT_LEVELS, // Used in App component
+    LOADING_MESSAGE_INTERVAL_MS,
+    INITIAL_LOADING_MESSAGES
 } from '../constants/appConstants';
 
 // Lazy load route components
@@ -73,31 +69,45 @@ const EarthquakeTimelineSVGChart = lazy(() => import('../components/EarthquakeTi
 const MagnitudeDepthScatterSVGChart = lazy(() => import('../components/MagnitudeDepthScatterSVGChart'));
 const PaginatedEarthquakeTable = lazy(() => import('../components/PaginatedEarthquakeTable'));
 
-// --- GlobeLayout Component ---
+/**
+ * Internal component responsible for laying out the main globe view and its fixed UI overlays.
+ * This includes the interactive globe itself, notable quake features, live statistics,
+ * and the global timer for the last major quake. It also renders an `<Outlet />` for modal routes.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {number} props.globeFocusLng - Longitude for the globe's camera focus.
+ * @param {function(Object):void} props.handleQuakeClick - Callback for when a quake on the globe is clicked.
+ * @param {function(number):string} props.getMagnitudeColor - Function to get color based on magnitude.
+ * @param {Object|null} props.coastlineData - GeoJSON data for coastlines.
+ * @param {Object|null} props.tectonicPlatesData - GeoJSON data for tectonic plates.
+ * @param {boolean} props.areGeoJsonAssetsLoading - Loading state for GeoJSON map assets.
+ * @param {Array<Object>} props.activeClusters - Array of active earthquake clusters to display.
+ * @param {Object|null} props.lastMajorQuake - Data for the last major earthquake.
+ * @param {function(number):string} props.formatTimeDuration - Function to format time durations.
+ * @param {function(Object):void} props.handleNotableQuakeSelect - Callback for when a notable quake feature is selected.
+ * @param {Object} props.keyStatsForGlobe - Object containing key statistics for display on the globe overlay.
+ * @param {boolean} props.areClustersLoading - Loading state for earthquake cluster data.
+ * @returns {JSX.Element} The GlobeLayout component.
+ */
 const GlobeLayout = (props) => {
   const {
     globeFocusLng,
     handleQuakeClick,
-    getMagnitudeColor, // This is the function itself
-    // coastlineData, // Will be passed as props
-    // tectonicPlatesData, // Will be passed as props
+    getMagnitudeColor,
     activeClusters,
     lastMajorQuake,
     formatTimeDuration,
     handleNotableQuakeSelect,
     keyStatsForGlobe,
-    // Props for GeoJSON data and loading state
     coastlineData,
     tectonicPlatesData,
     areGeoJsonAssetsLoading,
-    areClustersLoading // Added new prop
+    areClustersLoading
   } = props;
 
-  // areClustersLoading is now available here for future use, e.g., showing a specific loading indicator.
-  // For now, no visual change based on it as per requirements.
-
   return (
-    <div className="block h-full w-full"> {/* Base container for the globe and its fixed UI elements */}
+    <div className="block h-full w-full">
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
         {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
            <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
@@ -106,7 +116,7 @@ const GlobeLayout = (props) => {
             defaultFocusLat={20}
             defaultFocusLng={globeFocusLng}
             onQuakeClick={handleQuakeClick}
-            getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
+            getMagnitudeColorFunc={getMagnitudeColor}
             allowUserDragRotation={true}
             enableAutoRotation={true}
             globeAutoRotateSpeed={0.1}
@@ -117,16 +127,15 @@ const GlobeLayout = (props) => {
         )}
       </Suspense>
 
-      {/* Absolutely positioned UI elements over the globe */}
       <div className="absolute top-2 left-2 z-10 space-y-2">
         <NotableQuakeFeature
             onNotableQuakeSelect={handleNotableQuakeSelect}
-            getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
+            getMagnitudeColorFunc={getMagnitudeColor}
         />
         <div className="hidden md:block">
             <PreviousNotableQuakeFeature
                 onNotableQuakeSelect={handleNotableQuakeSelect}
-                getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
+                getMagnitudeColorFunc={getMagnitudeColor}
             />
         </div>
         <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-xs backdrop-blur-sm border border-slate-700">
@@ -143,41 +152,45 @@ const GlobeLayout = (props) => {
         formatTimeDuration={formatTimeDuration}
         handleTimerClick={handleQuakeClick}
       />
-
-      {/* Outlet for Modals (child routes) */}
       <Outlet />
     </div>
   );
 };
 
-// --- App Component ---
 /**
- * The main application component for the Global Seismic Activity Monitor.
- * It orchestrates data fetching via custom hooks (`useEarthquakeData`, `useMonthlyEarthquakeData`),
- * manages overall application state (UI states, feed selections, earthquake data, loading states),
- * handles routing for different application views using `react-router-dom`, and serves as the
- * primary layout component that assembles various UI pieces.
+ * Main application component for the Global Seismic Activity Monitor.
+ * This component serves as the root of the application, orchestrating data fetching,
+ * state management, routing, and the overall layout.
+ *
+ * It utilizes `EarthquakeDataContext` for earthquake data and `UIStateContext` for UI-related states.
+ * Features include:
+ * - Displaying an interactive globe with earthquake data (`GlobeLayout`).
+ * - Providing navigation to different pages like Overview, Feeds, and Learn sections.
+ * - Lazy loading of page components and heavy UI elements for performance.
+ * - Handling modals for detailed earthquake and cluster views through nested routes.
+ * - Displaying a dynamic sidebar with various informational panels and data views.
+ * - Showing global statistics and timers for significant seismic events.
+ *
+ * The component defines several callback functions for formatting data, handling user interactions,
+ * and deriving memoized values for performance. It takes no direct props itself.
+ *
+ * @component
  * @returns {JSX.Element} The rendered App component.
  */
 function App() {
-    // Use the UIStateContext for sidebar view management and other UI states
-    const { 
+    const {
         activeSidebarView, setActiveSidebarView,
-        activeFeedPeriod, // setActiveFeedPeriod removed
-        globeFocusLng, setGlobeFocusLng,       // from UIStateContext
-        setFocusedNotableQuake // focusedNotableQuake removed
-    } = useUIState(); // Use the context hook
+        activeFeedPeriod,
+        globeFocusLng, setGlobeFocusLng,
+        setFocusedNotableQuake
+    } = useUIState();
 
-    const [registeredIdsThisSession, setRegisteredIdsThisSession] = useState(new Set()); // Added state for tracking registered cluster IDs
+    const [registeredIdsThisSession, setRegisteredIdsThisSession] = useState(new Set());
 
-    // appRenderTrigger removed (unused)
-    // activeFeedPeriod is now from useUIState
-
-    // --- Callback Hooks (Formatting, Colors, Regions, Stats) ---
     /**
-     * Formats a timestamp into a human-readable date and time string.
+     * Formats a timestamp into a human-readable date and time string (e.g., "Jan 1, 10:00 AM").
      * @param {number} timestamp - The Unix timestamp in milliseconds.
-     * @returns {string} The formatted date and time string (e.g., "Jan 1, 10:00 AM") or 'N/A' if timestamp is invalid.
+     * @returns {string} The formatted date and time string, or 'N/A' if the timestamp is invalid.
      */
     const formatDate = useCallback((timestamp) => {
         if (!timestamp) return 'N/A';
@@ -224,11 +237,14 @@ function App() {
         return parts.join(', ');
     }, []);
 
-    // getMagnitudeColor is now imported from utils.js and used directly where needed,
-    // or passed as a prop if a component needs it but App itself doesn't use it directly in a useCallback here.
-    // The useCallback wrapper for getMagnitudeColor previously here is removed.
-    // getMagnitudeColorStyle was moved to src/utils/utils.js
+    // getMagnitudeColor is imported from utils.js and passed directly.
+    // getMagnitudeColorStyle is imported from utils.js and passed directly.
 
+    /**
+     * Memoized array of predefined geographic regions for classifying earthquake locations.
+     * Each region object includes name, latitude/longitude boundaries, and a display color.
+     * @type {Array<{name: string, latMin: number, latMax: number, lonMin: number, lonMax: number, color: string}>}
+     */
     const REGIONS = useMemo(() => [
         { name: "Alaska & W. Canada", latMin: 50, latMax: 72, lonMin: -170, lonMax: -125, color: "#A78BFA" },
         { name: "California & W. USA", latMin: 30, latMax: 50, lonMin: -125, lonMax: -110, color: "#F472B6" },
@@ -238,28 +254,33 @@ function App() {
         { name: "Mediterranean", latMin: 30, latMax: 45, lonMin: -10, lonMax: 40, color: "#818CF8" },
         { name: "Central America", latMin: 5, latMax: 30, lonMin: -118, lonMax: -77, color: "#FBBF24" },
         { name: "New Zealand & S. Pacific", latMin: -55, latMax: -10, lonMin: 160, lonMax: -150, color: "#C4B5FD" },
-        { name: "Other / Oceanic", latMin: -90, latMax: 90, lonMin: -180, lonMax: 180, color: "#9CA3AF" }
+        { name: "Other / Oceanic", latMin: -90, latMax: 90, lonMin: -180, lonMax: 180, color: "#9CA3AF" } // Fallback region
     ], []);
 
+    /**
+     * Determines the geographic region for a given earthquake based on its coordinates
+     * and the predefined `REGIONS` array.
+     * @param {Object} quake - An earthquake GeoJSON feature object with `geometry.coordinates`.
+     * @returns {Object} The region object from `REGIONS` that the earthquake falls into. Defaults to "Other / Oceanic".
+     */
     const getRegionForEarthquake = useCallback((quake) => {
         const lon = quake.geometry?.coordinates?.[0];
         const lat = quake.geometry?.coordinates?.[1];
-        if (lon === null || lat === null || lon === undefined || lat === undefined) return REGIONS[REGIONS.length - 1]; // Default to 'Other / Oceanic'
-        for (let i = 0; i < REGIONS.length - 1; i++) { // Exclude the last 'Other / Oceanic' region from specific checks
+        if (lon === null || lat === null || lon === undefined || lat === undefined) return REGIONS[REGIONS.length - 1];
+        for (let i = 0; i < REGIONS.length - 1; i++) {
             const region = REGIONS[i];
             if (lat >= region.latMin && lat <= region.latMax && lon >= region.lonMin && lon <= region.lonMax) return region;
         }
-        return REGIONS[REGIONS.length - 1]; // Default to 'Other / Oceanic' if no specific region matches
+        return REGIONS[REGIONS.length - 1];
     }, [REGIONS]);
 
     /**
-     * Calculates various statistics from an array of earthquake objects.
-     * Statistics include total count, average/strongest magnitude, count of feelable/significant quakes,
-     * average/deepest depth, average significance score, and highest PAGER alert level.
-     * @param {Array<object>} earthquakes - An array of earthquake GeoJSON feature objects.
-     *   Each object is expected to have `properties` (with `mag`, `sig`, `alert`) and `geometry.coordinates` (with depth at index 2).
-     * @returns {object} An object containing calculated statistics. Returns base statistics with 'N/A' or 0 if input is empty or invalid.
-     *   Example: `{ totalEarthquakes: 10, averageMagnitude: "2.5", strongestMagnitude: "4.0", ... }`
+     * Calculates various summary statistics from an array of earthquake objects.
+     * Includes total count, average/strongest magnitude, counts of feelable/significant quakes,
+     * average/deepest depth, average significance score, and the highest PAGER alert level observed.
+     * @param {Array<Object>} earthquakes - An array of earthquake GeoJSON feature objects.
+     * @returns {Object} An object containing calculated statistics (e.g., `totalEarthquakes`, `averageMagnitude`).
+     *   Returns base statistics with 'N/A' or 0 for values if input is empty or invalid.
      */
     const calculateStats = useCallback((earthquakes) => {
         const baseStats = { totalEarthquakes: 0, averageMagnitude: 'N/A', strongestMagnitude: 'N/A', significantEarthquakes: 0, feelableEarthquakes: 0, averageDepth: 'N/A', deepestEarthquake: 'N/A', averageSignificance: 'N/A', highestAlertLevel: null };

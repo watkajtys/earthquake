@@ -8,7 +8,7 @@
     "destination": "./docs/jsdoc/",
     "recurse": true,
     "readme": "./README.md",
-    "template": "node_modules/docdash"
+        "template": "./node_modules/docdash"
   },
   "plugins": ["plugins/markdown"],
   "templates": {
@@ -24,7 +24,7 @@
       "removeQuotes": "none",
       "menu": {
         "Github repo": {
-          "href": "https://github.com/username/projectname",
+          "href": "https://github.com/builtbyvibes/global-seismic-activity-monitor",
           "target": "_blank"
         }
       }

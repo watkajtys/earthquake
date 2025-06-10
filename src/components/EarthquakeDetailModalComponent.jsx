@@ -6,18 +6,22 @@ import EarthquakeDetailView from './EarthquakeDetailView'; // Path relative to s
 import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
 
 /**
- * A component that wraps EarthquakeDetailView and handles its presentation as a modal
- * controlled by routing parameters. It extracts the detail URL from the route and
- * manages the modal's open/close state based on navigation.
- * @param {object} props - The component's props.
- * @param {Array<object>} props.broaderEarthquakeData - Broader earthquake data for context.
- * @param {number} [props.dataSourceTimespanDays] - Optional: Timespan of the data source in days.
- * @param {function} props.handleLoadMonthlyData - Function to load monthly data.
- * @param {boolean} props.hasAttemptedMonthlyLoad - Whether monthly data load was attempted. (Removed, from context)
- * @param {boolean} props.isLoadingMonthly - Whether monthly data is currently loading. (Removed, from context)
- * @returns {JSX.Element} The rendered EarthquakeDetailView component configured as a modal.
+ * A wrapper component that displays detailed information about a specific earthquake in a modal-like view.
+ * It retrieves the earthquake's detail URL from routing parameters (`useParams`),
+ * fetches context data using `useEarthquakeDataState` (like available earthquake lists and loading states),
+ * and then renders the `EarthquakeDetailView` component.
+ *
+ * This component is also responsible for generating and setting SEO metadata for the earthquake detail page
+ * via the `SeoMetadata` component. It uses data loaded by `EarthquakeDetailView` to create rich SEO content,
+ * including JSON-LD for events.
+ *
+ * Navigation to and from this modal is handled using `useNavigate`.
+ * The component takes no direct props, as it derives all necessary information from routing and context.
+ *
+ * @component
+ * @returns {JSX.Element} The EarthquakeDetailModalComponent, which includes SEO metadata and the `EarthquakeDetailView`.
  */
-const EarthquakeDetailModalComponent = () => { // Removed dataSourceTimespanDays from props
+const EarthquakeDetailModalComponent = () => {
     const {
         allEarthquakes,
         earthquakesLast7Days,
@@ -26,12 +30,13 @@ const EarthquakeDetailModalComponent = () => { // Removed dataSourceTimespanDays
         isLoadingMonthly
     } = useEarthquakeDataState();
 
-    // Corrected derivation for broaderEarthquakeData:
+    // Memoized value to determine the primary earthquake data list (all vs. last 7 days)
+    // based on whether an attempt to load monthly data has been made and if it was successful.
     const internalBroaderEarthquakeData = useMemo(() => {
         return (hasAttemptedMonthlyLoad && allEarthquakes && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days;
     }, [hasAttemptedMonthlyLoad, allEarthquakes, earthquakesLast7Days]);
 
-    // New logic for currentDataSourceTimespan
+    // Memoized value to determine the timespan (7 or 30 days) of the current data source.
     const currentDataSourceTimespan = useMemo(() => {
         // If an attempt has been made to load monthly data, we are targeting 30 days.
         // Even if it's still loading or failed, the intent was 30 days.
@@ -50,7 +55,18 @@ const EarthquakeDetailModalComponent = () => { // Removed dataSourceTimespanDays
         navigate(-1); // Go back to the previous page
     };
 
-    // Callback for when EarthquakeDetailView has loaded data
+    /**
+     * Callback function passed to `EarthquakeDetailView`.
+     * It is triggered when `EarthquakeDetailView` successfully loads the detailed earthquake data.
+     * This function then uses that data to construct comprehensive SEO properties,
+     * including title, description, keywords, canonical URL, and a JSON-LD object for the event.
+     * The generated SEO properties are stored in the `seoProps` state variable.
+     *
+     * @param {Object} loadedData - The full GeoJSON feature object of the loaded earthquake,
+     *                              as provided by the USGS detail endpoint. Expected to contain
+     *                              `id`, `properties` (with `mag`, `place`, `time`, `updated`, `detail`),
+     *                              `geometry.coordinates`, and potentially `shakemapIntensityImageUrl`.
+     */
     const onDataLoadedForSeo = useCallback((loadedData) => {
         // The 'loadedData' is expected to be the full JSON response from the USGS detail geojson endpoint
         // It should contain loadedData.id (USGS event ID) and loadedData.properties.detail (USGS event page URL)

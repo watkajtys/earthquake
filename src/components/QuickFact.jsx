@@ -1,6 +1,17 @@
 import React, { memo } from 'react';
 import InfoSnippet from './InfoSnippet'; // Assuming InfoSnippet is in the same directory
 
+/**
+ * Displays a "Quick Fact" section, which includes a predefined `InfoSnippet`
+ * (currently hardcoded to the "magnitude" topic) and a button to navigate to a "Learn" page.
+ * This component is memoized using `React.memo` for performance optimization.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {function(string):void} props.navigate - A navigation function (typically from a routing library like React Router)
+ *   used to redirect the user to the specified path (e.g., '/learn').
+ * @returns {JSX.Element} The QuickFact component.
+ */
 const QuickFact = ({ navigate }) => {
   return (
     <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">

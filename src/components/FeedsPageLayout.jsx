@@ -10,35 +10,35 @@ import LoadMoreDataButton from './LoadMoreDataButton'; // Import the new compone
 import { FEELABLE_QUAKE_THRESHOLD, MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 
 /**
- * A layout component for the feeds page, handling SEO and presentation of feed-specific content.
- * @param {object} props - The component's props.
- * @param {string} props.currentFeedTitle - Title of the current feed.
- * @param {string} props.activeFeedPeriod - Identifier for the active feed period (e.g., 'last_24_hours').
- * @param {Array<object> | null} props.currentFeedData - Data for the current feed.
- * @param {boolean} props.currentFeedisLoading - Loading state for the current feed.
- * @param {Array<object> | null} props.previousDataForCurrentFeed - Data for the previous period, for trend comparison.
- * @param {function} props.handleQuakeClick - Callback for when an earthquake is clicked.
- * @param {function} props.setActiveFeedPeriod - Callback to set the active feed period.
- * @param {function} props.handleLoadMonthlyData - Callback to load monthly data.
- * @param {boolean} props.hasAttemptedMonthlyLoad - Whether an attempt to load monthly data has been made.
- * @param {boolean} props.isLoadingMonthly - Loading state for monthly data.
- * @param {Array<object>} props.allEarthquakes - All earthquake data (used if monthly is loaded).
- * @param {function} props.getFeedPageSeoInfo - Helper function to get SEO information for the feed page.
- * @param {function} props.calculateStats - Function to calculate stats (needed by SummaryStatisticsCard).
- * @param {function} props.getMagnitudeColorStyle - Function for PaginatedEarthquakeTable.
- * @param {function} props.formatTimeAgo - Function for PaginatedEarthquakeTable.
- * @param {function} props.formatDate - Function for PaginatedEarthquakeTable.
- * @returns {JSX.Element} The rendered FeedsPageLayout component.
+ * Provides the layout structure for the earthquake feeds page.
+ * This component is memoized using `React.memo` for performance.
+ * It orchestrates the display of various feed-related views, including:
+ * - SEO metadata using `SeoMetadata`.
+ * - A `FeedSelector` to switch between different time periods or filters.
+ * - `SummaryStatisticsCard` to show aggregated data for the selected feed.
+ * - `PaginatedEarthquakeTable` to list earthquakes in the selected feed.
+ * - `LoadMoreDataButton` to enable fetching extended (e.g., monthly) data.
+ *
+ * Most of the data (like current feed data, titles, loading states) is derived internally
+ * using `useMemo` based on state from `EarthquakeDataContext` (e.g., `earthquakesLastHour`, `allEarthquakes`)
+ * and `UIStateContext` (e.g., `activeFeedPeriod`).
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {function} props.handleQuakeClick - Callback function passed to `PaginatedEarthquakeTable` for when an earthquake row is clicked.
+ * @param {function} props.getFeedPageSeoInfo - Function that returns SEO information (title, description, keywords)
+ *   based on the current feed title and active period.
+ * @param {function} props.calculateStats - Function passed to `SummaryStatisticsCard` to compute statistics from earthquake data.
+ * @param {function} props.getMagnitudeColorStyle - Function passed to `PaginatedEarthquakeTable` to get CSS classes for magnitude coloring.
+ * @param {function} props.formatTimeAgo - Function passed to `PaginatedEarthquakeTable` to format timestamps into "time ago" strings.
+ * @param {function} props.formatDate - Function passed to `PaginatedEarthquakeTable` to format timestamps into full date strings.
+ * @returns {JSX.Element} The FeedsPageLayout component.
  */
 const FeedsPageLayout = ({
-    // currentFeedTitle, activeFeedPeriod, currentFeedData, currentFeedisLoading, // Will be derived or from context
-    // previousDataForCurrentFeed, // Will be derived
-    handleQuakeClick, 
-    // setActiveFeedPeriod, // From context
-    // handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly, allEarthquakes, // From context
+    handleQuakeClick,
     getFeedPageSeoInfo,
-    calculateStats, // for SummaryStatisticsCard
-    getMagnitudeColorStyle, formatTimeAgo, formatDate // for PaginatedEarthquakeTable
+    calculateStats,
+    getMagnitudeColorStyle, formatTimeAgo, formatDate
 }) => {
     const {
         earthquakesLastHour, earthquakesPriorHour,
@@ -167,17 +167,7 @@ const FeedsPageLayout = ({
 };
 
 FeedsPageLayout.propTypes = {
-    // currentFeedTitle: PropTypes.string.isRequired, // Derived
-    // activeFeedPeriod: PropTypes.string.isRequired, // From context
-    // currentFeedData: PropTypes.array, // Derived
-    // currentFeedisLoading: PropTypes.bool, // Derived
-    // previousDataForCurrentFeed: PropTypes.array, // Derived
     handleQuakeClick: PropTypes.func.isRequired,
-    // setActiveFeedPeriod: PropTypes.func.isRequired, // From context
-    // handleLoadMonthlyData: PropTypes.func.isRequired, // From context (loadMonthlyData)
-    // hasAttemptedMonthlyLoad: PropTypes.bool, // From context
-    // isLoadingMonthly: PropTypes.bool, // From context
-    // allEarthquakes: PropTypes.array, // From context (contextAllEarthquakes)
     getFeedPageSeoInfo: PropTypes.func.isRequired,
     calculateStats: PropTypes.func.isRequired,
     getMagnitudeColorStyle: PropTypes.func.isRequired,

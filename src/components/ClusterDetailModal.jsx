@@ -5,6 +5,10 @@ import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for g
 
 /**
  * A modal component to display detailed information about an earthquake cluster.
+ * It includes a mini-map, summary statistics, and a list of individual earthquakes within the cluster.
+ * The modal implements accessibility features like focus trapping and closing with the Escape key.
+ *
+ * @component
  * @param {object} props - The component's props.
  * @param {object} props.cluster - Data for the cluster to display. Expected structure:
  *   {
@@ -15,16 +19,16 @@ import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for g
  *     originalQuakes: Array<object> // Array of individual quake objects
  *   }
  * @param {function} props.onClose - Function to call when the modal should be closed.
- * @param {function} props.formatDate - Function to format timestamps.
- * @param {function} props.getMagnitudeColorStyle - Function to get Tailwind CSS color styles for magnitude.
- * @param {function} [props.onIndividualQuakeSelect] - Callback when an individual quake item is selected.
- * @returns {JSX.Element | null} The rendered ClusterDetailModal component or null if no cluster data.
+ * @param {function} props.formatDate - Function to format timestamps (e.g., from a timestamp number to a human-readable string).
+ * @param {function} props.getMagnitudeColorStyle - Function that returns Tailwind CSS class string for magnitude-based coloring.
+ * @param {function} [props.onIndividualQuakeSelect] - Optional callback function triggered when an individual earthquake item within the modal is selected. Receives the quake object as an argument.
+ * @returns {JSX.Element | null} The rendered ClusterDetailModal component or null if no `cluster` data is provided.
  */
 function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
     const modalContentRef = React.useRef(null);
     const closeButtonRef = React.useRef(null);
 
-    // Handle Escape key press & Focus Trapping
+    // Effect for handling Escape key press for closing the modal and implementing focus trapping.
     React.useEffect(() => {
         const modalElement = modalContentRef.current;
         if (!modalElement) return;

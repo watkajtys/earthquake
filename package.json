@@ -8,7 +8,8 @@
     "build": "vite build && wrangler pages functions build --outdir ./dist/worker --sourcemap",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "docs": "npx jsdoc -c jsdoc.json"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

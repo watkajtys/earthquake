@@ -1,5 +1,30 @@
 // functions/api/cluster-definition.js
 
+/**
+ * @file functions/api/cluster-definition.js
+ * @description Cloudflare Pages Function for managing earthquake cluster definitions.
+ * This function handles POST requests to create or update cluster definitions
+ * and GET requests to retrieve specific cluster definitions from a D1 database.
+ */
+
+/**
+ * Handles incoming HTTP requests for the /api/cluster-definition endpoint.
+ * - **POST**: Creates or replaces a cluster definition in the D1 database.
+ *   Expects a JSON payload with `clusterId` (string), `earthquakeIds` (Array<string>),
+ *   and `strongestQuakeId` (string).
+ *   Returns a 201 status on successful creation/update, 400 for invalid input, or 500 for server errors.
+ * - **GET**: Retrieves a specific cluster definition from the D1 database.
+ *   Expects a `id` URL query parameter specifying the `clusterId`.
+ *   Returns JSON data of the cluster definition with a 200 status if found,
+ *   404 if not found, 400 for missing `id` parameter, or 500 for server errors.
+ * - Other HTTP methods will result in a 405 Method Not Allowed response.
+ *
+ * @async
+ * @param {object} context - The Cloudflare Pages Function context object.
+ * @param {Request} context.request - The incoming HTTP request object.
+ * @param {object} context.env - Environment variables, expected to contain `DB` (D1 Database binding).
+ * @returns {Promise<Response>} A `Response` object.
+ */
 export async function onRequest(context) {
   const { request, env } = context;
   const method = request.method;

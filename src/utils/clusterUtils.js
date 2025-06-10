@@ -3,17 +3,30 @@
 import { calculateDistance } from './utils.js'; // Assuming utils.js is in the same directory
 
 /**
- * Finds clusters of earthquakes based on proximity and time.
- * The algorithm sorts earthquakes by magnitude in descending order.
- * It then iterates through sorted earthquakes, greedily assigning them to the first cluster
- * they are close enough to (within maxDistanceKm). If an earthquake doesn't fit an existing
- * cluster being built, it can start a new one.
- * Temporal proximity (time difference between quakes) is not a direct factor in this clustering logic,
- * which could be a potential area for future enhancement.
- * @param {Array<object>} earthquakes - Array of earthquake objects. Expected to have `properties.time` and `geometry.coordinates`.
- * @param {number} maxDistanceKm - Maximum distance between quakes to be considered in the same cluster.
- * @param {number} minQuakes - Minimum number of quakes to form a valid cluster.
- * @returns {Array<Array<object>>} An array of clusters, where each cluster is an array of earthquake objects.
+ * @file clusterUtils.js
+ * @description Utility functions for earthquake cluster analysis, primarily `findActiveClusters`.
+ */
+
+/**
+ * Finds clusters of earthquakes based on geographic proximity.
+ * The algorithm sorts earthquakes by magnitude in descending order to prioritize stronger events as potential cluster centers.
+ * It then iterates through these sorted earthquakes. If an earthquake hasn't been processed yet,
+ * it starts a new potential cluster with this quake. It then iterates through all other unprocessed earthquakes,
+ * adding them to this new cluster if they are within `maxDistanceKm` of the initial quake.
+ * Once an earthquake is added to any cluster (or processed as a potential cluster starter), it's marked as processed
+ * and won't be considered again for starting new clusters or being added to subsequent ones.
+ * Clusters with fewer than `minQuakes` are discarded.
+ *
+ * Note: Temporal proximity (time difference between quakes within a cluster) is not a direct factor in this specific clustering logic,
+ * which could be an area for future enhancement if time-constrained clusters are desired.
+ * Console warnings are issued for quakes with invalid coordinate data.
+ *
+ * @param {Array<Object>} earthquakes - Array of earthquake objects. Each object is expected to have an `id`,
+ *   `properties.mag` (magnitude), and `geometry.coordinates` (an array like `[longitude, latitude, depth_optional]`).
+ * @param {number} maxDistanceKm - Maximum geographic distance (in kilometers) between an earthquake and the
+ *   initial earthquake of a cluster for it to be included in that cluster.
+ * @param {number} minQuakes - Minimum number of earthquakes required to form a valid cluster.
+ * @returns {Array<Array<Object>>} An array of clusters. Each cluster is an array of earthquake objects that meet the criteria.
  */
 export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
     const clusters = [];
