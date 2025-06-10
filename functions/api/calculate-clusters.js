@@ -22,13 +22,33 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 /**
+ * Generates a SHA-256 hash of sorted earthquake IDs.
+ * @param {Array<object>} earthquakes - Array of earthquake objects. Expected to have `id`.
+ * @returns {Promise<string>} A hex string representation of the hash.
+ */
+async function generateEarthquakeHash(earthquakes) {
+    if (!earthquakes || earthquakes.length === 0) {
+        return ''; // Return an empty string or a predefined constant for empty/invalid input
+    }
+    const ids = earthquakes.map(eq => eq.id).sort();
+    const idString = ids.join(',');
+    const encoder = new TextEncoder();
+    const data = encoder.encode(idString);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer)); // convert buffer to byte array
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); // convert bytes to hex string
+    return hashHex;
+}
+
+/**
  * Finds clusters of earthquakes based on proximity and time.
  * @param {Array<object>} earthquakes - Array of earthquake objects. Expected to have `properties.time` and `geometry.coordinates`.
  * @param {number} maxDistanceKm - Maximum distance between quakes to be considered in the same cluster.
  * @param {number} minQuakes - Minimum number of quakes to form a valid cluster.
+ * @param {number} maxTimeDifferenceMs - Maximum time difference in milliseconds between quakes to be considered in the same cluster.
  * @returns {Array<Array<object>>} An array of clusters, where each cluster is an array of earthquake objects.
  */
-function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
+function findActiveClusters(earthquakes, maxDistanceKm, minQuakes, maxTimeDifferenceMs) {
     const clusters = [];
     const processedQuakeIds = new Set();
 
@@ -57,7 +77,9 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
                 otherQuake.geometry.coordinates[0]
             );
 
-            if (dist <= maxDistanceKm) {
+            const timeDifference = Math.abs(otherQuake.properties.time - quake.properties.time);
+
+            if (dist <= maxDistanceKm && timeDifference <= maxTimeDifferenceMs) {
                 newCluster.push(otherQuake);
                 processedQuakeIds.add(otherQuake.id);
             }
@@ -73,7 +95,7 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
 export async function onRequestPost(context) {
   try {
     const { env } = context;
-    const { earthquakes, maxDistanceKm, minQuakes } = await context.request.json();
+    const { earthquakes, maxDistanceKm, minQuakes, maxTimeDifferenceMs } = await context.request.json();
 
     // Basic input validation
     if (!Array.isArray(earthquakes) || !earthquakes.length) {
@@ -94,9 +116,16 @@ export async function onRequestPost(context) {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    if (typeof maxTimeDifferenceMs !== 'number' || maxTimeDifferenceMs <= 0) {
+      return new Response(JSON.stringify({ error: 'Invalid maxTimeDifferenceMs' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     // Generate a cache key
-    const cacheKey = `clusters-${earthquakes.length}-${maxDistanceKm}-${minQuakes}`;
+    const earthquakeHash = await generateEarthquakeHash(earthquakes);
+    const cacheKey = `clusters-${earthquakeHash}-${maxDistanceKm}-${minQuakes}-${maxTimeDifferenceMs}`;
 
     try {
       // Check cache first
@@ -120,7 +149,7 @@ export async function onRequestPost(context) {
       // Non-fatal, proceed to compute if KV GET fails
     }
 
-    const clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+    const clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes, maxTimeDifferenceMs);
     const clusterDataString = JSON.stringify(clusters);
 
     try {

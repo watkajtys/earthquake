@@ -85,10 +85,11 @@ export async function fetchClusterDefinition(clusterId) {
  * @param {Array<object>} earthquakes - Array of earthquake objects.
  * @param {number} maxDistanceKm - Maximum distance for clustering.
  * @param {number} minQuakes - Minimum quakes to form a cluster.
+ * @param {number} maxTimeDifferenceMs - Maximum time difference in milliseconds for clustering.
  * @returns {Promise<Array<Array<object>>>} An array of clusters.
  * @throws {Error} If the request fails or the response is not ok.
  */
-export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
+export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes, maxTimeDifferenceMs) {
   if (!Array.isArray(earthquakes)) {
     console.error("fetchActiveClusters: Invalid earthquakes array provided.");
     throw new Error("Invalid earthquakes array");
@@ -101,6 +102,10 @@ export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes)
     console.error("fetchActiveClusters: Invalid minQuakes provided.");
     throw new Error("Invalid minQuakes");
   }
+  if (typeof maxTimeDifferenceMs !== 'number' || maxTimeDifferenceMs <= 0) {
+    console.error("fetchActiveClusters: Invalid maxTimeDifferenceMs provided.");
+    throw new Error("Invalid maxTimeDifferenceMs");
+  }
 
   try {
     const response = await fetch('/api/calculate-clusters', {
@@ -109,7 +114,7 @@ export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes)
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify({ earthquakes, maxDistanceKm, minQuakes }),
+      body: JSON.stringify({ earthquakes, maxDistanceKm, minQuakes, maxTimeDifferenceMs }),
     });
 
     if (response.ok) {
