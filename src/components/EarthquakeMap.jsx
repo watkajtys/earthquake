@@ -1,10 +1,10 @@
-import React, { useRef, useEffect, memo } from 'react';
+import React, { useRef, useEffect, memo, useState } from 'react'; // Added useState
 // PropTypes import removed
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json';
+// import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
@@ -102,6 +102,9 @@ const EarthquakeMap = ({
   defaultZoom = 8,
 }) => {
   const mapRef = useRef(null);
+  const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);
+  const [isTectonicPlatesLoading, setIsTectonicPlatesLoading] = useState(true);
+
   const initialMapCenter = [mapCenterLatitude, mapCenterLongitude];
   const highlightedQuakePosition = highlightQuakeLatitude !== undefined && highlightQuakeLongitude !== undefined
     ? [highlightQuakeLatitude, highlightQuakeLongitude]
@@ -155,6 +158,29 @@ const EarthquakeMap = ({
     highlightedQuakePosition
   ]);
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadTectonicPlates = async () => {
+      setIsTectonicPlatesLoading(true);
+      try {
+        const platesData = await import('../assets/TectonicPlateBoundaries.json');
+        if (isMounted) {
+          setTectonicPlatesDataJson(platesData.default);
+        }
+      } catch (error) {
+        console.error("Error loading tectonic plates data:", error);
+      } finally {
+        if (isMounted) {
+          setIsTectonicPlatesLoading(false);
+        }
+      }
+    };
+    loadTectonicPlates();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <MapContainer
       center={initialMapCenter}
@@ -194,7 +220,14 @@ const EarthquakeMap = ({
       )}
 
       {nearbyQuakes.map((quake, index) => {
-        if (!quake.geometry || !quake.geometry.coordinates || typeof quake.properties?.mag !== 'number' || typeof quake.properties?.time !== 'number') {
+        const coordinates = quake.geometry?.coordinates;
+        if (
+          !quake.geometry ||
+          !Array.isArray(coordinates) || // Check if coordinates is an array
+          coordinates.length < 2 ||      // Check for at least two elements (lon, lat)
+          typeof quake.properties?.mag !== 'number' ||
+          typeof quake.properties?.time !== 'number'
+        ) {
           console.warn("Skipping rendering of nearby quake due to missing data:", quake);
           return null;
         }
@@ -221,7 +254,9 @@ const EarthquakeMap = ({
         );
       })}
 
-      <GeoJSON data={tectonicPlatesData} style={getTectonicPlateStyle} />
+      {!isTectonicPlatesLoading && tectonicPlatesDataJson && (
+        <GeoJSON data={tectonicPlatesDataJson} style={getTectonicPlateStyle} />
+      )}
     </MapContainer>
   );
 };

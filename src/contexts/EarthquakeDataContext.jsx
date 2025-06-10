@@ -202,6 +202,7 @@ const initialState = {
     dailyCounts7Days: [],
     sampledEarthquakesLast7Days: [],
     magnitudeDistribution7Days: [],
+    tsunamiTriggeringQuake: null, // Add this
 };
 
 const actionTypes = {
@@ -230,6 +231,18 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
             const dailyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
             const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, dailyMajors);
 
+            // Inside DAILY_DATA_PROCESSED case, after hasRecentTsunamiWarning is determined:
+            let identifiedTsunamiQuake = null;
+            const hasRecentTsunamiWarning = l24.some(q => q.properties.tsunami === 1); // Recalculate for clarity within this scope
+            if (hasRecentTsunamiWarning) {
+                const tsunamiQuakes = l24.filter(q => q.properties.tsunami === 1);
+                if (tsunamiQuakes.length > 0) {
+                    // Sort by time descending to get the most recent
+                    tsunamiQuakes.sort((a, b) => b.properties.time - a.properties.time);
+                    identifiedTsunamiQuake = tsunamiQuakes[0];
+                }
+            }
+
             return {
                 ...state,
                 isLoadingDaily: false,
@@ -238,7 +251,8 @@ function earthquakeReducer(state = initialState, action) { // Set initialState a
                 earthquakesLastHour: filterByTime(features, 1, 0, fetchTime),
                 earthquakesPriorHour: filterByTime(features, 2, 1, fetchTime),
                 earthquakesLast24Hours: l24,
-                hasRecentTsunamiWarning: l24.some(q => q.properties.tsunami === 1),
+                hasRecentTsunamiWarning: hasRecentTsunamiWarning, // Use the variable defined above
+                tsunamiTriggeringQuake: identifiedTsunamiQuake, // Add this
                 highestRecentAlert: currentHighestAlert,
                 activeAlertTriggeringQuakes: currentHighestAlert ? l24.filter(q => q.properties.alert === currentHighestAlert) : [],
                 ...majorQuakeUpdates,
@@ -457,8 +471,7 @@ export const EarthquakeDataProvider = ({ children }) => {
             isMounted = false;
             clearInterval(intervalId);
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [state.isInitialAppLoad]); // Dependency on isInitialAppLoad to re-initiate message cycling logic if app were to somehow reset to initial load state.
+    }, []); // Corrected: This effect should run once on mount to setup initial load and interval.
 
     // Loading message cycling effect
     useEffect(() => {
@@ -551,6 +564,7 @@ export const EarthquakeDataProvider = ({ children }) => {
         dailyCounts7Days: state.dailyCounts7Days,
         sampledEarthquakesLast7Days: state.sampledEarthquakesLast7Days,
         magnitudeDistribution7Days: state.magnitudeDistribution7Days,
+        tsunamiTriggeringQuake: state.tsunamiTriggeringQuake, // Add this
     }), [
         state, // Main state object from reducer
         isLoadingInitialData, 

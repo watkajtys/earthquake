@@ -1,5 +1,7 @@
 // src/utils.js
 
+// NOTE: This function is duplicated in functions/api/calculate-clusters.js
+// Any algorithmic changes should be synchronized.
 /**
  * Calculates the distance between two geographical coordinates using the Haversine formula.
  * @param {number} lat1 Latitude of the first point.
@@ -38,11 +40,32 @@ export const getMagnitudeColor = (magnitude) => {
     return '#B91C1C'; // red-700
 };
 
+/**
+ * Returns Tailwind CSS class strings for background and text color based on earthquake magnitude.
+ * @param {number | null | undefined} magnitude - The earthquake magnitude.
+ * @returns {string} Tailwind CSS class strings.
+ */
+export const getMagnitudeColorStyle = (magnitude) => {
+    if (magnitude === null || magnitude === undefined) return 'bg-slate-600 text-slate-100';
+    if (magnitude < 1.0) return 'bg-cyan-800 bg-opacity-50 text-cyan-100';
+    if (magnitude < 2.5) return 'bg-cyan-700 bg-opacity-50 text-cyan-100';
+    if (magnitude < 4.0) return 'bg-emerald-700 bg-opacity-50 text-emerald-100';
+    if (magnitude < 5.0) return 'bg-yellow-700 bg-opacity-50 text-yellow-100';
+    if (magnitude < 6.0) return 'bg-orange-700 bg-opacity-50 text-orange-100';
+    if (magnitude < 7.0) return 'bg-orange-800 bg-opacity-60 text-orange-50';
+    if (magnitude < 8.0) return 'bg-red-800 bg-opacity-60 text-red-50';
+    return 'bg-red-900 bg-opacity-70 text-red-50';
+};
+
 // Add other utility functions here as the app grows
 
 export const isValidNumber = (num) => {
-    const parsedNum = parseFloat(num);
-    return typeof parsedNum === 'number' && !isNaN(parsedNum);
+    // Handles actual numbers, numeric strings. Rejects mixed strings, null, undefined, empty/whitespace, arrays.
+    if (num === null || typeof num === 'boolean' || num === undefined || Array.isArray(num)) return false;
+    if (typeof num === 'string' && num.trim() === '') return false;
+    // Number() converts empty array [] to 0, so Array.isArray check is important.
+    // Number() converts "12a" to NaN.
+    return !isNaN(Number(num));
 };
 
 export const formatDate = (timestamp) => {
@@ -59,6 +82,7 @@ export const isValuePresent = (value) => {
 };
 
 export const formatNumber = (num, precision = 1) => {
+    // parseFloat(null) is NaN, so it will correctly return 'N/A' without special handling for null.
     const number = parseFloat(num);
     if (Number.isNaN(number)) return 'N/A';
     return number.toFixed(precision);

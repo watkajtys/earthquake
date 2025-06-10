@@ -14,69 +14,6 @@ const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefin
   });
 };
 
-async function handleClusterDefinitionRequest(context, url) {
-  const sourceName = "cluster-definition-handler";
-  const { request, env } = context;
-  const CLUSTER_KV = env.CLUSTER_KV;
-
-  if (!CLUSTER_KV) {
-    return jsonErrorResponse("KV store not configured", 500, sourceName);
-  }
-
-  let ttl_seconds = 6 * 60 * 60; // 6 hours (21600 seconds)
-  if (env.CLUSTER_DEFINITION_TTL_SECONDS) {
-    const parsed = parseInt(env.CLUSTER_DEFINITION_TTL_SECONDS, 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      ttl_seconds = parsed;
-    } else {
-      console.warn(`Invalid CLUSTER_DEFINITION_TTL_SECONDS value: "${env.CLUSTER_DEFINITION_TTL_SECONDS}". Using default: ${ttl_seconds}s.`);
-    }
-  }
-
-  if (request.method === "POST") {
-    try {
-      const { clusterId, earthquakeIds, strongestQuakeId } = await request.json();
-      if (!clusterId || !earthquakeIds || !Array.isArray(earthquakeIds) || earthquakeIds.length === 0 || !strongestQuakeId) {
-        return jsonErrorResponse("Missing or invalid parameters for POST", 400, sourceName);
-      }
-      const valueToStore = {
-        earthquakeIds,
-        strongestQuakeId,
-        updatedAt: new Date().toISOString()
-      };
-      const kvValue = JSON.stringify(valueToStore);
-      await CLUSTER_KV.put(clusterId, kvValue, { expirationTtl: ttl_seconds });
-      return new Response(JSON.stringify({ status: "success", message: "Cluster definition stored." }), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (e) {
-      console.error("Error processing POST for cluster definition:", e);
-      return jsonErrorResponse(`Error processing request: ${e.message}`, 500, sourceName);
-    }
-  } else if (request.method === "GET") {
-    const clusterId = url.searchParams.get("id");
-    if (!clusterId) {
-      return jsonErrorResponse("Missing 'id' query parameter for GET", 400, sourceName);
-    }
-    try {
-      const kvValue = await CLUSTER_KV.get(clusterId);
-      if (kvValue === null) {
-        return jsonErrorResponse("Cluster definition not found.", 404, sourceName);
-      }
-      return new Response(kvValue, {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (e) {
-      console.error("Error processing GET for cluster definition:", e);
-      return jsonErrorResponse(`Error processing request: ${e.message}`, 500, sourceName);
-    }
-  } else {
-    return jsonErrorResponse("Method not allowed", 405, sourceName);
-  }
-}
-
 async function handleUsgsProxyRequest(context, apiUrl) {
   const sourceName = "usgs-proxy-handler";
   const cacheKey = new Request(apiUrl, context.request);
@@ -363,40 +300,29 @@ export async function handleEarthquakesSitemapRequest(context) {
 // 4. Clusters Sitemap Endpoint (/sitemap-clusters.xml)
 export async function handleClustersSitemapRequest(context) {
   const sourceName = "clusters-sitemap-handler";
-  const CLUSTER_KV = context.env.CLUSTER_KV;
+  const DB = context.env.DB;
   let clustersXml = "";
   const currentDate = new Date().toISOString(); // For lastmod fallback
 
-  if (!CLUSTER_KV) {
-    console.error(`[${sourceName}] CLUSTER_KV not available`);
-    return new Response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<!-- CLUSTER_KV not available -->\n</urlset>`, {
+  if (!DB) {
+    console.error(`[${sourceName}] D1 Database (DB) not available`);
+    return new Response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<!-- D1 Database not available -->\n</urlset>`, {
       headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" }, // Cache error for 1 hour
     });
   }
 
   try {
-    const listResult = await CLUSTER_KV.list({ limit: 500 }); // Limit to 500 keys
+    // Fetch clusterId and updatedAt from ClusterDefinitions table
+    // Assuming columns are named clusterId and updatedAt. Adjust if necessary.
+    const stmt = DB.prepare("SELECT clusterId, updatedAt FROM ClusterDefinitions ORDER BY updatedAt DESC LIMIT 500");
+    const { results } = await stmt.all();
 
-    if (listResult && listResult.keys) {
-      for (const key of listResult.keys) {
-        const loc = `https://earthquakeslive.com/cluster/${escapeXml(key.name)}`;
-        let lastmod = currentDate; // Fallback to current date
-
-        try {
-          const kvValueString = await CLUSTER_KV.get(key.name);
-          if (kvValueString) {
-            const kvValue = JSON.parse(kvValueString);
-            if (kvValue && kvValue.updatedAt) {
-              lastmod = kvValue.updatedAt;
-            } else {
-              console.warn(`[${sourceName}] Missing updatedAt for cluster key: ${key.name}. Falling back to currentDate.`);
-            }
-          } else {
-            console.warn(`[${sourceName}] No KV value found for cluster key: ${key.name} during sitemap generation. Falling back to currentDate.`);
-          }
-        } catch (e) {
-          console.error(`[${sourceName}] Error parsing KV value for cluster key ${key.name}: ${e.message}. Falling back to currentDate.`, e);
-        }
+    if (results && results.length > 0) {
+      for (const row of results) {
+        const loc = `https://earthquakeslive.com/cluster/${escapeXml(row.clusterId)}`;
+        // Ensure updatedAt is a valid ISO string. If it's already stored as ISO, no conversion needed.
+        // If it's a number (timestamp) or different format, it might need new Date(row.updatedAt).toISOString()
+        const lastmod = row.updatedAt ? new Date(row.updatedAt).toISOString() : currentDate;
 
         clustersXml += `
   <url>
@@ -407,11 +333,11 @@ export async function handleClustersSitemapRequest(context) {
   </url>`;
       }
     } else {
-      console.log(`[${sourceName}] No cluster keys found or listResult is empty.`);
+      console.log(`[${sourceName}] No cluster definitions found in D1 table ClusterDefinitions.`);
     }
   } catch (error) {
-    console.error(`[${sourceName}] Exception listing or processing cluster keys: ${error.message}`, error);
-    return new Response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<!-- Exception processing cluster data: ${escapeXml(error.message)} -->\n</urlset>`, {
+    console.error(`[${sourceName}] Exception querying or processing cluster data from D1: ${error.message}`, error);
+    return new Response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<!-- Exception processing cluster data from D1: ${escapeXml(error.message)} -->\n</urlset>`, {
       headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" }, // Cache error for 1 hour
     });
   }
@@ -535,6 +461,7 @@ export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeXml(title)}</title>
   <meta name="description" content="${escapeXml(description)}">
+  <meta name="keywords" content="${escapeXml(keywords.toLowerCase())}">
   <link rel="canonical" href="${escapeXml(canonicalUrl)}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@builtbyvibes">
@@ -542,7 +469,7 @@ export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
   <meta property="og:description" content="${escapeXml(description)}">
   <meta property="og:url" content="${escapeXml(canonicalUrl)}">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://earthquakeslive.com/social-share-placeholder.png">
+  <meta property="og:image" content="https://earthquakeslive.com/social-default-earthquake.png">
   <script type="application/ld+json">${JSON.stringify(jsonLd, null, 2)}</script>
 </head>
 <body>
@@ -584,8 +511,9 @@ export async function handlePrerenderCluster(context, clusterId) {
   const sourceName = "prerender-cluster";
   const siteUrl = "https://earthquakeslive.com"; // Base site URL
 
-  if (!env.CLUSTER_KV) {
-    console.error(`[${sourceName}] CLUSTER_KV not configured.`);
+  // Using env.DB for D1 access, env.CLUSTER_KV is no longer used here.
+  if (!env.DB) {
+    console.error(`[${sourceName}] D1 Database (env.DB) not configured for prerendering cluster.`);
     return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Service configuration error.</body></html>`, {
       status: 500,
       headers: {
@@ -597,10 +525,13 @@ export async function handlePrerenderCluster(context, clusterId) {
 
   try {
     console.log(`[${sourceName}] Prerendering cluster: ${clusterId}`);
-    const clusterDataString = await env.CLUSTER_KV.get(clusterId);
+    // Fetch cluster data from D1 table ClusterDefinitions
+    // Assuming table `ClusterDefinitions` and columns `clusterId`, `earthquakeIds`, `strongestQuakeId`, `updatedAt`
+    const stmt = env.DB.prepare("SELECT earthquakeIds, strongestQuakeId, updatedAt FROM ClusterDefinitions WHERE clusterId = ?").bind(clusterId);
+    const clusterInfo = await stmt.first();
 
-    if (!clusterDataString) {
-      console.warn(`[${sourceName}] Cluster definition not found for ID: ${clusterId}`);
+    if (!clusterInfo) {
+      console.warn(`[${sourceName}] Cluster definition not found in D1 for ID: ${clusterId}`);
       return new Response(`<!DOCTYPE html><html><head><title>Not Found</title><meta name="robots" content="noindex"></head><body>Cluster not found.</body></html>`, {
         status: 404,
         headers: {
@@ -610,8 +541,20 @@ export async function handlePrerenderCluster(context, clusterId) {
       });
     }
 
-    const clusterData = JSON.parse(clusterDataString);
-    const { earthquakeIds, strongestQuakeId, updatedAt } = clusterData;
+    // earthquakeIds might be stored as JSON string in D1, parse if needed.
+    // Or it might be retrieved directly if D1 supports JSON types well and wrangler config is right.
+    // For this example, assuming earthquakeIds is retrieved as a string that needs parsing.
+    // Adjust if earthquakeIds is stored/retrieved differently (e.g. as a native JSON type or serialized differently).
+    let earthquakeIds;
+    try {
+        earthquakeIds = typeof clusterInfo.earthquakeIds === 'string' ? JSON.parse(clusterInfo.earthquakeIds) : clusterInfo.earthquakeIds;
+    } catch (e) {
+        console.error(`[${sourceName}] Error parsing earthquakeIds for cluster ${clusterId}: ${e.message}`);
+        return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error processing cluster data.</body></html>`, {
+            status: 500, headers: { "Content-Type": "text/html", "Cache-Control": "public, s-maxage=3600" }
+        });
+    }
+    const { strongestQuakeId, updatedAt } = clusterInfo;
     const numEvents = earthquakeIds ? earthquakeIds.length : 0;
     const canonicalUrl = `${siteUrl}/cluster/${clusterId}`;
     const formattedUpdatedAt = new Date(updatedAt).toLocaleString('en-US', {
@@ -715,6 +658,7 @@ export async function handlePrerenderCluster(context, clusterId) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeXml(title)}</title>
   <meta name="description" content="${escapeXml(description)}">
+  <meta name="keywords" content="${escapeXml(keywords.toLowerCase())}">
   <link rel="canonical" href="${escapeXml(canonicalUrl)}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@builtbyvibes">
@@ -722,7 +666,7 @@ export async function handlePrerenderCluster(context, clusterId) {
   <meta property="og:description" content="${escapeXml(description)}">
   <meta property="og:url" content="${escapeXml(canonicalUrl)}">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://earthquakeslive.com/social-share-placeholder.png">
+  <meta property="og:image" content="https://earthquakeslive.com/social-default-earthquake.png">
   <script type="application/ld+json">${JSON.stringify(jsonLd, null, 2)}</script>
 </head>
 <body>
@@ -789,9 +733,7 @@ export async function onRequest(context) {
   }
 
   // Existing API routes
-  else if (pathname === "/api/cluster-definition") {
-    return handleClusterDefinitionRequest(context, url);
-  } else if (pathname === "/api/usgs-proxy") {
+  else if (pathname === "/api/usgs-proxy") {
     const apiUrl = url.searchParams.get("apiUrl");
     if (!apiUrl) {
       return jsonErrorResponse("Missing apiUrl query parameter for proxy request", 400, "usgs-proxy-router");

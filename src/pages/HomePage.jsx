@@ -8,21 +8,22 @@ import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
 import NotableQuakeFeature from '../components/NotableQuakeFeature';
 import PreviousNotableQuakeFeature from '../components/PreviousNotableQuakeFeature';
 import InfoSnippet from '../components/InfoSnippet';
-import coastlineData from '../assets/ne_110m_coastline.json';
-import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json';
+// import coastlineData from '../assets/ne_110m_coastline.json'; // Removed for dynamic import
+// import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import GlobalLastMajorQuakeTimer from "../components/GlobalLastMajorQuakeTimer.jsx";
 import BottomNav from "../components/BottomNav.jsx";
 import ClusterSummaryItem from '../components/ClusterSummaryItem';
 import ClusterDetailModal from '../components/ClusterDetailModal'; // This is for the cluster map point, not the route component
 // import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx'; // Removed static import, will use lazy loaded
-import { getMagnitudeColor } from '../utils/utils.js'; // calculateDistance removed
-import { findActiveClusters } from '../utils/clusterUtils.js'; // Import findActiveClusters
+import { getMagnitudeColor, getMagnitudeColorStyle } from '../utils/utils.js';
+// import { findActiveClusters } from '../utils/clusterUtils.js'; // Import findActiveClusters - REMOVED
 
 // Import newly created components
 import SkeletonText from '../components/skeletons/SkeletonText';
 import SkeletonBlock from '../components/skeletons/SkeletonBlock';
 import SkeletonListItem from '../components/skeletons/SkeletonListItem';
 import SkeletonTableRow from '../components/skeletons/SkeletonTableRow';
+import AlertDisplay from '../components/AlertDisplay';
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // RegionalDistributionList will be lazy loaded
@@ -37,7 +38,7 @@ const InteractiveGlobeView = lazy(() => import('../components/InteractiveGlobeVi
 // import useMonthlyEarthquakeData from '../hooks/useMonthlyEarthquakeData'; // Will use context instead
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 import { useUIState } from '../contexts/UIStateContext.jsx'; // Import the new hook
-import { registerClusterDefinition } from '../services/clusterApiService.js'; // Import the new service
+import { registerClusterDefinition, fetchActiveClusters } from '../services/clusterApiService.js'; // Import the new service & fetchActiveClusters
 import {
     // USGS_API_URL_MONTH, // Now used inside useMonthlyEarthquakeData
     CLUSTER_MAX_DISTANCE_KM,
@@ -78,30 +79,42 @@ const GlobeLayout = (props) => {
     globeFocusLng,
     handleQuakeClick,
     getMagnitudeColor, // This is the function itself
-    coastlineData,
-    tectonicPlatesData,
+    // coastlineData, // Will be passed as props
+    // tectonicPlatesData, // Will be passed as props
     activeClusters,
     lastMajorQuake,
     formatTimeDuration,
     handleNotableQuakeSelect,
-    keyStatsForGlobe
+    keyStatsForGlobe,
+    // Props for GeoJSON data and loading state
+    coastlineData,
+    tectonicPlatesData,
+    areGeoJsonAssetsLoading,
+    areClustersLoading // Added new prop
   } = props;
+
+  // areClustersLoading is now available here for future use, e.g., showing a specific loading indicator.
+  // For now, no visual change based on it as per requirements.
 
   return (
     <div className="block h-full w-full"> {/* Base container for the globe and its fixed UI elements */}
-      <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe...</div>}>
-        <InteractiveGlobeView
-          defaultFocusLat={20}
-          defaultFocusLng={globeFocusLng}
-          onQuakeClick={handleQuakeClick}
-          getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
-          allowUserDragRotation={true}
-          enableAutoRotation={true}
-          globeAutoRotateSpeed={0.1}
-          coastlineGeoJson={coastlineData}
-          tectonicPlatesGeoJson={tectonicPlatesData}
-          activeClusters={activeClusters}
-        />
+      <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
+        {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
+           <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
+        ) : (
+          <InteractiveGlobeView
+            defaultFocusLat={20}
+            defaultFocusLng={globeFocusLng}
+            onQuakeClick={handleQuakeClick}
+            getMagnitudeColorFunc={getMagnitudeColor} // Passed as getMagnitudeColorFunc
+            allowUserDragRotation={true}
+            enableAutoRotation={true}
+            globeAutoRotateSpeed={0.1}
+            coastlineGeoJson={coastlineData}
+            tectonicPlatesGeoJson={tectonicPlatesData}
+            activeClusters={activeClusters}
+          />
+        )}
       </Suspense>
 
       {/* Absolutely positioned UI elements over the globe */}
@@ -214,23 +227,7 @@ function App() {
     // getMagnitudeColor is now imported from utils.js and used directly where needed,
     // or passed as a prop if a component needs it but App itself doesn't use it directly in a useCallback here.
     // The useCallback wrapper for getMagnitudeColor previously here is removed.
-
-    /**
-     * Returns Tailwind CSS class strings for background and text color based on earthquake magnitude.
-     * @param {number | null | undefined} magnitude - The earthquake magnitude.
-     * @returns {string} Tailwind CSS class strings.
-     */
-    const getMagnitudeColorStyle = useCallback((magnitude) => {
-        if (magnitude === null || magnitude === undefined) return 'bg-slate-600 text-slate-100';
-        if (magnitude < 1.0) return 'bg-cyan-800 bg-opacity-50 text-cyan-100';
-        if (magnitude < 2.5) return 'bg-cyan-700 bg-opacity-50 text-cyan-100';
-        if (magnitude < 4.0) return 'bg-emerald-700 bg-opacity-50 text-emerald-100';
-        if (magnitude < 5.0) return 'bg-yellow-700 bg-opacity-50 text-yellow-100';
-        if (magnitude < 6.0) return 'bg-orange-700 bg-opacity-50 text-orange-100';
-        if (magnitude < 7.0) return 'bg-orange-800 bg-opacity-60 text-orange-50';
-        if (magnitude < 8.0) return 'bg-red-800 bg-opacity-60 text-red-50';
-        return 'bg-red-900 bg-opacity-70 text-red-50';
-    }, []);
+    // getMagnitudeColorStyle was moved to src/utils/utils.js
 
     const REGIONS = useMemo(() => [
         { name: "Alaska & W. Canada", latMin: 50, latMax: 72, lonMin: -170, lonMax: -125, color: "#A78BFA" },
@@ -286,7 +283,13 @@ function App() {
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Kept local
     // activeSidebarView, activeFeedPeriod, globeFocusLng, focusedNotableQuake are from useUIState()
-    // const [activeClusters, setActiveClusters] = useState([]); // REPLACED with useMemo below
+    const [calculatedClusters, setCalculatedClusters] = useState([]); // NEW state for API fetched clusters
+    const [areClustersLoading, setAreClustersLoading] = useState(false); // New state for cluster loading
+
+    // State for GeoJSON data
+    const [coastlineData, setCoastlineData] = useState(null);
+    const [tectonicPlatesData, setTectonicPlatesData] = useState(null);
+    const [areGeoJsonAssetsLoading, setAreGeoJsonAssetsLoading] = useState(true);
 
     // --- Data Fetching Callbacks ---
     // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
@@ -406,13 +409,61 @@ function App() {
 
     // Old handleLoadMonthlyData is removed. `loadMonthlyData` from the hook is used instead.
 
-    // Calculate activeClusters using useMemo
-    const activeClusters = useMemo(() => {
-    if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
-      return findActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
+    // Effect to fetch active clusters from the API
+    useEffect(() => {
+        if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
+            setAreClustersLoading(true); // Set loading true before fetch
+            fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
+                .then(clusters => {
+                    setCalculatedClusters(clusters);
+                    setAreClustersLoading(false); // Set loading false on success
+                })
+                .catch(error => {
+                    console.error("Error fetching active clusters:", error);
+                    setCalculatedClusters([]);
+                    setAreClustersLoading(false); // Set loading false on error
+                });
+        } else {
+            setCalculatedClusters([]);
+            setAreClustersLoading(false); // Set loading false if no data to fetch for
         }
-        return [];
-  }, [earthquakesLast7Days]);
+    }, [earthquakesLast7Days]); // Dependency: earthquakesLast7Days
+
+    // Use calculatedClusters for the activeClusters memo
+    const activeClusters = useMemo(() => {
+        return calculatedClusters;
+    }, [calculatedClusters]);
+
+    // Effect to load GeoJSON assets
+    useEffect(() => {
+      let isMounted = true;
+      const loadGeoJsonAssets = async () => {
+        setAreGeoJsonAssetsLoading(true);
+        try {
+          const [coastline, tectonic] = await Promise.all([
+            import('../assets/ne_110m_coastline.json'),
+            import('../assets/TectonicPlateBoundaries.json')
+          ]);
+          if (isMounted) {
+            setCoastlineData(coastline.default); // .default is needed for dynamic import of JSON
+            setTectonicPlatesData(tectonic.default);
+          }
+        } catch (error) {
+          console.error("Error loading GeoJSON assets:", error);
+          // Optionally, set error state here
+        } finally {
+          if (isMounted) {
+            setAreGeoJsonAssetsLoading(false);
+          }
+        }
+      };
+
+      loadGeoJsonAssets();
+
+      return () => {
+        isMounted = false;
+      };
+    }, []); // Empty dependency array to run once on mount
 
     useEffect(() => {
         const timerId = setInterval(() => setAppCurrentTime(Date.now()), HEADER_TIME_UPDATE_INTERVAL_MS);
@@ -585,21 +636,49 @@ function App() {
                 _maxMagInternal: maxMag,
                 _quakeCountInternal: cluster.length,
                 _earliestTimeInternal: earliestTime,
+                _latestTimeInternal: latestTime, // **** ADDED _latestTimeInternal ****
                 originalQuakes: cluster,
-                strongestQuakeId: strongestQuakeInCluster.id, // <-- Add this line
+                strongestQuakeId: strongestQuakeInCluster.id,
             };
         }).filter(Boolean); // Remove any nulls if a cluster was empty
 
-        // Sort clusters: primarily by max magnitude (desc), then by quake count (desc)
+        // Sort clusters:
         processed.sort((a, b) => {
+            // Primary sort: by latest time in cluster (descending - most recent first)
+            if (b._latestTimeInternal !== a._latestTimeInternal) {
+                return b._latestTimeInternal - a._latestTimeInternal;
+            }
+            // Secondary sort: by max magnitude (descending - strongest first)
             if (b._maxMagInternal !== a._maxMagInternal) {
                 return b._maxMagInternal - a._maxMagInternal;
             }
+            // Tertiary sort: by quake count (descending) for further tie-breaking
             return b._quakeCountInternal - a._quakeCountInternal;
         });
 
         // Filter clusters to include only those with a max magnitude >= MAJOR_QUAKE_THRESHOLD
         const significantClusters = processed.filter(cluster => cluster._maxMagInternal >= MAJOR_QUAKE_THRESHOLD);
+
+        // Temporary debug logs - REMOVE AFTER DEBUGGING
+        // console.log("----------- DEBUG: Processed Clusters (before sort) -----------");
+        // activeClusters.map(clusterRaw => { // Renamed to avoid conflict
+        //     // Simplified reconstruction for logging - this is NOT the full component logic
+        //     if (!clusterRaw || clusterRaw.length === 0) return null;
+        //     let maxMag = -Infinity, earliestTime = Infinity, latestTime = -Infinity, strongestQuakeInCluster = null;
+        //     clusterRaw.forEach(quake => {
+        //         if (quake.properties.mag > maxMag) maxMag = quake.properties.mag;
+        //         if (quake.properties.time < earliestTime) earliestTime = quake.properties.time;
+        //         if (quake.properties.time > latestTime) latestTime = quake.properties.time;
+        //     });
+        //     strongestQuakeInCluster = clusterRaw.sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0))[0] || clusterRaw[0];
+        //     return { id: `overview_cluster_${strongestQuakeInCluster?.id}_${clusterRaw.length}`, _latestTimeInternal: latestTime, _maxMagInternal: maxMag, _quakeCountInternal: clusterRaw.length };
+        // }).filter(Boolean)
+        //   .forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
+        // console.log("----------- DEBUG: Processed Clusters (after sort) -----------");
+        // processed.forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
+        // console.log("----------- DEBUG: Significant Clusters (after filter) -----------");
+        // significantClusters.forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
+
 
         return significantClusters;
 
@@ -608,6 +687,9 @@ function App() {
     // Effect to register cluster definitions
     useEffect(() => {
         if (overviewClusters && overviewClusters.length > 0) {
+            // console.log("----------- DEBUG: Registering Overview Clusters -----------");
+            // overviewClusters.forEach(c => console.log(c.id, c._latestTimeInternal, c._maxMagInternal, c._quakeCountInternal));
+
             const registrationPromises = [];
             const idsSuccessfullyRegisteredInEffect = new Set();
 
@@ -815,13 +897,16 @@ function App() {
                                       globeFocusLng={globeFocusLng}
                                       handleQuakeClick={handleQuakeClick}
                                       getMagnitudeColor={getMagnitudeColor}
+                                      // Pass new state for GeoJSON
                                       coastlineData={coastlineData}
                                       tectonicPlatesData={tectonicPlatesData}
-                                      activeClusters={activeClusters}
+                                      areGeoJsonAssetsLoading={areGeoJsonAssetsLoading}
+                                      activeClusters={activeClusters} // This now uses calculatedClusters
                                       lastMajorQuake={lastMajorQuake}
                                       formatTimeDuration={formatTimeDuration}
                                       handleNotableQuakeSelect={handleNotableQuakeSelect}
                                       keyStatsForGlobe={keyStatsForGlobe}
+                                      areClustersLoading={areClustersLoading} // Pass new prop
                                     />
                                   </>
                                 }
@@ -841,6 +926,7 @@ function App() {
                                       onIndividualQuakeSelect={handleQuakeClick}
                                       formatTimeAgo={formatTimeAgo}
                                       formatTimeDuration={formatTimeDuration}
+                                      areParentClustersLoading={areClustersLoading} // Pass the new prop
                                     />
                                   }
                                 />
@@ -909,29 +995,28 @@ function App() {
                         )}
                         {activeSidebarView === 'overview_panel' && (
                             <>
-                            {currentAlertConfig && (
-                                <div
-                                    className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} `}
-                                    role="region"
-                                    aria-live="polite"
-                                    aria-labelledby="usgs-alert-title"
-                                >
-                                    <p id="usgs-alert-title" className="font-bold text-sm">Active USGS Alert: {currentAlertConfig.text}</p>
-                                    <p>{currentAlertConfig.description}</p>
-                                    {activeAlertTriggeringQuakes.length > 0 && (<Suspense fallback={<ChartLoadingFallback message="Loading alert quakes table..." />}><PaginatedEarthquakeTable title={`Alert Triggering Quakes (${currentAlertConfig.text})`} earthquakes={activeAlertTriggeringQuakes} isLoading={false} onQuakeClick={handleQuakeClick} itemsPerPage={3} periodName="alerting" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} SkeletonText={SkeletonText} SkeletonTableRow={SkeletonTableRow} /></Suspense> )}
-                                </div>
-                            )}
-                            {hasRecentTsunamiWarning && !currentAlertConfig && (
-                                <div
-                                    className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs"
-                                    role="region"
-                                    aria-live="polite"
-                                    aria-labelledby="tsunami-warning-title"
-                                >
-                                    <p id="tsunami-warning-title" className="font-bold">Tsunami Info</p>
-                                    <p>Recent quakes indicate potential tsunami activity. Check official channels.</p>
-                                </div>
-                            )}
+                            <AlertDisplay
+                                currentAlertConfig={currentAlertConfig}
+                                hasRecentTsunamiWarning={hasRecentTsunamiWarning}
+                                ALERT_LEVELS={ALERT_LEVELS}
+                            />
+                            {(currentAlertConfig && activeAlertTriggeringQuakes && activeAlertTriggeringQuakes.length > 0 && (
+                                <Suspense fallback={<ChartLoadingFallback message="Loading alert quakes table..." />}>
+                                    <PaginatedEarthquakeTable
+                                        title={`Alert Triggering Quakes (${currentAlertConfig.text})`}
+                                        earthquakes={activeAlertTriggeringQuakes}
+                                        isLoading={false} // Assuming data is loaded if activeAlertTriggeringQuakes is populated
+                                        onQuakeClick={handleQuakeClick}
+                                        itemsPerPage={3}
+                                        periodName="alerting"
+                                        getMagnitudeColorStyle={getMagnitudeColorStyle}
+                                        formatTimeAgo={formatTimeAgo}
+                                        formatDate={formatDate}
+                                        SkeletonText={SkeletonText} // Pass SkeletonText
+                                        SkeletonTableRow={SkeletonTableRow} // Pass SkeletonTableRow
+                                    />
+                                </Suspense>
+                            ))}
                             <TimeSinceLastMajorQuakeBanner
                                     // Props sourced from context are removed
                                 formatTimeDuration={formatTimeDuration}
@@ -969,24 +1054,12 @@ function App() {
 
                                 {/* Active Earthquake Clusters Section - Desktop Sidebar */}
                                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
-                                    <h3 className="text-md font-semibold mb-2 text-indigo-300">
-                                        Active Earthquake Clusters
-                                    </h3>
-                                    {overviewClusters && overviewClusters.length > 0 ? (
-                                        <ul className="space-y-2">
-                                            {overviewClusters.map(cluster => (
-                                                <ClusterSummaryItem
-                                                    clusterData={cluster}
-                                                    key={cluster.id}
-                                                    onClusterSelect={handleClusterSummaryClick} // <-- Add this prop
-                                                />
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <p className="text-xs text-slate-400 text-center py-2">
-                                            No significant active clusters detected currently.
-                                        </p>
-                                    )}
+                                <h3 className="text-md font-semibold mb-2 text-indigo-300"> Active Earthquake Clusters </h3>
+                                {areClustersLoading && (!overviewClusters || overviewClusters.length === 0) ? (
+                                    <div className="space-y-2"> <SkeletonListItem /><SkeletonListItem /> </div>
+                                ) : overviewClusters && overviewClusters.length > 0 ? (
+                                    <ul className="space-y-2"> {overviewClusters.map(cluster => ( <ClusterSummaryItem clusterData={cluster} key={cluster.id} onClusterSelect={handleClusterSummaryClick} /> ))} </ul>
+                                ) : ( <p className="text-xs text-slate-400 text-center py-2"> No significant active clusters detected. </p> )}
                                 </div>
 
                             {recentSignificantQuakesForOverview.length > 0 && (
