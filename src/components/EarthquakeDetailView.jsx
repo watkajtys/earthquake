@@ -149,81 +149,74 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
 
     useEffect(() => {
         if (!detailUrl) {
-            // If detailUrl is cleared (e.g., modal closes or selection changes to none)
             setIsLoading(false);
             setDetailData(null);
             setError(null);
-            return; // Stop further execution in this effect
+            return;
         }
 
-        // If detailUrl is present, prepare for fetching
+        let event_id = null;
+        try {
+            // Example detailUrl: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc73649170.geojson"
+            const urlObject = new URL(detailUrl); // Use URL constructor for robust parsing
+            const pathSegments = urlObject.pathname.split('/');
+            const fileName = pathSegments.pop(); // Get the last segment, e.g., 'nc73649170.geojson'
+
+            if (fileName && fileName.endsWith('.geojson')) {
+                event_id = fileName.substring(0, fileName.length - '.geojson'.length);
+            }
+        } catch (e) {
+            console.error('Error parsing detailUrl to get event_id:', detailUrl, e);
+            setError('Invalid earthquake detail URL format.');
+            setIsLoading(false);
+            setDetailData(null); // Clear any potentially stale data
+            return;
+        }
+
+        if (!event_id) {
+            console.error('Could not determine earthquake ID from URL:', detailUrl);
+            setError('Could not determine earthquake ID from URL.');
+            setIsLoading(false);
+            setDetailData(null); // Clear any potentially stale data
+            return;
+        }
+
         let isMounted = true;
         const fetchDetail = async () => {
-            setIsLoading(true); // Ensure loading state is true at the start of any fetch
-            setError(null);     // Clear any previous error
-            setDetailData(null); // Clear previous data before new fetch to prevent stale display
+            setIsLoading(true);
+            setError(null);
+            setDetailData(null);
             try {
-                const response = await fetch(detailUrl);
-                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status} ${response.url}`);
+                // Use the new API endpoint
+                const response = await fetch(`/api/earthquake/${event_id}`);
+                if (!response.ok) {
+                    // Try to parse error response from API, otherwise use statusText
+                    let errorData;
+                    try {
+                        errorData = await response.json();
+                    } catch (parseError) {
+                        // If parsing JSON fails, use statusText
+                        errorData = { message: response.statusText };
+                    }
+                    throw new Error(`Application API error! Status: ${response.status}. Message: ${errorData.message || "Failed to fetch"}`);
+                }
                 const data = await response.json();
                 if (isMounted) {
                     setDetailData(data);
                     if (onDataLoadedForSeo && data) {
-                        const props = data.properties;
-                        const geom = data.geometry;
-                        // Derive shakemapIntensityImageUrl directly here before calling callback
-                        // Pass the entire 'data' object (which is the full GeoJSON feature)
-                        // Also, pass shakemapIntensityImageUrl explicitly if it's derived and needed directly by consumer,
-                        // though consumer can also derive it if given the full 'data'.
-                        // For simplicity and to ensure consumer has what it needs, we can pass both.
-                        // The `EarthquakeDetailModalComponent` will then have access to `data.id` and `data.properties.detail`.
                         const shakemapProduct = data.properties?.products?.shakemap?.[0];
                         const shakemapIntensityImageUrl = shakemapProduct?.contents?.['download/intensity.jpg']?.url;
-
-                        // Construct an object that includes the full 'data' and any specifically derived values
-                        // that the parent component might expect separately.
-                        // Or, more simply, ensure the parent component knows to look inside 'data' for everything.
-                        // Given the existing structure of onDataLoadedForSeo in EarthquakeDetailModalComponent,
-                        // it expects specific top-level fields. Let's adapt to pass what it needs, plus the raw data.
-                        // The best approach is to pass the full `data` (GeoJSON feature) and let the consumer (ModalComponent) destructure it.
-                        // So, `onDataLoadedForSeo(data)` would be the cleanest.
-                        // The `EarthquakeDetailModalComponent` already expects `loadedData.id`, `loadedData.properties`, `loadedData.geometry`.
-                        // It also expects `shakemapIntensityImageUrl` directly.
-
-                        const seoDataPayload = {
-                            ...data, // This includes id, properties, geometry
-                            // Explicitly pass fields that EarthquakeDetailModalComponent's onDataLoadedForSeo was originally structured to receive directly,
-                            // if they are not easily derivable or for convenience.
-                            // However, the new version of onDataLoadedForSeo in ModalComponent is already set up to use data.properties, data.id etc.
-                            // So, just passing 'data' and 'shakemapIntensityImageUrl' separately should be fine.
-                            // Let's ensure the modal component's `onDataLoadedForSeo` receives an object that has `id`, `properties`, `geometry`, and `shakemapIntensityImageUrl`.
-                            // The simplest is to pass the full `data` object and let the callback in ModalComponent handle it.
-                            // The callback in EarthquakeDetailModalComponent expects `loadedData.id`, `loadedData.properties.detail`, etc.
-                            // So, onDataLoadedForSeo(data) is correct.
-                            // The `shakemapIntensityImageUrl` is also needed by the modal component.
-                            // It can be derived from `data.properties.products` there, or passed for convenience.
-                            // The current `EarthquakeDetailModalComponent` expects `loadedData.shakemapIntensityImageUrl`.
-                            // So we should add it to the `data` object before passing if it's not naturally there, or pass it alongside.
-                            // Let's pass the full `data` and add `shakemapIntensityImageUrl` to its root for convenience if not already there.
-                        };
-                        // Actually, the simplest is to call it with an object that has the properties
-                        // `EarthquakeDetailModalComponent` expects.
-                        // `EarthquakeDetailModalComponent` expects `loadedData.id`, `loadedData.properties.detail` etc.
-                        // The `data` object here *is* what `loadedData` will be.
-                        // So `data.id` is `loadedData.id`. `data.properties.detail` is `loadedData.properties.detail`.
-                        // The `shakemapIntensityImageUrl` is something `EarthquakeDetailModalComponent` also expects at top level of the passed object.
-
                         onDataLoadedForSeo({
-                            id: data.id, // USGS Event ID
-                            properties: data.properties, // All properties
-                            geometry: data.geometry, // All geometry
-                            shakemapIntensityImageUrl: shakemapIntensityImageUrl // Derived shakemap URL
+                            id: data.id,
+                            properties: data.properties,
+                            geometry: data.geometry,
+                            shakemapIntensityImageUrl: shakemapIntensityImageUrl
                         });
                     }
                 }
             } catch (e) {
-                console.error("Failed to fetch detail data:", e);
-                if (isMounted) setError(`Failed to load details: ${e.message}`);
+                console.error("Failed to fetch detail data from application API:", e);
+                if (isMounted) setError(`Failed to load details from application API: ${e.message}`);
             } finally {
                 if (isMounted) setIsLoading(false);
             }
@@ -234,7 +227,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
         return () => {
             isMounted = false;
         };
-    }, [detailUrl]); // Changed dependency: removed onDataLoadedForSeo
+    }, [detailUrl, onDataLoadedForSeo]);
 
     // New useEffect for investigating phase-data
     useEffect(() => {
