@@ -641,11 +641,17 @@ function App() {
             };
         }).filter(Boolean); // Remove any nulls if a cluster was empty
 
-        // Sort clusters: primarily by max magnitude (desc), then by quake count (desc)
+        // Sort clusters:
         processed.sort((a, b) => {
+            // Primary sort: by latest time in cluster (descending - most recent first)
+            if (b._latestTimeInternal !== a._latestTimeInternal) {
+                return b._latestTimeInternal - a._latestTimeInternal;
+            }
+            // Secondary sort: by max magnitude (descending - strongest first)
             if (b._maxMagInternal !== a._maxMagInternal) {
                 return b._maxMagInternal - a._maxMagInternal;
             }
+            // Tertiary sort: by quake count (descending) for further tie-breaking
             return b._quakeCountInternal - a._quakeCountInternal;
         });
 
