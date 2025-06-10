@@ -19,15 +19,19 @@ export async function onRequest(context) {
       }
 
       const { clusterId, earthquakeIds, strongestQuakeId } = clusterData;
-      const dataToStore = JSON.stringify({ earthquakeIds, strongestQuakeId });
-      await env.CLUSTER_KV.put(clusterId, dataToStore);
-      return new Response(`Cluster definition for ${clusterId} registered successfully.`, { status: 201 });
+
+      const stmt = env.DB.prepare(
+        'INSERT OR REPLACE INTO ClusterDefinitions (clusterId, earthquakeIds, strongestQuakeId, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
+      ).bind(clusterId, JSON.stringify(earthquakeIds), strongestQuakeId);
+      await stmt.run();
+
+      return new Response(`Cluster definition for ${clusterId} registered/updated successfully in D1.`, { status: 201 });
     } catch (e) {
       if (e instanceof SyntaxError) {
         return new Response('Invalid JSON payload.', { status: 400 });
       }
-      console.error('Error processing POST request:', e);
-      return new Response('Failed to process request: ' + e.message, { status: 500 });
+      console.error('Error processing POST request to D1:', e);
+      return new Response('Failed to process D1 request: ' + e.message, { status: 500 });
     }
   } else if (method === 'GET') {
     try {
@@ -38,22 +42,28 @@ export async function onRequest(context) {
         return new Response('Missing clusterId query parameter.', { status: 400 });
       }
 
-      const storedData = await env.CLUSTER_KV.get(clusterId);
+      const stmt = env.DB.prepare(
+        'SELECT clusterId, earthquakeIds, strongestQuakeId, createdAt, updatedAt FROM ClusterDefinitions WHERE clusterId = ?'
+      ).bind(clusterId);
+      const result = await stmt.first();
 
-      if (storedData === null) {
-        return new Response(`Cluster definition for ${clusterId} not found.`, { status: 404 });
+      if (!result) {
+        return new Response(`Cluster definition for ${clusterId} not found in D1.`, { status: 404 });
       }
 
-      // Assuming storedData is a JSON string, parse it before sending
-      // No need to parse if you stored it as a JSON object directly with KV.put(key, value, {type: 'json'})
-      // but we stored as string.
-      return new Response(storedData, {
+      // Parse earthquakeIds from JSON string to an array
+      const responsePayload = {
+        ...result,
+        earthquakeIds: JSON.parse(result.earthquakeIds || '[]'), // Handle null/empty if necessary
+      };
+
+      return new Response(JSON.stringify(responsePayload), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (e) {
-      console.error('Error processing GET request:', e);
-      return new Response('Failed to process request: ' + e.message, { status: 500 });
+      console.error('Error processing GET request from D1:', e);
+      return new Response('Failed to process D1 request: ' + e.message, { status: 500 });
     }
   } else {
     return new Response(`Method ${method} Not Allowed`, {
