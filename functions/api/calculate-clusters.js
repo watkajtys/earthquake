@@ -1,5 +1,7 @@
 // functions/api/calculate-clusters.js
 
+// NOTE: This function is duplicated in src/utils/utils.js
+// Any algorithmic changes should be synchronized.
 /**
  * Calculates the distance between two geographical coordinates using the Haversine formula.
  * @param {number} lat1 Latitude of the first point.
@@ -21,9 +23,17 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return distance;
 }
 
+// NOTE: This function is duplicated in src/utils/clusterUtils.js
+// Any algorithmic changes should be synchronized.
 /**
  * Finds clusters of earthquakes based on proximity and time.
- * @param {Array<object>} earthquakes - Array of earthquake objects. Expected to have `properties.time` and `geometry.coordinates`.
+ * The algorithm sorts earthquakes by magnitude in descending order.
+ * It then iterates through sorted earthquakes, greedily assigning them to the first cluster
+ * they are close enough to (within maxDistanceKm). If an earthquake doesn't fit an existing
+ * cluster being built, it can start a new one.
+ * Temporal proximity (time difference between quakes) is not a direct factor in this clustering logic,
+ * which could be a potential area for future enhancement.
+ * @param {Array<object>} earthquakes - Array of earthquake objects.
  * @param {number} maxDistanceKm - Maximum distance between quakes to be considered in the same cluster.
  * @param {number} minQuakes - Minimum number of quakes to form a valid cluster.
  * @returns {Array<Array<object>>} An array of clusters, where each cluster is an array of earthquake objects.
@@ -33,28 +43,42 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
     const processedQuakeIds = new Set();
 
     // Sort earthquakes by magnitude (descending) to potentially form clusters around stronger events first.
-    const sortedEarthquakes = [...earthquakes].sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
+    // This is a greedy approach.
+    const sortedEarthquakes = [...earthquakes].sort((a, b) => (b.properties?.mag || 0) - (a.properties?.mag || 0));
 
     for (const quake of sortedEarthquakes) {
-        if (processedQuakeIds.has(quake.id)) {
+        if (!quake || !quake.id || processedQuakeIds.has(quake.id)) {
             continue;
         }
 
         const newCluster = [quake];
         processedQuakeIds.add(quake.id);
-        const baseLat = quake.geometry.coordinates[1];
-        const baseLon = quake.geometry.coordinates[0];
 
+        const baseCoords = quake.geometry?.coordinates;
+        if (!Array.isArray(baseCoords) || baseCoords.length < 2) {
+            console.warn(`Skipping quake with invalid coordinates in findActiveClusters: ${quake.id}`);
+            continue;
+        }
+        const baseLat = baseCoords[1];
+        const baseLon = baseCoords[0];
+
+        // Iterate through remaining quakes to see if they belong to this newCluster
         for (const otherQuake of sortedEarthquakes) {
-            if (processedQuakeIds.has(otherQuake.id) || otherQuake.id === quake.id) {
+            if (!otherQuake || !otherQuake.id || processedQuakeIds.has(otherQuake.id) || otherQuake.id === quake.id) {
+                continue;
+            }
+
+            const otherCoords = otherQuake.geometry?.coordinates;
+            if (!Array.isArray(otherCoords) || otherCoords.length < 2) {
+                console.warn(`Skipping otherQuake with invalid coordinates in findActiveClusters: ${otherQuake.id}`);
                 continue;
             }
 
             const dist = calculateDistance(
                 baseLat,
                 baseLon,
-                otherQuake.geometry.coordinates[1],
-                otherQuake.geometry.coordinates[0]
+                otherCoords[1],
+                otherCoords[0]
             );
 
             if (dist <= maxDistanceKm) {
@@ -73,95 +97,147 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
 export async function onRequestPost(context) {
   try {
     const { env } = context;
-    // Assuming lastFetchTime and timeWindowHours are passed in the request for a more robust cache key.
-    // If not, the cache key generation needs to be adapted based on available unique parameters.
     const { earthquakes, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours } = await context.request.json();
 
-    // Basic input validation
-    if (!Array.isArray(earthquakes) || !earthquakes.length) {
-      return new Response(JSON.stringify({ error: 'Invalid or empty earthquakes array' }), {
+    // Input Validation for earthquakes array
+    if (!Array.isArray(earthquakes)) {
+      return new Response(JSON.stringify({ error: 'Invalid earthquakes payload: not an array.' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
+
+    for (let i = 0; i < earthquakes.length; i++) {
+        const quake = earthquakes[i];
+        if (!quake || typeof quake !== 'object') {
+            return new Response(JSON.stringify({ error: `Invalid earthquake object at index ${i}: not an object.` }), {
+                status: 400, headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        if (!quake.geometry || typeof quake.geometry !== 'object') {
+            return new Response(JSON.stringify({ error: `Invalid earthquake at index ${i} (id: ${quake.id || 'N/A'}): missing or invalid 'geometry' object.` }), {
+                status: 400, headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        if (!Array.isArray(quake.geometry.coordinates) || quake.geometry.coordinates.length < 2 ||
+            typeof quake.geometry.coordinates[0] !== 'number' || typeof quake.geometry.coordinates[1] !== 'number') {
+            return new Response(JSON.stringify({ error: `Invalid earthquake at index ${i} (id: ${quake.id || 'N/A'}): 'geometry.coordinates' must be an array of at least 2 numbers.` }), {
+                status: 400, headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        if (!quake.properties || typeof quake.properties !== 'object') {
+            return new Response(JSON.stringify({ error: `Invalid earthquake at index ${i} (id: ${quake.id || 'N/A'}): missing or invalid 'properties' object.` }), {
+                status: 400, headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        if (typeof quake.properties.time !== 'number') { // Assuming time is a Unix timestamp (number)
+            return new Response(JSON.stringify({ error: `Invalid earthquake at index ${i} (id: ${quake.id || 'N/A'}): 'properties.time' must be a number.` }), {
+                status: 400, headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        if (!quake.id) { // Checking for presence of id, could also check type if needed
+            return new Response(JSON.stringify({ error: `Invalid earthquake at index ${i}: missing 'id' property.` }), {
+                status: 400, headers: { 'Content-Type': 'application/json' },
+            });
+        }
+    }
+
+    if (earthquakes.length === 0 && (defaultRequestBody.earthquakes && defaultRequestBody.earthquakes.length > 0)) { // Check if original request had quakes
+        // This case implies all earthquakes were invalid and filtered out by the above loop.
+        // However, the current loop returns on first invalid. If we change to filter, this path might be taken.
+        // For now, the more direct test is `earthquakes.length === 0` for an initially empty array.
+    }
+
+
+    // Basic validation for other parameters (already present, retained)
     if (typeof maxDistanceKm !== 'number' || maxDistanceKm <= 0) {
       return new Response(JSON.stringify({ error: 'Invalid maxDistanceKm' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        status: 400, headers: { 'Content-Type': 'application/json' },
       });
     }
     if (typeof minQuakes !== 'number' || minQuakes <= 0) {
       return new Response(JSON.stringify({ error: 'Invalid minQuakes' }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // If earthquakes array is empty from the start
+    if (earthquakes.length === 0) {
+      return new Response(JSON.stringify({ error: 'Earthquakes array is empty, no clusters to calculate.' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // Generate a cache key - incorporating assumed lastFetchTime and timeWindowHours
-    // Ensure these parameters are consistently available and stringified for the key.
     const requestParams = { numQuakes: earthquakes.length, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours };
     const cacheKey = `clusters-${JSON.stringify(requestParams)}`;
+    const responseHeaders = { 'Content-Type': 'application/json' };
 
     if (!env.DB) {
-      console.error("D1 Database (env.DB) not available.");
-      // Fallback to calculation without caching if DB is not configured
-      // or return an error, depending on desired strictness.
-      // For now, proceeding to calculate without cache.
+      console.warn("D1 Database (env.DB) not available. Proceeding without cache.");
       const clustersNoDB = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+      responseHeaders['X-Cache-Hit'] = 'false';
+      responseHeaders['X-Cache-Info'] = 'DB not configured';
       return new Response(JSON.stringify(clustersNoDB), {
         status: 200,
-        headers: { 'Content-Type': 'application/json', 'X-Cache-Hit': 'false', 'X-Cache-Info': 'DB not configured' },
+        headers: responseHeaders,
       });
     }
 
     try {
       const cacheQuery = "SELECT clusterData FROM ClusterCache WHERE cacheKey = ? AND createdAt > datetime('now', '-1 hour')";
       const stmt = env.DB.prepare(cacheQuery).bind(cacheKey);
+      // console.log(`Attempting D1 GET for cacheKey: ${cacheKey}`); // Keep console logs for debugging if necessary
       const cachedResult = await stmt.first();
 
       if (cachedResult && cachedResult.clusterData) {
         try {
-          JSON.parse(cachedResult.clusterData); // Validate JSON
-          return new Response(cachedResult.clusterData, {
+          const parsedData = JSON.parse(cachedResult.clusterData);
+          // console.log(`Cache HIT for cacheKey: ${cacheKey}`);
+          responseHeaders['X-Cache-Hit'] = 'true';
+          return new Response(JSON.stringify(parsedData), {
             status: 200,
-            headers: { 'Content-Type': 'application/json', 'X-Cache-Hit': 'true' },
+            headers: responseHeaders,
           });
         } catch (parseError) {
-          console.error('Error parsing cached JSON from D1:', parseError);
-          // If parsing fails, proceed to compute and overwrite the bad cache entry
+          console.error(`D1 Cache: Error parsing cached JSON for key ${cacheKey}:`, parseError.message);
         }
+      } else {
+        // console.log(`Cache MISS for cacheKey: ${cacheKey}`);
       }
-    } catch (dbError) {
-      console.error('D1 GET error:', dbError);
-      // Non-fatal, proceed to compute if D1 GET fails
+    } catch (dbGetError) {
+      console.error(`D1 GET error for cacheKey ${cacheKey}:`, dbGetError.message, dbGetError.cause);
     }
 
+    // console.log(`Calculating clusters for cacheKey: ${cacheKey}`);
     const clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
     const clusterDataString = JSON.stringify(clusters);
 
     try {
-      const insertQuery = "INSERT OR REPLACE INTO ClusterCache (cacheKey, clusterData) VALUES (?, ?)";
-      const stmt = env.DB.prepare(insertQuery).bind(cacheKey, clusterDataString);
+      const insertQuery = "INSERT OR REPLACE INTO ClusterCache (cacheKey, clusterData, requestParams) VALUES (?, ?, ?)";
+      const stmt = env.DB.prepare(insertQuery).bind(cacheKey, clusterDataString, JSON.stringify(requestParams));
+      // console.log(`Attempting D1 PUT for cacheKey: ${cacheKey}`);
       await stmt.run();
-    } catch (dbError) {
-      console.error('D1 PUT error:', dbError);
-      // Non-fatal, return data even if PUT fails
+      // console.log(`D1 PUT successful for cacheKey: ${cacheKey}`);
+    } catch (dbPutError) {
+      console.error(`D1 PUT error for cacheKey ${cacheKey}:`, dbPutError.message, dbPutError.cause);
     }
 
+    responseHeaders['X-Cache-Hit'] = 'false';
     return new Response(clusterDataString, {
       status: 200,
-      headers: { 'Content-Type': 'application/json', 'X-Cache-Hit': 'false' },
+      headers: responseHeaders,
     });
 
   } catch (error) {
-    console.error('Error processing request:', error);
-    // Distinguish between client errors (e.g., bad JSON) and server errors
-    if (error instanceof SyntaxError) { // Potentially from await context.request.json()
+    if (error instanceof SyntaxError && error.message.includes("JSON")) {
+        console.error('Error parsing request JSON payload:', error.message);
         return new Response(JSON.stringify({ error: 'Invalid JSON payload', details: error.message }), {
-            status: 400, // Bad Request
+            status: 400,
             headers: { 'Content-Type': 'application/json' },
         });
     }
+    console.error('Unhandled error processing request:', error.message, error.stack);
     return new Response(JSON.stringify({ error: 'Internal server error', details: error.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
