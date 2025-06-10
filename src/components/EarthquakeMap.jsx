@@ -220,7 +220,14 @@ const EarthquakeMap = ({
       )}
 
       {nearbyQuakes.map((quake, index) => {
-        if (!quake.geometry || !quake.geometry.coordinates || typeof quake.properties?.mag !== 'number' || typeof quake.properties?.time !== 'number') {
+        const coordinates = quake.geometry?.coordinates;
+        if (
+          !quake.geometry ||
+          !Array.isArray(coordinates) || // Check if coordinates is an array
+          coordinates.length < 2 ||      // Check for at least two elements (lon, lat)
+          typeof quake.properties?.mag !== 'number' ||
+          typeof quake.properties?.time !== 'number'
+        ) {
           console.warn("Skipping rendering of nearby quake due to missing data:", quake);
           return null;
         }
