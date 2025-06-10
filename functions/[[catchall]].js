@@ -47,6 +47,78 @@ async function handleUsgsProxyRequest(context, apiUrl) {
 
     const data = await response.json();
 
+    // --- BEGIN Proactive D1 Population ---
+    const DB = context.env.DB;
+    if (DB && data && Array.isArray(data.features) && data.features.length > 0) {
+      const upsertEarthquakeFeatures = async (features) => {
+        const sourceFnName = "upsertEarthquakeFeatures"; // For logging within this function
+        console.log(`[${sourceFnName}] Starting background upsert for ${features.length} features.`);
+        const upsertStmtText = `
+          INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature, retrieved_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+              event_time = excluded.event_time,
+              latitude = excluded.latitude,
+              longitude = excluded.longitude,
+              depth = excluded.depth,
+              magnitude = excluded.magnitude,
+              place = excluded.place,
+              usgs_detail_url = excluded.usgs_detail_url,
+              geojson_feature = excluded.geojson_feature,
+              retrieved_at = excluded.retrieved_at;
+        `;
+        // Prepare statement once outside the loop for efficiency
+        const stmt = DB.prepare(upsertStmtText);
+
+        for (const feature of features) {
+          try {
+            if (!feature || !feature.id || !feature.properties || !feature.geometry || !feature.geometry.coordinates || feature.geometry.coordinates.length < 3) {
+              console.warn(`[${sourceFnName}] Skipping feature due to missing critical data:`, feature?.id || "ID missing");
+              continue;
+            }
+
+            const id = feature.id;
+            const event_time = feature.properties.time;
+            const latitude = feature.geometry.coordinates[1];
+            const longitude = feature.geometry.coordinates[0];
+            const depth = feature.geometry.coordinates[2];
+            const magnitude = feature.properties.mag;
+            const place = feature.properties.place;
+            const usgs_detail_url = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${feature.id}.geojson`;
+            const geojson_feature_string = JSON.stringify(feature);
+            const retrieved_at = Date.now();
+
+            // Validate required fields before binding (optional, but good practice)
+            if (id == null || event_time == null || latitude == null || longitude == null || depth == null || magnitude == null || place == null || usgs_detail_url == null || geojson_feature_string == null) {
+                console.warn(`[${sourceFnName}] Skipping feature ${id} due to null value in one of the required fields.`);
+                continue;
+            }
+
+            await stmt.bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature_string, retrieved_at).run();
+            // console.log(`[${sourceFnName}] Successfully upserted feature: ${id}`); // Can be too verbose for many features
+          } catch (e) {
+            console.error(`[${sourceFnName}] Error upserting feature ${feature?.id}: ${e.message}`, e);
+            // Continue to next feature even if one fails
+          }
+        }
+        console.log(`[${sourceFnName}] Finished background upsert for ${features.length} features.`);
+      };
+
+      context.waitUntil(upsertEarthquakeFeatures(data.features).catch(err => {
+        console.error(`[${sourceName}] Error during background D1 upsert from proxy: ${err.message}`, err);
+      }));
+    } else if (DB && data && data.id && data.type === 'Feature' && data.geometry && data.properties) {
+        // This condition handles the case where 'data' is a single GeoJSON feature (e.g. from a detail URL being proxied)
+        // This is less likely for the proxy now that we have /api/earthquake/{id}, but good to be robust.
+        // We can reuse the handleEarthquakeDetailRequest's D1 upsert logic or a simplified version.
+        // For now, let's log that we received a single feature and could potentially upsert it.
+        // console.log(`[${sourceName}] Proxied a single GeoJSON feature: ${data.id}. Population via dedicated detail endpoint is preferred.`);
+        // To avoid redundancy with handleEarthquakeDetailRequest, we might choose *not* to upsert it here,
+        // or ensure the logic is identical and efficient.
+        // The main goal is to populate from feeds (data.features array).
+    }
+    // --- END Proactive D1 Population ---
+
     const DEFAULT_CACHE_DURATION_SECONDS = 600; // 10 minutes
     let durationInSeconds = DEFAULT_CACHE_DURATION_SECONDS;
 
@@ -786,4 +858,120 @@ export async function onRequest(context) {
   console.log(`[${mainSourceName}] Path ${pathname} not handled by explicit routing in worker. Passing to Pages asset handler.`);
   // Implicitly, Pages will now try to serve a static file or index.html.
   // No explicit return new Response(...) for unhandled paths.
+}
+
+// --- Earthquake Detail API Handler ---
+async function handleEarthquakeDetailRequest(context, event_id) {
+  const sourceName = "earthquake-detail-handler";
+  const DATA_FRESHNESS_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
+
+  const DB = context.env.DB;
+  if (!DB) {
+    console.error(`[${sourceName}] D1 Database (DB) not available for event: ${event_id}`);
+    return jsonErrorResponse("Service configuration error: Database unavailable.", 500, sourceName);
+  }
+
+  try {
+    // 1. Query D1 for the event
+    const stmt = DB.prepare("SELECT geojson_feature, retrieved_at FROM EarthquakeEvents WHERE id = ?").bind(event_id);
+    const result = await stmt.first();
+
+    if (result && result.retrieved_at && (Date.now() - result.retrieved_at < DATA_FRESHNESS_THRESHOLD_MS)) {
+      console.log(`[${sourceName}] Cache hit in D1 for event: ${event_id}. Freshness: ${Date.now() - result.retrieved_at}ms.`);
+      return new Response(result.geojson_feature, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Data-Source': 'D1-Cache'
+        }
+      });
+    }
+    if (result) {
+        console.log(`[${sourceName}] Data for event ${event_id} found in D1 but is stale (retrieved_at: ${result.retrieved_at}). Fetching from USGS.`);
+    } else {
+        console.log(`[${sourceName}] Event ${event_id} not found in D1. Fetching from USGS.`);
+    }
+
+    // 2. Fetch from USGS if not in D1 or stale
+    const usgsUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${event_id}.geojson`;
+    console.log(`[${sourceName}] Fetching event ${event_id} from USGS: ${usgsUrl}`);
+    let usgsResponse;
+    try {
+      usgsResponse = await fetch(usgsUrl);
+    } catch (error) {
+      console.error(`[${sourceName}] USGS API fetch failed for ${usgsUrl}: ${error.message}`, error);
+      return jsonErrorResponse(`USGS API fetch failed: ${error.message}`, 502, sourceName); // 502 Bad Gateway
+    }
+
+    if (!usgsResponse.ok) {
+      console.error(`[${sourceName}] Error fetching data from USGS API (${usgsUrl}): ${usgsResponse.status} ${usgsResponse.statusText}`);
+      return jsonErrorResponse(
+        `Error fetching data from USGS API: ${usgsResponse.status} ${usgsResponse.statusText}`,
+        502, // 502 Bad Gateway, as we are acting as a gateway to USGS
+        sourceName,
+        usgsResponse.status
+      );
+    }
+
+    const geojsonFeature = await usgsResponse.json();
+
+    // 3. Upsert into D1 (don't await this promise, let it run in background)
+    const retrieved_at = Date.now();
+    const geojson_feature_string = JSON.stringify(geojsonFeature);
+
+    // Extract properties for individual columns
+    const id = geojsonFeature.id;
+    const event_time = geojsonFeature.properties.time;
+    const latitude = geojsonFeature.geometry.coordinates[1];
+    const longitude = geojsonFeature.geometry.coordinates[0];
+    const depth = geojsonFeature.geometry.coordinates[2];
+    const magnitude = geojsonFeature.properties.mag;
+    const place = geojsonFeature.properties.place;
+    // Use the actual fetched URL for usgs_detail_url
+    const usgs_detail_json_url = usgsUrl;
+
+
+    const upsertStmt = `
+      INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature, retrieved_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+          event_time = excluded.event_time,
+          latitude = excluded.latitude,
+          longitude = excluded.longitude,
+          depth = excluded.depth,
+          magnitude = excluded.magnitude,
+          place = excluded.place,
+          usgs_detail_url = excluded.usgs_detail_url,
+          geojson_feature = excluded.geojson_feature,
+          retrieved_at = excluded.retrieved_at;
+    `;
+
+    const d1WritePromise = DB.prepare(upsertStmt)
+      .bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_json_url, geojson_feature_string, retrieved_at)
+      .run()
+      .then(({ success, error }) => {
+        if (success) {
+          console.log(`[${sourceName}] Successfully upserted event ${id} into D1.`);
+        } else {
+          //This error won't be sent to the client as we don't await it. Log it for server-side debugging.
+          console.error(`[${sourceName}] Failed to upsert event ${id} into D1: ${error}`);
+        }
+      })
+      .catch(err => {
+        console.error(`[${sourceName}] Exception during D1 upsert for event ${id}: ${err.message}`, err);
+      });
+
+    context.waitUntil(d1WritePromise);
+
+    // 4. Return the fetched GeoJSON
+    return new Response(geojson_feature_string, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Data-Source': 'USGS-API'
+       }
+    });
+
+  } catch (error) {
+    console.error(`[${sourceName}] Unexpected error processing request for event ${event_id}: ${error.message}`, error);
+    return jsonErrorResponse(`Unexpected error processing your request: ${error.message}`, 500, sourceName);
+  }
 }
