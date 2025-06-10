@@ -5,7 +5,9 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'; // Import Routes
 import { expect, describe, it, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock context hooks
-import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
+// Note: Actual import of useEarthquakeDataState is deferred or handled by Vitest's hoisting/mocking mechanism.
+// We will define our mock function first, then tell Vitest to use it for the module.
+// import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Keep if HomePage itself imports it directly
 import { useUIState } from '../contexts/UIStateContext.jsx';
 
 // Mock services
@@ -51,23 +53,39 @@ vi.mock('../components/ClusterDetailModalWrapper', () => ({
 import App from './HomePage';
 import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants.js';
 
-const mockUseEarthquakeDataState = vi.fn();
-const mockUseUIState = vi.fn();
-const mockFetchActiveClusters = vi.fn();
-const mockRegisterClusterDefinition = vi.fn();
+const { mockUseEarthquakeDataState } = vi.hoisted(() => {
+  return { mockUseEarthquakeDataState: vi.fn() };
+});
+const { mockUseUIState } = vi.hoisted(() => {
+  return { mockUseUIState: vi.fn() };
+});
+const { mockFetchActiveClusters, mockRegisterClusterDefinition } = vi.hoisted(() => {
+  return {
+    mockFetchActiveClusters: vi.fn(),
+    mockRegisterClusterDefinition: vi.fn(),
+  };
+});
 
 vi.mock('../contexts/EarthquakeDataContext.jsx', () => ({
   useEarthquakeDataState: mockUseEarthquakeDataState,
   EarthquakeDataProvider: ({ children }) => <div>{children}</div>,
 }));
 vi.mock('../contexts/UIStateContext.jsx', () => ({
-  useUIState: mockUseUIState,
+  useUIState: mockUseUIState, // Now correctly refers to the hoisted mock
   UIStateProvider: ({ children }) => <div>{children}</div>,
 }));
 vi.mock('../services/clusterApiService.js', () => ({
-  fetchActiveClusters: mockFetchActiveClusters,
-  registerClusterDefinition: mockRegisterClusterDefinition,
+  fetchActiveClusters: mockFetchActiveClusters, // Now correctly refers to the hoisted mock
+  registerClusterDefinition: mockRegisterClusterDefinition, // Now correctly refers to the hoisted mock
 }));
+
+// Keep the original import for useEarthquakeDataState if it's directly used by HomePage component.
+// If HomePage only gets it via context, this import might not be strictly necessary at the top level of the test file.
+// For now, the critical part is the vi.mock factory.
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
+// The original import for useUIState at the top of the file is sufficient.
+// The original import for clusterApiService functions at the top of the file is sufficient.
+
 
 global.IntersectionObserver = class IntersectionObserver {
   constructor() {}
@@ -101,14 +119,22 @@ describe('HomePage (App Component)', () => {
     vi.resetAllMocks();
     mockUseEarthquakeDataState.mockReturnValue(defaultEarthquakeData);
     mockUseUIState.mockReturnValue(defaultUIState);
+    // Ensure service mocks return promises by default for .then() calls
+    mockFetchActiveClusters.mockResolvedValue([]); // Default to empty array for fetches
+    mockRegisterClusterDefinition.mockResolvedValue(true); // Default to success for registration
+
     vi.mock('../assets/ne_110m_coastline.json', () => ({ default: { type: "FeatureCollection", features: [] }}));
     vi.mock('../assets/TectonicPlateBoundaries.json', () => ({ default: { type: "FeatureCollection", features: [] }}));
     mockClusterSummaryItemData.length = 0; // Clear captured data for each test
   });
 
   // ... (Accessibility and Cluster Loading State Management tests remain)
-  describe('Accessibility', () => { /* ... existing tests ... */ });
-  describe('Cluster Loading State Management', () => { /* ... existing tests ... */ });
+  describe('Accessibility', () => {
+    it.todo('should have accessibility tests implemented for HomePage');
+  });
+  describe('Cluster Loading State Management', () => {
+    it.todo('should have tests implemented for cluster loading states');
+  });
 
 
   describe('overviewClusters Sorting and Filtering Logic', () => {
@@ -118,11 +144,11 @@ describe('HomePage (App Component)', () => {
       geometry: { coordinates: [0, 0, 0] },
     });
 
-    // Times (most recent to oldest)
-    const T_NOW = Date.now();
-    const T_1_HOUR_AGO = T_NOW - 3600 * 1000;
-    const T_2_HOURS_AGO = T_NOW - 2 * 3600 * 1000;
-    const T_3_HOURS_AGO = T_NOW - 3 * 3600 * 1000;
+    // Times (most recent to oldest) - Using fixed values to avoid Date.now() variance during test analysis
+    const T_NOW = 100000000; // A fixed base time in "seconds" for simplicity
+    const T_1_HOUR_AGO = T_NOW - 3600;    // 1 hour ago
+    const T_2_HOURS_AGO = T_NOW - 7200;   // 2 hours ago
+    const T_3_HOURS_AGO = T_NOW - 10800;  // 3 hours ago
 
     // Magnitudes
     const MAG_HIGH = MAJOR_QUAKE_THRESHOLD + 1.0; // e.g., 5.5

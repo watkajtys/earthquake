@@ -97,7 +97,7 @@ describe('ErrorBoundary', () => {
   // Test for the commented-out development error details block (optional, depends on env)
   // To test this, one would need to set process.env.NODE_ENV = 'development'
   // For now, this test is skipped or adapted based on how NODE_ENV is handled in test setup.
-  it.skip('displays error details in development mode if error occurs', () => {
+  it('displays error details in development mode if error occurs', () => { // Unskipped
     const originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development'; // Temporarily set for this test
 
@@ -108,9 +108,19 @@ describe('ErrorBoundary', () => {
     );
 
     expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
-    // Check for the <details> block or its contents if it were rendered
-    // e.g., expect(screen.getByText('Error Details (Development Only)')).toBeInTheDocument();
-    // This depends on uncommenting the block in ErrorBoundary.jsx
+
+    // Assertions for the development details block
+    const expectedErrorMessage = 'Test error from ProblemChild';
+    // Check for the summary text, then find the parent <details> element
+    const summaryElement = screen.getByText('Error Details (Development Only)');
+    expect(summaryElement).toBeInTheDocument();
+
+    const detailsElement = summaryElement.closest('details');
+    expect(detailsElement).toBeInTheDocument();
+
+    // Check for error message and component stack within the details element
+    expect(detailsElement).toHaveTextContent(expectedErrorMessage); // e.g., "Error: Test error from ProblemChild"
+    expect(detailsElement.textContent).toMatch(/ProblemChild/); // Check if "ProblemChild" is mentioned in the component stack part
 
     process.env.NODE_ENV = originalNodeEnv; // Restore original NODE_ENV
   });
