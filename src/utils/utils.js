@@ -1,5 +1,7 @@
 // src/utils.js
 
+// NOTE: This function is duplicated in functions/api/calculate-clusters.js
+// Any algorithmic changes should be synchronized.
 /**
  * Calculates the distance between two geographical coordinates using the Haversine formula.
  * @param {number} lat1 Latitude of the first point.
