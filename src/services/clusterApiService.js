@@ -1,12 +1,19 @@
 import { findActiveClusters as localFindActiveClusters } from '../utils/clusterUtils.js';
 
 /**
- * Registers a cluster definition with the backend.
- * @param {object} clusterData - The cluster data to register.
+ * @file clusterApiService.js
+ * @description Service functions for interacting with the backend API related to earthquake cluster definitions and calculations.
+ * This includes registering new cluster definitions, fetching existing ones, and calculating active clusters
+ * with a client-side fallback mechanism.
+ */
+
+/**
+ * Registers a cluster definition with the backend via a POST request to `/api/cluster-definition`.
+ * @param {Object} clusterData - The cluster data to register.
  * @param {string} clusterData.clusterId - The ID of the cluster.
- * @param {string[]} clusterData.earthquakeIds - An array of earthquake IDs in the cluster.
- * @param {string} clusterData.strongestQuakeId - The ID of the strongest earthquake in the cluster.
- * @returns {Promise<boolean>} True if registration is successful, false otherwise.
+ * @param {string[]} clusterData.earthquakeIds - An array of earthquake IDs forming the cluster.
+ * @param {string} clusterData.strongestQuakeId - The ID of the most significant earthquake in the cluster.
+ * @returns {Promise<boolean>} A promise that resolves to `true` if registration is successful (201 Created), or `false` otherwise.
  */
 export async function registerClusterDefinition(clusterData) {
   if (!clusterData || !clusterData.clusterId || !clusterData.earthquakeIds || !clusterData.strongestQuakeId) {
@@ -41,11 +48,11 @@ export async function registerClusterDefinition(clusterData) {
 }
 
 /**
- * Fetches a cluster definition from the backend.
+ * Fetches a specific cluster definition from the backend via a GET request to `/api/cluster-definition?id=<clusterId>`.
  * @param {string} clusterId - The ID of the cluster to fetch.
- * @returns {Promise<object|null>} The cluster definition object if found,
- *                                 null if not found (404),
- *                                 or throws an error for other issues.
+ * @returns {Promise<Object|null>} A promise that resolves to the cluster definition object
+ *   (expected to contain `earthquakeIds`, `strongestQuakeId`, and optionally `updatedAt`) if found (200 OK),
+ *   `null` if not found (404), or throws an error for other server/network issues.
  */
 export async function fetchClusterDefinition(clusterId) {
   if (!clusterId) {
@@ -83,15 +90,18 @@ export async function fetchClusterDefinition(clusterId) {
 }
 
 /**
- * Fetches active earthquake clusters from the backend with client-side fallback.
- * @param {Array<object>} earthquakes - Array of earthquake objects (original argument for potential fallback).
- * @param {number} maxDistanceKm - Maximum distance for clustering (original argument for potential fallback).
- * @param {number} minQuakes - Minimum quakes to form a cluster (original argument for potential fallback).
- * @returns {Promise<Array<Array<object>>>} An array of clusters.
- * @throws {Error} If the request fails and the fallback also fails.
+ * Attempts to fetch pre-calculated active earthquake clusters from the backend via a POST request to `/api/calculate-clusters`.
+ * The request body includes the current list of earthquakes and clustering parameters.
+ * If the server request fails, encounters a cache miss, or returns stale data (indicated by `X-Cache-Hit` header),
+ * this function falls back to calculating clusters client-side using `localFindActiveClusters`.
+ *
+ * @param {Array<Object>} earthquakes - Array of earthquake objects (USGS GeoJSON feature structure) to be clustered.
+ * @param {number} maxDistanceKm - Maximum distance in kilometers for earthquakes to be considered in the same cluster.
+ * @param {number} minQuakes - Minimum number of earthquakes required to form a valid cluster.
+ * @returns {Promise<Array<Array<Object>>>} A promise that resolves to an array of clusters. Each cluster is an array of earthquake objects.
+ * @throws {Error} If the backend request fails and the client-side fallback calculation also fails, or if input parameters are invalid.
  */
 export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
-  // Store original arguments for fallback - they are already available as function parameters.
   if (!Array.isArray(earthquakes)) {
     console.error("fetchActiveClusters: Invalid earthquakes array provided.");
     throw new Error("Invalid earthquakes array");
@@ -112,10 +122,7 @@ export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes)
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify({ earthquakes, maxDistanceKm, minQuakes,
-        // Sending lastFetchTime and timeWindowHours if available/relevant for server cache
-        // For now, assuming the server handles their absence if not critical for this client's context
-      }),
+      body: JSON.stringify({ earthquakes, maxDistanceKm, minQuakes }),
     });
 
     const cacheHit = response.headers.get('X-Cache-Hit');
@@ -123,30 +130,27 @@ export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes)
     if (response.ok && cacheHit === 'true') {
       console.log('Active clusters fetched successfully from server cache.');
       const data = await response.json();
-      return data;
+      return data; // Expected to be Array<Array<EarthquakeObject>>
     } else if (response.ok && cacheHit !== 'true') {
       console.warn(`Server cache miss or stale data (X-Cache-Hit: ${cacheHit}). Falling back to local calculation.`);
-      // Proceed to fallback (outside this block, after catch)
     } else { // !response.ok
       const errorBody = await response.text();
       console.error(
         `Failed to fetch active clusters from server. Status: ${response.status}. Body: ${errorBody}. Falling back to local calculation.`
       );
-      // Proceed to fallback (outside this block, after catch)
     }
   } catch (error) {
     console.error('Network error while fetching active clusters. Falling back to local calculation:', error);
-    // Proceed to fallback
   }
 
-  // Fallback to local calculation
+  // Fallback to local calculation if server fetch fails or indicates stale data
   try {
-    console.log('Initiating client-side cluster calculation.');
+    console.log('Initiating client-side cluster calculation using localFindActiveClusters.');
     const localClusters = localFindActiveClusters(earthquakes, maxDistanceKm, minQuakes);
     console.log('Client-side cluster calculation successful.');
     return localClusters;
   } catch (localError) {
     console.error('Client-side cluster calculation also failed:', localError);
-    throw localError; // Re-throw the error from local calculation
+    throw localError; // Re-throw if local calculation also fails
   }
 }

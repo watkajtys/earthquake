@@ -8,7 +8,19 @@ import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
 import { findActiveClusters } from '../utils/clusterUtils.js';
 import { CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES } from '../constants/appConstants.js';
 
-// Helper function (can be outside component if it doesn't need props/state from it directly)
+/**
+ * Calculates a human-readable string representing the active time range of an earthquake cluster.
+ * It prioritizes short, user-friendly descriptions like "Active just now" or "Active over Xm/Xh"
+ * if the cluster is recent. Otherwise, it shows when the cluster started.
+ *
+ * @param {number} earliestTime - Timestamp of the earliest earthquake in the cluster.
+ * @param {number} latestTime - Timestamp of the latest earthquake in the cluster.
+ * @param {function} formatDate - Function to format a full date string. (Currently unused in this specific logic but kept for potential future use)
+ * @param {function} formatTimeAgo - Function to format a duration as "X time ago".
+ * @param {function} formatTimeDuration - Function to format a duration into a compact string (e.g., "2h 30m").
+ * @param {number} [clusterLength=0] - The number of earthquakes in the cluster.
+ * @returns {string} A string describing the cluster's active time range.
+ */
 function calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, clusterLength = 0) {
     if (earliestTime === Infinity || latestTime === -Infinity || !earliestTime || !latestTime) return 'Time N/A';
     const now = Date.now();
@@ -22,6 +34,27 @@ function calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDat
     return `Started ${formatTimeAgo(durationSinceEarliest)}`;
 }
 
+/**
+ * Wrapper component responsible for fetching, processing, and displaying details for a specific earthquake cluster.
+ * It handles routing parameters to identify the cluster, manages loading and error states,
+ * generates SEO metadata, and then renders the `ClusterDetailModal` with the cluster data.
+ * It attempts to find cluster data from various sources:
+ * 1. `overviewClusters` prop (if available).
+ * 2. Reconstructing from `earthquakesLast72Hours` or `allEarthquakes` from `EarthquakeDataContext`.
+ * 3. Fetching a persisted cluster definition via `fetchClusterDefinition` (e.g., from a D1 store).
+ * It also handles cases where data might need to be loaded on-demand (e.g., monthly data).
+ *
+ * @component
+ * @param {Object} props - The component props.
+ * @param {Array<Object>} [props.overviewClusters] - Array of pre-calculated cluster objects, typically from an overview page.
+ * @param {function} props.formatDate - Function to format timestamps into date strings.
+ * @param {function} props.getMagnitudeColorStyle - Function to get Tailwind CSS color styles for magnitude.
+ * @param {function} [props.onIndividualQuakeSelect] - Callback when an individual quake item within the modal is selected.
+ * @param {function} props.formatTimeAgo - Function to format a duration as "X time ago".
+ * @param {function} props.formatTimeDuration - Function to format a duration into a compact string (e.g., "2h 30m").
+ * @param {boolean} props.areParentClustersLoading - Boolean indicating if the parent component providing `overviewClusters` is still loading.
+ * @returns {JSX.Element} The ClusterDetailModalWrapper, rendering either a loading state, error message, or the ClusterDetailModal.
+ */
 function ClusterDetailModalWrapper({
     overviewClusters,
     formatDate,
@@ -34,10 +67,15 @@ function ClusterDetailModalWrapper({
     const { clusterId } = useParams();
     const navigate = useNavigate();
 
+    // State for managing loading status specific to this wrapper
     const [internalIsLoading, setInternalIsLoading] = useState(true);
+    // State for the dynamically found or fetched cluster data
     const [dynamicCluster, setDynamicCluster] = useState(null);
+    // State for displaying any error messages during data fetching or processing
     const [errorMessage, setErrorMessage] = useState('');
+    // State for SEO properties, generated based on cluster data or error state
     const [seoProps, setSeoProps] = useState({});
+    // State to track if the component is waiting for monthly data to be loaded by EarthquakeDataContext
     const [isWaitingForMonthlyData, setIsWaitingForMonthlyData] = useState(false);
 
     const {
@@ -51,6 +89,14 @@ function ClusterDetailModalWrapper({
         monthlyError
     } = useEarthquakeDataState();
 
+    /**
+     * Generates SEO metadata (title, description, keywords, JSON-LD) for the cluster detail page.
+     * Adapts content based on whether cluster data is available or an error has occurred.
+     * @param {Object|null} clusterData - The cluster data object, or null if not found/error.
+     * @param {string|null} currentId - The ID of the current cluster.
+     * @param {string} [errorMsg=''] - An optional error message if the cluster could not be loaded.
+     * @returns {Object} An object containing SEO properties (title, description, canonicalUrl, etc.).
+     */
     const generateSeo = useCallback((clusterData, currentId, errorMsg = '') => {
         const pageUrl = `https://earthquakeslive.com/cluster/${currentId || 'unknown'}`;
         if (errorMsg || !clusterData) {
@@ -81,6 +127,18 @@ function ClusterDetailModalWrapper({
         return { title: pageTitle, description: pageDescription, keywords: pageKeywords, canonicalUrl: pageUrl, pageUrl, eventJsonLd, type: 'website' };
     }, []);
 
+    /**
+     * Main effect hook for fetching and setting cluster data.
+     * This effect runs when the component mounts or when its dependencies change.
+     * It tries to find the cluster data from various sources in a specific order:
+     * 1. From `overviewClusters` prop.
+     * 2. By reconstructing from `earthquakesLast72Hours` (or `allEarthquakes` if monthly data is loaded)
+     *    using `findActiveClusters` if the `clusterId` seems to be a generated one.
+     * 3. If monthly data hasn't been loaded and is needed, it triggers `loadMonthlyData`.
+     * 4. As a fallback, it attempts to fetch a persisted cluster definition using `fetchClusterDefinition`.
+     * It manages loading states (`internalIsLoading`, `isWaitingForMonthlyData`) and error messages (`errorMessage`).
+     * It also generates SEO properties using `generateSeo` based on the outcome.
+     */
     useEffect(() => {
         let isMounted = true;
         let d1FetchAttempted = false;

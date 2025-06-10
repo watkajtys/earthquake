@@ -6,18 +6,26 @@ import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 import SkeletonText from './skeletons/SkeletonText';
 
 /**
- * A React component that displays a timer showing the time since the last major global earthquake.
- * It updates every second. If no major quake is found, it displays a message indicating an extended period without one.
+ * Displays a timer indicating the time elapsed since the last major global earthquake
+ * (M{MAJOR_QUAKE_THRESHOLD}+). The timer updates every second.
+ * If a `lastMajorQuake` object is provided, it also displays its magnitude and location.
+ * If `lastMajorQuake` is null or its time is missing, it shows a message indicating an
+ * extended period without such an event.
+ * The component is clickable if `handleTimerClick` is provided and a quake exists.
  *
- * @param {object} props - The component's props.
- * @param {object | null} props.lastMajorQuake - The last major earthquake object. Can be null if no such quake is found.
- * @param {object} [props.lastMajorQuake.properties] - Properties of the last major earthquake. Required if lastMajorQuake is not null.
- * @param {number} props.lastMajorQuake.properties.time - Timestamp of the last major quake in milliseconds.
- * @param {string} [props.lastMajorQuake.properties.place] - Location of the last major quake.
- * @param {number} [props.lastMajorQuake.properties.mag] - Magnitude of the last major quake.
- * @param {function} props.formatTimeDuration - Function to format a duration in milliseconds to a human-readable string (e.g., "1 day, 2 hr, 30 min").
- * @param {function} [props.handleTimerClick] - Optional function to handle clicks on the timer.
- * @returns {JSX.Element} The rendered GlobalLastMajorQuakeTimer component.
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {Object|null} props.lastMajorQuake - The last major earthquake object. If null, indicates no major quake data is available.
+ *   Expected structure if not null:
+ *   - `properties` (Object):
+ *     - `time` (number): Timestamp of the quake in milliseconds.
+ *     - `place` (string, optional): Location string of the quake.
+ *     - `mag` (number, optional): Magnitude of the quake.
+ * @param {function(number): string} props.formatTimeDuration - Function to format a duration (in milliseconds)
+ *   into a human-readable string (e.g., "1 day, 2 hr, 30 min, 5 sec").
+ * @param {function(Object): void} [props.handleTimerClick] - Optional callback function invoked when the timer display
+ *   is clicked. Receives the `lastMajorQuake` object as an argument.
+ * @returns {JSX.Element} The GlobalLastMajorQuakeTimer component.
  */
 const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, formatTimeDuration, handleTimerClick }) => {
     const [timeSinceFormatted, setTimeSinceFormatted] = useState(<SkeletonText width="w-1/2 mx-auto" height="h-8" className="bg-slate-600"/>);

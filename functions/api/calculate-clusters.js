@@ -1,9 +1,19 @@
 // functions/api/calculate-clusters.js
 
+/**
+ * @file functions/api/calculate-clusters.js
+ * @description Cloudflare Pages Function for calculating earthquake clusters.
+ * This function receives a list of earthquakes and clustering parameters,
+ * calculates clusters, and utilizes a D1 database for caching results.
+ * It includes duplicated utility functions for distance calculation and cluster finding,
+ * which should be kept in sync with their counterparts in `src/utils/`.
+ */
+
 // NOTE: This function is duplicated in src/utils/utils.js
 // Any algorithmic changes should be synchronized.
 /**
  * Calculates the distance between two geographical coordinates using the Haversine formula.
+ * (Duplicated from `src/utils/utils.js` - keep synchronized)
  * @param {number} lat1 Latitude of the first point.
  * @param {number} lon1 Longitude of the first point.
  * @param {number} lat2 Latitude of the second point.
@@ -26,11 +36,13 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 // NOTE: This function is duplicated in src/utils/clusterUtils.js
 // Any algorithmic changes should be synchronized.
 /**
- * Finds clusters of earthquakes based on proximity and time.
- * @param {Array<object>} earthquakes - Array of earthquake objects.
- * @param {number} maxDistanceKm - Maximum distance between quakes to be considered in the same cluster.
- * @param {number} minQuakes - Minimum number of quakes to form a valid cluster.
- * @returns {Array<Array<object>>} An array of clusters, where each cluster is an array of earthquake objects.
+ * Finds clusters of earthquakes based on proximity.
+ * (Duplicated from `src/utils/clusterUtils.js` - keep synchronized)
+ * @param {Array<Object>} earthquakes - Array of earthquake objects. Each object is expected to have an `id`,
+ *   `properties.mag` (magnitude), and `geometry.coordinates`.
+ * @param {number} maxDistanceKm - Maximum geographic distance (in kilometers) for clustering.
+ * @param {number} minQuakes - Minimum number of earthquakes required to form a valid cluster.
+ * @returns {Array<Array<Object>>} An array of clusters, where each cluster is an array of earthquake objects.
  */
 function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
     const clusters = [];
@@ -66,6 +78,26 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
     return clusters;
 }
 
+/**
+ * Handles POST requests to calculate earthquake clusters.
+ * Expects a JSON payload with `earthquakes`, `maxDistanceKm`, and `minQuakes`.
+ * Optional `lastFetchTime` and `timeWindowHours` can be included for caching key generation.
+ *
+ * The function performs input validation on the payload.
+ * It then attempts to retrieve cached cluster data from a D1 database (`env.DB`, table `ClusterCache`)
+ * based on the request parameters. Cache duration is 1 hour.
+ * If no valid cache entry is found, it calculates clusters using `findActiveClusters`,
+ * stores the new result in the D1 cache, and returns the clusters.
+ *
+ * Responses include an `X-Cache-Hit` header ('true' or 'false').
+ *
+ * @async
+ * @param {object} context - The Cloudflare Pages Function context object.
+ * @param {Request} context.request - The incoming HTTP request object, expected to have a JSON body.
+ * @param {object} context.env - Environment variables, expected to contain `DB` (D1 Database binding).
+ * @returns {Promise<Response>} A `Response` object containing either the calculated cluster data (Array of arrays of earthquake objects)
+ *   or a JSON error object with appropriate HTTP status codes (400 for bad request, 500 for internal server error).
+ */
 export async function onRequestPost(context) {
   try {
     const { env } = context;

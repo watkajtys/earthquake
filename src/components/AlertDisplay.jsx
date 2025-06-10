@@ -2,12 +2,31 @@ import React, { memo, useCallback } from 'react'; // Add useCallback
 import { useNavigate } from 'react-router-dom';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Add this
 
+/**
+ * Displays alerts related to seismic activity, including USGS alerts and tsunami warnings.
+ * It uses data from the EarthquakeDataContext to determine which alerts to show.
+ * The component is memoized for performance optimization.
+ *
+ * @component
+ * @param {Object} props - The component props.
+ * @param {Object} props.currentAlertConfig - Configuration object for the current USGS alert. Contains text and description.
+ * @param {boolean} props.hasRecentTsunamiWarning - Flag indicating if there's a recent tsunami warning.
+ * @param {Object} props.ALERT_LEVELS - Object mapping alert levels (e.g., "RED", "ORANGE") to their corresponding color classes.
+ * @returns {JSX.Element|null} The AlertDisplay component or null if there are no alerts to display.
+ */
 const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning, ALERT_LEVELS }) => {
   // Consume data from EarthquakeDataContext (tsunamiTriggeringQuake will be used later)
   const { tsunamiTriggeringQuake, activeAlertTriggeringQuakes } = useEarthquakeDataState();
   const navigate = useNavigate();
 
-  // Create a navigation handler function (will be implemented in the next step)
+  /**
+   * Handles click events on an alert.
+   * Navigates to the detail page of the associated earthquake.
+   * It tries to get the detail URL from `quake.properties.detail` first,
+   * then constructs a URL using `quake.id` if the first is not available.
+   * Logs a warning if no valid quake data is found for navigation.
+   * @param {Object} quake - The earthquake object associated with the alert.
+   */
   const handleAlertClick = useCallback((quake) => {
     if (quake && quake.properties && quake.properties.detail) {
         const detailUrl = quake.properties.detail;

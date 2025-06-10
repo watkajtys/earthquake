@@ -16,11 +16,12 @@ L.Icon.Default.mergeOptions({
 });
 
 /**
- * Custom Leaflet DivIcon for displaying the highlighted earthquake (epicenter).
- * Features a pulsing animation for better visibility.
- * The animation (`pulse`) is defined in global CSS (e.g., App.css or index.css).
- * @param {number} magnitude - The earthquake magnitude to determine the icon color.
- * @returns {L.DivIcon} A Leaflet DivIcon instance.
+ * Creates a custom Leaflet DivIcon for the main highlighted earthquake (epicenter).
+ * The icon features a pulsing animation for enhanced visibility, with color determined by magnitude.
+ * The pulsing animation CSS (`custom-pulsing-icon` and its keyframes) should be defined globally.
+ *
+ * @param {number} magnitude - The earthquake magnitude, used to determine the icon's color via `getMagnitudeColor`.
+ * @returns {L.DivIcon} A Leaflet `L.DivIcon` instance configured for the epicenter.
  */
 const createEpicenterIcon = (magnitude) => {
   const fillColor = getMagnitudeColor(magnitude);
@@ -44,11 +45,13 @@ const createEpicenterIcon = (magnitude) => {
 };
 
 /**
- * Creates a custom Leaflet DivIcon for a nearby earthquake.
- * Opacity varies based on the age of the quake.
- * @param {number} magnitude - The earthquake magnitude to determine the icon color.
- * @param {number} time - The time of the earthquake (timestamp).
- * @returns {L.DivIcon} A Leaflet DivIcon instance.
+ * Creates a custom Leaflet DivIcon for displaying nearby earthquakes.
+ * The icon's color is based on magnitude, and its opacity is reduced for older quakes
+ * (less than 1 day: 1.0, <7 days: 0.8, <14 days: 0.6, otherwise: 0.4).
+ *
+ * @param {number} magnitude - The earthquake magnitude, used for color coding.
+ * @param {number} time - The timestamp of the earthquake, used to calculate its age and opacity.
+ * @returns {L.DivIcon} A Leaflet `L.DivIcon` instance for a nearby quake.
  */
 const createNearbyQuakeIcon = (magnitude, time) => {
   const fillColor = getMagnitudeColor(magnitude);
@@ -70,27 +73,51 @@ const createNearbyQuakeIcon = (magnitude, time) => {
 };
 
 /**
- * Determines the style for tectonic plate boundary lines on the map.
- * Color varies based on the boundary type (Convergent, Divergent, Transform).
- * @param {object} feature - The GeoJSON feature representing a tectonic plate boundary.
- * @returns {object} Leaflet path style options for the feature.
+ * Defines the styling for tectonic plate boundary GeoJSON features.
+ * The color of the boundary line varies based on its type (Convergent, Divergent, Transform).
+ *
+ * @param {Object} feature - The GeoJSON feature representing a tectonic plate boundary.
+ *                           Expected to have `feature.properties.Boundary_Type`.
+ * @returns {Object} A Leaflet path style options object for the feature.
  */
 const getTectonicPlateStyle = (feature) => {
-  let color = 'rgba(255, 165, 0, 0.8)';
+  let color = 'rgba(255, 165, 0, 0.8)'; // Default for other/unknown types
   const type = feature?.properties?.Boundary_Type;
   if (type === 'Convergent') color = 'rgba(220, 20, 60, 0.8)';
   else if (type === 'Divergent') color = 'rgba(60, 179, 113, 0.8)';
-  else if (type === 'Transform') color = 'rgba(70, 130, 180, 0.8)';
+  else if (type === 'Transform') color = 'rgba(70, 130, 180, 0.8)'; // Blue for Transform
   return { color, weight: 1, opacity: 0.8 };
 };
 
 /**
- * `EarthquakeMap` is a React component that renders a Leaflet map.
- * (JSDoc remains, but references to PropTypes are no longer directly applicable from static properties)
+ * Renders an interactive Leaflet map to display earthquake information.
+ * Key features include:
+ * - Displaying a main highlighted earthquake with a pulsing icon.
+ * - Showing nearby earthquakes with icons whose opacity varies by age.
+ * - Optionally displaying tectonic plate boundaries (dynamically imported GeoJSON).
+ * - Ability to fit the map bounds to show all displayed quakes or center on a specific point.
+ * - Customizable map zoom and center.
+ * The component is memoized for performance optimization.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {number} props.mapCenterLatitude - Initial latitude for the map center.
+ * @param {number} props.mapCenterLongitude - Initial longitude for the map center.
+ * @param {number} [props.highlightQuakeLatitude] - Latitude of the main earthquake to highlight.
+ * @param {number} [props.highlightQuakeLongitude] - Longitude of the main earthquake to highlight.
+ * @param {number} [props.highlightQuakeMagnitude] - Magnitude of the main earthquake, used for icon styling.
+ * @param {string} [props.highlightQuakeTitle=''] - Title for the popup of the highlighted earthquake.
+ * @param {string|null} [props.shakeMapUrl=null] - URL to a ShakeMap for the highlighted earthquake (external link).
+ * @param {Array<Object>} [props.nearbyQuakes=[]] - Array of nearby earthquake objects (USGS GeoJSON feature structure) to display.
+ *   Each object should have `id`, `geometry.coordinates`, `properties.mag`, `properties.time`, and optionally `properties.place`/`title`, `properties.detail`.
+ * @param {string|null} [props.mainQuakeDetailUrl=null] - Internal application URL for the detail page of the highlighted quake.
+ * @param {boolean} [props.fitMapToBounds=false] - If true, the map will adjust its bounds to show all plotted quakes. If false, it uses `defaultZoom`.
+ * @param {number} [props.defaultZoom=8] - Default zoom level for the map if not fitting to bounds or if only one point is shown.
+ * @returns {JSX.Element} The EarthquakeMap component.
  */
 const EarthquakeMap = ({
-  mapCenterLatitude, // Required
-  mapCenterLongitude, // Required
+  mapCenterLatitude,
+  mapCenterLongitude,
   highlightQuakeLatitude = undefined,
   highlightQuakeLongitude = undefined,
   highlightQuakeMagnitude = undefined,
