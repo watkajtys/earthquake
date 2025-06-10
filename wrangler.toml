@@ -97,3 +97,6 @@ DB = { preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" }
 
 # If you have other bindings (like R2, Services), define them here too.
 # Refer to Cloudflare Wrangler documentation for more details.
+# wrangler.toml (wrangler v3.88.0^)
+[observability.logs]
+enabled = true
