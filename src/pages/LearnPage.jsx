@@ -1,12 +1,22 @@
 // src/pages/LearnPage.jsx
 import React from 'react';
-import { Link } from 'react-router-dom'; // Added Link import
+import { Link } from 'react-router-dom';
 import SeoMetadata from '../components/SeoMetadata';
 import InfoSnippet from '../components/InfoSnippet';
-// Import any other components specific to the previous inline learn page content
 
+/**
+ * Renders the main "Learn About Earthquakes" page.
+ * This page provides a collection of informational snippets about various earthquake-related topics
+ * (e.g., magnitude, depth, intensity, alerts) using the `InfoSnippet` component.
+ * It also includes links to more detailed article pages on specific subjects like
+ * Magnitude vs. Intensity, Measuring Earthquakes, and Plate Tectonics.
+ * SEO metadata for the page is set using the `SeoMetadata` component.
+ * This component takes no direct props.
+ *
+ * @component
+ * @returns {JSX.Element} The LearnPage component.
+ */
 const LearnPage = () => {
-    // This component will replicate the JSX structure previously under the /learn Route in HomePage.jsx
     return (
         <>
             <SeoMetadata

@@ -18,9 +18,9 @@ const AVERAGE_P_WAVE_VELOCITY_KM_S = 6.5;
 const AVERAGE_S_WAVE_VELOCITY_KM_S = 3.75;
 
 /**
- * Calculates the travel time for a P-wave over a given distance.
- * This is a simplified calculation assuming a constant average velocity
- * and does not account for earthquake depth or complex velocity models.
+ * Estimates the travel time for a P-wave over a given distance.
+ * This is a simplified calculation assuming a constant average P-wave velocity
+ * and does not account for earthquake depth or complex Earth velocity models.
  *
  * @param {number} distanceKm - The distance from the earthquake epicenter in kilometers.
  * @returns {number} The estimated P-wave travel time in seconds. Returns 0 if distance is 0.
@@ -38,9 +38,9 @@ export function calculatePWaveTravelTime(distanceKm) {
 }
 
 /**
- * Calculates the travel time for an S-wave over a given distance.
- * This is a simplified calculation assuming a constant average velocity
- * and does not account for earthquake depth or complex velocity models.
+ * Estimates the travel time for an S-wave over a given distance.
+ * This is a simplified calculation assuming a constant average S-wave velocity
+ * and does not account for earthquake depth or complex Earth velocity models.
  *
  * @param {number} distanceKm - The distance from the earthquake epicenter in kilometers.
  * @returns {number} The estimated S-wave travel time in seconds. Returns 0 if distance is 0.

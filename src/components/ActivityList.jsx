@@ -1,5 +1,18 @@
 import React from 'react';
 
+/**
+ * Renders a list of the latest feelable earthquakes.
+ * Each item in the list is clickable and navigates to the earthquake details.
+ *
+ * @component
+ * @param {Object} props - The component props.
+ * @param {Array<Object>} props.latestFeelableQuakesSnippet - An array of earthquake objects to display in the list.
+ * @param {function} props.getMagnitudeColor - A function that returns a color based on the earthquake's magnitude.
+ * @param {function} props.formatTimeAgo - A function that formats a timestamp into a human-readable "time ago" string.
+ * @param {function} props.handleQuakeClick - A function to handle clicks on individual earthquake items, likely to show more details.
+ * @param {function} props.navigate - A function used for programmatic navigation, typically from a routing library.
+ * @returns {JSX.Element|null} The ActivityList component or null if there are no quakes to display.
+ */
 const ActivityList = ({ latestFeelableQuakesSnippet, getMagnitudeColor, formatTimeAgo, handleQuakeClick, navigate }) => {
   if (!latestFeelableQuakesSnippet || latestFeelableQuakesSnippet.length === 0) {
     return null; // Or some placeholder if no activity

@@ -2,29 +2,23 @@ import React, { memo } from 'react';
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 
 /**
- * Renders a mini map for a cluster of earthquakes.
+ * Renders a mini-map focused on a specific cluster of earthquakes using the `EarthquakeMap` component.
+ * It highlights the most recent valid earthquake within the cluster and displays other cluster quakes.
+ * The map automatically centers on the cluster's geographic mean and fits its bounds to include all cluster events.
+ * Includes robust data validation for the cluster and its constituent quakes.
+ * The component is memoized for performance optimization.
  *
- * The map displays:
- * 1. A highlighted marker for the most recent (latest) valid earthquake in the cluster.
- * 2. Other earthquakes from the cluster as smaller, non-pulsing markers.
- *
- * Map behavior:
- * - The map is centered at the geographic average (mean) of all valid earthquakes in the cluster.
- * - It automatically fits its bounds to ensure all earthquakes in the cluster are visible,
- *   due to `fitMapToBounds={true}` being passed to the underlying `EarthquakeMap`.
- *
- * Data validation:
- * - The component performs several checks to ensure valid data before attempting to render the map.
- * - It requires a valid `cluster` object with an `originalQuakes` array.
- * - It filters `originalQuakes` to find a valid "latest" quake for highlighting and to calculate
- *   a valid geographic center. If either cannot be determined, a placeholder message is shown.
- *
- * @param {object} props - The component's props.
- * @param {object} props.cluster - The cluster data. Must contain an `originalQuakes` array.
- * @param {Array<object>} props.cluster.originalQuakes - An array of earthquake objects. Each object is expected
- *   to have `id`, `geometry.coordinates` (lng, lat, depth), and `properties.mag` (magnitude),
- *   `properties.place` or `properties.title`, and `properties.time`.
- * @returns {JSX.Element | null} The rendered EarthquakeMap component for the cluster or a placeholder/null if data is invalid.
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {Object} props.cluster - The cluster data.
+ * @param {Array<Object>} props.cluster.originalQuakes - An array of earthquake objects forming the cluster.
+ *   Each quake object should contain:
+ *   - `id` (string|number): Unique identifier for the quake.
+ *   - `geometry.coordinates` (Array<number>): An array `[longitude, latitude, depth]`.
+ *   - `properties.mag` (number): Magnitude of the earthquake.
+ *   - `properties.time` (number): Timestamp of the earthquake event.
+ *   - `properties.place` (string) or `properties.title` (string): Location description.
+ * @returns {JSX.Element|null} The `EarthquakeMap` configured for the cluster, or a placeholder message if data is invalid/insufficient.
  */
 const ClusterMiniMap = ({ cluster }) => {
   // Section: Initial data validation
