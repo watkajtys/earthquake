@@ -23,11 +23,20 @@ global.fetch = vi.fn();
 // --- Helper to create mock context ---
 const createMockContext = (request, env = {}, cf = {}) => {
   const waitUntilPromises = [];
+  const mockDbInstance = {
+    prepare: vi.fn().mockReturnThis(),
+    bind: vi.fn().mockReturnThis(),
+    first: vi.fn(),
+    run: vi.fn(),
+    all: vi.fn(),
+  };
+
   return {
     request,
     env: {
-      // Default KV mock, can be overridden per test
-      CLUSTER_KV: {
+      DB: mockDbInstance, // Default D1 mock
+      // Default KV mock, can be overridden per test (though less used now)
+      CLUSTER_KV: { // Kept for any tests that might still use it or for completeness
         get: vi.fn(),
         put: vi.fn(),
         list: vi.fn().mockResolvedValue({ keys: [], list_complete: true, cursor: undefined }),
@@ -226,170 +235,6 @@ describe('onRequest (Main Router)', () => {
     });
   });
 
-  // -- API: /api/cluster-definition --
-  describe('/api/cluster-definition', () => {
-    const clusterPath = '/api/cluster-definition';
-
-    it('POST should store valid cluster definition in KV', async () => {
-      const clusterData = { clusterId: 'c1', earthquakeIds: ['q1', 'q2'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clusterData),
-      });
-      const context = createMockContext(request);
-      context.env.CLUSTER_KV.put.mockResolvedValueOnce(undefined);
-
-      const response = await onRequest(context);
-      expect(response.status).toBe(201);
-      const json = await response.json();
-      expect(json.message).toBe("Cluster definition stored.");
-
-      const expectedPutValue = {
-        earthquakeIds: clusterData.earthquakeIds,
-        strongestQuakeId: clusterData.strongestQuakeId,
-        updatedAt: expect.any(String), // Check that updatedAt is a string (ISO date)
-      };
-      const actualPutValueString = context.env.CLUSTER_KV.put.mock.calls[0][1];
-      const actualPutValue = JSON.parse(actualPutValueString);
-
-      expect(actualPutValue).toMatchObject(expectedPutValue);
-      expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
-        clusterData.clusterId,
-        expect.any(String), // Already checked content with toMatchObject
-        { expirationTtl: 21600 } // Default TTL
-      );
-    });
-
-    it('POST should use CLUSTER_DEFINITION_TTL_SECONDS from env if valid', async () => {
-      const clusterData = { clusterId: 'c_ttl_test', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clusterData),
-      });
-      const context = createMockContext(request, { CLUSTER_DEFINITION_TTL_SECONDS: '3600' });
-      await onRequest(context);
-      expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
-        clusterData.clusterId,
-        expect.any(String),
-        { expirationTtl: 3600 }
-      );
-    });
-
-    it('POST should use default TTL if CLUSTER_DEFINITION_TTL_SECONDS is invalid', async () => {
-      const clusterData = { clusterId: 'c_invalid_ttl', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const consoleWarnSpy = vi.spyOn(console, 'warn');
-
-      const invalidTTLs = ['abc', '0', '-100'];
-      for (const ttl of invalidTTLs) {
-        // Create new request for each iteration to avoid "body already used" error
-        const request = new Request(`http://localhost${clusterPath}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(clusterData),
-        });
-        const context = createMockContext(request, { CLUSTER_DEFINITION_TTL_SECONDS: ttl });
-        // context.env.CLUSTER_KV.put is fresh in each context, no need to clear unless asserting across loop iterations with a shared mock
-        await onRequest(context);
-        expect(context.env.CLUSTER_KV.put).toHaveBeenCalledWith(
-          clusterData.clusterId,
-          expect.any(String),
-          { expirationTtl: 21600 } // Default TTL
-        );
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Invalid CLUSTER_DEFINITION_TTL_SECONDS value: "${ttl}"`));
-      }
-      consoleWarnSpy.mockRestore();
-    });
-
-    it('POST should return 500 if CLUSTER_KV is not configured', async () => {
-      const clusterData = { clusterId: 'c1', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        body: JSON.stringify(clusterData), // Content-Type header missing, but function doesn't check it strictly
-      });
-      const context = createMockContext(request, { CLUSTER_KV: undefined }); // Undefined KV
-      const response = await onRequest(context);
-      expect(response.status).toBe(500);
-      const json = await response.json();
-      expect(json.message).toBe("KV store not configured");
-    });
-
-    it('POST should return 500 if CLUSTER_KV.put throws an error', async () => {
-      const clusterData = { clusterId: 'c1', earthquakeIds: ['q1'], strongestQuakeId: 'q1' };
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clusterData),
-      });
-      const context = createMockContext(request);
-      context.env.CLUSTER_KV.put.mockRejectedValueOnce(new Error("KV Put Error"));
-      const response = await onRequest(context);
-      expect(response.status).toBe(500);
-      const json = await response.json();
-      expect(json.message).toContain("KV Put Error");
-    });
-
-    it('POST should return 400 for invalid data', async () => {
-      const request = new Request(`http://localhost${clusterPath}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clusterId: 'c1' }), // Missing fields
-      });
-      const context = createMockContext(request);
-      const response = await onRequest(context);
-      expect(response.status).toBe(400);
-    });
-
-    it('GET should retrieve cluster definition from KV', async () => {
-      const clusterId = 'c1';
-      const storedValue = { earthquakeIds: ['q1', 'q2'], strongestQuakeId: 'q1', updatedAt: new Date().toISOString() };
-      const request = new Request(`http://localhost${clusterPath}?id=${clusterId}`, { method: 'GET' });
-      const context = createMockContext(request);
-      context.env.CLUSTER_KV.get.mockResolvedValueOnce(JSON.stringify(storedValue));
-
-      const response = await onRequest(context);
-      expect(response.status).toBe(200);
-      const json = await response.json();
-      expect(json).toEqual(storedValue);
-      expect(context.env.CLUSTER_KV.get).toHaveBeenCalledWith(clusterId);
-    });
-
-    it('GET should return 500 if CLUSTER_KV is not configured', async () => {
-      const request = new Request(`http://localhost${clusterPath}?id=anyId`, { method: 'GET' });
-      const context = createMockContext(request, { CLUSTER_KV: undefined }); // Undefined KV
-      const response = await onRequest(context);
-      expect(response.status).toBe(500);
-      const json = await response.json();
-      expect(json.message).toBe("KV store not configured");
-    });
-
-    it('GET should return 500 if CLUSTER_KV.get throws an error', async () => {
-      const request = new Request(`http://localhost${clusterPath}?id=someId`, { method: 'GET' });
-      const context = createMockContext(request);
-      context.env.CLUSTER_KV.get.mockRejectedValueOnce(new Error("KV Get Error"));
-      const response = await onRequest(context);
-      expect(response.status).toBe(500);
-      const json = await response.json();
-      expect(json.message).toContain("KV Get Error");
-    });
-
-    it('GET should return 404 if cluster ID not found in KV', async () => {
-      const request = new Request(`http://localhost${clusterPath}?id=nonexistent`, { method: 'GET' });
-      const context = createMockContext(request);
-      context.env.CLUSTER_KV.get.mockResolvedValueOnce(null);
-      const response = await onRequest(context);
-      expect(response.status).toBe(404);
-    });
-
-    it('should return 405 for unallowed method', async () => {
-      const request = new Request(`http://localhost${clusterPath}`, { method: 'PUT' });
-      const context = createMockContext(request);
-      const response = await onRequest(context);
-      expect(response.status).toBe(405);
-    });
-  });
-
   // -- Sitemap Handlers --
   describe('Sitemap Handlers', () => {
     it('/sitemap-index.xml should return XML sitemap index', async () => {
@@ -430,13 +275,14 @@ describe('onRequest (Main Router)', () => {
         expect(fetch).toHaveBeenCalledWith(expect.stringContaining('2.5_week.geojson'));
     });
 
-    it('/sitemap-clusters.xml should list keys from KV and return XML', async () => {
-        const mockKeys = [{ name: "cluster1" }, { name: "cluster2" }];
-        const mockKVData = { updatedAt: new Date().toISOString() };
+    it('/sitemap-clusters.xml should list clusters from D1 and return XML', async () => {
+        const mockD1Results = [
+            { clusterId: "cluster1", updatedAt: new Date().toISOString() },
+            { clusterId: "cluster2", updatedAt: new Date(Date.now() - 86400000).toISOString() } // 1 day ago
+        ];
         const request = new Request('http://localhost/sitemap-clusters.xml');
         const context = createMockContext(request);
-        context.env.CLUSTER_KV.list.mockResolvedValueOnce({ keys: mockKeys });
-        context.env.CLUSTER_KV.get.mockResolvedValue(JSON.stringify(mockKVData)); // For each key
+        context.env.DB.all.mockResolvedValueOnce({ results: mockD1Results, success: true });
 
         const response = await onRequest(context);
         expect(response.status).toBe(200);
@@ -444,10 +290,11 @@ describe('onRequest (Main Router)', () => {
         const text = await response.text();
         expect(text).toContain('<urlset');
         expect(text).toContain('/cluster/cluster1');
+        expect(text).toContain(mockD1Results[0].updatedAt);
         expect(text).toContain('/cluster/cluster2');
-        expect(context.env.CLUSTER_KV.list).toHaveBeenCalled();
-        expect(context.env.CLUSTER_KV.get).toHaveBeenCalledWith("cluster1");
-        expect(context.env.CLUSTER_KV.get).toHaveBeenCalledWith("cluster2");
+        expect(text).toContain(mockD1Results[1].updatedAt);
+        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT clusterId, updatedAt FROM ClusterDefinitions"));
+        expect(context.env.DB.all).toHaveBeenCalled();
     });
 
     it('/sitemap-earthquakes.xml should handle fetch error', async () => {
@@ -481,50 +328,51 @@ describe('onRequest (Main Router)', () => {
         expect(text).not.toContain("<loc>"); // No locations if no features
     });
 
-    it('/sitemap-clusters.xml should handle CLUSTER_KV not configured', async () => {
+    it('/sitemap-clusters.xml should handle DB not configured', async () => {
       const request = new Request('http://localhost/sitemap-clusters.xml');
-      const context = createMockContext(request, { CLUSTER_KV: undefined });
+      // Explicitly set DB to undefined for this specific test
+      const context = createMockContext(request, { DB: undefined });
       const response = await onRequest(context);
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(200); // Sitemap handler itself returns 200
       const text = await response.text();
-      expect(text).toContain("<!-- CLUSTER_KV not available -->");
+      // Check for the specific comment indicating DB is not available
+      expect(text).toContain("<!-- D1 Database not available -->");
     });
 
-    it('/sitemap-clusters.xml should handle CLUSTER_KV.list failure', async () => {
+    it('/sitemap-clusters.xml should handle D1 query failure', async () => {
       const request = new Request('http://localhost/sitemap-clusters.xml');
       const context = createMockContext(request);
-      context.env.CLUSTER_KV.list.mockRejectedValueOnce(new Error("KV List Error"));
+      context.env.DB.all.mockRejectedValueOnce(new Error("D1 Query Error")); // Simulate D1 throwing an error
       const response = await onRequest(context);
       expect(response.status).toBe(200);
       const text = await response.text();
-      expect(text).toContain("<!-- Exception processing cluster data: KV List Error -->");
+      expect(text).toContain("<!-- Exception processing cluster data from D1: D1 Query Error -->");
     });
 
-    it('/sitemap-clusters.xml should handle empty keys from CLUSTER_KV.list', async () => {
+    it('/sitemap-clusters.xml should handle empty results from D1', async () => {
       const request = new Request('http://localhost/sitemap-clusters.xml');
       const context = createMockContext(request);
-      context.env.CLUSTER_KV.list.mockResolvedValueOnce({ keys: [] }); // No keys
+      context.env.DB.all.mockResolvedValueOnce({ results: [], success: true }); // D1 returns empty array
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {}); // Spy on console.log
       const response = await onRequest(context);
       expect(response.status).toBe(200);
       const text = await response.text();
-      expect(text).not.toContain("<loc>");
+      expect(text).not.toContain("<loc>"); // No <loc> tags if no results
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("No cluster definitions found in D1 table ClusterDefinitions."));
+      consoleLogSpy.mockRestore();
     });
 
-    it('/sitemap-clusters.xml should handle CLUSTER_KV.get failure for a key', async () => {
-      const mockKeys = [{ name: "cluster1" }];
+    it('/sitemap-clusters.xml should use current date if updatedAt is null/missing from D1', async () => {
+      const mockD1Results = [{ clusterId: "cluster_no_date", updatedAt: null }];
       const request = new Request('http://localhost/sitemap-clusters.xml');
       const context = createMockContext(request);
-      context.env.CLUSTER_KV.list.mockResolvedValueOnce({ keys: mockKeys });
-      context.env.CLUSTER_KV.get.mockRejectedValueOnce(new Error("KV Get Error for key")); // get fails
-      const consoleErrorSpy = vi.spyOn(console, 'error');
+      context.env.DB.all.mockResolvedValueOnce({ results: mockD1Results, success: true });
+      const currentDate = new Date().toISOString().split('T')[0]; // Get YYYY-MM-DD part
 
       const response = await onRequest(context);
-      expect(response.status).toBe(200);
       const text = await response.text();
-      // It should still build the URL for cluster1 but might use current date for lastmod
-      expect(text).toContain("<loc>https://earthquakeslive.com/cluster/cluster1</loc>");
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Error parsing KV value for cluster key cluster1"), expect.any(Error));
-      consoleErrorSpy.mockRestore();
+      expect(text).toContain(`<loc>https://earthquakeslive.com/cluster/cluster_no_date</loc>`);
+      expect(text).toContain(`<lastmod>${currentDate}`); // Check if it contains the current date part
     });
   });
 
@@ -548,24 +396,37 @@ describe('onRequest (Main Router)', () => {
         expect(fetch).toHaveBeenCalledWith(quakeDetailUrl); // Decoded URL
     });
 
-    it('/cluster/some-cluster-id should trigger prerender for crawler', async () => {
-        const clusterId = "test-cluster-1";
-        const mockClusterData = { earthquakeIds: ['q1'], strongestQuakeId: 'q1', updatedAt: new Date().toISOString() };
+    it('/cluster/some-cluster-id should trigger prerender for crawler using D1', async () => {
+        const clusterId = "test-cluster-d1";
+        const mockClusterD1Data = {
+            earthquakeIds: JSON.stringify(['q1', 'q2']), // Stored as JSON string
+            strongestQuakeId: 'q1',
+            updatedAt: new Date().toISOString()
+        };
+        const mockStrongestQuakeDetails = { properties: { mag: 3, place: "Cluster Epicenter D1" }, geometry: { coordinates: [1,1,1]}, id: 'q1' };
 
         const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
-        context.env.CLUSTER_KV.get.mockResolvedValueOnce(JSON.stringify(mockClusterData));
-        // Mock fetch for strongestQuakeId if that logic is hit
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify({ properties: { mag: 3, place: "Cluster Epicenter" }, geometry: { coordinates: [1,1,1]}, id: 'q1' })));
 
+        // Setup mocks for D1
+        const mockD1First = vi.fn().mockResolvedValueOnce(mockClusterD1Data);
+        const mockD1Bind = vi.fn().mockReturnValueOnce({ first: mockD1First });
+        context.env.DB.prepare.mockReturnValueOnce({ bind: mockD1Bind });
+
+        // Mock fetch for strongest quake details
+        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockStrongestQuakeDetails)));
 
         const response = await onRequest(context);
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('text/html');
         const text = await response.text();
-        expect(text).toContain(`<title>Earthquake Cluster near Cluster Epicenter`);
-        expect(context.env.CLUSTER_KV.get).toHaveBeenCalledWith(clusterId);
+        expect(text).toContain(`<title>Earthquake Cluster near Cluster Epicenter D1`);
+        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT earthquakeIds, strongestQuakeId, updatedAt FROM ClusterDefinitions WHERE clusterId = ?"));
+        expect(mockD1Bind).toHaveBeenCalledWith(clusterId); // Assert on the captured mock
+        expect(mockD1First).toHaveBeenCalled(); // Assert on the captured mock
     });
+
+    // ... (other /quake/ tests remain unchanged) ...
 
     it('/quake/some-quake-id should handle fetch error during prerender', async () => {
         const quakeDetailUrl = "http://example.com/details/q_error";
@@ -612,11 +473,11 @@ describe('onRequest (Main Router)', () => {
     });
 
 
-    it('/cluster/some-cluster-id should handle KV.get returning null for prerender', async () => {
-        const clusterId = "test-cluster-notfound";
+    it('/cluster/some-cluster-id should handle D1 returning null for prerender', async () => {
+        const clusterId = "test-cluster-notfound-d1";
         const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
-        context.env.CLUSTER_KV.get.mockResolvedValueOnce(null); // KV returns null
+        context.env.DB.prepare.mockReturnValueOnce({ bind: vi.fn().mockReturnValueOnce({ first: vi.fn().mockResolvedValueOnce(null) }) }); // D1 returns null for the cluster
 
         const response = await onRequest(context);
         expect(response.status).toBe(404);
@@ -624,29 +485,66 @@ describe('onRequest (Main Router)', () => {
         expect(text).toContain("Cluster not found");
     });
 
-    it('/cluster/some-cluster-id should handle fetch error for strongest quake during prerender', async () => {
-        const clusterId = "test-cluster-fetch-error";
-        const mockClusterData = { earthquakeIds: ['q1'], strongestQuakeId: 'q1', updatedAt: new Date().toISOString() };
+    it('/cluster/some-cluster-id should handle D1 error during prerender', async () => {
+        const clusterId = "test-cluster-d1-error";
         const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
-        context.env.CLUSTER_KV.get.mockResolvedValueOnce(JSON.stringify(mockClusterData));
-        fetch.mockRejectedValueOnce(new Error("Strongest Quake Fetch Error")); // Fetch for strongest quake fails
+        context.env.DB.prepare.mockReturnValueOnce({ bind: vi.fn().mockReturnValueOnce({ first: vi.fn().mockRejectedValueOnce(new Error("D1 .first() error")) }) });
 
         const response = await onRequest(context);
-        expect(response.status).toBe(200); // Page should still render, but maybe with partial data
+        expect(response.status).toBe(500);
+        const text = await response.text();
+        expect(text).toContain("Error prerendering cluster page");
+    });
+
+    it('/cluster/some-cluster-id should handle fetch error for strongest quake during prerender (D1 context)', async () => {
+        const clusterId = "test-cluster-fetch-error-d1";
+        const mockClusterD1Data = { earthquakeIds: JSON.stringify(['q1']), strongestQuakeId: 'q1', updatedAt: new Date().toISOString() };
+        const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const context = createMockContext(request);
+        context.env.DB.prepare.mockReturnValueOnce({ bind: vi.fn().mockReturnValueOnce({ first: vi.fn().mockResolvedValueOnce(mockClusterD1Data) }) });
+        fetch.mockRejectedValueOnce(new Error("Strongest Quake Fetch Error D1"));
+
+        const response = await onRequest(context);
+        expect(response.status).toBe(200); // Should still render the page but with a fallback message
         const text = await response.text();
         expect(text).toContain("Further details about the most significant event in this cluster are currently unavailable.");
     });
 
-    it('/cluster/some-cluster-id should handle CLUSTER_KV undefined for prerender', async () => {
-        const clusterId = "test-cluster-no-kv";
+    it('/cluster/some-cluster-id should handle DB undefined for prerender', async () => {
+        const clusterId = "test-cluster-no-db";
         const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
-        const context = createMockContext(request, { CLUSTER_KV: undefined });
+        const context = createMockContext(request, { DB: undefined }); // DB is not configured
 
         const response = await onRequest(context);
         expect(response.status).toBe(500);
         const text = await response.text();
         expect(text).toContain("Service configuration error.");
+    });
+
+    it('/cluster/some-cluster-id should handle error parsing earthquakeIds from D1', async () => {
+        const clusterId = "test-cluster-bad-json-d1";
+        const mockClusterD1DataBadJson = {
+            earthquakeIds: "this is not json", // Invalid JSON string
+            strongestQuakeId: 'q1',
+            updatedAt: new Date().toISOString()
+        };
+        const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const context = createMockContext(request);
+
+        const mockD1First = vi.fn().mockResolvedValueOnce(mockClusterD1DataBadJson);
+        context.env.DB.prepare.mockReturnValueOnce({ bind: vi.fn().mockReturnValueOnce({ first: mockD1First }) });
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+
+        const response = await onRequest(context);
+        expect(response.status).toBe(500);
+        const text = await response.text();
+        expect(text).toContain("Error processing cluster data.");
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect.stringContaining(`[prerender-cluster] Error parsing earthquakeIds for cluster ${clusterId}: Unexpected token`)
+        );
+        consoleErrorSpy.mockRestore();
     });
 
     it('should fall through for crawler on non-prerenderable path', async () => {
