@@ -29,7 +29,7 @@ function ClusterDetailModalWrapper({
     onIndividualQuakeSelect,
     formatTimeAgo,
     formatTimeDuration,
-    areParentClustersLoading // New prop
+    areParentClustersLoading
 }) {
     const { clusterId } = useParams();
     const navigate = useNavigate();
@@ -38,14 +38,17 @@ function ClusterDetailModalWrapper({
     const [dynamicCluster, setDynamicCluster] = useState(null);
     const [errorMessage, setErrorMessage] = useState('');
     const [seoProps, setSeoProps] = useState({});
+    const [isWaitingForMonthlyData, setIsWaitingForMonthlyData] = useState(false); // New state
 
     const {
-        allEarthquakes, // Used for 30-day data if available
-        earthquakesLast72Hours, // Fallback for recent data
-        isLoadingWeekly, // For 72h/7day data
-        isLoadingMonthly, // For 30-day data
-        isInitialAppLoad, // Overall initial load
-        hasAttemptedMonthlyLoad
+        allEarthquakes,
+        earthquakesLast72Hours,
+        isLoadingWeekly,
+        isLoadingMonthly,
+        isInitialAppLoad,
+        hasAttemptedMonthlyLoad,
+        loadMonthlyData, // New from context
+        monthlyError
     } = useEarthquakeDataState();
 
     const generateSeo = useCallback((clusterData, currentId, errorMsg = '') => {
@@ -57,7 +60,7 @@ function ClusterDetailModalWrapper({
                 canonicalUrl: pageUrl, pageUrl, noindex: true,
             };
         }
-        const { locationName, quakeCount, maxMagnitude, _earliestTimeInternal, _latestTimeInternal, strongestQuake, updatedAt } = clusterData;
+        const { locationName, quakeCount, maxMagnitude, strongestQuake, updatedAt, _latestTimeInternal } = clusterData;
         const pageTitle = `Earthquake Cluster: ${locationName || 'Unknown Area'}`;
         const pageDescription = `Explore an earthquake cluster near ${locationName || 'Unknown Area'} with ${quakeCount} events, max magnitude M${maxMagnitude?.toFixed(1)}. View details, map, and activity period.`;
         const pageKeywords = `earthquake cluster, seismic swarm, ${locationName || 'unknown area'}, active seismic zone, earthquake activity, seismic events`;
@@ -80,149 +83,197 @@ function ClusterDetailModalWrapper({
 
     useEffect(() => {
         let isMounted = true;
-        setInternalIsLoading(true);
-        setErrorMessage('');
-        setDynamicCluster(null); // Reset on ID change
 
-        if (!clusterId) {
-            if (isMounted) {
-                setErrorMessage('No cluster ID specified.');
-                setInternalIsLoading(false);
-                setSeoProps(generateSeo(null, null, 'No cluster ID specified.'));
+        const findAndSetCluster = async () => {
+            if (!isMounted) return;
+            setInternalIsLoading(true);
+            // Reset error only if we are not in a waiting phase that might resolve it
+            if (!isWaitingForMonthlyData) {
+                setErrorMessage('');
             }
-            return;
-        }
 
-        // Initial Loading Gate
-        const sourceDataAvailable = (hasAttemptedMonthlyLoad && allEarthquakes?.length > 0) || (!hasAttemptedMonthlyLoad && earthquakesLast72Hours?.length > 0);
-        const stillLoadingUpstream =
-            areParentClustersLoading ||
-            (hasAttemptedMonthlyLoad && isLoadingMonthly && !allEarthquakes?.length) ||
-            (!hasAttemptedMonthlyLoad && (isLoadingWeekly || isInitialAppLoad) && !earthquakesLast72Hours?.length);
-
-        if (stillLoadingUpstream && !sourceDataAvailable) {
-            // console.log(`ClusterDetailWrapper (${clusterId}): Waiting for upstream data or parent clusters.`);
-            if (isMounted) {
-                 setSeoProps(generateSeo(null, clusterId, 'Loading cluster details...')); // Initial loading SEO
+            if (!clusterId) {
+                if (isMounted) {
+                    setErrorMessage('No cluster ID specified.');
+                    setInternalIsLoading(false);
+                    setSeoProps(generateSeo(null, null, 'No cluster ID specified.'));
+                }
+                return;
             }
-            // Do not setInternalIsLoading(false) here, wait for re-render when props change
-            return;
-        }
 
-        // Attempt 1: Find in overviewClusters prop
-        const clusterFromProp = overviewClusters?.find(c => c.id === clusterId);
-        if (clusterFromProp) {
-            if (isMounted) {
-                // console.log(`ClusterDetailWrapper (${clusterId}): Found in overviewClusters prop.`);
-                setDynamicCluster(clusterFromProp);
-                setSeoProps(generateSeo(clusterFromProp, clusterId));
-                setInternalIsLoading(false);
+            // Initial Loading Gate (Phase 1: Parent or initial context data loading)
+            const initialUpstreamLoad = areParentClustersLoading ||
+                                       (!hasAttemptedMonthlyLoad && (isLoadingWeekly || isInitialAppLoad) && !earthquakesLast72Hours?.length) ||
+                                       (hasAttemptedMonthlyLoad && isLoadingMonthly && !allEarthquakes?.length && !isWaitingForMonthlyData); // Don't get stuck if waiting for monthly specifically
+
+            if (initialUpstreamLoad && !dynamicCluster) { // Only block if we haven't found a cluster yet
+                if (isMounted) {
+                    setSeoProps(generateSeo(null, clusterId, 'Loading cluster details...'));
+                }
+                // internalIsLoading remains true, effect will re-run when props/context change
+                return;
             }
-            return;
-        }
 
-        // Determine source quakes for reconstruction attempts
-        const sourceQuakesForReconstruction = (hasAttemptedMonthlyLoad && allEarthquakes?.length > 0)
-            ? allEarthquakes
-            : earthquakesLast72Hours;
+            // Attempt 1: Find in overviewClusters prop (if not already found and parent isn't loading new ones)
+            if (!dynamicCluster && !areParentClustersLoading) {
+                const clusterFromProp = overviewClusters?.find(c => c.id === clusterId);
+                if (clusterFromProp) {
+                    if (isMounted) {
+                        setDynamicCluster(clusterFromProp);
+                        setSeoProps(generateSeo(clusterFromProp, clusterId));
+                        setInternalIsLoading(false);
+                    }
+                    return;
+                }
+            }
 
-        // Attempt 2: Reconstruct from clusterId (overview_cluster_...)
-        const parts = clusterId.split('_');
-        if (parts.length === 4 && parts[0] === 'overview' && parts[1] === 'cluster') {
-            const parsedStrongestQuakeId = parts[2];
-            if (parsedStrongestQuakeId && sourceQuakesForReconstruction?.length > 0) {
-                // console.log(`ClusterDetailWrapper (${clusterId}): Attempting reconstruction from ID.`);
-                const allNewlyFormedClusters = findActiveClusters(sourceQuakesForReconstruction, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
-                for (const newClusterArray of allNewlyFormedClusters) {
-                    if (!newClusterArray || newClusterArray.length === 0) continue;
-                    const sortedForStrongest = [...newClusterArray].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-                    const newStrongestQuakeInCluster = sortedForStrongest[0];
-                    if (!newStrongestQuakeInCluster) continue;
-                    const newGeneratedId = `overview_cluster_${newStrongestQuakeInCluster.id}_${newClusterArray.length}`;
+            // Determine source quakes for reconstruction (can change if monthly data loads)
+            let sourceQuakesForReconstruction = earthquakesLast72Hours;
+            if (hasAttemptedMonthlyLoad && allEarthquakes?.length > 0) {
+                sourceQuakesForReconstruction = allEarthquakes;
+            }
 
-                    if (newGeneratedId === clusterId) {
-                        let earliestTime = Infinity, latestTime = -Infinity;
-                        newClusterArray.forEach(q => {
-                            if (q.properties.time < earliestTime) earliestTime = q.properties.time;
-                            if (q.properties.time > latestTime) latestTime = q.properties.time;
-                        });
-                        const reconstructed = {
-                            id: clusterId, originalQuakes: newClusterArray, quakeCount: newClusterArray.length,
-                            strongestQuakeId: newStrongestQuakeInCluster.id, strongestQuake: newStrongestQuakeInCluster,
-                            maxMagnitude: Math.max(...newClusterArray.map(q => q.properties.mag).filter(m => m != null)),
-                            locationName: newStrongestQuakeInCluster.properties.place || 'Unknown Location',
-                            _earliestTimeInternal: earliestTime, _latestTimeInternal: latestTime,
-                            timeRange: calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, newClusterArray.length),
-                        };
-                        if (isMounted) {
-                            setDynamicCluster(reconstructed);
-                            setSeoProps(generateSeo(reconstructed, clusterId));
-                            setInternalIsLoading(false);
+            // Attempt 2: Reconstruct from clusterId (overview_cluster_...) if not found yet
+            if (!dynamicCluster && sourceQuakesForReconstruction?.length > 0) {
+                const parts = clusterId.split('_');
+                if (parts.length === 4 && parts[0] === 'overview' && parts[1] === 'cluster') {
+                    const parsedStrongestQuakeId = parts[2];
+                    if (parsedStrongestQuakeId) {
+                        const allNewlyFormedClusters = findActiveClusters(sourceQuakesForReconstruction, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
+                        for (const newClusterArray of allNewlyFormedClusters) {
+                            if (!newClusterArray || newClusterArray.length === 0) continue;
+                            const sortedForStrongest = [...newClusterArray].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
+                            const newStrongestQuakeInCluster = sortedForStrongest[0];
+                            if (!newStrongestQuakeInCluster) continue;
+                            const newGeneratedId = `overview_cluster_${newStrongestQuakeInCluster.id}_${newClusterArray.length}`;
+
+                            if (newGeneratedId === clusterId) {
+                                let earliestTime = Infinity, latestTime = -Infinity;
+                                newClusterArray.forEach(q => {
+                                    if (q.properties.time < earliestTime) earliestTime = q.properties.time;
+                                    if (q.properties.time > latestTime) latestTime = q.properties.time;
+                                });
+                                const reconstructed = {
+                                    id: clusterId, originalQuakes: newClusterArray, quakeCount: newClusterArray.length,
+                                    strongestQuakeId: newStrongestQuakeInCluster.id, strongestQuake: newStrongestQuakeInCluster,
+                                    maxMagnitude: Math.max(...newClusterArray.map(q => q.properties.mag).filter(m => m != null)),
+                                    locationName: newStrongestQuakeInCluster.properties.place || 'Unknown Location',
+                                    _earliestTimeInternal: earliestTime, _latestTimeInternal: latestTime,
+                                    timeRange: calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, newClusterArray.length),
+                                };
+                                if (isMounted) {
+                                    setDynamicCluster(reconstructed);
+                                    setSeoProps(generateSeo(reconstructed, clusterId));
+                                    setInternalIsLoading(false);
+                                    setIsWaitingForMonthlyData(false); // Found it, no longer waiting
+                                }
+                                return;
+                            }
                         }
-                        return;
                     }
                 }
             }
-        }
 
-        // Attempt 3: fetchClusterDefinition (Worker/KV store)
-        // console.log(`ClusterDetailWrapper (${clusterId}): Attempting fetch from worker.`);
-        fetchClusterDefinition(clusterId)
-            .then(workerResult => {
-                if (!isMounted) return;
-                if (workerResult && sourceQuakesForReconstruction?.length > 0) {
-                    const { earthquakeIds, strongestQuakeId: defStrongestQuakeId, updatedAt: kvUpdatedAt } = workerResult;
-                    const foundQuakes = earthquakeIds.map(id => sourceQuakesForReconstruction.find(q => q.id === id)).filter(Boolean);
+            // If cluster still not found, and we haven't tried loading monthly data yet
+            if (!dynamicCluster && !hasAttemptedMonthlyLoad && !isWaitingForMonthlyData) {
+                if (isMounted) {
+                    // console.log(`ClusterDetailWrapper (${clusterId}): Not found yet, attempting to load monthly data.`);
+                    loadMonthlyData();
+                    setIsWaitingForMonthlyData(true);
+                    // internalIsLoading is already true or will be set at the start of the next run.
+                    // SEO props for loading are likely already set.
+                }
+                return; // Wait for monthly data to load
+            }
 
-                    if (foundQuakes.length === earthquakeIds.length) {
-                        let earliestTime = Infinity, latestTime = -Infinity;
-                        foundQuakes.forEach(q => {
-                            if (q.properties.time < earliestTime) earliestTime = q.properties.time;
-                            if (q.properties.time > latestTime) latestTime = q.properties.time;
-                        });
-                        const strongestQuakeInList = foundQuakes.find(q => q.id === defStrongestQuakeId) || foundQuakes[0];
-                        if (strongestQuakeInList) {
-                            const reconstructed = {
-                                id: clusterId, originalQuakes: foundQuakes, quakeCount: foundQuakes.length,
-                                strongestQuakeId: strongestQuakeInList.id, strongestQuake: strongestQuakeInList,
-                                maxMagnitude: Math.max(...foundQuakes.map(q => q.properties.mag).filter(m => m != null)),
-                                locationName: strongestQuakeInList.properties.place || 'Unknown Location',
-                                _earliestTimeInternal: earliestTime, _latestTimeInternal: latestTime,
-                                timeRange: calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, foundQuakes.length),
-                                updatedAt: kvUpdatedAt,
-                            };
-                            setDynamicCluster(reconstructed);
-                            setSeoProps(generateSeo(reconstructed, clusterId));
+            // If waiting for monthly data and it has now loaded (or failed)
+            if (isWaitingForMonthlyData && !isLoadingMonthly) {
+                 if(isMounted) setIsWaitingForMonthlyData(false); // Stop waiting, proceed with whatever data we have
+                 // The effect will re-run due to setIsWaitingForMonthlyData, and sourceQuakesForReconstruction will update if allEarthquakes populated.
+                 // Then reconstruction (Attempt 2) will be tried again.
+                 // If monthlyError occurred, allEarthquakes might still be empty, and subsequent steps will handle this.
+                 // If still not found after this, it will fall through to Attempt 3 or error.
+                 if(isMounted) setInternalIsLoading(true); // Ensure loading is true for the re-evaluation pass
+                 return; // Re-run effect with updated isWaitingForMonthlyData
+            }
+
+            // If still waiting for monthly data to load, keep showing loading.
+            if (isWaitingForMonthlyData && isLoadingMonthly) {
+                if(isMounted) setInternalIsLoading(true); // Remain in loading state
+                return;
+            }
+
+            // Attempt 3: fetchClusterDefinition (Worker/KV store) - only if not found by other means
+            if (!dynamicCluster) {
+                try {
+                    const workerResult = await fetchClusterDefinition(clusterId);
+                    if (!isMounted) return;
+
+                    if (workerResult && sourceQuakesForReconstruction?.length > 0) {
+                        const { earthquakeIds, strongestQuakeId: defStrongestQuakeId, updatedAt: kvUpdatedAt } = workerResult;
+                        const foundQuakes = earthquakeIds.map(id => sourceQuakesForReconstruction.find(q => q.id === id)).filter(Boolean);
+
+                        if (foundQuakes.length === earthquakeIds.length) {
+                            let earliestTime = Infinity, latestTime = -Infinity;
+                            foundQuakes.forEach(q => {
+                                if (q.properties.time < earliestTime) earliestTime = q.properties.time;
+                                if (q.properties.time > latestTime) latestTime = q.properties.time;
+                            });
+                            const strongestQuakeInList = foundQuakes.find(q => q.id === defStrongestQuakeId) || foundQuakes[0];
+                            if (strongestQuakeInList) {
+                                const reconstructed = {
+                                    id: clusterId, originalQuakes: foundQuakes, quakeCount: foundQuakes.length,
+                                    strongestQuakeId: strongestQuakeInList.id, strongestQuake: strongestQuakeInList,
+                                    maxMagnitude: Math.max(...foundQuakes.map(q => q.properties.mag).filter(m => m != null)),
+                                    locationName: strongestQuakeInList.properties.place || 'Unknown Location',
+                                    _earliestTimeInternal: earliestTime, _latestTimeInternal: latestTime,
+                                    timeRange: calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, foundQuakes.length),
+                                    updatedAt: kvUpdatedAt,
+                                };
+                                setDynamicCluster(reconstructed);
+                                setSeoProps(generateSeo(reconstructed, clusterId));
+                            } else {
+                                 setErrorMessage("Cluster details found but strongest quake data missing.");
+                                 setSeoProps(generateSeo(null, clusterId, "Cluster details found but strongest quake data missing."));
+                            }
                         } else {
-                             setErrorMessage("Cluster details found but strongest quake data missing.");
-                             setSeoProps(generateSeo(null, clusterId, "Cluster details found but strongest quake data missing."));
+                            setErrorMessage("Cluster definition found, but some earthquake data is missing or stale.");
+                            setSeoProps(generateSeo(null, clusterId, "Cluster definition found, but some earthquake data is missing or stale."));
                         }
                     } else {
-                        setErrorMessage("Cluster definition found, but some earthquake data is missing or stale.");
-                        setSeoProps(generateSeo(null, clusterId, "Cluster definition found, but some earthquake data is missing or stale."));
+                        // If workerResult is null OR sourceQuakes are still not available (e.g. monthly load failed silently)
+                        const finalErrorMessage = monthlyError ? `Failed to load extended data: ${monthlyError}. Cluster details may be incomplete.` : "Cluster details could not be found.";
+                        setErrorMessage(finalErrorMessage);
+                        setSeoProps(generateSeo(null, clusterId, finalErrorMessage));
                     }
-                } else {
-                    setErrorMessage("Cluster details could not be found.");
-                    setSeoProps(generateSeo(null, clusterId, "Cluster details could not be found."));
+                } catch (error) {
+                    if (!isMounted) return;
+                    console.error(`Error fetching cluster definition ${clusterId} from worker:`, error);
+                    setErrorMessage("Failed to fetch cluster details.");
+                    setSeoProps(generateSeo(null, clusterId, "Failed to fetch cluster details."));
+                } finally {
+                    if (isMounted) setInternalIsLoading(false);
                 }
-            })
-            .catch(error => {
-                if (!isMounted) return;
-                console.error(`Error fetching cluster definition ${clusterId} from worker:`, error);
-                setErrorMessage("Failed to fetch cluster details.");
-                setSeoProps(generateSeo(null, clusterId, "Failed to fetch cluster details."));
-            })
-            .finally(() => {
-                if (isMounted) setInternalIsLoading(false);
-            });
+            } else { // If dynamicCluster was found by earlier steps (prop or reconstruct)
+                 if (isMounted) setInternalIsLoading(false);
+            }
+        };
+
+        // Reset dynamicCluster to null at the very start of the effect if clusterId changes,
+        // to ensure previous cluster data doesn't persist while new one is loading.
+        if (dynamicCluster && dynamicCluster.id !== clusterId) {
+            setDynamicCluster(null);
+        }
+        findAndSetCluster();
 
         return () => { isMounted = false; };
 
     }, [
         clusterId, overviewClusters, areParentClustersLoading,
         allEarthquakes, earthquakesLast72Hours,
-        isLoadingWeekly, isLoadingMonthly, isInitialAppLoad, hasAttemptedMonthlyLoad,
-        formatDate, formatTimeAgo, formatTimeDuration, generateSeo // generateSeo is useCallback now
+        isLoadingWeekly, isLoadingMonthly, isInitialAppLoad, hasAttemptedMonthlyLoad, loadMonthlyData, monthlyError,
+        isWaitingForMonthlyData, // Added to deps
+        formatDate, formatTimeAgo, formatTimeDuration, generateSeo
     ]);
 
     const handleClose = () => navigate(-1);
@@ -230,7 +281,7 @@ function ClusterDetailModalWrapper({
     if (internalIsLoading) {
         return (
             <>
-                <SeoMetadata {...seoProps} /> {/* Will show "Loading Cluster..." or similar */}
+                <SeoMetadata {...(seoProps || generateSeo(null, clusterId, 'Loading cluster details...'))} />
                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4">
                     <div className="bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700 text-center">
                         <svg aria-hidden="true" className="animate-spin h-8 w-8 text-indigo-400 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -238,7 +289,7 @@ function ClusterDetailModalWrapper({
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                         <h2 className="text-lg font-semibold text-indigo-300">Loading Cluster Details...</h2>
-                        <p className="text-sm text-slate-400">Please wait while we fetch the information.</p>
+                        <p className="text-sm text-slate-400">Please wait while we fetch the information.{isWaitingForMonthlyData ? " (Checking extended data...)" : ""}</p>
                     </div>
                 </div>
             </>
@@ -248,10 +299,10 @@ function ClusterDetailModalWrapper({
     if (errorMessage) {
         return (
             <>
-                <SeoMetadata {...seoProps} /> {/* Will show "Cluster Not Found" or error title */}
+                <SeoMetadata {...(seoProps || generateSeo(null, clusterId, errorMessage))} />
                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4">
                     <div className="bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700">
-                        <h2 className="text-xl font-semibold text-amber-400 mb-3">{seoProps.title?.split('|')[0].trim() || "Error"}</h2>
+                        <h2 className="text-xl font-semibold text-amber-400 mb-3">{seoProps?.title?.split('|')[0].trim() || "Error"}</h2>
                         <p className="text-sm mb-4">{errorMessage}</p>
                         <button onClick={handleClose} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors">
                             Go Back
@@ -265,7 +316,7 @@ function ClusterDetailModalWrapper({
     if (dynamicCluster) {
         return (
             <>
-                <SeoMetadata {...seoProps} />
+                <SeoMetadata {...(seoProps || generateSeo(dynamicCluster, clusterId))} />
                 <ClusterDetailModal
                     cluster={dynamicCluster}
                     onClose={handleClose}
@@ -277,8 +328,6 @@ function ClusterDetailModalWrapper({
         );
     }
 
-    // Fallback if somehow none of the above states are met (should be rare)
-    // This also covers the brief moment before the main useEffect sets an error or loading state for the first time.
     return (
          <>
             <SeoMetadata title="Cluster Information" description="Details about a specific earthquake cluster." noindex={true} />
