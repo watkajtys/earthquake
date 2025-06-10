@@ -19,7 +19,9 @@ export const CLUSTER_MAX_DISTANCE_KM = 100;
 /** @description Minimum number of earthquakes required to form a valid cluster. */
 export const CLUSTER_MIN_QUAKES = 3;
 /** @description Time window in hours to consider when grouping earthquakes into clusters. */
-export const CLUSTER_TIME_WINDOW_HOURS = 48;
+export const CLUSTER_TIME_WINDOW_HOURS = 48; // Note: This might be superseded or used alongside MS version
+/** @description Maximum time difference in milliseconds for earthquakes to be considered in the same cluster by the backend. */
+export const CLUSTER_MAX_TIME_DIFFERENCE_MS = 259200000; // 3 days in milliseconds (3 * 24 * 60 * 60 * 1000)
 
 // Earthquake Thresholds
 /** @description Minimum magnitude for an earthquake to be considered 'major' or 'significant' in many contexts. */

@@ -43,6 +43,7 @@ import {
     // USGS_API_URL_MONTH, // Now used inside useMonthlyEarthquakeData
     CLUSTER_MAX_DISTANCE_KM,
     CLUSTER_MIN_QUAKES,
+    CLUSTER_MAX_TIME_DIFFERENCE_MS, // Import the new constant
     FELT_REPORTS_THRESHOLD,
     SIGNIFICANCE_THRESHOLD,
     HEADER_TIME_UPDATE_INTERVAL_MS,
@@ -407,7 +408,7 @@ function App() {
     // Effect to fetch active clusters from the API
     useEffect(() => {
         if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
-            fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
+            fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES, CLUSTER_MAX_TIME_DIFFERENCE_MS)
                 .then(clusters => {
                     setCalculatedClusters(clusters);
                 })
@@ -418,7 +419,7 @@ function App() {
         } else {
             setCalculatedClusters([]); // Clear if no earthquake data
         }
-    }, [earthquakesLast7Days]); // Dependencies: earthquakesLast7Days
+    }, [earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES, CLUSTER_MAX_TIME_DIFFERENCE_MS]); // Added constants to dependency array
 
     // Use calculatedClusters for the activeClusters memo
     const activeClusters = useMemo(() => {
