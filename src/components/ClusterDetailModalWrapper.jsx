@@ -5,7 +5,7 @@ import ClusterDetailModal from './ClusterDetailModal';
 import SeoMetadata from './SeoMetadata';
 import { fetchClusterDefinition } from '../services/clusterApiService.js';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
-import { findActiveClusters } from '../utils/clusterUtils.js';
+// import { findActiveClusters } from '../utils/clusterUtils.js'; // Removed as clustering is backend-only
 import { CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES } from '../constants/appConstants.js';
 
 function calculateClusterTimeRange(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, clusterLength = 0) {
@@ -253,45 +253,10 @@ function ClusterDetailModalWrapper({
                 return;
             }
 
-            const allNewlyFormedClusters = findActiveClusters(sourceQuakes, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
+            // Client-side reconstruction logic using findActiveClusters has been removed.
+            // This path ('reconstruct_from_id_attempt') will now effectively lead to 'fallback_prop_check_attempt'
+            // as 'matchFound' will remain false.
             let matchFound = false;
-            for (const newClusterArray of allNewlyFormedClusters) {
-                if (!newClusterArray || newClusterArray.length === 0) continue;
-
-                const sortedForStrongest = [...newClusterArray].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-                const newStrongestQuakeInCluster = sortedForStrongest[0];
-
-                if (!newStrongestQuakeInCluster) continue;
-
-                const newGeneratedId = `overview_cluster_${newStrongestQuakeInCluster.id}_${newClusterArray.length}`;
-                if (newGeneratedId === clusterId) {
-                    let earliestTime = Infinity;
-                    let latestTime = -Infinity;
-                    newClusterArray.forEach(quake => {
-                        if (quake.properties.time < earliestTime) earliestTime = quake.properties.time;
-                        if (quake.properties.time > latestTime) latestTime = quake.properties.time;
-                    });
-
-                    const reconstructedCluster = {
-                        id: clusterId,
-                        originalQuakes: newClusterArray,
-                        quakeCount: newClusterArray.length,
-                        strongestQuakeId: newStrongestQuakeInCluster.id,
-                        strongestQuake: newStrongestQuakeInCluster, // Keep the strongest quake object
-                        maxMagnitude: Math.max(...newClusterArray.map(q => q.properties.mag).filter(m => m !== null && m !== undefined)),
-                        locationName: newStrongestQuakeInCluster.properties.place || 'Unknown Location',
-                        _earliestTimeInternal: earliestTime,
-                        _latestTimeInternal: latestTime,
-                        timeRange: calculateClusterTimeRange(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, newClusterArray.length),
-                        // No kvUpdatedAt available for this reconstruction method
-                    };
-                    setDynamicCluster(reconstructedCluster);
-                    setClusterSeoProps(generateClusterSeoProps(reconstructedCluster, clusterId));
-                    setLoadingPhase('done');
-                    matchFound = true;
-                    break;
-                }
-            }
             if (!matchFound) {
                 setLoadingPhase('fallback_prop_check_attempt');
             }

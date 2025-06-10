@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { registerClusterDefinition, fetchClusterDefinition } from './clusterApiService';
+import { registerClusterDefinition, fetchClusterDefinition, fetchActiveClusters } from './clusterApiService';
 
 // Mock global fetch
 global.fetch = vi.fn();
@@ -195,6 +195,167 @@ describe('clusterApiService', () => {
       await expect(fetchClusterDefinition('')).rejects.toThrow("Invalid clusterId");
       expect(consoleErrorSpy).toHaveBeenCalledWith("fetchClusterDefinition: Invalid clusterId provided.");
       expect(fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fetchActiveClusters', () => {
+    const mockEarthquakes = [
+      { id: 'eq1', properties: { time: Date.now(), mag: 3 }, geometry: { coordinates: [10, 10] } },
+      { id: 'eq2', properties: { time: Date.now() + 1000, mag: 4 }, geometry: { coordinates: [10.1, 10.1] } },
+    ];
+    const mockMaxDistanceKm = 100;
+    const mockMinQuakes = 2;
+    const mockMaxTimeDifferenceMs = 86400000; // 1 day
+    const mockClusterResponse = [
+      [mockEarthquakes[0], mockEarthquakes[1]]
+    ];
+
+    const validPayload = {
+      earthquakes: mockEarthquakes,
+      maxDistanceKm: mockMaxDistanceKm,
+      minQuakes: mockMinQuakes,
+      maxTimeDifferenceMs: mockMaxTimeDifferenceMs,
+    };
+
+    it('should return cluster data on successful fetch (200)', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => mockClusterResponse,
+      });
+
+      const result = await fetchActiveClusters(
+        mockEarthquakes,
+        mockMaxDistanceKm,
+        mockMinQuakes,
+        mockMaxTimeDifferenceMs
+      );
+
+      expect(result).toEqual(mockClusterResponse);
+      expect(fetch).toHaveBeenCalledWith('/api/calculate-clusters', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(validPayload),
+      });
+    });
+
+    it('should throw error and log on API error (e.g., 400)', async () => {
+      const errorText = 'Bad Request - API Error';
+      const status = 400;
+      fetch.mockResolvedValueOnce({
+        ok: false,
+        status: status,
+        text: async () => errorText,
+      });
+
+      await expect(
+        fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes, mockMaxTimeDifferenceMs)
+      ).rejects.toThrow(`Failed to fetch active clusters. Status: ${status}`);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        `Failed to fetch active clusters. Status: ${status}`,
+        errorText
+      );
+    });
+
+    it('should re-throw error and log on network error', async () => {
+      const networkError = new Error('Network connection lost');
+      fetch.mockRejectedValueOnce(networkError);
+
+      await expect(
+        fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes, mockMaxTimeDifferenceMs)
+      ).rejects.toThrow(networkError);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Network error while fetching active clusters:',
+        networkError
+      );
+    });
+
+    it('should throw error if response.json() fails after ok:true', async () => {
+      const parseError = new Error('Invalid API JSON response');
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => { throw parseError; },
+      });
+
+      await expect(
+        fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes, mockMaxTimeDifferenceMs)
+      ).rejects.toThrow(parseError);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        `Network error while fetching active clusters:`, // This is the console log from the catch block in SUT
+        parseError
+      );
+    });
+
+    // Input validation tests
+    const invalidInputTestCases = [
+      {
+        name: 'earthquakes not an array',
+        args: ["not-an-array", mockMaxDistanceKm, mockMinQuakes, mockMaxTimeDifferenceMs],
+        error: 'Invalid earthquakes array',
+      },
+      {
+        name: 'earthquakes empty array',
+        args: [[], mockMaxDistanceKm, mockMinQuakes, mockMaxTimeDifferenceMs],
+        error: 'Invalid earthquakes array',
+      },
+      {
+        name: 'maxDistanceKm not a number',
+        args: [mockEarthquakes, "abc", mockMinQuakes, mockMaxTimeDifferenceMs],
+        error: 'Invalid maxDistanceKm',
+      },
+      {
+        name: 'maxDistanceKm zero',
+        args: [mockEarthquakes, 0, mockMinQuakes, mockMaxTimeDifferenceMs],
+        error: 'Invalid maxDistanceKm',
+      },
+      {
+        name: 'maxDistanceKm negative',
+        args: [mockEarthquakes, -10, mockMinQuakes, mockMaxTimeDifferenceMs],
+        error: 'Invalid maxDistanceKm',
+      },
+      {
+        name: 'minQuakes not a number',
+        args: [mockEarthquakes, mockMaxDistanceKm, "abc", mockMaxTimeDifferenceMs],
+        error: 'Invalid minQuakes',
+      },
+      {
+        name: 'minQuakes zero',
+        args: [mockEarthquakes, mockMaxDistanceKm, 0, mockMaxTimeDifferenceMs],
+        error: 'Invalid minQuakes',
+      },
+      {
+        name: 'minQuakes negative',
+        args: [mockEarthquakes, mockMaxDistanceKm, -2, mockMaxTimeDifferenceMs],
+        error: 'Invalid minQuakes',
+      },
+      {
+        name: 'maxTimeDifferenceMs not a number',
+        args: [mockEarthquakes, mockMaxDistanceKm, mockMinQuakes, "abc"],
+        error: 'Invalid maxTimeDifferenceMs',
+      },
+      {
+        name: 'maxTimeDifferenceMs zero',
+        args: [mockEarthquakes, mockMaxDistanceKm, mockMinQuakes, 0],
+        error: 'Invalid maxTimeDifferenceMs',
+      },
+      {
+        name: 'maxTimeDifferenceMs negative',
+        args: [mockEarthquakes, mockMaxDistanceKm, mockMinQuakes, -1000],
+        error: 'Invalid maxTimeDifferenceMs',
+      },
+    ];
+
+    invalidInputTestCases.forEach(({ name, args, error }) => {
+      it(`should throw error for invalid input: ${name}`, async () => {
+        // @ts-ignore
+        await expect(fetchActiveClusters(...args)).rejects.toThrow(error);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(`fetchActiveClusters: ${error} provided.`);
+        expect(fetch).not.toHaveBeenCalled();
+      });
     });
   });
 });

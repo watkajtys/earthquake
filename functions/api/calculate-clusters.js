@@ -8,7 +8,7 @@
  * @param {number} lon2 Longitude of the second point.
  * @returns {number} Distance in kilometers.
  */
-function calculateDistance(lat1, lon1, lat2, lon2) {
+export function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; // Radius of the Earth in kilometers
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -26,7 +26,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
  * @param {Array<object>} earthquakes - Array of earthquake objects. Expected to have `id`.
  * @returns {Promise<string>} A hex string representation of the hash.
  */
-async function generateEarthquakeHash(earthquakes) {
+export async function generateEarthquakeHash(earthquakes) {
     if (!earthquakes || earthquakes.length === 0) {
         return ''; // Return an empty string or a predefined constant for empty/invalid input
     }
@@ -48,7 +48,7 @@ async function generateEarthquakeHash(earthquakes) {
  * @param {number} maxTimeDifferenceMs - Maximum time difference in milliseconds between quakes to be considered in the same cluster.
  * @returns {Array<Array<object>>} An array of clusters, where each cluster is an array of earthquake objects.
  */
-function findActiveClusters(earthquakes, maxDistanceKm, minQuakes, maxTimeDifferenceMs) {
+export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes, maxTimeDifferenceMs) {
     const clusters = [];
     const processedQuakeIds = new Set();
 

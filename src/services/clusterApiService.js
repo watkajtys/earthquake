@@ -90,7 +90,7 @@ export async function fetchClusterDefinition(clusterId) {
  * @throws {Error} If the request fails or the response is not ok.
  */
 export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes, maxTimeDifferenceMs) {
-  if (!Array.isArray(earthquakes)) {
+  if (!Array.isArray(earthquakes) || earthquakes.length === 0) {
     console.error("fetchActiveClusters: Invalid earthquakes array provided.");
     throw new Error("Invalid earthquakes array");
   }
