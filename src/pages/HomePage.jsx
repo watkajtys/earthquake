@@ -89,8 +89,12 @@ const GlobeLayout = (props) => {
     // Props for GeoJSON data and loading state
     coastlineData,
     tectonicPlatesData,
-    areGeoJsonAssetsLoading
+    areGeoJsonAssetsLoading,
+    areClustersLoading // Added new prop
   } = props;
+
+  // areClustersLoading is now available here for future use, e.g., showing a specific loading indicator.
+  // For now, no visual change based on it as per requirements.
 
   return (
     <div className="block h-full w-full"> {/* Base container for the globe and its fixed UI elements */}
@@ -280,6 +284,7 @@ function App() {
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Kept local
     // activeSidebarView, activeFeedPeriod, globeFocusLng, focusedNotableQuake are from useUIState()
     const [calculatedClusters, setCalculatedClusters] = useState([]); // NEW state for API fetched clusters
+    const [areClustersLoading, setAreClustersLoading] = useState(false); // New state for cluster loading
 
     // State for GeoJSON data
     const [coastlineData, setCoastlineData] = useState(null);
@@ -407,18 +412,22 @@ function App() {
     // Effect to fetch active clusters from the API
     useEffect(() => {
         if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
+            setAreClustersLoading(true); // Set loading true before fetch
             fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
                 .then(clusters => {
                     setCalculatedClusters(clusters);
+                    setAreClustersLoading(false); // Set loading false on success
                 })
                 .catch(error => {
                     console.error("Error fetching active clusters:", error);
-                    setCalculatedClusters([]); // Set to empty array on error
+                    setCalculatedClusters([]);
+                    setAreClustersLoading(false); // Set loading false on error
                 });
         } else {
-            setCalculatedClusters([]); // Clear if no earthquake data
+            setCalculatedClusters([]);
+            setAreClustersLoading(false); // Set loading false if no data to fetch for
         }
-    }, [earthquakesLast7Days]); // Dependencies: earthquakesLast7Days
+    }, [earthquakesLast7Days]); // Dependency: earthquakesLast7Days
 
     // Use calculatedClusters for the activeClusters memo
     const activeClusters = useMemo(() => {
@@ -866,6 +875,7 @@ function App() {
                                       formatTimeDuration={formatTimeDuration}
                                       handleNotableQuakeSelect={handleNotableQuakeSelect}
                                       keyStatsForGlobe={keyStatsForGlobe}
+                                      areClustersLoading={areClustersLoading} // Pass new prop
                                     />
                                   </>
                                 }
@@ -1012,24 +1022,12 @@ function App() {
 
                                 {/* Active Earthquake Clusters Section - Desktop Sidebar */}
                                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
-                                    <h3 className="text-md font-semibold mb-2 text-indigo-300">
-                                        Active Earthquake Clusters
-                                    </h3>
-                                    {overviewClusters && overviewClusters.length > 0 ? (
-                                        <ul className="space-y-2">
-                                            {overviewClusters.map(cluster => (
-                                                <ClusterSummaryItem
-                                                    clusterData={cluster}
-                                                    key={cluster.id}
-                                                    onClusterSelect={handleClusterSummaryClick} // <-- Add this prop
-                                                />
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <p className="text-xs text-slate-400 text-center py-2">
-                                            No significant active clusters detected currently.
-                                        </p>
-                                    )}
+                                <h3 className="text-md font-semibold mb-2 text-indigo-300"> Active Earthquake Clusters </h3>
+                                {areClustersLoading && (!overviewClusters || overviewClusters.length === 0) ? (
+                                    <div className="space-y-2"> <SkeletonListItem /><SkeletonListItem /> </div>
+                                ) : overviewClusters && overviewClusters.length > 0 ? (
+                                    <ul className="space-y-2"> {overviewClusters.map(cluster => ( <ClusterSummaryItem clusterData={cluster} key={cluster.id} onClusterSelect={handleClusterSummaryClick} /> ))} </ul>
+                                ) : ( <p className="text-xs text-slate-400 text-center py-2"> No significant active clusters detected. </p> )}
                                 </div>
 
                             {recentSignificantQuakesForOverview.length > 0 && (
