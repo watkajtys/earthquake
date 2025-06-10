@@ -812,6 +812,27 @@ export async function onRequest(context) {
     }
     return handleUsgsProxyRequest(context, apiUrl);
   }
+  else if (pathname.startsWith("/api/earthquake/")) {
+    const parts = pathname.split('/');
+    // Expected format: /api/earthquake/{event_id}
+    // parts will be ["", "api", "earthquake", "{event_id}"]
+    if (parts.length === 4 && parts[3]) {
+      try {
+        const event_id = decodeURIComponent(parts[3]);
+        return handleEarthquakeDetailRequest(context, event_id);
+      } catch (e) {
+        // Specifically catch URIError from decodeURIComponent, but catch others too just in case.
+        if (e instanceof URIError) {
+          return jsonErrorResponse("Invalid event_id encoding in path. Please ensure it is correctly URI encoded.", 400, "earthquake-router-decode-error");
+        }
+        // Log other unexpected errors during this stage
+        console.error(`[onRequest-earthquake-routing] Unexpected error before calling handler: ${e.message}`, e);
+        return jsonErrorResponse("Error processing earthquake request path.", 500, "earthquake-router-unexpected-error");
+      }
+    } else {
+      return jsonErrorResponse("Invalid earthquake event ID in path. Expected format: /api/earthquake/{event_id}", 400, "earthquake-router-format-error"); // Added a more specific source
+    }
+  }
 
   // If it's not a crawler and not an API/Sitemap route,
   // Pages will serve the static asset (e.g. index.html for SPA routes like /quake/* /cluster/*)
