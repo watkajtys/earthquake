@@ -1,4 +1,4 @@
-import { onRequestPost } from './calculate-clusters';
+import { onRequestPost, calculateDistance, findActiveClusters } from './calculate-clusters';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // Helper to create mock context for calculate-clusters
@@ -78,7 +78,6 @@ describe('onRequestPost in calculate-clusters.js', () => {
       const response = await onRequestPost(context);
       expect(response.status).toBe(400);
       const json = await response.json();
-      // Error message updated based on actual implementation
       expect(json.error).toBe('Earthquakes array is empty, no clusters to calculate.');
     });
 
@@ -235,17 +234,6 @@ describe('onRequestPost in calculate-clusters.js', () => {
     });
 
     it('should handle generic error during processing (e.g. in findActiveClusters due to unexpected data shape not caught by validation)', async () => {
-      // This test simulates an error *after* initial validation and D1 checks.
-      // We can achieve this by making findActiveClusters itself throw an error.
-      // However, findActiveClusters is internal. A more realistic way is to pass data that
-      // is valid by schema but causes an issue *inside* findActiveClusters if it were less robust.
-      // Since findActiveClusters is now quite robust, we'll test the generic 500 path by
-      // making a D1 operation like `prepare` fail unexpectedly, if not already covered.
-      // The existing `test('should handle generic error during processing'` in the original file
-      // was trying to make `findActiveClusters` fail by passing null geometry, but this is now caught
-      // by the input validation.
-
-      // Let's simulate a non-standard error from D1 prepare for instance
       const context = createMockContext(defaultRequestBody);
       const prepareError = new Error("Catastrophic D1 prepare failure");
       context.env.DB.prepare.mockImplementation(() => { throw prepareError; });
@@ -257,5 +245,206 @@ describe('onRequestPost in calculate-clusters.js', () => {
       expect(json.details).toBe(prepareError.message);
       expect(consoleErrorSpy).toHaveBeenCalledWith('Unhandled error processing request:', prepareError.message, expect.any(String));
     });
+  });
+});
+
+// --- Tests for calculateDistance ---
+describe('calculateDistance (internal)', () => {
+  it('should return 0 for the same point', () => {
+    expect(calculateDistance(10, 20, 10, 20)).toBe(0);
+  });
+
+  it('should calculate known distances correctly', () => {
+    // Paris (48.8566 N, 2.3522 E) to London (51.5074 N, 0.1278 W)
+    expect(calculateDistance(48.8566, 2.3522, 51.5074, -0.1278)).toBeCloseTo(343.5, 0);
+    // New York (40.7128 N, 74.0060 W) to Los Angeles (34.0522 N, 118.2437 W)
+    expect(calculateDistance(40.7128, -74.0060, 34.0522, -118.2437)).toBeCloseTo(3935.7, 0);
+  });
+
+  it('should handle points across the equator', () => {
+    // Point in Northern Hemisphere to Southern Hemisphere (approx 20 deg latitude = 20 * 111.195km)
+    // Note: 1 degree of latitude is approx 111.195 km (varies slightly)
+    expect(calculateDistance(10, 0, -10, 0)).toBeCloseTo(20 * 111.195, 0);
+  });
+
+  it('should handle points across the prime meridian', () => {
+    // Point East of PM to West of PM (approx 20 deg longitude at equator)
+    // Note: 1 degree of longitude at the equator is also approx 111.195 km
+    expect(calculateDistance(0, 10, 0, -10)).toBeCloseTo(20 * 111.195, 0);
+  });
+});
+
+// --- Tests for findActiveClusters (internal, adapted from src/utils/clusterUtils.test.js) ---
+const createMockQuake = (id, mag, lat, lon, time = Date.now()) => ({
+  id,
+  properties: { mag, time },
+  geometry: { coordinates: [lon, lat, 0] },
+});
+
+describe('findActiveClusters (internal)', () => {
+  let localConsoleWarnSpy; // Use a different name to avoid conflict with the one in onRequestPost describe block
+
+  beforeEach(() => {
+    localConsoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    localConsoleWarnSpy.mockRestore();
+  });
+
+  it('should return an empty array if no earthquakes are provided', () => {
+    const clusters = findActiveClusters([], 100, 2);
+    expect(clusters).toEqual([]);
+  });
+
+  it('should return an empty array if no clusters meet minQuakes criteria', () => {
+    const quakes = [
+      createMockQuake('q1', 5, 10, 20),
+      createMockQuake('q2', 4, 10.1, 20.1),
+    ];
+    const clusters = findActiveClusters(quakes, 20, 3);
+    expect(clusters).toEqual([]);
+  });
+
+  it('should form a single cluster if quakes are close enough and meet minQuakes', () => {
+    const q1 = createMockQuake('q1', 5, 10, 20);
+    const q2 = createMockQuake('q2', 4, 10.01, 20.01);
+    const q3 = createMockQuake('q3', 3, 10.02, 20.02);
+    const quakes = [q1, q2, q3];
+    const clusters = findActiveClusters(quakes, 5, 2);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0]).toEqual(expect.arrayContaining([q1, q2, q3]));
+    expect(clusters[0].length).toBe(3);
+  });
+
+  it('should form multiple distinct clusters', () => {
+    const qA1 = createMockQuake('qA1', 5, 10, 20);
+    const qA2 = createMockQuake('qA2', 4.8, 10.01, 20.01);
+    const qB1 = createMockQuake('qB1', 5.5, 30, 50);
+    const qB2 = createMockQuake('qB2', 5.2, 30.01, 50.01);
+    const qNoise = createMockQuake('qNoise', 3, 0, 0);
+    const quakes = [qA1, qA2, qB1, qB2, qNoise];
+    const clusters = findActiveClusters(quakes, 5, 2);
+    expect(clusters.length).toBe(2);
+    const clusterA = clusters.find(c => c.some(q => q.id === 'qA1'));
+    expect(clusterA).toEqual(expect.arrayContaining([qA1, qA2]));
+    const clusterB = clusters.find(c => c.some(q => q.id === 'qB1'));
+    expect(clusterB).toEqual(expect.arrayContaining([qB1, qB2]));
+    expect(clusters.every(c => !c.some(q => q.id === 'qNoise'))).toBe(true);
+  });
+
+  it('should handle earthquakes being used in only one cluster (desc mag sort behavior)', () => {
+    const q_strongest = createMockQuake('q_strongest', 6, 0, 0);
+    const q_close_to_strongest = createMockQuake('q_close_to_strongest', 3, 0.01, 0.01);
+    const q_middle = createMockQuake('q_middle', 4, 0.02, 0.02);
+    const quakes = [q_middle, q_strongest, q_close_to_strongest];
+    const clusters = findActiveClusters(quakes, 2, 2);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0]).toEqual(expect.arrayContaining([q_strongest, q_close_to_strongest]));
+    expect(clusters[0].some(q => q.id === 'q_middle')).toBe(false);
+  });
+
+  it('should not add quakes to a cluster if distance is greater than maxDistanceKm', () => {
+    const q1 = createMockQuake('q1', 5, 10, 20);
+    const q2 = createMockQuake('q2', 4, 10.01, 20.01);
+    const q3 = createMockQuake('q3', 3, 12, 22);
+    const quakes = [q1, q2, q3];
+    const clusters = findActiveClusters(quakes, 2, 2);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0]).toEqual(expect.arrayContaining([q1, q2]));
+    expect(clusters[0].some(q => q.id === 'q3')).toBe(false);
+  });
+
+  it('should handle null or undefined quake objects gracefully (skips them, no warning in this version)', () => {
+    const validQuake = createMockQuake('q1', 5, 10, 20);
+    const quakes = [ validQuake, null, undefined, createMockQuake('q2', 4, 10.01, 20.01)];
+    const clusters = findActiveClusters(quakes, 5, 2);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0]).toEqual(expect.arrayContaining([validQuake, quakes[3]]));
+    expect(localConsoleWarnSpy).not.toHaveBeenCalledWith("Skipping invalid quake object: null or undefined");
+  });
+
+  it('should handle quakes missing the id property (logs warning and skips)', () => {
+    const validQuake = createMockQuake('q1', 5, 10, 20);
+    const quakeMissingId = { properties: { mag: 4 }, geometry: { coordinates: [20.01, 10.01, 0] } };
+    const quakes = [validQuake, quakeMissingId, createMockQuake('q2', 3, 10.02, 20.02)];
+    const clusters = findActiveClusters(quakes, 5, 2);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0].some(q => q.id === 'q1')).toBe(true);
+    expect(clusters[0].some(q => q.id === 'q2')).toBe(true);
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith("Skipping quake with missing ID or invalid object in findActiveClusters.");
+  });
+
+  it('should handle quakes missing the geometry property (logs invalid coords)', () => {
+    const validQuake = createMockQuake('q1', 5, 10, 20);
+    const quakeMissingGeometry = { id: 'qInvalidGeo', properties: { mag: 4 } };
+    const quakes = [validQuake, quakeMissingGeometry, createMockQuake('q2', 3, 10.01, 20.01)];
+    const clusters = findActiveClusters(quakes, 5, 2);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0].some(q => q.id === 'q1')).toBe(true);
+    expect(clusters[0].some(q => q.id === 'q2')).toBe(true);
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping quake ${quakeMissingGeometry.id} due to invalid coordinates in findActiveClusters.`);
+  });
+
+  it('should handle quakes with invalid geometry.coordinates (not an array)', () => {
+    const validQuake = createMockQuake('q1', 5, 10, 20);
+    const quakeInvalidCoords = createMockQuake('qInvCoords1', 4, 0, 0);
+    quakeInvalidCoords.geometry.coordinates = "not-an-array";
+    const quakes = [validQuake, quakeInvalidCoords, createMockQuake('q2', 3, 10.01, 20.01)];
+    const clusters = findActiveClusters(quakes, 5, 2);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0].some(q => q.id === 'q1')).toBe(true);
+    expect(clusters[0].some(q => q.id === 'q2')).toBe(true);
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping quake ${quakeInvalidCoords.id} due to invalid coordinates in findActiveClusters.`);
+  });
+
+  it('should handle quakes with invalid geometry.coordinates (less than 2 elements)', () => {
+    const validQuake = createMockQuake('q1', 5, 10, 20);
+    const quakeInvalidCoordsShort = createMockQuake('qInvCoords2', 4, 0, 0);
+    quakeInvalidCoordsShort.geometry.coordinates = [10];
+    const quakes = [validQuake, quakeInvalidCoordsShort, createMockQuake('q2', 3, 10.01, 20.01)];
+    const clusters = findActiveClusters(quakes, 5, 2);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0].some(q => q.id === 'q1')).toBe(true);
+    expect(clusters[0].some(q => q.id === 'q2')).toBe(true);
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping quake ${quakeInvalidCoordsShort.id} due to invalid coordinates in findActiveClusters.`);
+  });
+
+  it('should correctly process valid quakes mixed with various invalid ones', () => {
+    const qA1 = createMockQuake('qA1', 6, 40, -120);
+    const qA2 = createMockQuake('qA2', 5.5, 40.01, -120.01);
+    const qB_valid_isolated = createMockQuake('qB_iso', 5, 50, -100);
+    const malformedQuakesSource = [
+      null,
+      undefined,
+      { properties: { mag: 5 }, geometry: { coordinates: [1, 1] } }, // Missing id
+      { id: 'm_no_geom', properties: { mag: 5 } },
+      { id: 'm_bad_coords1', properties: { mag: 5 }, geometry: { coordinates: "invalid" } },
+      { id: 'm_bad_coords2', properties: { mag: 5 }, geometry: { coordinates: [1] } },
+    ];
+    const quakes = [
+      malformedQuakesSource[0], qA1, malformedQuakesSource[1], qA2, malformedQuakesSource[2],
+      qB_valid_isolated, malformedQuakesSource[3], malformedQuakesSource[4], malformedQuakesSource[5]
+    ];
+    const clusters = findActiveClusters(quakes, 5, 2);
+    expect(clusters.length).toBe(1);
+    expect(clusters[0]).toEqual(expect.arrayContaining([qA1, qA2]));
+    expect(clusters[0].some(q => q.id === 'qB_iso')).toBe(false);
+
+    // Outer loop warnings:
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith("Skipping quake with missing ID or invalid object in findActiveClusters."); // For malformedQuakesSource[2]
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping quake ${malformedQuakesSource[3].id} due to invalid coordinates in findActiveClusters.`);
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping quake ${malformedQuakesSource[4].id} due to invalid coordinates in findActiveClusters.`);
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping quake ${malformedQuakesSource[5].id} due to invalid coordinates in findActiveClusters.`);
+
+    // Inner loop warnings for otherQuake:
+    // When qA1 is base:
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith("Skipping potential cluster member with missing ID or invalid object."); // for malformedQuakesSource[2] as otherQuake
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping potential cluster member ${malformedQuakesSource[3].id} due to invalid coordinates.`);
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping potential cluster member ${malformedQuakesSource[4].id} due to invalid coordinates.`);
+    expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping potential cluster member ${malformedQuakesSource[5].id} due to invalid coordinates.`);
+    // When qB_iso is base: (these will be called again)
+    // Total calls: 1 (outer missing ID) + 3 (outer invalid_coord) + 2 * (1 (inner missing ID) + 3 (inner invalid_coord)) = 4 + 2*4 = 12
+    expect(localConsoleWarnSpy).toHaveBeenCalledTimes(12);
   });
 });

@@ -19,38 +19,55 @@ export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
     const clusters = [];
     const processedQuakeIds = new Set();
 
+    // Filter out null or undefined earthquake objects first.
+    const validEarthquakes = earthquakes.filter(q => {
+        if (!q) {
+            // Use a generic message as the object itself is null/undefined
+            console.warn("Skipping invalid quake object: null or undefined");
+            return false;
+        }
+        // Further checks for id, geometry will be handled within the loops or by their absence causing issues.
+        return true;
+    });
+
     // Sort earthquakes by magnitude (descending) to potentially form clusters around stronger events first.
-    // This is a greedy approach.
-    const sortedEarthquakes = [...earthquakes].sort((a, b) => (b.properties?.mag || 0) - (a.properties?.mag || 0));
+    const sortedEarthquakes = [...validEarthquakes].sort((a, b) => (b.properties?.mag || 0) - (a.properties?.mag || 0));
 
     for (const quake of sortedEarthquakes) {
-        if (!quake || !quake.id || processedQuakeIds.has(quake.id)) {
+        // ID check is crucial; if a quake somehow passed the filter without an ID (e.g. empty string id), skip.
+        if (!quake.id || processedQuakeIds.has(quake.id)) {
+            if (!quake.id && !processedQuakeIds.has(quake.id)) { // Added specific warning for missing ID if it reaches here.
+                console.warn("Skipping quake with missing or empty id during clustering attempt.");
+            }
             continue;
         }
 
-        const newCluster = [quake];
-        processedQuakeIds.add(quake.id);
-
         const baseCoords = quake.geometry?.coordinates;
         if (!Array.isArray(baseCoords) || baseCoords.length < 2) {
-            // console.warn is not typically used in client-side utils directly affecting UI flow,
-            // but for consistency in logic, the check is valuable.
-            // Consider how to handle/log this in a client-specific way if needed.
-            console.warn(`Client: Skipping quake with invalid coordinates in findActiveClusters: ${quake.id}`);
+            console.warn(`Client: Skipping quake ${quake.id} due to invalid coordinates in findActiveClusters.`);
             continue;
         }
         const baseLat = baseCoords[1];
         const baseLon = baseCoords[0];
 
+        // Quake is valid enough to start a cluster attempt
+        const newCluster = [quake];
+        processedQuakeIds.add(quake.id);
+
         // Iterate through remaining quakes to see if they belong to this newCluster
         for (const otherQuake of sortedEarthquakes) {
-            if (!otherQuake || !otherQuake.id || processedQuakeIds.has(otherQuake.id) || otherQuake.id === quake.id) {
+            // ID check for otherQuake as well. If it's missing an ID, or already processed, or the same as the current quake, skip.
+            if (!otherQuake.id || processedQuakeIds.has(otherQuake.id) || otherQuake.id === quake.id) {
+                // The warning for missing ID on `otherQuake` was removed as it could be noisy.
+                // `quake` (the base of the cluster) already has its ID checked and warned if missing.
+                // `otherQuake` without an ID will simply be skipped here.
                 continue;
             }
 
             const otherCoords = otherQuake.geometry?.coordinates;
             if (!Array.isArray(otherCoords) || otherCoords.length < 2) {
-                console.warn(`Client: Skipping otherQuake with invalid coordinates in findActiveClusters: ${otherQuake.id}`);
+                // Warning removed here to avoid duplicate warnings from the outer loop's check.
+                // The quake will be skipped by the outer loop check when its turn comes.
                 continue;
             }
 

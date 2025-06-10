@@ -10,7 +10,7 @@
  * @param {number} lon2 Longitude of the second point.
  * @returns {number} Distance in kilometers.
  */
-function calculateDistance(lat1, lon1, lat2, lon2) {
+export function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; // Radius of the Earth in kilometers
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -32,27 +32,56 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
  * @param {number} minQuakes - Minimum number of quakes to form a valid cluster.
  * @returns {Array<Array<object>>} An array of clusters, where each cluster is an array of earthquake objects.
  */
-function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
+export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
     const clusters = [];
     const processedQuakeIds = new Set();
-    const sortedEarthquakes = [...earthquakes].sort((a, b) => (b.properties?.mag || 0) - (a.properties?.mag || 0));
+
+    // Filter out null or undefined earthquake objects first.
+    const validEarthquakes = earthquakes.filter(q => {
+        if (!q) {
+            // Not logging here for null/undefined as this is an API context,
+            // and the primary input validation in onRequestPost should catch this.
+            // If direct calls to findActiveClusters need this, it can be added.
+            return false;
+        }
+        return true;
+    });
+
+    const sortedEarthquakes = [...validEarthquakes].sort((a, b) => (b.properties?.mag || 0) - (a.properties?.mag || 0));
 
     for (const quake of sortedEarthquakes) {
-        if (!quake || !quake.id || processedQuakeIds.has(quake.id)) continue;
-        const newCluster = [quake];
-        processedQuakeIds.add(quake.id);
+        if (!quake.id || processedQuakeIds.has(quake.id)) {
+            if (!quake.id && !processedQuakeIds.has(quake.id)) {
+                console.warn(`Skipping quake with missing ID or invalid object in findActiveClusters.`);
+            }
+            continue;
+        }
+
         const baseCoords = quake.geometry?.coordinates;
         if (!Array.isArray(baseCoords) || baseCoords.length < 2) {
-            console.warn(`Skipping quake with invalid coordinates in findActiveClusters: ${quake.id}`);
+            console.warn(`Skipping quake ${quake.id} due to invalid coordinates in findActiveClusters.`);
             continue;
         }
         const baseLat = baseCoords[1];
         const baseLon = baseCoords[0];
+
+        const newCluster = [quake]; // Initialize cluster with the current quake
+        processedQuakeIds.add(quake.id);
+
+
         for (const otherQuake of sortedEarthquakes) {
-            if (!otherQuake || !otherQuake.id || processedQuakeIds.has(otherQuake.id) || otherQuake.id === quake.id) continue;
+            if (otherQuake.id === quake.id || processedQuakeIds.has(otherQuake.id)) { // Check if same quake or already processed
+                continue;
+            }
+             if (!otherQuake.id ) { // Check for missing ID on otherQuake
+                console.warn(`Skipping potential cluster member with missing ID or invalid object.`);
+                continue;
+            }
+
+
             const otherCoords = otherQuake.geometry?.coordinates;
             if (!Array.isArray(otherCoords) || otherCoords.length < 2) {
-                console.warn(`Skipping otherQuake with invalid coordinates in findActiveClusters: ${otherQuake.id}`);
+                console.warn(`Skipping potential cluster member ${otherQuake.id} due to invalid coordinates.`);
                 continue;
             }
             const dist = calculateDistance(baseLat, baseLon, otherCoords[1], otherCoords[0]);
@@ -61,7 +90,30 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
                 processedQuakeIds.add(otherQuake.id);
             }
         }
-        if (newCluster.length >= minQuakes) clusters.push(newCluster);
+        if (newCluster.length >= minQuakes) {
+             // Check if this new cluster is essentially a duplicate of an existing one (e.g. same set of quake IDs)
+            const newClusterQuakeIds = new Set(newCluster.map(q => q.id));
+            let isDuplicate = false;
+            for (const existingCluster of clusters) {
+                const existingClusterQuakeIds = new Set(existingCluster.map(q => q.id));
+                if (newClusterQuakeIds.size === existingClusterQuakeIds.size) {
+                    let allSame = true;
+                    for (const id of newClusterQuakeIds) {
+                        if (!existingClusterQuakeIds.has(id)) {
+                            allSame = false;
+                            break;
+                        }
+                    }
+                    if (allSame) {
+                        isDuplicate = true;
+                        break;
+                    }
+                }
+            }
+            if (!isDuplicate) {
+                clusters.push(newCluster);
+            }
+        }
     }
     return clusters;
 }
