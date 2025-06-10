@@ -636,8 +636,9 @@ function App() {
                 _maxMagInternal: maxMag,
                 _quakeCountInternal: cluster.length,
                 _earliestTimeInternal: earliestTime,
+                _latestTimeInternal: latestTime, // **** ADDED _latestTimeInternal ****
                 originalQuakes: cluster,
-                strongestQuakeId: strongestQuakeInCluster.id, // <-- Add this line
+                strongestQuakeId: strongestQuakeInCluster.id,
             };
         }).filter(Boolean); // Remove any nulls if a cluster was empty
 
@@ -658,6 +659,27 @@ function App() {
         // Filter clusters to include only those with a max magnitude >= MAJOR_QUAKE_THRESHOLD
         const significantClusters = processed.filter(cluster => cluster._maxMagInternal >= MAJOR_QUAKE_THRESHOLD);
 
+        // Temporary debug logs - REMOVE AFTER DEBUGGING
+        // console.log("----------- DEBUG: Processed Clusters (before sort) -----------");
+        // activeClusters.map(clusterRaw => { // Renamed to avoid conflict
+        //     // Simplified reconstruction for logging - this is NOT the full component logic
+        //     if (!clusterRaw || clusterRaw.length === 0) return null;
+        //     let maxMag = -Infinity, earliestTime = Infinity, latestTime = -Infinity, strongestQuakeInCluster = null;
+        //     clusterRaw.forEach(quake => {
+        //         if (quake.properties.mag > maxMag) maxMag = quake.properties.mag;
+        //         if (quake.properties.time < earliestTime) earliestTime = quake.properties.time;
+        //         if (quake.properties.time > latestTime) latestTime = quake.properties.time;
+        //     });
+        //     strongestQuakeInCluster = clusterRaw.sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0))[0] || clusterRaw[0];
+        //     return { id: `overview_cluster_${strongestQuakeInCluster?.id}_${clusterRaw.length}`, _latestTimeInternal: latestTime, _maxMagInternal: maxMag, _quakeCountInternal: clusterRaw.length };
+        // }).filter(Boolean)
+        //   .forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
+        // console.log("----------- DEBUG: Processed Clusters (after sort) -----------");
+        // processed.forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
+        // console.log("----------- DEBUG: Significant Clusters (after filter) -----------");
+        // significantClusters.forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
+
+
         return significantClusters;
 
     }, [activeClusters, formatDate, formatTimeAgo, formatTimeDuration]); // Include formatDate, formatTimeAgo, formatTimeDuration if they are from useCallback/component scope
@@ -665,6 +687,9 @@ function App() {
     // Effect to register cluster definitions
     useEffect(() => {
         if (overviewClusters && overviewClusters.length > 0) {
+            // console.log("----------- DEBUG: Registering Overview Clusters -----------");
+            // overviewClusters.forEach(c => console.log(c.id, c._latestTimeInternal, c._maxMagInternal, c._quakeCountInternal));
+
             const registrationPromises = [];
             const idsSuccessfullyRegisteredInEffect = new Set();
 
