@@ -5,8 +5,12 @@ import ClusterDetailModal from './ClusterDetailModal';
 import SeoMetadata from './SeoMetadata';
 import { fetchClusterDefinition } from '../services/clusterApiService.js';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
-// import { findActiveClusters } from '../utils/clusterUtils.js'; // Removed as clustering is backend-only
-import { CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES } from '../constants/appConstants.js';
+import { calculateDistance } from '../../utils/utils.js'; // Re-import for client-side reconstruction
+import {
+    CLUSTER_MAX_DISTANCE_KM,
+    CLUSTER_MIN_QUAKES,
+    CLUSTER_MAX_TIME_DIFFERENCE_MS // Import for client-side reconstruction
+} from '../constants/appConstants.js';
 
 function calculateClusterTimeRange(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, clusterLength = 0) {
     if (earliestTime === Infinity || latestTime === -Infinity || !earliestTime || !latestTime) return 'Time N/A';
@@ -31,6 +35,33 @@ function ClusterDetailModalWrapper({
 }) {
     const { clusterId } = useParams();
     const navigate = useNavigate();
+
+    // Client-side cluster reconstruction function
+    function findClientSideCluster(baseQuake, searchQuakes, maxDistanceKm, minQuakesRequired, maxTimeDifferenceMsToUse) {
+        if (!baseQuake || !searchQuakes || searchQuakes.length === 0) return null;
+
+        const newCluster = [baseQuake];
+        const baseLat = baseQuake.geometry.coordinates[1];
+        const baseLon = baseQuake.geometry.coordinates[0];
+        const baseTime = baseQuake.properties.time;
+
+        for (const otherQuake of searchQuakes) {
+            if (otherQuake.id === baseQuake.id) continue;
+
+            const dist = calculateDistance(
+                baseLat,
+                baseLon,
+                otherQuake.geometry.coordinates[1],
+                otherQuake.geometry.coordinates[0]
+            );
+            const timeDifference = Math.abs(otherQuake.properties.time - baseTime);
+
+            if (dist <= maxDistanceKm && timeDifference <= maxTimeDifferenceMsToUse) {
+                newCluster.push(otherQuake);
+            }
+        }
+        return newCluster.length >= minQuakesRequired ? newCluster : null;
+    }
 
     const [rawClusterDefinition, setRawClusterDefinition] = useState(null); // Stores direct API response
     const [dynamicCluster, setDynamicCluster] = useState(null); // Progressively built cluster
@@ -194,9 +225,14 @@ function ClusterDetailModalWrapper({
             }
 
             if (!sourceQuakes || sourceQuakes.length === 0) {
-                 console.warn(`Cluster ${clusterId}: Source quakes for hydration are empty even after load checks.`);
-                 setErrorMessage(prev => prev || 'Could not load full earthquake details for the cluster.');
-                 setLoadingPhase('error');
+                 console.warn(`Cluster ${clusterId}: Source quakes for hydration/reconstruction are empty even after load checks.`);
+                 // Attempt client-side reconstruction if D1 definition exists and has a strongest quake ID
+                 if (rawClusterDefinition && rawClusterDefinition.strongestQuakeId) {
+                    setLoadingPhase('client_reconstruction_attempt');
+                 } else {
+                    setErrorMessage(prev => prev || 'Could not load earthquake details for the cluster.');
+                    setLoadingPhase('error');
+                 }
                  return;
             }
 
@@ -204,18 +240,29 @@ function ClusterDetailModalWrapper({
                 .map(id => sourceQuakes.find(q => q.id === id))
                 .filter(Boolean);
 
-            if (foundQuakes.length < rawClusterDefinition.earthquakeIds.length) {
-                console.warn(`Cluster ${clusterId}: Hydration found ${foundQuakes.length} of ${rawClusterDefinition.earthquakeIds.length} quakes. Some may be missing.`);
+            // Condition for attempting client-side reconstruction:
+            // 1. D1 definition existed.
+            // 2. Either not all quakes from D1 definition were found in context (stale data).
+            // 3. Or the D1 definition was missing place/mag initially (so initialDynamicCluster was partial).
+            const needsReconstructionAttempt = rawClusterDefinition &&
+                (foundQuakes.length < rawClusterDefinition.earthquakeIds.length ||
+                 !rawClusterDefinition.strongestQuakePlace ||
+                 rawClusterDefinition.strongestQuakeMag === null);
+
+            if (foundQuakes.length === 0 && rawClusterDefinition.earthquakeIds.length > 0 && !needsReconstructionAttempt) {
+                 console.error(`Cluster ${clusterId}: No quakes found for hydration, and reconstruction not triggered. Using D1 summary.`);
+                 setErrorMessage(prev => prev || 'Failed to load individual earthquake details. Displaying summary.');
+                 setLoadingPhase('done'); // dynamicCluster has D1 summary
+                 return;
             }
 
-            if (foundQuakes.length === 0 && rawClusterDefinition.earthquakeIds.length > 0) {
-                console.error(`Cluster ${clusterId}: No quakes found for hydration. Using D1 summary data.`);
-                setErrorMessage(prev => prev || 'Failed to load individual earthquake details for this cluster. Displaying summary.');
-                // dynamicCluster already has D1 summary, so just set phase to done.
-                setLoadingPhase('done');
-                return;
+            if (needsReconstructionAttempt && rawClusterDefinition.strongestQuakeId) {
+                console.log(`Cluster ${clusterId}: Hydration incomplete or D1 data was partial. Attempting client-side reconstruction.`);
+                setLoadingPhase('client_reconstruction_attempt');
+                return; // Let the new effect handle reconstruction
             }
 
+            // If full hydration possible and no need for reconstruction from this path:
             let earliestTime = Infinity;
             let latestTime = -Infinity;
             let calculatedMaxMag = -Infinity;
@@ -265,7 +312,85 @@ function ClusterDetailModalWrapper({
         clusterId, formatDate, formatTimeAgo, formatTimeDuration, dynamicCluster // generateClusterSeoProps is stable
     ]);
 
-    // Effect 3: Fallback to overviewClusters prop
+    // Effect 3: Client-side reconstruction attempt (if hydration was incomplete or D1 data was partial)
+    useEffect(() => {
+        if (loadingPhase === 'client_reconstruction_attempt' && rawClusterDefinition && rawClusterDefinition.strongestQuakeId) {
+            const sourceQuakes = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0)
+                                 ? allEarthquakes
+                                 : earthquakesLast72Hours;
+
+            if (!sourceQuakes || sourceQuakes.length === 0) {
+                console.warn(`Cluster ${clusterId}: Source quakes for client reconstruction are not available.`);
+                setLoadingPhase('fallback_prop_check_attempt'); // Try props
+                return;
+            }
+
+            const baseQuakeForReconstruction = sourceQuakes.find(q => q.id === rawClusterDefinition.strongestQuakeId);
+
+            if (!baseQuakeForReconstruction) {
+                console.warn(`Cluster ${clusterId}: Base quake for reconstruction (ID: ${rawClusterDefinition.strongestQuakeId}) not found.`);
+                setLoadingPhase('fallback_prop_check_attempt'); // Try props
+                return;
+            }
+
+            const reconstructedClusterQuakes = findClientSideCluster(
+                baseQuakeForReconstruction,
+                sourceQuakes,
+                CLUSTER_MAX_DISTANCE_KM,
+                CLUSTER_MIN_QUAKES,
+                CLUSTER_MAX_TIME_DIFFERENCE_MS
+            );
+
+            if (reconstructedClusterQuakes && reconstructedClusterQuakes.length > 0) {
+                let earliestTime = Infinity;
+                let latestTime = -Infinity;
+                let maxMag = -Infinity;
+                let strongestQuakeInCalc = baseQuakeForReconstruction;
+
+                reconstructedClusterQuakes.forEach(quake => {
+                    if (quake.properties.time < earliestTime) earliestTime = quake.properties.time;
+                    if (quake.properties.time > latestTime) latestTime = quake.properties.time;
+                    if (quake.properties.mag > maxMag) {
+                        maxMag = quake.properties.mag;
+                        strongestQuakeInCalc = quake;
+                    }
+                });
+                 if (maxMag === -Infinity && reconstructedClusterQuakes.length > 0) maxMag = reconstructedClusterQuakes[0].properties.mag;
+
+
+                const reconstructedData = {
+                    id: clusterId, // Keep original clusterId from URL/D1
+                    originalQuakes: reconstructedClusterQuakes,
+                    quakeCount: reconstructedClusterQuakes.length,
+                    strongestQuakeId: strongestQuakeInCalc.id,
+                    strongestQuake: strongestQuakeInCalc,
+                    maxMagnitude: maxMag,
+                    locationName: strongestQuakeInCalc.properties.place || 'Unknown Location',
+                    _earliestTimeInternal: earliestTime,
+                    _latestTimeInternal: latestTime,
+                    timeRange: calculateClusterTimeRange(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, reconstructedClusterQuakes.length),
+                    updatedAt: rawClusterDefinition.updatedAt, // Keep D1 updatedAt if available
+                };
+                setDynamicCluster(reconstructedData);
+                setClusterSeoProps(generateClusterSeoProps(reconstructedData, clusterId));
+                setLoadingPhase('done');
+            } else {
+                console.warn(`Cluster ${clusterId}: Client-side reconstruction did not yield a valid cluster.`);
+                // If dynamicCluster still has partial data from D1, keep it. Otherwise, try props.
+                if (dynamicCluster && dynamicCluster.locationName !== 'Details Loading...') {
+                    setLoadingPhase('done'); // Keep partial D1 data
+                } else {
+                    setLoadingPhase('fallback_prop_check_attempt'); // Try props
+                }
+            }
+        }
+    }, [
+        loadingPhase, rawClusterDefinition, allEarthquakes, earthquakesLast72Hours,
+        hasAttemptedMonthlyLoad, clusterId, formatDate, formatTimeAgo, formatTimeDuration, dynamicCluster
+        // CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES, CLUSTER_MAX_TIME_DIFFERENCE_MS are constants, no need in deps
+    ]);
+
+    // Effect 4: Fallback to overviewClusters prop
     useEffect(() => {
         if (loadingPhase === 'fallback_prop_check_attempt' && !dynamicCluster) { // only run if dynamicCluster isn't already set
             const clusterFromProp = overviewClusters?.find(c => c.id === clusterId);
@@ -287,7 +412,7 @@ function ClusterDetailModalWrapper({
         }
     }, [loadingPhase, dynamicCluster, overviewClusters, clusterId, isInitialAppLoad, isLoadingWeekly, isLoadingMonthly, hasAttemptedMonthlyLoad, allEarthquakes, errorMessage]);
 
-    // Effect 4: Manage SEO props based on loadingPhase and error states
+    // Effect 5: Manage SEO props based on loadingPhase and error states
     useEffect(() => {
         const currentCanonicalUrl = clusterId ? `https://earthquakeslive.com/cluster/${clusterId}` : "https://earthquakeslive.com/clusters";
 
