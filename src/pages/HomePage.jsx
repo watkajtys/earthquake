@@ -895,6 +895,7 @@ function App() {
                                       onIndividualQuakeSelect={handleQuakeClick}
                                       formatTimeAgo={formatTimeAgo}
                                       formatTimeDuration={formatTimeDuration}
+                                      areParentClustersLoading={areClustersLoading} // Pass the new prop
                                     />
                                   }
                                 />
