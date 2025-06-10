@@ -177,7 +177,7 @@ describe('clusterApiService', () => {
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(localFindActiveClusters).toHaveBeenCalledWith(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
       expect(consoleWarnSpy).toHaveBeenCalledWith('Server cache miss or stale data (X-Cache-Hit: false). Falling back to local calculation.');
-      expect(consoleLogSpy).toHaveBeenCalledWith('Initiating client-side cluster calculation.');
+      expect(consoleLogSpy).toHaveBeenCalledWith('Initiating client-side cluster calculation using localFindActiveClusters.');
       expect(consoleLogSpy).toHaveBeenCalledWith('Client-side cluster calculation successful.');
     });
 

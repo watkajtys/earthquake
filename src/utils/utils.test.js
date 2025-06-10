@@ -391,7 +391,8 @@ describe('formatDate', () => {
     // The current implementation returns "N/A" due to the initial `if (!timestamp)` check for falsy values.
     // If "not-a-date-string" is passed, it's truthy, so it proceeds.
     // `new Date("not-a-date-string").toLocaleString()` is "Invalid Date" in Node.
-    expect(result).toBe("Invalid Date");
+    // However, our function's `isNaN(date.getTime())` check should catch this and return "N/A".
+    expect(result).toBe("N/A");
   });
 });
 

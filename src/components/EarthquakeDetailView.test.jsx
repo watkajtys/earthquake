@@ -176,9 +176,12 @@ describe('EarthquakeDetailView - Nearby Quakes Filtering', () => {
 */
 
 describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () => {
-  const mockDetailUrl = 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=testquake&format=geojson';
+  // Base mockDetailUrl and event_id for most tests
+  const MOCK_EVENT_ID_BASE = 'testquake';
+  const mockDetailUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${MOCK_EVENT_ID_BASE}.geojson`;
+
   const baseMockDetailData = {
-    id: 'testquake',
+    id: MOCK_EVENT_ID_BASE,
     properties: {
       title: 'M 6.5 - TestVille', mag: 6.5, place: '100km W of TestCity', time: 1678886400000, updated: 1678887400000,
       tsunami: 1, status: 'reviewed', felt: 150, mmi: 7.2, alert: 'red',
@@ -194,7 +197,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(global, 'fetch');
+    fetchSpy = vi.spyOn(global, 'fetch'); // Spy on global fetch
     mockOnClose.mockClear();
     mockDefaultPropsGlobal.handleLoadMonthlyData.mockClear();
     mockDefaultPropsGlobal.onDataLoadedForSeo.mockClear();
@@ -207,14 +210,25 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
   });
 
   it('renders loading skeleton immediately on mount if detailUrl is provided', () => {
-    fetchSpy.mockImplementationOnce(() => new Promise(() => {}));
+    // Mock fetch for the new API endpoint to be pending
+    fetchSpy.mockImplementation((url) => {
+      if (url === `/api/earthquake/${MOCK_EVENT_ID_BASE}`) {
+        return new Promise(() => {}); // Pending promise
+      }
+      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
+    });
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
     expect(screen.queryByText(/Details Not Available/i)).not.toBeInTheDocument();
   });
 
   it('displays loading state initially, then renders fetched data', async () => {
-    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => deepClone(baseMockDetailData) });
+    fetchSpy.mockImplementation((url) => {
+      if (url === `/api/earthquake/${MOCK_EVENT_ID_BASE}`) {
+        return Promise.resolve({ ok: true, json: async () => deepClone(baseMockDetailData) });
+      }
+      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
+    });
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
     expect(screen.queryByText(/Details Not Available/i)).not.toBeInTheDocument();
@@ -227,27 +241,39 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
 
   it('handles fetched data with null coordinates or magnitude gracefully', async () => {
     // Scenario A: Null coordinates
+    const MOCK_EVENT_ID_A = 'testquakeA';
+    const mockDetailUrlA = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${MOCK_EVENT_ID_A}.geojson`;
     let mockDataScenarioA = deepClone(baseMockDetailData);
-    mockDataScenarioA.id = 'testquakeA';
+    mockDataScenarioA.id = MOCK_EVENT_ID_A;
     mockDataScenarioA.properties.title = 'M 6.0 - Null Coords Test';
     mockDataScenarioA.geometry.coordinates = [null, null, 10];
-    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => mockDataScenarioA });
 
-    const { rerender } = render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={`${mockDetailUrl}A`} />);
+    fetchSpy.mockImplementation((url) => {
+      if (url === `/api/earthquake/${MOCK_EVENT_ID_A}`) {
+        return Promise.resolve({ ok: true, json: async () => mockDataScenarioA });
+      }
+      if (url === `/api/earthquake/${MOCK_EVENT_ID_B}`) { // Pre-configure for scenario B
+        return Promise.resolve({ ok: true, json: async () => mockDataScenarioB });
+      }
+      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
+    });
+
+    const { rerender } = render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlA} />);
     await waitFor(() => expect(screen.queryByTestId('loading-skeleton-container')).not.toBeInTheDocument());
-    expect(screen.queryByTestId('mock-earthquake-map')).toBeNull(); // Map should not render due to panel's guard
+    expect(screen.queryByTestId('mock-earthquake-map')).toBeNull();
     expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('MockEarthquakeMap received invalid mapCenterLatitude'));
 
-
     // Scenario B: Null magnitude
-    vi.mocked(console.warn).mockClear(); // Clear previous console.warn calls
+    vi.mocked(console.warn).mockClear();
+    const MOCK_EVENT_ID_B = 'testquakeB';
+    const mockDetailUrlB = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${MOCK_EVENT_ID_B}.geojson`;
     let mockDataScenarioB = deepClone(baseMockDetailData);
-    mockDataScenarioB.id = 'testquakeB';
+    mockDataScenarioB.id = MOCK_EVENT_ID_B;
     mockDataScenarioB.properties.title = 'M Null - Null Mag Test';
     mockDataScenarioB.properties.mag = null;
-    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => mockDataScenarioB });
+    // fetchSpy is already configured to handle MOCK_EVENT_ID_B from above
 
-    rerender(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={`${mockDetailUrl}B`} />);
+    rerender(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlB} />);
     await waitFor(() => expect(screen.queryByTestId('loading-skeleton-container')).not.toBeInTheDocument());
 
     const mapElement = screen.queryByTestId('mock-earthquake-map');
@@ -270,12 +296,26 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
   });
 
   it('displays an error message if fetching data fails', async () => {
-    const localErrorMessage = 'Network error: Failed to fetch details';
-    fetchSpy.mockRejectedValueOnce(new Error(localErrorMessage));
+    const MOCK_EVENT_ID_ERROR = 'testquake_error';
+    const mockDetailUrlError = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${MOCK_EVENT_ID_ERROR}.geojson`;
+    const localErrorMessage = 'Application API error! Status: 500. Message: Server Issue';
+
+    fetchSpy.mockImplementation((url) => {
+      if (url === `/api/earthquake/${MOCK_EVENT_ID_ERROR}`) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          statusText: "Server Issue",
+          json: async () => ({ message: "Server Issue" })
+        });
+      }
+      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
+    });
+
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
-    const expectedErrorMessage = `Failed to load details: ${localErrorMessage}`;
-    const errorElements = await screen.findAllByText(expectedErrorMessage);
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlError} />);
+    const expectedDisplayErrorMessage = `Failed to load details from application API: ${localErrorMessage}`;
+    const errorElements = await screen.findAllByText(expectedDisplayErrorMessage);
     expect(errorElements[0]).toBeInTheDocument();
     expect(screen.queryByTestId('mock-earthquake-map')).not.toBeInTheDocument();
     consoleErrorSpy.mockRestore();
@@ -283,13 +323,15 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
 
   it('calls onDataLoadedForSeo with correct data when details are fetched', async () => {
     const mockOnDataLoadedForSeo = vi.fn();
-    // Ensure baseMockDetailData.properties includes 'detail' for completeness, though not strictly tested here.
-    const currentMockData = deepClone(baseMockDetailData);
-    if (!currentMockData.properties.detail) {
-      currentMockData.properties.detail = `https://earthquake.usgs.gov/earthquakes/eventpage/${currentMockData.id}`;
-    }
+    const currentMockData = deepClone(baseMockDetailData); // Uses MOCK_EVENT_ID_BASE
 
-    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
+    fetchSpy.mockImplementation((url) => {
+      if (url === `/api/earthquake/${MOCK_EVENT_ID_BASE}`) {
+        return Promise.resolve({ ok: true, json: async () => currentMockData });
+      }
+      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
+    });
+
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} onDataLoadedForSeo={mockOnDataLoadedForSeo} />);
     await waitFor(() => expect(mockOnDataLoadedForSeo).toHaveBeenCalledTimes(1));
 
@@ -311,11 +353,21 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
   // These tests are not directly affected by the EarthquakeMap prop changes, so they are abridged here.
   // Ensure they are kept in the actual file. Example for one:
   it('does not render date row for null time', async () => {
+    const MOCK_EVENT_ID_NULLTIME = 'testquake_nulltime';
+    const mockDetailUrlNullTime = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${MOCK_EVENT_ID_NULLTIME}.geojson`;
     const currentMockData = deepClone(baseMockDetailData);
+    currentMockData.id = MOCK_EVENT_ID_NULLTIME;
     currentMockData.properties.time = null;
     currentMockData.properties.title = "Test Null Time";
-    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => currentMockData });
-    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
+
+    fetchSpy.mockImplementation((url) => {
+      if (url === `/api/earthquake/${MOCK_EVENT_ID_NULLTIME}`) {
+        return Promise.resolve({ ok: true, json: async () => currentMockData });
+      }
+      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
+    });
+
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlNullTime} />);
     await screen.findAllByText(currentMockData.properties.title);
     expect(screen.queryByText("Date & Time (UTC)")).not.toBeInTheDocument();
   });
@@ -323,20 +375,31 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
 
 // Accessibility tests remain unchanged
 describe('EarthquakeDetailView Accessibility', () => {
-  // ... (accessibility tests content)
-  // These tests are not directly affected by the EarthquakeMap prop changes.
-  // Example for one:
-  const mockDetailUrlAxe = 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=testquake-axe&format=geojson';
+  const MOCK_EVENT_ID_AXE = 'testquake-axe';
+  const mockDetailUrlAxe = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${MOCK_EVENT_ID_AXE}.geojson`;
   const mockDetailDataAxe = {
-    id: 'testquake-axe', properties: { title: 'M 7.0 - Axe Test Region', mag: 7.0, place: 'Axe Test Place', time: Date.now(), updated: Date.now(), products: {} },
+    id: MOCK_EVENT_ID_AXE,
+    properties: { title: 'M 7.0 - Axe Test Region', mag: 7.0, place: 'Axe Test Place', time: Date.now(), updated: Date.now(), products: {} },
     geometry: { coordinates: [-120, 37, 10] }
   };
   let fetchSpy;
-  beforeEach(() => { fetchSpy = vi.spyOn(global, 'fetch'); mockOnClose.mockClear(); vi.spyOn(console, 'warn').mockImplementation(() => {}); });
-  afterEach(() => { fetchSpy.mockRestore(); vi.restoreAllMocks(); });
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(global, 'fetch');
+    mockOnClose.mockClear();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    vi.restoreAllMocks();
+  });
 
   it('should have no axe violations when displaying data', async () => {
-    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => JSON.parse(JSON.stringify(mockDetailDataAxe)) });
+    fetchSpy.mockImplementation((url) => {
+      if (url === `/api/earthquake/${MOCK_EVENT_ID_AXE}`) {
+        return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(mockDetailDataAxe)) });
+      }
+      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
+    });
     const { container } = render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlAxe} onDataLoadedForSeo={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByText((content, element) => element.id === 'earthquake-detail-title' && content.startsWith(mockDetailDataAxe.properties.title))).toBeInTheDocument();
