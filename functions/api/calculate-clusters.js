@@ -73,7 +73,9 @@ function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
 export async function onRequestPost(context) {
   try {
     const { env } = context;
-    const { earthquakes, maxDistanceKm, minQuakes } = await context.request.json();
+    // Assuming lastFetchTime and timeWindowHours are passed in the request for a more robust cache key.
+    // If not, the cache key generation needs to be adapted based on available unique parameters.
+    const { earthquakes, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours } = await context.request.json();
 
     // Basic input validation
     if (!Array.isArray(earthquakes) || !earthquakes.length) {
@@ -95,40 +97,54 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Generate a cache key
-    const cacheKey = `clusters-${earthquakes.length}-${maxDistanceKm}-${minQuakes}`;
+    // Generate a cache key - incorporating assumed lastFetchTime and timeWindowHours
+    // Ensure these parameters are consistently available and stringified for the key.
+    const requestParams = { numQuakes: earthquakes.length, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours };
+    const cacheKey = `clusters-${JSON.stringify(requestParams)}`;
+
+    if (!env.DB) {
+      console.error("D1 Database (env.DB) not available.");
+      // Fallback to calculation without caching if DB is not configured
+      // or return an error, depending on desired strictness.
+      // For now, proceeding to calculate without cache.
+      const clustersNoDB = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+      return new Response(JSON.stringify(clustersNoDB), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'X-Cache-Hit': 'false', 'X-Cache-Info': 'DB not configured' },
+      });
+    }
 
     try {
-      // Check cache first
-      if (env.CLUSTER_KV) {
-        const cachedData = await env.CLUSTER_KV.get(cacheKey);
-        if (cachedData) {
-          try {
-            JSON.parse(cachedData); // Validate JSON before sending
-            return new Response(cachedData, {
-              status: 200,
-              headers: { 'Content-Type': 'application/json', 'X-Cache-Hit': 'true' },
-            });
-          } catch (parseError) {
-            console.error('Error parsing cached JSON:', parseError);
-            // If parsing fails, proceed to compute and overwrite the bad cache entry
-          }
+      const cacheQuery = "SELECT clusterData FROM ClusterCache WHERE cacheKey = ? AND createdAt > datetime('now', '-1 hour')";
+      const stmt = env.DB.prepare(cacheQuery).bind(cacheKey);
+      const cachedResult = await stmt.first();
+
+      if (cachedResult && cachedResult.clusterData) {
+        try {
+          JSON.parse(cachedResult.clusterData); // Validate JSON
+          return new Response(cachedResult.clusterData, {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', 'X-Cache-Hit': 'true' },
+          });
+        } catch (parseError) {
+          console.error('Error parsing cached JSON from D1:', parseError);
+          // If parsing fails, proceed to compute and overwrite the bad cache entry
         }
       }
-    } catch (kvError) {
-      console.error('KV GET error:', kvError);
-      // Non-fatal, proceed to compute if KV GET fails
+    } catch (dbError) {
+      console.error('D1 GET error:', dbError);
+      // Non-fatal, proceed to compute if D1 GET fails
     }
 
     const clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
     const clusterDataString = JSON.stringify(clusters);
 
     try {
-      if (env.CLUSTER_KV) {
-        await env.CLUSTER_KV.put(cacheKey, clusterDataString, { expirationTtl: 3600 }); // Cache for 1 hour
-      }
-    } catch (kvError) {
-      console.error('KV PUT error:', kvError);
+      const insertQuery = "INSERT OR REPLACE INTO ClusterCache (cacheKey, clusterData) VALUES (?, ?)";
+      const stmt = env.DB.prepare(insertQuery).bind(cacheKey, clusterDataString);
+      await stmt.run();
+    } catch (dbError) {
+      console.error('D1 PUT error:', dbError);
       // Non-fatal, return data even if PUT fails
     }
 
