@@ -142,12 +142,14 @@ export async function onRequestPost(context) {
         }
     }
 
-    if (earthquakes.length === 0 && (defaultRequestBody.earthquakes && defaultRequestBody.earthquakes.length > 0)) { // Check if original request had quakes
-        // This case implies all earthquakes were invalid and filtered out by the above loop.
-        // However, the current loop returns on first invalid. If we change to filter, this path might be taken.
-        // For now, the more direct test is `earthquakes.length === 0` for an initially empty array.
+    // If earthquakes array is empty from the start, it's a bad request.
+    // Moved this check up to happen before other parameter validations.
+    if (earthquakes.length === 0) {
+      return new Response(JSON.stringify({ error: 'Earthquakes array is empty, no clusters to calculate.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
-
 
     // Basic validation for other parameters (already present, retained)
     if (typeof maxDistanceKm !== 'number' || maxDistanceKm <= 0) {
@@ -158,14 +160,6 @@ export async function onRequestPost(context) {
     if (typeof minQuakes !== 'number' || minQuakes <= 0) {
       return new Response(JSON.stringify({ error: 'Invalid minQuakes' }), {
         status: 400, headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    // If earthquakes array is empty from the start
-    if (earthquakes.length === 0) {
-      return new Response(JSON.stringify({ error: 'Earthquakes array is empty, no clusters to calculate.' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
       });
     }
 
@@ -207,6 +201,7 @@ export async function onRequestPost(context) {
       }
     } catch (dbGetError) {
       console.error(`D1 GET error for cacheKey ${cacheKey}:`, dbGetError.message, dbGetError.cause);
+      // Do not re-throw; allow function to proceed and calculate clusters
     }
 
     // console.log(`Calculating clusters for cacheKey: ${cacheKey}`);
@@ -221,6 +216,7 @@ export async function onRequestPost(context) {
       // console.log(`D1 PUT successful for cacheKey: ${cacheKey}`);
     } catch (dbPutError) {
       console.error(`D1 PUT error for cacheKey ${cacheKey}:`, dbPutError.message, dbPutError.cause);
+      // Do not re-throw; allow function to proceed
     }
 
     responseHeaders['X-Cache-Hit'] = 'false';
