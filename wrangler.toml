@@ -51,5 +51,9 @@ kv_namespaces = [
 # [env.dev.vars] # For 'wrangler pages dev'
 # MY_VARIABLE = "dev_value"
 
+# This explicitly tells 'wrangler dev' to use the preview_id for CLUSTER_KV.
+[env.dev.kv_namespaces]
+CLUSTER_KV = { preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
+
 # If you have other bindings (like D1, R2, Services), define them here too.
 # Refer to Cloudflare Wrangler documentation for more details.
