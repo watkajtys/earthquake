@@ -17,9 +17,15 @@ vi.mock('react-router-dom', async () => {
     useNavigate: vi.fn(),
   };
 });
-const mockUseEarthquakeDataStateActual = vi.fn();
+
+// Import the mocked versions for use in the test file
+import { useParams, useNavigate } from 'react-router-dom';
+
+const { mockUseEarthquakeDataState } = vi.hoisted(() => {
+  return { mockUseEarthquakeDataState: vi.fn() };
+});
 vi.mock('../contexts/EarthquakeDataContext.jsx', () => ({
-  useEarthquakeDataState: mockUseEarthquakeDataStateActual,
+  useEarthquakeDataState: mockUseEarthquakeDataState,
 }));
 
 vi.mock('../services/clusterApiService.js');
@@ -66,7 +72,7 @@ describe('ClusterDetailModalWrapper', () => {
       monthlyError: null,
       ...overrides,
     };
-    vi.mocked(useEarthquakeDataState).mockReturnValue(currentEarthquakeContextValue);
+    mockUseEarthquakeDataState.mockReturnValue(currentEarthquakeContextValue);
   };
 
   const renderComponent = (clusterIdParam, passOverviewClusters = mockOverviewClusters, passAreParentClustersLoading = false) => {
@@ -74,7 +80,7 @@ describe('ClusterDetailModalWrapper', () => {
     vi.mocked(useNavigate).mockReturnValue(mockNavigate);
 
     // Ensure context is set up for each render using the latest currentEarthquakeContextValue
-    vi.mocked(useEarthquakeDataState).mockReturnValue(currentEarthquakeContextValue);
+    mockUseEarthquakeDataState.mockReturnValue(currentEarthquakeContextValue);
 
     return render(
       <MemoryRouter initialEntries={[`/cluster/${clusterIdParam}`]}>
@@ -157,8 +163,9 @@ describe('ClusterDetailModalWrapper', () => {
       // For this test, let's assume findActiveClusters was called twice (once with 72h - fail, once with allEarthquakes - success)
       // or if it was not an overview_cluster type, it would be called once (fail), then D1 fetch.
       // The key is that D1 was called AND its stale warning appeared, but its data wasn't used.
-      await waitFor(() => expect(fetchClusterDefinition).toHaveBeenCalledWith(reconstructableId));
-      await waitFor(() => expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`D1 ClusterDefinition for ${reconstructableId} is stale`)));
+      // MODIFIED: If client reconstruction succeeds, D1 is NOT called.
+      expect(fetchClusterDefinition).not.toHaveBeenCalled();
+      expect(consoleWarnSpy).not.toHaveBeenCalledWith(expect.stringContaining(`D1 ClusterDefinition for ${reconstructableId} is stale`));
       expect(screen.queryByText(/Cluster definition found, but some earthquake data is missing or stale./i)).not.toBeInTheDocument();
     });
 
