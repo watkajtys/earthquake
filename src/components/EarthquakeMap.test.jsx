@@ -67,6 +67,11 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     mockFitBounds.mockClear();
     mockSetView.mockClear();
     mockInvalidateSize.mockClear();
+    vi.spyOn(console, 'warn').mockImplementation(() => {}); // Mock console.warn for all tests in this block
+  });
+
+  afterEach(() => { // Add afterEach to restore console.warn
+    console.warn.mockRestore();
   });
 
   it('renders the map container', () => {
@@ -129,6 +134,38 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     const nearbyMarkers = markers.filter(m => m.getAttribute('data-icon-classname') === 'custom-nearby-quake-icon');
     expect(nearbyMarkers.length).toBe(nearbyQuakesData.length);
   });
+
+  it('renders map and only valid nearbyQuakes when some have missing data, logging warnings', () => {
+    const malformedNearbyQuakes = [
+      { id: 'validNearby1', geometry: { coordinates: [-120.0, 36.0, 12] }, properties: { mag: 2.5, title: "Valid Nearby Quake 1", time: Date.now() - 3000, detail: 'vnq1_detail' } },
+      { id: 'invalidNearbyNoGeom', properties: { mag: 3.0, title: "No Geometry", time: Date.now() - 4000 } }, // Missing geometry
+      { id: 'invalidNearbyNoCoords', geometry: {}, properties: { mag: 3.1, title: "No Coords", time: Date.now() - 5000 } }, // Missing geometry.coordinates
+      { id: 'invalidNearbyShortCoords', geometry: { coordinates: [-121.0] }, properties: { mag: 3.2, title: "Short Coords", time: Date.now() - 6000 } }, // Insufficient coordinates
+      { id: 'invalidNearbyNoMag', geometry: { coordinates: [-122.0, 37.0, 15] }, properties: { title: "No Mag", time: Date.now() - 7000 } }, // Missing properties.mag
+      { id: 'invalidNearbyNoTime', geometry: { coordinates: [-123.0, 38.0, 18] }, properties: { mag: 3.3, title: "No Time" } }, // Missing properties.time
+    ];
+
+    render(<MemoryRouter><EarthquakeMap {...baseProps} nearbyQuakes={malformedNearbyQuakes} /></MemoryRouter>);
+
+    // Check map still renders
+    expect(screen.getByTestId('map-container')).toBeInTheDocument();
+
+    // Check markers: 1 main highlight marker + 1 valid nearby marker
+    const markers = screen.getAllByTestId('marker');
+    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
+    const nearbyMarkers = markers.filter(m => m.getAttribute('data-icon-classname') === 'custom-nearby-quake-icon');
+
+    expect(mainMarker).toBeInTheDocument();
+    expect(nearbyMarkers.length).toBe(1); // Only 'validNearby1' should render as a nearby quake
+    expect(nearbyMarkers[0]).toHaveAttribute('data-position', JSON.stringify([malformedNearbyQuakes[0].geometry.coordinates[1], malformedNearbyQuakes[0].geometry.coordinates[0]]));
+
+    // Check warnings (adjust message based on actual implementation)
+    expect(console.warn).toHaveBeenCalledWith("Skipping rendering of nearby quake due to missing data:", malformedNearbyQuakes[1]);
+    expect(console.warn).toHaveBeenCalledWith("Skipping rendering of nearby quake due to missing data:", malformedNearbyQuakes[2]);
+    expect(console.warn).toHaveBeenCalledWith("Skipping rendering of nearby quake due to missing data:", malformedNearbyQuakes[3]);
+    expect(console.warn).toHaveBeenCalledWith("Skipping rendering of nearby quake due to missing data:", malformedNearbyQuakes[4]);
+    expect(console.warn).toHaveBeenCalledWith("Skipping rendering of nearby quake due to missing data:", malformedNearbyQuakes[5]);
+  });
 });
 
 
@@ -138,6 +175,16 @@ describe('EarthquakeMap Component - Bounds Fitting', () => {
     mockSetView.mockClear();
     mockInvalidateSize.mockClear();
   });
+
+  // This afterEach was missing, which would cause console.warn to remain mocked for other describe blocks.
+  // However, since we are adding mock/restore to the 'Core Rendering' block specifically,
+  // we don't need a global one here unless other describe blocks also mock console.warn.
+  // For now, this change is not strictly needed by the PR's explicit changes but good for hygiene if other tests mock console.
+  // afterEach(() => {
+  //   if (vi.isMockFunction(console.warn)) { // Check if it's mocked before trying to restore
+  //     console.warn.mockRestore();
+  //   }
+  // });
 
   it('fitMapToBounds={true} with highlight quake and nearby quakes: calls fitBounds', () => {
     render(
