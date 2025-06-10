@@ -5,7 +5,7 @@ import ClusterDetailModal from './ClusterDetailModal';
 import SeoMetadata from './SeoMetadata';
 import { fetchClusterDefinition } from '../services/clusterApiService.js';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
-import { calculateDistance } from '../../utils/utils.js'; // Re-import for client-side reconstruction
+import { calculateDistance } from '../utils/utils.js'; // Corrected path for client-side reconstruction
 import {
     CLUSTER_MAX_DISTANCE_KM,
     CLUSTER_MIN_QUAKES,
