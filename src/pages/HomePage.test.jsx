@@ -129,8 +129,12 @@ describe('HomePage (App Component)', () => {
   });
 
   // ... (Accessibility and Cluster Loading State Management tests remain)
-  describe('Accessibility', () => { /* ... existing tests ... */ });
-  describe('Cluster Loading State Management', () => { /* ... existing tests ... */ });
+  describe('Accessibility', () => {
+    it.todo('should have accessibility tests implemented for HomePage');
+  });
+  describe('Cluster Loading State Management', () => {
+    it.todo('should have tests implemented for cluster loading states');
+  });
 
 
   describe('overviewClusters Sorting and Filtering Logic', () => {
