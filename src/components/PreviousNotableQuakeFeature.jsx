@@ -4,19 +4,23 @@ import { getMagnitudeColor as getMagnitudeColorUtil } from '../utils/utils.js'; 
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 
 /**
- * A React component that displays a feature card for the second most recent significant earthquake.
- * This component is intended to show the major quake that occurred before the one currently highlighted as 'latest'.
- * @param {object} props - The component's props.
- * @param {function(object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card is clicked. Receives the quake data object.
- * @param {function(number):string} [props.getMagnitudeColorFunc] - Optional: Function that returns a color string based on earthquake magnitude.
- * @returns {JSX.Element} The rendered PreviousNotableQuakeFeature component.
+ * Displays a feature card for the "previous" significant earthquake, meaning the one that occurred
+ * before the `lastMajorQuake`. This component is memoized using `React.memo`.
+ * It sources the `previousMajorQuake` data and its loading state (`isLoadingInitialData`)
+ * directly from the `EarthquakeDataContext`.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {function(Object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card (button) is clicked.
+ *   Receives the full data object of the `previousMajorQuake`.
+ * @param {function(number):string} [props.getMagnitudeColorFunc] - Optional function to determine the color for the magnitude display.
+ *   If not provided, a default utility function (`getMagnitudeColorUtil`) is used.
+ * @returns {JSX.Element} The PreviousNotableQuakeFeature component, or a loading/empty state placeholder.
  */
 const PreviousNotableQuakeFeature = ({
-                                 // previousMajorQuake, // From context
-                                 // isLoadingPreviousQuake, // From context
-                                 onNotableQuakeSelect,
-                                 getMagnitudeColorFunc
-                             }) => {
+    onNotableQuakeSelect,
+    getMagnitudeColorFunc
+}) => {
     const { previousMajorQuake, isLoadingInitialData: isLoadingPreviousQuake } = useEarthquakeDataState();
     const [displayQuake, setDisplayQuake] = useState(null);
 

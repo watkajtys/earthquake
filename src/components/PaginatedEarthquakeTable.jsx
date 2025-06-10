@@ -4,21 +4,31 @@ import SkeletonText from './skeletons/SkeletonText';
 import SkeletonTableRow from './skeletons/SkeletonTableRow';
 
 /**
- * A React component that displays a paginated and sortable table of earthquake data.
- * @param {object} props - The component's props.
- * @param {string} props.title - The title of the table.
- * @param {Array<object> | null} props.earthquakes - An array of earthquake feature objects.
- * @param {boolean} props.isLoading - Whether the data is currently loading.
- * @param {function} props.onQuakeClick - Callback function when an earthquake row is clicked.
- * @param {number} [props.itemsPerPage=10] - Number of items to display per page.
- * @param {string} [props.defaultSortKey='time'] - The default key to sort by.
+ * Displays earthquake data in a paginated and sortable table.
+ * This component is memoized using `React.memo` for performance.
+ * It handles internal state for sorting configuration (`sortConfig`) and current page (`currentPage`).
+ * Earthquake data is processed (filtered and sorted) using `useMemo` for efficiency.
+ * Shows skeleton rows during loading or if `earthquakes` is null.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {string} props.title - The title to be displayed above the table.
+ * @param {Array<Object>|null} props.earthquakes - An array of earthquake feature objects (USGS GeoJSON structure).
+ *   If null or while `isLoading` is true, skeleton loaders are shown.
+ * @param {boolean} props.isLoading - Flag indicating whether the earthquake data is currently loading.
+ * @param {function(Object):void} props.onQuakeClick - Callback function invoked when an earthquake row is clicked.
+ *   Receives the earthquake data object for that row.
+ * @param {number} [props.itemsPerPage=10] - The number of earthquake entries to display per page.
+ * @param {string} [props.defaultSortKey='time'] - The key (from earthquake properties or geometry) to sort by initially (e.g., 'mag', 'time', 'depth').
  * @param {string} [props.initialSortDirection='descending'] - The initial sort direction ('ascending' or 'descending').
- * @param {string} [props.periodName] - Name of the period for display purposes (e.g., "last 24 hours").
- * @param {function} [props.filterPredicate] - An optional function to filter earthquakes before display.
- * @param {function} props.getMagnitudeColorStyle - Function to get magnitude color style.
- * @param {function} props.formatTimeAgo - Function to format time ago.
- * @param {function} props.formatDate - Function to format date.
- * @returns {JSX.Element} The rendered PaginatedEarthquakeTable component.
+ * @param {string} [props.periodName] - Optional name of the period being displayed (e.g., "last 24 hours"),
+ *   used in the message when no earthquakes are found.
+ * @param {function(Object):boolean} [props.filterPredicate] - An optional predicate function to filter the `earthquakes` array
+ *   before sorting and pagination. Receives an earthquake object and should return true to include it.
+ * @param {function(number):string} props.getMagnitudeColorStyle - Function that returns Tailwind CSS class strings for magnitude-based row styling.
+ * @param {function(number):string} props.formatTimeAgo - Function to format a timestamp difference into a "time ago" string.
+ * @param {function(number):string} props.formatDate - Function to format a timestamp into a full date string.
+ * @returns {JSX.Element} The PaginatedEarthquakeTable component.
  */
 const PaginatedEarthquakeTable = React.memo(({
     title, earthquakes, isLoading, onQuakeClick, itemsPerPage = 10,

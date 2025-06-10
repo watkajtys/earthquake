@@ -1,5 +1,17 @@
 import React, { memo } from 'react';
 
+/**
+ * A button component that allows users to load more extensive earthquake data (e.g., 14-day and 30-day archives).
+ * It displays different states based on whether the extended data load has been attempted or is in progress.
+ * This component is memoized using `React.memo` for performance optimization.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {boolean} props.hasAttemptedMonthlyLoad - Flag indicating if an attempt to load the monthly (extended) data has already been made.
+ * @param {boolean} props.isLoadingMonthly - Flag indicating if the monthly (extended) data is currently being loaded.
+ * @param {function(): void} props.loadMonthlyData - Callback function to trigger the loading of monthly (extended) data.
+ * @returns {JSX.Element} The LoadMoreDataButton component, or a loading message, or null if data has been loaded.
+ */
 const LoadMoreDataButton = ({ hasAttemptedMonthlyLoad, isLoadingMonthly, loadMonthlyData }) => {
   return (
     <>

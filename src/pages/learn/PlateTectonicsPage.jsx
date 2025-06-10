@@ -3,6 +3,16 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import SeoMetadata from '../../components/SeoMetadata';
 
+/**
+ * Renders the "Plate Tectonics and Earthquakes" learning page.
+ * Currently, this page serves as a placeholder indicating that content is "coming soon".
+ * It includes SEO metadata relevant to the topic and a link to navigate back
+ * to the main "Learn About Earthquakes" page.
+ * This component takes no direct props.
+ *
+ * @component
+ * @returns {JSX.Element} The PlateTectonicsPage component.
+ */
 const PlateTectonicsPage = () => {
   return (
     <>

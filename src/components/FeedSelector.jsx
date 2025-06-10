@@ -1,6 +1,22 @@
 import React from 'react'; // React is needed
-// No PropTypes needed here as this is a simpler component for now
 
+/**
+ * Renders a group of buttons that allow the user to select different earthquake feed periods or types.
+ * The selected feed determines the data displayed in other parts of the application (e.g., a list or map).
+ * It conditionally renders 14-day and 30-day options based on whether extended data has been loaded.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {string} props.activeFeedPeriod - The currently active feed period key (e.g., 'last_hour', 'feelable_quakes').
+ * @param {function(string): void} props.setActiveFeedPeriod - Callback function to set the new active feed period when a button is clicked.
+ * @param {boolean} props.hasAttemptedMonthlyLoad - Flag indicating if an attempt was made to load monthly (extended) earthquake data.
+ *   Used to determine if 14-day and 30-day options should be shown.
+ * @param {Array<Object>|null} props.allEarthquakes - The array of all earthquakes, typically from the monthly load.
+ *   Used in conjunction with `hasAttemptedMonthlyLoad` to confirm data availability for extended periods.
+ * @param {number} props.FEELABLE_QUAKE_THRESHOLD - The magnitude threshold for "feelable" quakes, used in a button label.
+ * @param {number} props.MAJOR_QUAKE_THRESHOLD - The magnitude threshold for "significant" or "major" quakes, used in a button label.
+ * @returns {JSX.Element} The FeedSelector component.
+ */
 const FeedSelector = ({
   activeFeedPeriod,
   setActiveFeedPeriod,

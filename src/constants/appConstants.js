@@ -44,13 +44,19 @@ export const HEADER_TIME_UPDATE_INTERVAL_MS = 60 * 1000;
 export const TOP_N_CLUSTERS_OVERVIEW = 3;
 
 // Loading Messages
-/** @description Array of messages displayed sequentially during the initial data loading sequence of the application. */
+/**
+ * @description Array of messages displayed sequentially during the initial data loading sequence of the application.
+ * @type {string[]}
+ */
 export const INITIAL_LOADING_MESSAGES = [
     "Connecting to Global Seismic Network...", "Fetching Most Recent Events...", "Processing Live Data...",
     "Analyzing Tectonic Movements...", "Compiling Regional Summaries...",
     "Finalizing Real-time Display..."
 ];
-/** @description Array of messages displayed sequentially during the loading of extended monthly earthquake data. */
+/**
+ * @description Array of messages displayed sequentially during the loading of extended monthly earthquake data.
+ * @type {string[]}
+ */
 export const MONTHLY_LOADING_MESSAGES = [
     "Accessing Historical Archives...", "Fetching Extended Seismic Records...", "Processing 14 & 30-Day Data...",
     "Identifying Long-term Patterns...", "Calculating Deep Earth Insights...", "Preparing Historical Analysis...",

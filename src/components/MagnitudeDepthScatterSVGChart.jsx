@@ -6,8 +6,24 @@ import MagnitudeDepthScatterSVGChartSkeleton from './skeletons/MagnitudeDepthSca
 import { getMagnitudeColor } from '../utils/utils.js';
 
 /**
- * A React component that displays an SVG scatter plot of earthquake magnitude versus depth.
- * It uses a ResizeObserver to dynamically adjust chart dimensions.
+ * Renders an SVG scatter plot visualizing the relationship between earthquake magnitude and depth.
+ * This component is memoized using `React.memo` for performance.
+ * It dynamically adjusts its dimensions based on the container size using `ResizeObserver`.
+ *
+ * The chart attempts to use pre-sampled earthquake data from `EarthquakeDataContext`
+ * (e.g., `sampledEarthquakesLast7Days`, `sampledEarthquakesLast30Days`) based on the `titleSuffix` prop.
+ * If corresponding sampled data isn't available, it falls back to processing the `earthquakes` prop.
+ * A skeleton loader (`MagnitudeDepthScatterSVGChartSkeleton`) is displayed if `isLoading` is true.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {Array<Object>} [props.earthquakes] - An array of earthquake feature objects. This is used as a fallback
+ *   if pre-sampled data for the period indicated by `titleSuffix` is not available in context.
+ *   Each object should adhere to USGS GeoJSON structure, with `properties.mag` and `geometry.coordinates[2]` (depth).
+ * @param {string} [props.titleSuffix='(Last 30 Days)'] - Suffix for the chart's title (e.g., "(Last 7 Days)", "(Last 30 Days)").
+ *   This suffix also influences which sampled dataset is attempted to be loaded from context.
+ * @param {boolean} props.isLoading - Flag indicating whether data is currently loading. If true, a skeleton loader is displayed.
+ * @returns {JSX.Element} The MagnitudeDepthScatterSVGChart component.
  */
 const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
     const { sampledEarthquakesLast7Days, sampledEarthquakesLast14Days, sampledEarthquakesLast30Days } = useEarthquakeDataState();

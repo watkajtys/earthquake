@@ -7,15 +7,26 @@ import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext';
 import EarthquakeTimelineSVGChartSkeleton from './skeletons/EarthquakeTimelineSVGChartSkeleton'; // New skeleton import
 
 /**
- * A React component that displays an SVG bar chart of earthquake frequency over a timeline.
- * @param {object} props - The component's props.
- * @param {Array<object> | null} props.earthquakes - An array of earthquake feature objects.
- * @param {number} [props.days=7] - The number of days to display on the timeline.
- * @param {string} [props.titleSuffix='(Last 7 Days)'] - Suffix for the component's title.
- * @param {boolean} props.isLoading - Whether the data is currently loading.
- * @returns {JSX.Element} The rendered EarthquakeTimelineSVGChart component.
+ * Displays an SVG bar chart visualizing earthquake frequency over a specified number of days.
+ * This component is memoized using `React.memo` for performance optimization.
+ * It can utilize pre-calculated daily counts from `EarthquakeDataContext` (e.g., `dailyCounts7Days`,
+ * `dailyCounts14Days`, `dailyCounts30Days`) if available for the specified `days` prop.
+ * Otherwise, it processes the raw `earthquakes` data to calculate daily frequencies.
+ * Shows a skeleton loader (`EarthquakeTimelineSVGChartSkeleton`) when `isLoading` is true.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {Array<Object>|null} [props.earthquakes=null] - An array of earthquake feature objects. This is used as a fallback
+ *   if pre-calculated data for the specified `days` is not available in context. Each object should
+ *   adhere to the USGS GeoJSON feature structure, particularly `properties.time`.
+ * @param {number} [props.days=7] - The number of days to display on the timeline (e.g., 7, 14, 30).
+ *   The component will try to use corresponding pre-calculated daily counts from context if available.
+ * @param {string} [props.titleSuffix='(Last 7 Days)'] - Suffix for the chart's title, typically indicating the time period.
+ * @param {boolean} props.isLoading - Flag indicating whether the data is currently loading.
+ *   If true, a skeleton loader is displayed.
+ * @returns {JSX.Element} The EarthquakeTimelineSVGChart component.
  */
-const EarthquakeTimelineSVGChart = React.memo(({earthquakes, days = 7, titleSuffix = "(Last 7 Days)", isLoading}) => {
+const EarthquakeTimelineSVGChart = React.memo(({earthquakes = null, days = 7, titleSuffix = "(Last 7 Days)", isLoading}) => {
     const { dailyCounts7Days, dailyCounts14Days, dailyCounts30Days, earthquakesLast7Days } = useEarthquakeDataState();
     const cardBg = "bg-slate-700";
     const titleColor = "text-indigo-400";

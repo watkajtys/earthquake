@@ -1,5 +1,21 @@
 // src/services/usgsApiService.js
 
+/**
+ * @file usgsApiService.js
+ * @description Service function for fetching data from USGS earthquake APIs via a server-side proxy.
+ */
+
+/**
+ * Fetches data from the specified USGS API URL using a server-side proxy endpoint (`/api/usgs-proxy`).
+ * This approach helps in bypassing CORS issues that might arise from direct client-side requests to the USGS API.
+ *
+ * @async
+ * @param {string} apiUrl - The full URL of the USGS GeoJSON API endpoint to fetch data from.
+ * @returns {Promise<Object>} A promise that resolves to the JSON data from the USGS API if successful.
+ *   If the fetch fails or the response is not OK, it resolves to an object containing an `error` property,
+ *   which itself is an object with `message` (string) and optionally `status` (number).
+ *   Example of error object: `{ error: { message: "HTTP error! status: 404", status: 404 } }`
+ */
 export const fetchUsgsData = async (apiUrl) => {
   try {
     const proxyUrl = `/api/usgs-proxy?apiUrl=${encodeURIComponent(apiUrl)}`;

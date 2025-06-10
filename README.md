@@ -88,11 +88,11 @@ To run this project locally:
 
 1.  **Clone the repository**:
     ```bash
-    git clone <your-repository-url>
+    git clone https://github.com/builtbyvibes/global-seismic-activity-monitor.git
     ```
 2.  **Navigate to the project directory**:
     ```bash
-    cd <project-name>
+    cd global-seismic-activity-monitor
     ```
 3.  **Install dependencies**:
     ```bash
@@ -122,17 +122,24 @@ Note: For this project, the Vite development server is often sufficient for end-
 
 The `src/` directory contains the core source code for the application, organized as follows:
 
--   **`assets/`**: Static assets like images, JSON data files (e.g., tectonic plate boundaries, coastline data), and other resources.
--   **`components/`**: Reusable React components that make up the user interface. Each component is typically in its own `.jsx` file.
--   **`constants/`**: Contains constant values used throughout the application, such as API endpoints, thresholds, or configuration settings (e.g., `appConstants.js`).
--   **`functions/`**: Contains the source code for Cloudflare Workers, which handle backend logic such as the USGS data proxy. Each subdirectory within `functions/` may represent a different Worker.
--   **`features/`**: Intended for modules or components related to specific application features. Currently, this directory is set up with a `.gitkeep` file and is awaiting future development or is not actively used.
--   **`hooks/`**: Intended for custom React hooks that encapsulate reusable stateful logic. Currently, this directory is set up with a `.gitkeep` file and is awaiting future development or is not actively used.
--   **`pages/`**: Top-level React components that represent different "pages" or views of the application (e.g., `HomePage.jsx`).
--   **`utils/`**: Utility functions that provide helper functionalities used across different parts of the application (e.g., date formatting, calculations in `utils.js`).
--   **`App.jsx`**: The root application component.
--   **`main.jsx`**: The main entry point for the React application.
--   **`index.css`**: Global styles for the application.
+-   **`assets/`**: Static assets like images, JSON data files (e.g., `TectonicPlateBoundaries.json`, `ne_110m_coastline.json`).
+-   **`components/`**: Core UI components. Most components are directly within this folder.
+    -   **`components/earthquakeDetail/`**: Components specifically used within the `EarthquakeDetailView`.
+    -   **`components/skeletons/`**: Skeleton loader components used for placeholder UI during data fetching.
+-   **`constants/`**: Application-wide constants, primarily in `appConstants.js` (e.g., API URLs, thresholds).
+-   **`contexts/`**: React Context providers and custom hooks for global state management (e.g., `EarthquakeDataContext.jsx`, `UIStateContext.jsx`).
+-   **`functions/`**: Serverless backend logic for Cloudflare Pages Functions.
+    -   **`functions/api/`**: API route handlers (e.g., for cluster calculations, D1 database interactions).
+    -   **`functions/[[catchall]].js`**: Main router for Cloudflare Pages Functions, handling proxy requests, sitemap generation, and prerendering.
+-   **`features/`**: Currently contains a `.gitkeep` file; intended for feature-specific modules in future development.
+-   **`hooks/`**: Currently contains a `.gitkeep` file; intended for custom React hooks.
+-   **`pages/`**: Top-level React components representing different application pages/views.
+    -   **`pages/learn/`**: Components for specific educational article pages.
+    -   **`HomePage.jsx`**: Defines the main application structure and routes (exports the `App` component).
+-   **`services/`**: Modules for interacting with external APIs or backend services (e.g., `usgsApiService.js`, `clusterApiService.js`).
+-   **`utils/`**: General utility functions used across the application (e.g., `utils.js`, `clusterUtils.js`).
+-   **`main.jsx`**: The main entry point for the React application, rendering the root component from `HomePage.jsx`.
+-   **`index.css`**: Global styles and Tailwind CSS base configuration.
 
 Additionally, at the project root:
 
@@ -188,7 +195,7 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
           "removeQuotes": "none",
           "menu": {
             "Github repo": {
-              "href": "https://github.com/your-repo/your-project",
+              "href": "https://github.com/builtbyvibes/global-seismic-activity-monitor",
               "target": "_blank"
             }
           }

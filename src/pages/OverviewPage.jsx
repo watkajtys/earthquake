@@ -15,11 +15,35 @@ import ClusterSummaryItem from '../components/ClusterSummaryItem'; // Assuming t
 
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 
-// Props that would have been passed to the inline JSX in HomePage.jsx for the /overview route
-// These will need to be passed from HomePage.jsx when rendering this component
+/**
+ * Renders the "Overview" page, providing a snapshot of current and recent global seismic activity.
+ * This page is typically displayed on mobile devices or when the "Overview" tab is selected in the main UI.
+ * It aggregates various data display components like alerts, latest significant event,
+ * activity lists, summary statistics, regional distributions, and active clusters.
+ *
+ * The component receives several utility functions and pre-calculated data snippets as props.
+ * It also consumes real-time data and loading states directly from `EarthquakeDataContext`.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {Object} props.ALERT_LEVELS - Configuration object for USGS PAGER alert levels.
+ * @param {function(number):string} props.getMagnitudeColor - Function to get color based on earthquake magnitude.
+ * @param {function(number):string} props.formatDate - Function to format a timestamp into a readable date string.
+ * @param {function(Object):void} props.handleQuakeClick - Callback for when an earthquake item is clicked.
+ * @param {Array<Object>} props.latestFeelableQuakesSnippet - Array of the latest feelable quakes for a snippet display.
+ * @param {function(number):string} props.formatTimeAgo - Function to format a duration into a "time ago" string.
+ * @param {function(number):string} props.formatTimeDuration - Function to format a duration into a detailed time string (days, hr, min).
+ * @param {function(Object):Object} props.getRegionForEarthquake - Function to determine the geographic region of an earthquake.
+ * @param {function(Array<Object>):Object} props.calculateStats - Function to calculate summary statistics from an array of earthquakes.
+ * @param {Array<Object>} props.overviewClusters - Array of processed earthquake cluster data for display.
+ * @param {function(Object):void} props.handleClusterSummaryClick - Callback for when a cluster summary item is clicked.
+ * @param {Array<Object>} props.topActiveRegionsOverview - Array of data for displaying the most active regions.
+ * @param {Array<Object>} props.REGIONS - Array of predefined geographic region objects.
+ * @param {function(string):void} props.navigate - Navigation function from a routing library.
+ * @returns {JSX.Element} The OverviewPage component.
+ */
 const OverviewPage = ({
-    // currentAlertConfig, // Will get from context via highestRecentAlert
-    ALERT_LEVELS, // Constant, but might be passed if structure demands
+    ALERT_LEVELS,
     // hasRecentTsunamiWarning, // Will get from context
     // lastMajorQuake, // Will get from context
     getMagnitudeColor,
@@ -37,17 +61,15 @@ const OverviewPage = ({
     getRegionForEarthquake, // For TimeSinceLastMajorQuakeBanner & RegionalDistributionList
     // earthquakesLast24Hours, // Will get from context
     // prev24HourData, // Will get from context
-    // isLoadingDaily, // Will get from context
-    // isLoadingWeekly, // Will get from context
-    calculateStats, // For SummaryStatisticsCard
-    overviewClusters, // For ClusterSummaryItem list
-    handleClusterSummaryClick, // For ClusterSummaryItem list
-    topActiveRegionsOverview, // For active region display
-    REGIONS, // For active region display color (if not handled by topActiveRegionsOverview structure)
-    navigate, // For "Learn More" button, if not using Link
+    calculateStats,
+    overviewClusters,
+    handleClusterSummaryClick,
+    topActiveRegionsOverview,
+    REGIONS,
+    navigate,
 }) => {
     const {
-        highestRecentAlert, // Used to derive currentAlertConfig
+        highestRecentAlert,
         hasRecentTsunamiWarning,
         lastMajorQuake,
         isLoadingInitialData,
@@ -61,16 +83,18 @@ const OverviewPage = ({
         isLoadingWeekly
     } = useEarthquakeDataState();
 
-    // Derive currentAlertConfig here
+    /**
+     * Memoized configuration object for the current highest USGS PAGER alert,
+     * derived from `highestRecentAlert` (from context) and the `ALERT_LEVELS` prop.
+     * @type {Object|null}
+     */
     const currentAlertConfig = React.useMemo(() => {
         if (highestRecentAlert && ALERT_LEVELS[highestRecentAlert.toUpperCase()]) {
             return ALERT_LEVELS[highestRecentAlert.toUpperCase()];
         }
         return null;
     }, [highestRecentAlert, ALERT_LEVELS]);
-    
-    // This component will replicate the JSX structure previously under the /overview Route in HomePage.jsx
-    // For brevity, I'm showing a simplified structure. The actual content should be moved from HomePage.jsx
+
     return (
         <>
             <SeoMetadata
