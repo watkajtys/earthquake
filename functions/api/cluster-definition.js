@@ -18,12 +18,39 @@ export async function onRequest(context) {
           return new Response('Invalid cluster data: clusterId and strongestQuakeId must be strings.', { status: 400 });
       }
 
-      const { clusterId, earthquakeIds, strongestQuakeId } = clusterData;
+      const { clusterId, earthquakeIds: incomingEarthquakeIds, strongestQuakeId: incomingStrongestQuakeId } = clusterData;
 
-      const stmt = env.DB.prepare(
+      // Fetch existing record
+      const selectStmt = env.DB.prepare(
+        'SELECT clusterId, earthquakeIds, strongestQuakeId FROM ClusterDefinitions WHERE clusterId = ?'
+      ).bind(clusterId);
+      const existingRecord = await selectStmt.first();
+
+      if (existingRecord) {
+        let existingEarthquakeIdsArray = [];
+        try {
+          existingEarthquakeIdsArray = JSON.parse(existingRecord.earthquakeIds || '[]');
+        } catch (parseError) {
+          console.error(`Error parsing existing earthquakeIds for cluster ${clusterId}:`, parseError);
+          // Proceed as if data is different if parsing fails, to ensure an update attempt
+        }
+
+        const sortedIncomingIds = JSON.stringify([...incomingEarthquakeIds].sort());
+        const sortedExistingIds = JSON.stringify([...existingEarthquakeIdsArray].sort());
+
+        if (
+          sortedIncomingIds === sortedExistingIds &&
+          existingRecord.strongestQuakeId === incomingStrongestQuakeId
+        ) {
+          return new Response(`Cluster definition for ${clusterId} is already up-to-date.`, { status: 200 });
+        }
+      }
+
+      // Proceed with Write if New or Different
+      const upsertStmt = env.DB.prepare(
         'INSERT OR REPLACE INTO ClusterDefinitions (clusterId, earthquakeIds, strongestQuakeId, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
-      ).bind(clusterId, JSON.stringify(earthquakeIds), strongestQuakeId);
-      await stmt.run();
+      ).bind(clusterId, JSON.stringify(incomingEarthquakeIds), incomingStrongestQuakeId);
+      await upsertStmt.run();
 
       return new Response(`Cluster definition for ${clusterId} registered/updated successfully in D1.`, { status: 201 });
     } catch (e) {
