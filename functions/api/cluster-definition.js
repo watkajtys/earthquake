@@ -55,7 +55,44 @@ export async function onRequest(context) {
       const responsePayload = {
         ...result,
         earthquakeIds: JSON.parse(result.earthquakeIds || '[]'), // Handle null/empty if necessary
+        strongestQuakePlace: null, // Initialize with null
+        strongestQuakeMag: null,   // Initialize with null
       };
+
+      // Fetch strongest quake details
+      if (result.strongestQuakeId) {
+        try {
+          const quakeStmt = env.DB.prepare(
+            // Assuming 'Earthquakes' table and 'properties' column as JSON string
+            'SELECT id, properties FROM Earthquakes WHERE id = ?'
+          ).bind(result.strongestQuakeId);
+          const quakeResult = await quakeStmt.first();
+
+          if (quakeResult) {
+            let quakeProperties = quakeResult.properties;
+            if (typeof quakeProperties === 'string') {
+              try {
+                quakeProperties = JSON.parse(quakeProperties);
+              } catch (parseError) {
+                console.error(`Error parsing properties for quake ${result.strongestQuakeId}:`, parseError);
+                quakeProperties = null; // Set to null if parsing fails
+              }
+            }
+
+            if (quakeProperties && typeof quakeProperties === 'object') {
+              responsePayload.strongestQuakePlace = quakeProperties.place || null;
+              responsePayload.strongestQuakeMag = typeof quakeProperties.mag === 'number' ? quakeProperties.mag : null;
+            } else {
+               console.warn(`Quake ${result.strongestQuakeId} found, but its properties are not a valid object or could not be parsed.`);
+            }
+          } else {
+            console.warn(`Strongest quake with ID ${result.strongestQuakeId} not found in Earthquakes table.`);
+          }
+        } catch (dbError) {
+          console.error(`Database error fetching strongest quake ${result.strongestQuakeId}:`, dbError);
+          // Do not let this error fail the main cluster definition response; proceed with nulls.
+        }
+      }
 
       return new Response(JSON.stringify(responsePayload), {
         status: 200,

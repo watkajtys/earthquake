@@ -32,9 +32,10 @@ function ClusterDetailModalWrapper({
     const { clusterId } = useParams();
     const navigate = useNavigate();
 
-    const [dynamicCluster, setDynamicCluster] = useState(null);
-    const [clusterSeoProps, setClusterSeoProps] = useState(null); // Added state for SEO props
-    const [loadingPhase, setLoadingPhase] = useState('worker_fetch');
+    const [rawClusterDefinition, setRawClusterDefinition] = useState(null); // Stores direct API response
+    const [dynamicCluster, setDynamicCluster] = useState(null); // Progressively built cluster
+    const [clusterSeoProps, setClusterSeoProps] = useState(null);
+    const [loadingPhase, setLoadingPhase] = useState('fetching_definition'); // Initial phase
     const [errorMessage, setErrorMessage] = useState('');
 
     const {
@@ -129,212 +130,221 @@ function ClusterDetailModalWrapper({
         };
     };
 
-    // Effect 1: Fetch from worker
+    // Effect 1: Fetch cluster definition from D1
     useEffect(() => {
         setDynamicCluster(null);
+        setRawClusterDefinition(null);
         setErrorMessage('');
-        setLoadingPhase('worker_fetch');
+        setLoadingPhase('fetching_definition');
 
-        async function fetchAndProcessClusterFromWorker() {
+        async function fetchInitialClusterDefinition() {
             if (!clusterId) {
                 setErrorMessage('No cluster ID specified.');
-                setLoadingPhase('done');
+                setLoadingPhase('error'); // Use 'error' for clearer state
                 return;
             }
-
-            const willLikelyUseMonthly = hasAttemptedMonthlyLoad;
-            if (willLikelyUseMonthly && isLoadingMonthly) return;
-            if (!willLikelyUseMonthly && (isLoadingWeekly || isInitialAppLoad)) return;
+            // No need to wait for context data loading here for the initial definition fetch.
 
             try {
-                const result = await fetchClusterDefinition(clusterId); // result includes { earthquakeIds, strongestQuakeId, updatedAt }
+                const definition = await fetchClusterDefinition(clusterId);
 
-                if (result) {
-                    const { earthquakeIds, strongestQuakeId: defStrongestQuakeId, updatedAt: kvUpdatedAt } = result;
-                    const sourceQuakes = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0)
-                                         ? allEarthquakes
-                                         : earthquakesLast72Hours;
-                    if (!sourceQuakes || sourceQuakes.length === 0) {
-                        console.warn("Source quakes not available for reconstruction from worker def.");
-                        setLoadingPhase('reconstruct_from_id_attempt');
-                        return;
-                    }
-                    const foundQuakes = earthquakeIds.map(id => sourceQuakes.find(q => q.id === id)).filter(Boolean);
+                if (definition && definition.earthquakeIds) {
+                    setRawClusterDefinition(definition);
 
-                    if (foundQuakes.length < earthquakeIds.length) {
-                        console.warn(`Cluster ${clusterId}: Worker data may be stale. Found ${foundQuakes.length} of ${earthquakeIds.length} quakes.`);
-                        setLoadingPhase('reconstruct_from_id_attempt');
-                    } else {
-                        let earliestTime = Infinity;
-                        let latestTime = -Infinity;
-                        foundQuakes.forEach(quake => {
-                            if (quake.properties.time < earliestTime) earliestTime = quake.properties.time;
-                            if (quake.properties.time > latestTime) latestTime = quake.properties.time;
-                        });
-                        const strongestQuakeInList = foundQuakes.find(q => q.id === defStrongestQuakeId) || foundQuakes[0];
-                        if (!strongestQuakeInList) {
-                             setLoadingPhase('reconstruct_from_id_attempt'); return;
-                        }
-                        const reconstructedClusterData = {
-                            id: clusterId,
-                            originalQuakes: foundQuakes,
-                            quakeCount: foundQuakes.length,
-                            strongestQuakeId: strongestQuakeInList.id,
-                            strongestQuake: strongestQuakeInList, // Keep the strongest quake object for geo coords
-                            maxMagnitude: Math.max(...foundQuakes.map(q => q.properties.mag).filter(m => m !== null && m !== undefined)),
-                            locationName: strongestQuakeInList.properties.place || 'Unknown Location',
-                            _earliestTimeInternal: earliestTime,
-                            _latestTimeInternal: latestTime,
-                            timeRange: calculateClusterTimeRange(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, foundQuakes.length),
-                            updatedAt: kvUpdatedAt, // Store the KV updatedAt
-                        };
-                        setDynamicCluster(reconstructedClusterData);
-                        setClusterSeoProps(generateClusterSeoProps(reconstructedClusterData, clusterId));
-                        setLoadingPhase('done');
-                    }
+                    const initialClusterData = {
+                        id: definition.clusterId,
+                        locationName: definition.strongestQuakePlace || 'Details Loading...',
+                        quakeCount: definition.earthquakeIds.length,
+                        maxMagnitude: definition.strongestQuakeMag, // Might be null
+                        originalQuakes: [], // Will be hydrated
+                        strongestQuakeId: definition.strongestQuakeId,
+                        updatedAt: definition.updatedAt,
+                         // _earliestTimeInternal, _latestTimeInternal, timeRange, strongestQuake will be set/updated after hydration
+                    };
+                    setDynamicCluster(initialClusterData);
+                    setClusterSeoProps(generateClusterSeoProps(initialClusterData, clusterId)); // Set SEO props early
+                    setLoadingPhase('hydrating_quakes');
                 } else {
-                    setLoadingPhase('reconstruct_from_id_attempt');
+                    setErrorMessage(`Cluster definition for ${clusterId} not found or is invalid.`);
+                    setLoadingPhase('fallback_prop_check_attempt');
                 }
             } catch (error) {
-                console.error(`Error fetching cluster definition ${clusterId} from worker:`, error);
-                setLoadingPhase('reconstruct_from_id_attempt');
+                console.error(`Error fetching cluster definition ${clusterId}:`, error);
+                setErrorMessage(`Failed to fetch definition for cluster ${clusterId}.`);
+                setLoadingPhase('fallback_prop_check_attempt');
             }
         }
-        fetchAndProcessClusterFromWorker();
-    }, [clusterId, formatDate, formatTimeAgo, formatTimeDuration, allEarthquakes, earthquakesLast72Hours, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]); // Removed generateClusterSeoProps from deps
+        fetchInitialClusterDefinition();
+    }, [clusterId]); // generateClusterSeoProps is stable if its definition doesn't change based on these deps
 
-
-    // Effect 2: Attempt reconstruction from parsed ID if worker fetch failed/incomplete
+    // Effect 2: Hydrate full earthquake details
     useEffect(() => {
-        if (loadingPhase === 'reconstruct_from_id_attempt' && !dynamicCluster) {
-            // ---- Start of added ----
-            const willLikelyUseMonthly = hasAttemptedMonthlyLoad;
-
-            if (willLikelyUseMonthly && isLoadingMonthly) {
-                // console.log(`WRAPPER ${clusterId}: Monthly data is loading. Waiting... (reconstruct_from_id_attempt)`);
-                return;
-            }
-            if (!willLikelyUseMonthly && (isLoadingWeekly || isInitialAppLoad)) {
-                // console.log(`WRAPPER ${clusterId}: Weekly/Initial data is loading. Waiting... (reconstruct_from_id_attempt)`);
-                return;
-            }
-            // console.log(`WRAPPER ${clusterId}: Context data presumed loaded. Proceeding with reconstruct_from_id_attempt.`);
-            // ---- End of added ----
-
-            // console.log(`WRAPPER ${clusterId}: Phase reconstruct_from_id_attempt.`); // Removed
-            const parts = clusterId ? clusterId.split('_') : [];
-            let parsedStrongestQuakeId = null;
-            // let parsedExpectedCount = null; // Not directly used in logic, so removed log for it
-            if (parts.length === 4 && parts[0] === 'overview' && parts[1] === 'cluster') {
-                parsedStrongestQuakeId = parts[2];
-                // const count = parseInt(parts[3], 10); // Not directly used
-                // if (!isNaN(count)) parsedExpectedCount = count;
-            }
-            // console.log(`WRAPPER ${clusterId}: Parsed ID - strongestQuakeId: ${parsedStrongestQuakeId}, expectedCount: ${parsedExpectedCount}.`); // Removed
-
-            if (!parsedStrongestQuakeId) {
-                // console.log(`WRAPPER ${clusterId}: Invalid parsed ID. Transitioning to fallback_prop_check_attempt.`); // Removed
-                setLoadingPhase('fallback_prop_check_attempt');
-                return;
-            }
-
+        if (loadingPhase === 'hydrating_quakes' && rawClusterDefinition && rawClusterDefinition.earthquakeIds) {
             const sourceQuakes = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0)
                                  ? allEarthquakes
                                  : earthquakesLast72Hours;
 
+            // Determine if sourceQuakes are ready for hydration
+            const areSourceQuakesLoading = (hasAttemptedMonthlyLoad && isLoadingMonthly && !allEarthquakes.length) ||
+                                           (!hasAttemptedMonthlyLoad && (isLoadingWeekly || isInitialAppLoad) && (!earthquakesLast72Hours || earthquakesLast72Hours.length === 0));
+
+            if (areSourceQuakesLoading) {
+                // console.log(`Cluster ${clusterId}: Hydration waiting for sourceQuakes...`);
+                return; // Wait for sourceQuakes to be loaded
+            }
+
             if (!sourceQuakes || sourceQuakes.length === 0) {
-                setLoadingPhase('fallback_prop_check_attempt');
+                 console.warn(`Cluster ${clusterId}: Source quakes for hydration are empty even after load checks.`);
+                 setErrorMessage(prev => prev || 'Could not load full earthquake details for the cluster.');
+                 setLoadingPhase('error');
+                 return;
+            }
+
+            const foundQuakes = rawClusterDefinition.earthquakeIds
+                .map(id => sourceQuakes.find(q => q.id === id))
+                .filter(Boolean);
+
+            if (foundQuakes.length < rawClusterDefinition.earthquakeIds.length) {
+                console.warn(`Cluster ${clusterId}: Hydration found ${foundQuakes.length} of ${rawClusterDefinition.earthquakeIds.length} quakes. Some may be missing.`);
+            }
+
+            if (foundQuakes.length === 0 && rawClusterDefinition.earthquakeIds.length > 0) {
+                console.error(`Cluster ${clusterId}: No quakes found for hydration. Using D1 summary data.`);
+                setErrorMessage(prev => prev || 'Failed to load individual earthquake details for this cluster. Displaying summary.');
+                // dynamicCluster already has D1 summary, so just set phase to done.
+                setLoadingPhase('done');
                 return;
             }
 
-            const strongestQuakeObjectFromId = sourceQuakes.find(q => q.id === parsedStrongestQuakeId);
-            if (!strongestQuakeObjectFromId) {
-                setLoadingPhase('fallback_prop_check_attempt');
-                return;
+            let earliestTime = Infinity;
+            let latestTime = -Infinity;
+            let calculatedMaxMag = -Infinity;
+            let hydratedStrongestQuake = null;
+
+            if (foundQuakes.length > 0) {
+                foundQuakes.forEach(quake => {
+                    if (quake.properties.time < earliestTime) earliestTime = quake.properties.time;
+                    if (quake.properties.time > latestTime) latestTime = quake.properties.time;
+                    if (quake.properties.mag > calculatedMaxMag) {
+                        calculatedMaxMag = quake.properties.mag;
+                        hydratedStrongestQuake = quake;
+                    }
+                });
+                if (!hydratedStrongestQuake && foundQuakes.length > 0) hydratedStrongestQuake = foundQuakes[0];
+            } else { // Should not happen if previous check for foundQuakes.length === 0 is hit
+                earliestTime = null;
+                latestTime = null;
+                calculatedMaxMag = rawClusterDefinition.strongestQuakeMag;
             }
 
-            // Client-side reconstruction logic using findActiveClusters has been removed.
-            // This path ('reconstruct_from_id_attempt') will now effectively lead to 'fallback_prop_check_attempt'
-            // as 'matchFound' will remain false.
-            let matchFound = false;
-            if (!matchFound) {
-                setLoadingPhase('fallback_prop_check_attempt');
+            const finalStrongestQuake = hydratedStrongestQuake || (dynamicCluster?.strongestQuakeId ? { id: dynamicCluster.strongestQuakeId, properties: { place: dynamicCluster.locationName, mag: dynamicCluster.maxMagnitude } } : null);
+
+            const hydratedCluster = {
+                ...dynamicCluster, // Spread initial data (ID, D1 place/mag, updatedAt)
+                originalQuakes: foundQuakes,
+                quakeCount: foundQuakes.length || rawClusterDefinition.earthquakeIds.length,
+                maxMagnitude: foundQuakes.length > 0 ? calculatedMaxMag : (rawClusterDefinition.strongestQuakeMag || null),
+                strongestQuakeId: finalStrongestQuake?.id || rawClusterDefinition.strongestQuakeId,
+                strongestQuake: finalStrongestQuake, // Full object
+                locationName: finalStrongestQuake?.properties?.place || dynamicCluster.locationName, // Prefer hydrated, fallback to initial
+                _earliestTimeInternal: earliestTime,
+                _latestTimeInternal: latestTime,
+                timeRange: calculateClusterTimeRange(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, foundQuakes.length),
+            };
+
+            setDynamicCluster(hydratedCluster);
+            // Update SEO props if location or magnitude significantly changed from initial D1 data
+            if (hydratedCluster.locationName !== dynamicCluster.locationName || hydratedCluster.maxMagnitude !== dynamicCluster.maxMagnitude) {
+                 setClusterSeoProps(generateClusterSeoProps(hydratedCluster, clusterId));
             }
+            setLoadingPhase('done');
         }
-    }, [loadingPhase, clusterId, allEarthquakes, earthquakesLast72Hours, formatDate, formatTimeAgo, formatTimeDuration, hasAttemptedMonthlyLoad, isLoadingWeekly, isLoadingMonthly, isInitialAppLoad]); // Removed generateClusterSeoProps from deps
+    }, [
+        loadingPhase, rawClusterDefinition, allEarthquakes, earthquakesLast72Hours,
+        hasAttemptedMonthlyLoad, isLoadingMonthly, isLoadingWeekly, isInitialAppLoad,
+        clusterId, formatDate, formatTimeAgo, formatTimeDuration, dynamicCluster // generateClusterSeoProps is stable
+    ]);
 
     // Effect 3: Fallback to overviewClusters prop
     useEffect(() => {
-        if (loadingPhase === 'fallback_prop_check_attempt' && !dynamicCluster) {
+        if (loadingPhase === 'fallback_prop_check_attempt' && !dynamicCluster) { // only run if dynamicCluster isn't already set
             const clusterFromProp = overviewClusters?.find(c => c.id === clusterId);
             if (clusterFromProp) {
-                setDynamicCluster(clusterFromProp); // This clusterFromProp might not have 'strongestQuake' object or 'updatedAt'
+                // This data is likely already fully hydrated if coming from overviewClusters
+                setDynamicCluster(clusterFromProp);
                 setClusterSeoProps(generateClusterSeoProps(clusterFromProp, clusterId));
                 setLoadingPhase('done');
             } else {
+                 // If still loading context data that might be needed for overviewClusters
                 if (isInitialAppLoad || isLoadingWeekly || (hasAttemptedMonthlyLoad && isLoadingMonthly && !allEarthquakes.length)) {
-                    setLoadingPhase('fallback_loading');
+                    setLoadingPhase('fallback_loading'); // A phase to indicate we are waiting for data for this fallback
                 } else {
-                    const currentErrorMessage = 'Cluster details could not be found after all checks.';
-                    setErrorMessage(currentErrorMessage);
-                    setLoadingPhase('done');
+                    // All data sources exhausted
+                    setErrorMessage(prev => prev || 'Cluster details could not be found from any source.');
+                    setLoadingPhase('error');
                 }
             }
         }
-    }, [loadingPhase, dynamicCluster, overviewClusters, clusterId, isInitialAppLoad, isLoadingWeekly, isLoadingMonthly, hasAttemptedMonthlyLoad, allEarthquakes]); // Removed generateClusterSeoProps & errorMessage
+    }, [loadingPhase, dynamicCluster, overviewClusters, clusterId, isInitialAppLoad, isLoadingWeekly, isLoadingMonthly, hasAttemptedMonthlyLoad, allEarthquakes, errorMessage]);
 
-    // Effect to manage SEO props for loading, error, and not found states
+    // Effect 4: Manage SEO props based on loadingPhase and error states
     useEffect(() => {
         const currentCanonicalUrl = clusterId ? `https://earthquakeslive.com/cluster/${clusterId}` : "https://earthquakeslive.com/clusters";
 
-        if (!clusterId) {
+        if (!clusterId) { // Handles invalid ID case first
             setClusterSeoProps({
                 title: "Invalid Cluster Request | Earthquakes Live",
                 description: "No cluster ID was provided for the request.",
                 canonicalUrl: currentCanonicalUrl,
                 pageUrl: currentCanonicalUrl,
-                noindex: true, // Good to add noindex for invalid requests
+                noindex: true,
             });
+            setLoadingPhase('error'); // Ensure this leads to error display
+            setErrorMessage('No cluster ID specified.');
             return;
         }
 
-        // If dynamicCluster is already set, its specific SEO props should have been generated.
-        // This effect handles states where dynamicCluster is NOT yet set or an error occurred.
-        if (!dynamicCluster) {
-            if (loadingPhase !== 'done' && !errorMessage) {
-                // Loading state
-                setClusterSeoProps({
-                    title: "Loading Cluster... | Earthquakes Live",
-                    description: "Loading earthquake cluster details.",
-                    canonicalUrl: currentCanonicalUrl,
-                    pageUrl: currentCanonicalUrl,
-                });
-            } else if (errorMessage || (loadingPhase === 'done' && !dynamicCluster)) {
-                // Error state or Not Found
-                setClusterSeoProps({
-                    title: "Cluster Not Found | Earthquakes Live",
-                    description: errorMessage || "The requested earthquake cluster could not be located.",
-                    canonicalUrl: currentCanonicalUrl,
-                    pageUrl: currentCanonicalUrl,
-                    noindex: true,
-                });
-            }
+        // If dynamicCluster exists (even partially from D1), generate SEO props from it.
+        // generateClusterSeoProps is designed to handle potentially incomplete data.
+        if (dynamicCluster) {
+            setClusterSeoProps(generateClusterSeoProps(dynamicCluster, clusterId));
         }
-        // If dynamicCluster IS set, generateClusterSeoProps has already been called by the effect that set it.
-        // No need to call setClusterSeoProps(generateClusterSeoProps(dynamicCluster, clusterId)) here again,
-        // as it would create a loop if generateClusterSeoProps is a dependency.
 
-    }, [clusterId, loadingPhase, errorMessage, dynamicCluster]);
+        // Further refine SEO based on loading/error states, potentially overriding above if still loading or error occurred
+        if (loadingPhase === 'fetching_definition' || loadingPhase === 'hydrating_quakes' ||
+            (loadingPhase === 'fallback_loading' && !dynamicCluster)) { // Still actively loading
+            setClusterSeoProps({ // Set or override to loading SEO
+                title: `Loading Cluster ${clusterId}... | Earthquakes Live`,
+                description: `Loading details for earthquake cluster ${clusterId}.`,
+                canonicalUrl: currentCanonicalUrl,
+                pageUrl: currentCanonicalUrl,
+            });
+        } else if (loadingPhase === 'error' || (loadingPhase === 'done' && !dynamicCluster && errorMessage)) {
+            // Final error state or 'done' but with no usable cluster and an error message
+            setClusterSeoProps({
+                title: "Cluster Not Found | Earthquakes Live",
+                description: errorMessage || `The earthquake cluster with ID ${clusterId} could not be located or loaded.`,
+                canonicalUrl: currentCanonicalUrl,
+                pageUrl: currentCanonicalUrl,
+                noindex: true,
+            });
+        }
+        // If loadingPhase is 'done' and dynamicCluster IS available, its specific SEO props
+        // (set by the `if (dynamicCluster)` block above) should generally be maintained.
+    }, [clusterId, loadingPhase, errorMessage, dynamicCluster]); // generateClusterSeoProps is stable
 
 
     const handleClose = () => navigate(-1);
 
-    // Centralized rendering logic based on current state (clusterSeoProps, dynamicCluster, loadingPhase)
-    if (clusterSeoProps && dynamicCluster && loadingPhase === 'done' && !errorMessage) {
-        // SUCCESS: Cluster data and its specific SEO props are ready
+    // Determine if we are in a final loading state (waiting for context data for fallbacks)
+    const isContextDataStillLoadingForFallback = isInitialAppLoad || isLoadingWeekly || (hasAttemptedMonthlyLoad && isLoadingMonthly && !allEarthquakes.length);
+
+    // Centralized rendering logic
+    // 1. Success case: dynamicCluster is populated, loading is 'done', no error
+    if (dynamicCluster && loadingPhase === 'done' && !errorMessage) {
         return (
             <>
-                <SeoMetadata {...clusterSeoProps} />
+                {clusterSeoProps && <SeoMetadata {...clusterSeoProps} />}
                 <ClusterDetailModal
                     cluster={dynamicCluster}
                     onClose={handleClose}
@@ -344,11 +354,17 @@ function ClusterDetailModalWrapper({
                 />
             </>
         );
-    } else if (clusterSeoProps && (loadingPhase !== 'done' || (isInitialAppLoad || isLoadingWeekly || (hasAttemptedMonthlyLoad && isLoadingMonthly && !allEarthquakes.length)))) {
-        // LOADING: Show loading UI, SeoMetadata should be "Loading Cluster..."
+    }
+    // 2. Loading states: fetching_definition, hydrating_quakes, or fallback_loading (if context data is also still loading)
+    //    Also includes initial render before any effect sets specific SEO props.
+    else if (loadingPhase === 'fetching_definition' ||
+             loadingPhase === 'hydrating_quakes' ||
+             (loadingPhase === 'fallback_loading' && isContextDataStillLoadingForFallback) ||
+             !clusterSeoProps // Catches very initial render before SEO effect for loading runs
+            ) {
         return (
             <>
-                <SeoMetadata {...clusterSeoProps} />
+                {clusterSeoProps ? <SeoMetadata {...clusterSeoProps} /> : <SeoMetadata title={`Loading Cluster ${clusterId || ''}...`} description="Loading earthquake cluster details." />}
                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4">
                     <div className="bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700 text-center">
                         <svg aria-hidden="true" className="animate-spin h-8 w-8 text-indigo-400 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -356,20 +372,26 @@ function ClusterDetailModalWrapper({
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                         <h2 className="text-lg font-semibold text-indigo-300">Loading Cluster Details...</h2>
-                        <p className="text-sm text-slate-400">Fetching the latest information (Phase: {loadingPhase}).</p>
+                        <p className="text-sm text-slate-400">Fetching information (Phase: {loadingPhase}).</p>
                     </div>
                 </div>
             </>
         );
-    } else if (clusterSeoProps && clusterSeoProps.noindex && loadingPhase === 'done') {
-        // NOT FOUND / ERROR: Show error UI, SeoMetadata should be "Cluster Not Found" or specific error
+    }
+    // 3. Error/Not Found states: loadingPhase is 'error', or ('done' but no dynamicCluster and an errorMessage exists).
+    //    Relies on clusterSeoProps potentially having been set to an error/noindex state by the SEO effect.
+    else if (loadingPhase === 'error' || (loadingPhase === 'done' && !dynamicCluster && errorMessage)) {
         return (
             <>
-                <SeoMetadata {...clusterSeoProps} />
+                {clusterSeoProps ? <SeoMetadata {...clusterSeoProps} /> : <SeoMetadata title="Cluster Not Found" description="The requested cluster could not be found." noindex={true} />}
                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4">
                     <div className="bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700">
-                        <h2 className="text-xl font-semibold text-amber-400 mb-3">{clusterSeoProps.title?.split('|')[0].trim() || "Error"}</h2>
-                        <p className="text-sm mb-4">{clusterSeoProps.description || "An unexpected error occurred."}</p>
+                        <h2 className="text-xl font-semibold text-amber-400 mb-3">
+                            {clusterSeoProps?.title?.split('|')[0].trim() || "Cluster Error"}
+                        </h2>
+                        <p className="text-sm mb-4">
+                            {errorMessage || clusterSeoProps?.description || "The cluster could not be loaded."}
+                        </p>
                         <button onClick={handleClose} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors">
                             Go Back
                         </button>
@@ -379,17 +401,13 @@ function ClusterDetailModalWrapper({
         );
     }
 
-    // Fallback for any other unhandled state, or if clusterSeoProps is null when it shouldn't be.
-    // This could be a brief moment before the SEO effect for loading/error kicks in.
-    // Rendering a minimal, non-indexed SEO tag and a simple loading or null.
-    const defaultSeoTitle = !clusterId ? "Invalid Request" : "Loading Information...";
+    // Fallback for any truly unhandled state (should ideally not be reached if logic above is sound)
     return (
         <>
-            <SeoMetadata title={defaultSeoTitle} description="Loading earthquake cluster information." noindex={!clusterId ? true : undefined} />
-            {/* Can show a minimal loading indicator here or return null if preferred for brief transitions */}
-             <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4">
+            <SeoMetadata title="Loading Information..." description="Please wait while we load the details." noindex={true} />
+            <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4">
                 <div className="bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700 text-center">
-                     <h2 className="text-lg font-semibold text-indigo-300">{defaultSeoTitle}</h2>
+                     <h2 className="text-lg font-semibold text-indigo-300">Preparing Details...</h2>
                  </div>
              </div>
         </>
