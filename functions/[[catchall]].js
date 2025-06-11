@@ -800,7 +800,7 @@ export async function handlePrerenderCluster(context, urlSlugParam) { // Renamed
 }
 
 
-export async function onRequest(context) {
+async function onRequest(context) {
   const mainSourceName = "worker-router"; // For errors originating from the router itself
   const url = new URL(context.request.url);
   const pathname = url.pathname;
@@ -1030,3 +1030,7 @@ async function handleEarthquakeDetailRequest(context, event_id) {
     return jsonErrorResponse(`Error processing earthquake detail request: ${usgsOrGeneralError.message}`, 500, sourceName);
   }
 }
+
+export default {
+  fetch: onRequest
+};
