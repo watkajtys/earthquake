@@ -934,7 +934,7 @@ function App() {
                               >
                                 {/* Child routes for modals correctly nested HERE */}
                                 <Route
-                                  path="quake/:detailUrlParam"
+                                  path="quake/*"
                                   element={<EarthquakeDetailModalComponent />}
                                 />
                                 <Route

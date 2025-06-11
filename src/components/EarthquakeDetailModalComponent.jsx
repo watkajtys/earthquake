@@ -46,9 +46,9 @@ const EarthquakeDetailModalComponent = () => {
     }, [hasAttemptedMonthlyLoad]);
 
 
-    const { detailUrlParam } = useParams();
+    const params = useParams();
     const navigate = useNavigate();
-    const detailUrl = typeof detailUrlParam === 'string' ? decodeURIComponent(detailUrlParam) : undefined;
+    const detailUrlParam = params['*']; const detailUrl = typeof detailUrlParam === 'string' ? decodeURIComponent(detailUrlParam) : undefined;
     const [seoProps, setSeoProps] = useState(null); // Renamed from seoData to seoProps
 
     const handleClose = () => {
@@ -92,7 +92,7 @@ const EarthquakeDetailModalComponent = () => {
         const pageDescription = `Detailed report of the M ${mag} earthquake that struck near ${place} on ${titleDate} at ${descriptionTime} (UTC). Magnitude: ${mag}, Depth: ${depth} km. Location: ${latitude?.toFixed(2)}, ${longitude?.toFixed(2)}. Stay updated with Earthquakes Live.`;
 
         const pageKeywords = `earthquake, seismic event, M ${mag}, ${place ? place.split(', ').join(', ') : ''}, earthquake details, usgs event, ${usgsEventId}`;
-        const canonicalPageUrl = `https://earthquakeslive.com/quake/${detailUrlParam}`; // detailUrlParam is from useParams()
+        const canonicalPageUrl = `https://earthquakeslive.com/quake/${params['*']}`; // detailUrlParam is from useParams()
 
         const eventLocation = {
             '@type': 'Place',
@@ -144,7 +144,7 @@ const EarthquakeDetailModalComponent = () => {
     const initialPageDescription = "Fetching detailed information for the selected seismic event.";
     const initialKeywords = "earthquake details, seismic event, seismology, earthquakes live";
     // detailUrlParam might be undefined on initial render if component loads before router is fully ready.
-    const initialCanonicalUrl = detailUrlParam ? `https://earthquakeslive.com/quake/${detailUrlParam}` : "https://earthquakeslive.com";
+    const initialCanonicalUrl = params['*'] ? `https://earthquakeslive.com/quake/${params['*']}` : "https://earthquakeslive.com";
 
 
     return (
