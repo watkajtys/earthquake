@@ -750,13 +750,26 @@ function App() {
 
     // --- Event Handlers ---
     const navigate = useNavigate();
+
+    // Slugify helper function
+    const slugify = (text) => {
+        if (!text) return 'unknown-location';
+        return text
+            .toString()
+            .toLowerCase()
+            .replace(/\s+/g, '-') // Replace spaces with -
+            .replace(/[^\w-]+/g, '') // Remove all non-word chars except -
+            .replace(/--+/g, '-') // Replace multiple - with single -
+            .replace(/^-+/, '') // Trim - from start of text
+            .replace(/-+$/, ''); // Trim - from end of text
+    };
+
     const handleQuakeClick = useCallback((quake) => {
-        // --- NEW LOGIC ---
         if (quake?.isCluster && quake?.clusterDetails) {
-            // This is a cluster point
+            // This is a cluster point (existing logic seems fine for clusters)
             const clusterInfo = quake.clusterDetails;
             const numQuakesDisplay = clusterInfo.quakes.length;
-            const maxMagDisplay = quake.properties.mag; // This was set to maxMag of cluster
+            const maxMagDisplay = quake.properties.mag;
 
             let message = `Cluster Information:\n`;
             message += `------------------------\n`;
@@ -770,23 +783,26 @@ function App() {
             if (clusterInfo.quakes.length > 5) {
                 message += `  ...and ${clusterInfo.quakes.length - 5} more.\n`;
             }
-
             alert(message);
-            // Optionally, you could also log to console for more detailed inspection
             console.log("Cluster clicked:", quake);
 
         } else {
-            // Existing logic for individual earthquake clicks
-            const detailUrl = quake?.properties?.detail || quake?.properties?.url; // Check both common USGS fields
-            if (detailUrl) {
-                navigate(`/quake/${encodeURIComponent(detailUrl)}`);
+            // Logic for individual earthquake clicks
+            const props = quake?.properties;
+            const id = quake?.id;
+            if (props && id) {
+                const mag = typeof props.mag === 'number' ? props.mag.toFixed(1) : 'unknown';
+                const place = props.place || 'Unknown Location';
+                const locationSlug = slugify(place);
+                // Construct the new URL: /quake/m[magnitude]-[location-slug]-[usgs-id]
+                const newDetailPath = `/quake/m${mag}-${locationSlug}-${id}`;
+                navigate(newDetailPath);
             } else {
-                console.warn("No detail URL for individual earthquake:", quake?.id, quake);
-                // Fallback alert if no detail URL for a non-cluster point
-                alert(`Earthquake: M ${quake?.properties?.mag?.toFixed(1)} - ${quake?.properties?.place || 'Unknown location'}. No further details link available.`);
+                console.warn("Missing properties or id for individual earthquake:", quake);
+                alert(`Earthquake: M ${props?.mag?.toFixed(1) || 'N/A'} - ${props?.place || 'Unknown location'}. Insufficient data to show details.`);
             }
         }
-    }, [navigate]);
+    }, [navigate, slugify]); // Added slugify to dependencies
 
     // Helper function for /feeds SEO
     const getFeedPageSeoInfo = useCallback((feedTitle, activePeriod) => {
@@ -840,13 +856,21 @@ function App() {
     // const handleCloseDetail = useCallback(() => setSelectedDetailUrl(null), []); // Removed
     const handleNotableQuakeSelect = useCallback((quakeFromFeature) => {
         setFocusedNotableQuake(quakeFromFeature); // Use setter from UIStateContext
-        const detailUrl = quakeFromFeature?.properties?.detail || quakeFromFeature?.properties?.url || quakeFromFeature?.url;
-        if (detailUrl) {
-            navigate(`/quake/${encodeURIComponent(detailUrl)}`);
+        const props = quakeFromFeature?.properties;
+        const id = quakeFromFeature?.id;
+
+        if (props && id) {
+            const mag = typeof props.mag === 'number' ? props.mag.toFixed(1) : 'unknown';
+            const place = props.place || quakeFromFeature.name || 'Unknown Location'; // Use quakeFromFeature.name as fallback for place
+            const locationSlug = slugify(place);
+            // Construct the new URL: /quake/m[magnitude]-[location-slug]-[usgs-id]
+            const newDetailPath = `/quake/m${mag}-${locationSlug}-${id}`;
+            navigate(newDetailPath);
         } else {
-            alert(`Featured Quake: ${quakeFromFeature.name || quakeFromFeature.properties?.place}\n${quakeFromFeature.description || ''}`);
+            console.warn("Missing properties or id for notable earthquake:", quakeFromFeature);
+            alert(`Featured Quake: ${props?.place || quakeFromFeature?.name || 'N/A'}\nInsufficient data to show details.`);
         }
-    }, [navigate]);
+    }, [navigate, setFocusedNotableQuake, slugify]); // Added slugify and setFocusedNotableQuake
 
     const handleClusterSummaryClick = useCallback((clusterData) => {
         navigate(`/cluster/${clusterData.id}`);
