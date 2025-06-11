@@ -869,7 +869,6 @@ export async function onRequest(context) {
   // or a 404 if the asset doesn't exist.
   // We are *not* returning a jsonErrorResponse for unknown paths here anymore,
   // to allow Pages to handle SPA routing and static assets.
-  // If context.next exists (i.e. part of Cloudflare Pages advanced mode functions), call it.
   if (context.next) {
      return context.next();
   }
@@ -888,20 +887,19 @@ export async function onRequest(context) {
   }
 
   // If we've reached here, it's not a path the worker actively handles.
-  // For Cloudflare Pages, not returning a Response (or calling context.next())
+  // For a standalone worker, not returning a Response here allows the [site] configuration to handle static assets.
   // should allow the static asset handler to take over.
   // If this were a classic worker script that must always return a response,
   // we'd need to return a 404 or fetch index.html.
   // The current setup expects Pages to handle it.
   // If there's no context.next() and no explicit response, this might result in an error
-  // depending on the exact Cloudflare Pages execution model for _functions without explicit passthrough.
   // For now, let's assume Pages handles the fall-through correctly for SPA routes.
   // A more robust way for SPA fallbacks if this function *must* return:
   // return context.env.ASSETS.fetch(new Request(new URL("/index.html", request.url)));
   // But this is usually not required for Pages functions if they simply don't handle the route.
 
   // Default behavior if no other handler is matched:
-  // It's important to let non-matching requests pass through to Cloudflare Pages static asset serving.
+  // Non-API/specific requests fall through, allowing [site] to serve static assets from ./dist.
   // So, we don't return a generic 404 here for all non-matched paths.
   // Only the specific API routes should return errors if malformed.
   // The final "else" block from the original code that returned a generic "Unknown API path"

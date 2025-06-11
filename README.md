@@ -38,21 +38,21 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * **Tailwind CSS**: Utility-first CSS framework for styling.
 * **Vite**: Frontend build tool.
 * **JavaScript (ES6+)**
-* **Cloudflare Pages**: For hosting and deployment.
+* **Cloudflare Workers**: For hosting, deployment, and serverless backend logic.
 * **Cloudflare Workers**: For serverless backend functions.
 
 ## Deployment / Infrastructure
 
 The application leverages Cloudflare's robust infrastructure for both frontend hosting and backend serverless functions:
 
-*   **Frontend**: The React-based user interface is deployed and hosted using **Cloudflare Pages**. This provides a fast, secure, and reliable way to serve static assets globally.
+*   **Frontend**: The React-based user interface is built as static assets, served via **Cloudflare Workers** using the `[site]` configuration.
 *   **Backend**: Serverless backend logic, such as the proxy for the USGS earthquake data feed, is implemented using **Cloudflare Workers**. This allows for efficient and scalable handling of API requests without managing traditional server infrastructure.
     *   Worker configuration, including routes, environment variables, and build steps, is managed through the `wrangler.toml` file, which is part of the Cloudflare Workers development toolkit.
 *   **Benefits**: This setup offers significant advantages, including:
     *   **Scalability**: Both Pages and Workers scale automatically to handle traffic load.
     *   **Performance**: Cloudflare's extensive Content Delivery Network (CDN) ensures that the application and its data are delivered quickly to users worldwide.
     *   **Cost-Effectiveness**: Serverless architecture can be more cost-effective as you only pay for what you use.
-    *   **Simplified DevOps**: CI/CD for the frontend is streamlined through Cloudflare Pages' integration with Git repositories.
+    *   **Simplified DevOps**: CI/CD for the Worker (including frontend assets) can be managed via Wrangler GitHub Actions or similar CI/CD pipelines.
 
 ## Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
 
@@ -128,9 +128,9 @@ The `src/` directory contains the core source code for the application, organize
     -   **`components/skeletons/`**: Skeleton loader components used for placeholder UI during data fetching.
 -   **`constants/`**: Application-wide constants, primarily in `appConstants.js` (e.g., API URLs, thresholds).
 -   **`contexts/`**: React Context providers and custom hooks for global state management (e.g., `EarthquakeDataContext.jsx`, `UIStateContext.jsx`).
--   **`functions/`**: Serverless backend logic for Cloudflare Pages Functions.
+-   **`functions/`**: Contains the primary serverless backend logic for the Cloudflare Worker.
     -   **`functions/api/`**: API route handlers (e.g., for cluster calculations, D1 database interactions).
-    -   **`functions/[[catchall]].js`**: Main router for Cloudflare Pages Functions, handling proxy requests, sitemap generation, and prerendering.
+    -   **`functions/[[catchall]].js`**: Main router for the Cloudflare Worker, handling API requests, proxy requests, sitemap generation, and prerendering.
 -   **`features/`**: Currently contains a `.gitkeep` file; intended for feature-specific modules in future development.
 -   **`hooks/`**: Currently contains a `.gitkeep` file; intended for custom React hooks.
 -   **`pages/`**: Top-level React components representing different application pages/views.
@@ -143,7 +143,7 @@ The `src/` directory contains the core source code for the application, organize
 
 Additionally, at the project root:
 
--   **`wrangler.toml`**: The configuration file for Cloudflare Workers and Cloudflare Pages projects. It defines build settings, environments, routes for Workers, and compatibility settings.
+-   **`wrangler.toml`**: The configuration file for the Cloudflare Worker project. It defines build settings, environments, static asset serving, bindings, and compatibility settings.
 
 This structure helps in organizing the codebase logically, making it easier to navigate and maintain. JSDoc comments are used throughout these files to provide detailed documentation for components, functions, and hooks.
 
