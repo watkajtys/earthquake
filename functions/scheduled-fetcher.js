@@ -42,8 +42,3 @@ export async function scheduled(event, env, ctx) {
     console.error(`[scheduled-fetcher] Unhandled error in scheduled function: ${error.message}`, error);
   }
 }
-
-// Add a dummy default export to prevent issues if other parts of the system expect one.
-// Or, if confident that no other part needs a default export from this file for Pages functions,
-// this can be omitted. For safety, including a minimal default export is often better.
-export default {};
