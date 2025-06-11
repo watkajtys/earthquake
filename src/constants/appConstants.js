@@ -33,7 +33,7 @@ export const SIGNIFICANCE_THRESHOLD = 0; // Currently, any significance score is
 
 // Timing and Intervals
 /** @description Data refresh interval in milliseconds (e.g., 5 minutes) for polling updated earthquake data. */
-export const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+export const REFRESH_INTERVAL_MS = 60000;
 /** @description Interval in milliseconds for cycling through messages displayed during initial data loading. */
 export const LOADING_MESSAGE_INTERVAL_MS = 750;
 /** @description Interval in milliseconds for updating the 'time ago' display in the application header. */
