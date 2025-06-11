@@ -459,7 +459,7 @@ function ClusterDetailModalWrapper({
                 <ClusterDetailModal
                     cluster={dynamicCluster}
                     onClose={handleClose}
-                    formatDate={formatDate}
+                    formatDate={formatTimeAgo}
                     getMagnitudeColorStyle={getMagnitudeColorStyle}
                     onIndividualQuakeSelect={onIndividualQuakeSelect}
                 />
