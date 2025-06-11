@@ -312,21 +312,65 @@ export async function handleClustersSitemapRequest(context) {
   }
 
   try {
-    // Fetch clusterId and updatedAt from ClusterDefinitions table
-    // Assuming columns are named clusterId and updatedAt. Adjust if necessary.
     const stmt = DB.prepare("SELECT clusterId, updatedAt FROM ClusterDefinitions ORDER BY updatedAt DESC LIMIT 500");
     const { results } = await stmt.all();
 
     if (results && results.length > 0) {
       for (const row of results) {
-        const loc = `https://earthquakeslive.com/cluster/${escapeXml(row.clusterId)}`;
-        // Ensure updatedAt is a valid ISO string. If it's already stored as ISO, no conversion needed.
-        // If it's a number (timestamp) or different format, it might need new Date(row.updatedAt).toISOString()
+        const d1ClusterId = row.clusterId;
         const lastmod = row.updatedAt ? new Date(row.updatedAt).toISOString() : currentDate;
+
+        // Parse D1 clusterId: overview_cluster_[strongestQuakeId]_[quakeCount]
+        const d1IdRegex = /^overview_cluster_([a-zA-Z0-9]+)_(\d+)$/;
+        const d1Match = d1ClusterId.match(d1IdRegex);
+
+        if (!d1Match) {
+          console.warn(`[${sourceName}] Failed to parse D1 clusterId: ${d1ClusterId}. Skipping.`);
+          continue;
+        }
+
+        const strongestQuakeIdFromDb = d1Match[1];
+        const quakeCountFromDb = d1Match[2];
+
+        let quakeData;
+        try {
+          const usgsUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${strongestQuakeIdFromDb}.geojson`;
+          // console.log(`[${sourceName}] Fetching details for ${strongestQuakeIdFromDb} from ${usgsUrl}`);
+          const response = await fetch(usgsUrl);
+          if (!response.ok) {
+            console.warn(`[${sourceName}] USGS fetch failed for ${strongestQuakeIdFromDb}: ${response.status} ${response.statusText}. Skipping.`);
+            continue;
+          }
+          quakeData = await response.json();
+        } catch (fetchError) {
+          console.error(`[${sourceName}] Error fetching USGS data for ${strongestQuakeIdFromDb}: ${fetchError.message}. Skipping.`);
+          continue;
+        }
+
+        if (!quakeData || !quakeData.properties) {
+            console.warn(`[${sourceName}] Invalid or missing properties in USGS data for ${strongestQuakeIdFromDb}. Skipping.`);
+            continue;
+        }
+
+        const locationName = quakeData.properties.place;
+        const maxMagnitude = quakeData.properties.mag;
+
+        if (!locationName || typeof locationName !== 'string') {
+          console.warn(`[${sourceName}] Missing or invalid locationName for ${strongestQuakeIdFromDb}. Skipping.`);
+          continue;
+        }
+        if (maxMagnitude === null || maxMagnitude === undefined || typeof maxMagnitude !== 'number') {
+          console.warn(`[${sourceName}] Missing or invalid maxMagnitude for ${strongestQuakeIdFromDb}. Skipping.`);
+          continue;
+        }
+
+        const locationSlug = locationName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+
+        const newUrl = `https://earthquakeslive.com/cluster/${quakeCountFromDb}-quakes-near-${locationSlug}-up-to-m${maxMagnitude.toFixed(1)}-${strongestQuakeIdFromDb}`;
 
         clustersXml += `
   <url>
-    <loc>${loc}</loc>
+    <loc>${escapeXml(newUrl)}</loc>
     <lastmod>${lastmod}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
@@ -506,12 +550,35 @@ export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
 }
 
 // Prerendering function for Cluster pages
-export async function handlePrerenderCluster(context, clusterId) {
+export async function handlePrerenderCluster(context, urlSlugParam) { // Renamed param for clarity
   const { request, env } = context;
   const sourceName = "prerender-cluster";
   const siteUrl = "https://earthquakeslive.com"; // Base site URL
+  const urlSlug = urlSlugParam; // Use urlSlug internally
 
-  // Using env.DB for D1 access, env.CLUSTER_KV is no longer used here.
+  console.log(`[${sourceName}] Attempting to prerender cluster with full slug: ${urlSlug}`);
+
+  // Parse the new URL slug format: [count]-quakes-near-[location-slug]-up-to-m[max-magnitude]-[strongest-quake-id]
+  const slugRegex = /^(\d+)-quakes-near-.*?([a-zA-Z0-9]+)$/;
+  const match = urlSlug.match(slugRegex);
+
+  if (!match) {
+    console.warn(`[${sourceName}] Invalid cluster URL slug format: ${urlSlug}`);
+    return new Response(`<!DOCTYPE html><html><head><title>Not Found</title><meta name="robots" content="noindex"></head><body>Invalid cluster URL format.</body></html>`, {
+        status: 404,
+        headers: { "Content-Type": "text/html", "Cache-Control": "public, s-maxage=3600" },
+    });
+  }
+
+  const extractedCount = match[1];
+  const extractedStrongestQuakeId = match[2];
+  console.log(`[${sourceName}] Extracted from slug: count=${extractedCount}, strongestQuakeId=${extractedStrongestQuakeId}`);
+
+  // Construct the D1-compatible clusterId
+  const clusterIdForD1Query = `overview_cluster_${extractedStrongestQuakeId}_${extractedCount}`;
+  console.log(`[${sourceName}] Constructed D1 query ID: ${clusterIdForD1Query}`);
+
+  // Using env.DB for D1 access
   if (!env.DB) {
     console.error(`[${sourceName}] D1 Database (env.DB) not configured for prerendering cluster.`);
     return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Service configuration error.</body></html>`, {
@@ -524,14 +591,12 @@ export async function handlePrerenderCluster(context, clusterId) {
   }
 
   try {
-    console.log(`[${sourceName}] Prerendering cluster: ${clusterId}`);
-    // Fetch cluster data from D1 table ClusterDefinitions
-    // Assuming table `ClusterDefinitions` and columns `clusterId`, `earthquakeIds`, `strongestQuakeId`, `updatedAt`
-    const stmt = env.DB.prepare("SELECT earthquakeIds, strongestQuakeId, updatedAt FROM ClusterDefinitions WHERE clusterId = ?").bind(clusterId);
+    // Fetch cluster data from D1 table ClusterDefinitions using the constructed ID
+    const stmt = env.DB.prepare("SELECT earthquakeIds, strongestQuakeId, updatedAt FROM ClusterDefinitions WHERE clusterId = ?").bind(clusterIdForD1Query);
     const clusterInfo = await stmt.first();
 
     if (!clusterInfo) {
-      console.warn(`[${sourceName}] Cluster definition not found in D1 for ID: ${clusterId}`);
+      console.warn(`[${sourceName}] Cluster definition not found in D1 for D1 Query ID: ${clusterIdForD1Query} (derived from slug: ${urlSlug})`);
       return new Response(`<!DOCTYPE html><html><head><title>Not Found</title><meta name="robots" content="noindex"></head><body>Cluster not found.</body></html>`, {
         status: 404,
         headers: {
@@ -542,21 +607,20 @@ export async function handlePrerenderCluster(context, clusterId) {
     }
 
     // earthquakeIds might be stored as JSON string in D1, parse if needed.
-    // Or it might be retrieved directly if D1 supports JSON types well and wrangler config is right.
-    // For this example, assuming earthquakeIds is retrieved as a string that needs parsing.
-    // Adjust if earthquakeIds is stored/retrieved differently (e.g. as a native JSON type or serialized differently).
     let earthquakeIds;
     try {
         earthquakeIds = typeof clusterInfo.earthquakeIds === 'string' ? JSON.parse(clusterInfo.earthquakeIds) : clusterInfo.earthquakeIds;
     } catch (e) {
-        console.error(`[${sourceName}] Error parsing earthquakeIds for cluster ${clusterId}: ${e.message}`);
+        console.error(`[${sourceName}] Error parsing earthquakeIds for D1 Query ID ${clusterIdForD1Query}: ${e.message}`);
         return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error processing cluster data.</body></html>`, {
             status: 500, headers: { "Content-Type": "text/html", "Cache-Control": "public, s-maxage=3600" }
         });
     }
-    const { strongestQuakeId, updatedAt } = clusterInfo;
+    // Use the strongestQuakeId from D1 (which should match extractedStrongestQuakeId if data is consistent)
+    const d1StrongestQuakeId = clusterInfo.strongestQuakeId;
+    const { updatedAt } = clusterInfo;
     const numEvents = earthquakeIds ? earthquakeIds.length : 0;
-    const canonicalUrl = `${siteUrl}/cluster/${clusterId}`;
+    const canonicalUrl = `${siteUrl}/cluster/${urlSlug}`; // Canonical URL uses the original full slug
     const formattedUpdatedAt = new Date(updatedAt).toLocaleString('en-US', {
         year: 'numeric', month: 'long', day: 'numeric',
         hour: '2-digit', minute: '2-digit', timeZoneName: 'short', timeZone: 'UTC'
@@ -565,10 +629,11 @@ export async function handlePrerenderCluster(context, clusterId) {
     let strongestQuakeDetails = null;
     let title, description, bodyContent, keywords;
 
-    if (strongestQuakeId) {
+    // Use d1StrongestQuakeId (from D1) to fetch details. This should align with extractedStrongestQuakeId.
+    if (d1StrongestQuakeId) {
       try {
-        const quakeDetailUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${strongestQuakeId}.geojson`;
-        console.log(`[${sourceName}] Fetching strongest quake details from: ${quakeDetailUrl}`);
+        const quakeDetailUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${d1StrongestQuakeId}.geojson`;
+        console.log(`[${sourceName}] Fetching strongest quake details (ID: ${d1StrongestQuakeId}) from: ${quakeDetailUrl}`);
         const res = await fetch(quakeDetailUrl);
         if (res.ok) {
           const quakeData = await res.json();
@@ -586,13 +651,13 @@ export async function handlePrerenderCluster(context, clusterId) {
               latitude: quakeData.geometry?.coordinates?.[1],
               longitude: quakeData.geometry?.coordinates?.[0]
             };
-            console.log(`[${sourceName}] Successfully fetched details for strongest quake: ${strongestQuakeId}`);
+            console.log(`[${sourceName}] Successfully fetched details for strongest quake: ${d1StrongestQuakeId}`);
           }
         } else {
-          console.warn(`[${sourceName}] Failed to fetch strongest quake details for ${strongestQuakeId}: ${res.status}`);
+          console.warn(`[${sourceName}] Failed to fetch strongest quake details for ${d1StrongestQuakeId}: ${res.status}`);
         }
       } catch (e) {
-        console.error(`[${sourceName}] Error fetching strongest quake details for ${strongestQuakeId}: ${e.message}`);
+        console.error(`[${sourceName}] Error fetching strongest quake details for ${d1StrongestQuakeId}: ${e.message}`);
       }
     }
 
@@ -608,11 +673,12 @@ export async function handlePrerenderCluster(context, clusterId) {
         <p><em>Cluster information last updated: ${escapeXml(formattedUpdatedAt)}.</em></p>
       `;
     } else {
-      title = `Earthquake Cluster - ${clusterId} | Earthquakes Live`;
-      description = `Details of earthquake cluster ${clusterId}, containing ${numEvents} seismic events. Updated ${formattedUpdatedAt}.`;
-      keywords = `earthquake cluster, seismic sequence, ${clusterId}, tectonic activity`;
+      // Fallback if strongest quake details couldn't be fetched
+      title = `Earthquake Cluster Summary (${numEvents} Events) | Earthquakes Live`;
+      description = `Details of an earthquake cluster containing ${numEvents} seismic events. This cluster is identified by the strongest quake ID: ${extractedStrongestQuakeId}. Updated ${formattedUpdatedAt}.`;
+      keywords = `earthquake cluster, seismic sequence, ${extractedStrongestQuakeId}, tectonic activity`;
       bodyContent = `
-        <p>This page provides details about an earthquake cluster identified as <strong>${escapeXml(clusterId)}</strong>.</p>
+        <p>This page provides details about an earthquake cluster associated with the primary event ID <strong>${escapeXml(extractedStrongestQuakeId)}</strong>.</p>
         <p>This cluster contains <strong>${numEvents}</strong> individual seismic events.</p>
         <p><em>Cluster information last updated: ${escapeXml(formattedUpdatedAt)}.</em></p>
         <p><em>Further details about the most significant event in this cluster are currently unavailable.</em></p>
@@ -633,7 +699,7 @@ export async function handlePrerenderCluster(context, clusterId) {
       jsonLd.about = {
         "@type": "Event",
         "name": `M ${strongestQuakeDetails.mag} - ${strongestQuakeDetails.place}`,
-        "identifier": strongestQuakeDetails.id,
+        "identifier": strongestQuakeDetails.id, // This is d1StrongestQuakeId
         ...(strongestQuakeDetails.url && { "url": strongestQuakeDetails.url })
       };
 
@@ -686,7 +752,7 @@ export async function handlePrerenderCluster(context, clusterId) {
     });
 
   } catch (error) {
-    console.error(`[${sourceName}] Error processing cluster ${clusterId}: ${error.message}`, error);
+    console.error(`[${sourceName}] Error processing cluster slug ${urlSlug} (D1 ID: ${clusterIdForD1Query || 'not_constructed'}): ${error.message}`, error);
     return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error prerendering cluster page.</body></html>`, {
       status: 500,
       headers: {

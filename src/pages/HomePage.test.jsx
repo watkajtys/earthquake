@@ -216,3 +216,158 @@ describe('HomePage (App Component)', () => {
   });
 
 });
+
+// Mock navigate from react-router-dom
+const { mockNavigate } = vi.hoisted(() => ({ mockNavigate: vi.fn() }));
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const originalModules = await importOriginal();
+  return {
+    ...originalModules,
+    useNavigate: () => mockNavigate, // Override useNavigate
+    // Preserve other exports from react-router-dom like MemoryRouter, Routes, Route etc.
+  };
+});
+
+describe('handleClusterSummaryClick URL Generation', () => {
+  const originalDefaultEarthquakeData = {
+    isLoadingDaily: false, isLoadingWeekly: false, isLoadingInitialData: false, error: null,
+    dataFetchTime: Date.now(), lastUpdated: Date.now().toString(),
+    earthquakesLastHour: [], earthquakesPriorHour: [], earthquakesLast24Hours: [],
+    earthquakesLast72Hours: [], earthquakesLast7Days: [], prev24HourData: [],
+    hasRecentTsunamiWarning: false, highestRecentAlert: null, activeAlertTriggeringQuakes: [],
+    lastMajorQuake: null, currentLoadingMessage: '', isInitialAppLoad: false,
+    isLoadingMonthly: false, hasAttemptedMonthlyLoad: false, monthlyError: null,
+    allEarthquakes: [], earthquakesLast14Days: [], earthquakesLast30Days: [],
+    prev7DayData: [], prev14DayData: [], loadMonthlyData: vi.fn(),
+    feelableQuakes7Days_ctx: [], significantQuakes7Days_ctx: [],
+    feelableQuakes30Days_ctx: [], significantQuakes30Days_ctx: [],
+  };
+  const originalDefaultUIState = {
+    activeSidebarView: 'overview_panel', setActiveSidebarView: vi.fn(),
+    activeFeedPeriod: 'last_24_hours', globeFocusLng: 0, setGlobeFocusLng: vi.fn(),
+    setFocusedNotableQuake: vi.fn(),
+  };
+
+  // Helper to create mock quakes easily
+  const createMockQuakeInternal = (id, time, mag, place = 'Test Place') => ({
+    id,
+    properties: { time, mag, place, alert: null, sig: 0 }, // Added alert and sig for full structure
+    geometry: { coordinates: [0, 0, 0] },
+  });
+
+
+  beforeEach(() => {
+    vi.resetAllMocks(); // This will also reset mockNavigate
+    // Restore default mocks for contexts
+    mockUseEarthquakeDataState.mockReturnValue(originalDefaultEarthquakeData);
+    mockUseUIState.mockReturnValue(originalDefaultUIState);
+    // Default service mocks
+    mockFetchActiveClusters.mockResolvedValue([]);
+    mockRegisterClusterDefinition.mockResolvedValue(true);
+
+    // Clear any captured data from previous tests if using shared mocks like mockClusterSummaryItemData
+    // (already handled by mockClusterSummaryItemData.length = 0 in global beforeEach, but good to be aware)
+  });
+
+  const testCases = [
+    {
+      description: 'Basic valid input',
+      clusterDataInput: { quakeCount: 15, locationName: "Southern Sumatra, Indonesia", maxMagnitude: 5.8, strongestQuakeId: "us7000mfp9" },
+      expectedUrl: "/cluster/15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9"
+    },
+    {
+      description: 'Location name with extra spaces and mixed case, magnitude rounding',
+      clusterDataInput: { quakeCount: 5, locationName: "  Test  Location  ", maxMagnitude: 4.234, strongestQuakeId: "test123xyz" },
+      expectedUrl: "/cluster/5-quakes-near-test-location-up-to-m4.2-test123xyz"
+    },
+    {
+      description: 'Location name with special characters',
+      clusterDataInput: { quakeCount: 10, locationName: "North Island, N.Z.!", maxMagnitude: 6.0, strongestQuakeId: "nz2024abc" },
+      expectedUrl: "/cluster/10-quakes-near-north-island-nz-up-to-m6.0-nz2024abc"
+    },
+    {
+      description: 'Location name resulting in multiple hyphens (condensed by regex s+)',
+      // The slugify logic `replace(/\s+/g, '-')` handles multiple spaces.
+      // `replace(/[^a-z0-9-]/g, '')` handles other chars.
+      // If input is "Region --- Sub-region", first becomes "Region----Sub-region", then non-alphanum removed.
+      // If the non-alphanum regex runs first, "RegionSub-region" then space becomes "RegionSub-region".
+      // The current implementation in HomePage.jsx:
+      // .toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      // "Region --- Sub-region" -> "region --- sub-region" -> "region---sub-region" -> "region---sub-region" (as - is allowed)
+      // This is slightly different from the "region-sub-region" expectation if multiple hyphens were to be condensed further.
+      // The implemented slugify does NOT condense multiple hyphens if they are already hyphens.
+      // Let's test the implemented behavior.
+      clusterDataInput: { quakeCount: 3, locationName: "Region --- Sub-region", maxMagnitude: 3.1, strongestQuakeId: "regsub1" },
+      expectedUrl: "/cluster/3-quakes-near-region---sub-region-up-to-m3.1-regsub1"
+    },
+    {
+      description: 'Location name with multiple hyphens that should be preserved',
+      clusterDataInput: { quakeCount: 2, locationName: "Test-Location-With-Hyphens", maxMagnitude: 3.5, strongestQuakeId: "testhyphen" },
+      expectedUrl: "/cluster/2-quakes-near-test-location-with-hyphens-up-to-m3.5-testhyphen"
+    },
+    {
+      description: 'Empty locationName',
+      clusterDataInput: { quakeCount: 1, locationName: "", maxMagnitude: 2.5, strongestQuakeId: "unknownloc1" },
+      expectedUrl: "/cluster/1-quakes-near--up-to-m2.5-unknownloc1" // Current slugify results in empty part if location is empty
+    },
+  ];
+
+  testCases.forEach(({ description, clusterDataInput, expectedUrl }) => {
+    it(`should generate correct URL for: ${description}`, async () => {
+      const mockRawQuakesForCluster = [];
+      for (let i = 0; i < clusterDataInput.quakeCount; i++) {
+        mockRawQuakesForCluster.push(
+          createMockQuakeInternal(
+            i === 0 ? clusterDataInput.strongestQuakeId : `dummy${i}_${clusterDataInput.strongestQuakeId}`,
+            Date.now() - i * 1000, // Ensure slightly different times for realism
+            i === 0 ? clusterDataInput.maxMagnitude : clusterDataInput.maxMagnitude - 0.1,
+            clusterDataInput.locationName
+          )
+        );
+      }
+
+      mockFetchActiveClusters.mockResolvedValue([mockRawQuakesForCluster]);
+      // Provide some earthquakesLast7Days to ensure the effect in App runs
+      mockUseEarthquakeDataState.mockReturnValue({
+        ...originalDefaultEarthquakeData,
+        earthquakesLast7Days: [createMockQuakeInternal('somequake', Date.now(), 4.0)],
+        // ensure these are not loading so cluster processing proceeds
+        isLoadingDaily: false,
+        isLoadingWeekly: false,
+        isInitialAppLoad: false,
+      });
+      mockUseUIState.mockReturnValue(originalDefaultUIState);
+
+
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <App />
+        </MemoryRouter>
+      );
+
+      // The ClusterSummaryItem mock uses `overview_cluster_${strongestQuakeId}_${quakeCount}` for its data-testid
+      const expectedTestId = `mock-cluster-summary-item-overview_cluster_${clusterDataInput.strongestQuakeId}_${clusterDataInput.quakeCount}`;
+
+      let clusterItem;
+      try {
+          clusterItem = await screen.findByTestId(expectedTestId, {}, { timeout: 3000 }); // Increased timeout
+      } catch (e) {
+          // If not found, provide more debug info.
+          // This can happen if overviewClusters memo doesn't produce the expected clusterData.id
+          console.error(`Test item with ID ${expectedTestId} not found. Captured items by mock:`, mockClusterSummaryItemData.map(d => d.id));
+          // Also log the activeClusters input to the memo
+          const globeView = screen.getByTestId('mock-globe-view');
+          const activeClustersProp = globeView.querySelector('[data-testid="active-clusters-prop"]').textContent;
+          console.error('Active clusters passed to Globe (input to overviewClusters memo):', activeClustersProp);
+          throw e;
+      }
+
+      act(() => {
+        clusterItem.click();
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith(expectedUrl);
+    });
+  });
+});
