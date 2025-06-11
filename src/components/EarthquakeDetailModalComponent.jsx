@@ -46,9 +46,35 @@ const EarthquakeDetailModalComponent = () => {
     }, [hasAttemptedMonthlyLoad]);
 
 
-    const { detailUrlParam } = useParams();
+    const params = useParams();
     const navigate = useNavigate();
-    const detailUrl = typeof detailUrlParam === 'string' ? decodeURIComponent(detailUrlParam) : undefined;
+    const detailUrlParam = params['*']; // This is our slug e.g. m6.5-northern-california-nc73649170
+
+    // New logic to construct detailUrl from usgs-id
+    let detailUrl;
+    if (detailUrlParam) {
+        const parts = detailUrlParam.split('-');
+        if (parts.length > 1) {
+            const usgsId = parts[parts.length - 1];
+            if (usgsId) {
+                detailUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${usgsId}.geojson`;
+            } else {
+                // This case should ideally not happen if format is correct, but good to be aware
+                console.warn(`EarthquakeDetailModalComponent: Extracted usgsId is empty from param: ${detailUrlParam}`);
+                // Fallback to trying to decode the whole thing, though this is less likely to be a valid GeoJSON URL
+                detailUrl = typeof detailUrlParam === 'string' ? decodeURIComponent(detailUrlParam) : undefined;
+            }
+        } else {
+            console.warn(`EarthquakeDetailModalComponent: Unexpected format for detailUrlParam: ${detailUrlParam}. Expected format like 'm[magnitude]-[location-slug]-[usgs-id]'.`);
+            // Fallback: try to use the decoded param directly if it doesn't match the new format.
+            // This might be an old full URL or some other format.
+            detailUrl = typeof detailUrlParam === 'string' ? decodeURIComponent(detailUrlParam) : undefined;
+        }
+    } else {
+        console.warn("EarthquakeDetailModalComponent: detailUrlParam is undefined.");
+        detailUrl = undefined;
+    }
+
     const [seoProps, setSeoProps] = useState(null); // Renamed from seoData to seoProps
 
     const handleClose = () => {
@@ -92,7 +118,8 @@ const EarthquakeDetailModalComponent = () => {
         const pageDescription = `Detailed report of the M ${mag} earthquake that struck near ${place} on ${titleDate} at ${descriptionTime} (UTC). Magnitude: ${mag}, Depth: ${depth} km. Location: ${latitude?.toFixed(2)}, ${longitude?.toFixed(2)}. Stay updated with Earthquakes Live.`;
 
         const pageKeywords = `earthquake, seismic event, M ${mag}, ${place ? place.split(', ').join(', ') : ''}, earthquake details, usgs event, ${usgsEventId}`;
-        const canonicalPageUrl = `https://earthquakeslive.com/quake/${detailUrlParam}`; // detailUrlParam is from useParams()
+        // canonicalPageUrl uses detailUrlParam (which is params['*']) directly as per requirements.
+        const canonicalPageUrl = `https://earthquakeslive.com/quake/${detailUrlParam}`;
 
         const eventLocation = {
             '@type': 'Place',
@@ -137,13 +164,13 @@ const EarthquakeDetailModalComponent = () => {
             modifiedTime: updated ? new Date(updated).toISOString() : (time ? new Date(time).toISOString() : undefined),
             imageUrl: shakemapIntensityImageUrl || null,
         });
-    }, [detailUrlParam]);
+    }, [detailUrlParam]); // detailUrlParam (params['*']) is a dependency for canonicalPageUrl
 
     // Default/loading SEO values
     const initialPageTitle = "Loading Earthquake Details... | Earthquakes Live";
     const initialPageDescription = "Fetching detailed information for the selected seismic event.";
     const initialKeywords = "earthquake details, seismic event, seismology, earthquakes live";
-    // detailUrlParam might be undefined on initial render if component loads before router is fully ready.
+    // initialCanonicalUrl uses detailUrlParam (params['*']) directly as per requirements.
     const initialCanonicalUrl = detailUrlParam ? `https://earthquakeslive.com/quake/${detailUrlParam}` : "https://earthquakeslive.com";
 
 

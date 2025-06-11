@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS ClusterCache;
 CREATE TABLE ClusterCache (
     cacheKey TEXT PRIMARY KEY NOT NULL,    -- Unique key for the cache entry (e.g., derived from lastFetchTime and timeWindowHours)
     clusterData TEXT NOT NULL,             -- JSON string containing the calculated cluster data
+    requestParams TEXT, -- New column
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP -- Timestamp of when the cache entry was created
 );
 
