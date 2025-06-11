@@ -35,9 +35,9 @@ function slugify(text) {
 // Import the D1 utility function
 import { upsertEarthquakeFeaturesToD1 } from '../src/utils/d1Utils.js';
 
-async function handleUsgsProxyRequest(context, apiUrl) {
+async function handleUsgsProxyRequest(initialRequest, env, ctx, apiUrl) {
   const sourceName = "usgs-proxy-handler";
-  const cacheKey = new Request(apiUrl, context.request);
+  const cacheKey = new Request(apiUrl, initialRequest);
   const cache = caches.default;
 
   try {
@@ -69,10 +69,10 @@ async function handleUsgsProxyRequest(context, apiUrl) {
     const data = await response.json();
 
     // --- BEGIN Proactive D1 Population ---
-    const DB = context.env.DB;
+    const DB = env.DB;
     if (DB && data && Array.isArray(data.features) && data.features.length > 0) {
       console.log(`[${sourceName}] Proactively upserting ${data.features.length} features from proxied feed into D1.`);
-      context.waitUntil(upsertEarthquakeFeaturesToD1(DB, data.features).catch(err => {
+      ctx.waitUntil(upsertEarthquakeFeaturesToD1(DB, data.features).catch(err => {
         // The utility function logs internally, but we can add context-specific logging
         console.error(`[${sourceName}] Error during background D1 upsert from proxied feed: ${err.message}`, err);
       }));
@@ -91,7 +91,7 @@ async function handleUsgsProxyRequest(context, apiUrl) {
     const DEFAULT_CACHE_DURATION_SECONDS = 600; // 10 minutes
     let durationInSeconds = DEFAULT_CACHE_DURATION_SECONDS;
 
-    const envCacheDuration = context.env && context.env.WORKER_CACHE_DURATION_SECONDS;
+    const envCacheDuration = env && env.WORKER_CACHE_DURATION_SECONDS;
     if (envCacheDuration) {
       const parsedDuration = parseInt(envCacheDuration, 10);
       if (!isNaN(parsedDuration) && parsedDuration > 0) {
@@ -112,7 +112,7 @@ async function handleUsgsProxyRequest(context, apiUrl) {
       headers: newResponseHeaders,
     });
 
-    context.waitUntil(
+    ctx.waitUntil(
       cache.put(cacheKey, newResponse.clone()).then(() => {
         console.log(`Successfully cached response for: ${apiUrl} (duration: ${durationInSeconds}s)`);
       }).catch(err => {
@@ -131,7 +131,7 @@ async function handleUsgsProxyRequest(context, apiUrl) {
 // --- Sitemap Handler Functions ---
 
 // 1. Sitemap Index Endpoint (/sitemap-index.xml)
-export async function handleSitemapIndexRequest(context) {
+export async function handleSitemapIndexRequest() {
   const sitemapIndexXML = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
@@ -171,7 +171,7 @@ export function escapeXml(unsafe) {
 }
 
 // 2. Static Pages Sitemap Endpoint (/sitemap-static-pages.xml)
-export async function handleStaticPagesSitemapRequest(context) {
+export async function handleStaticPagesSitemapRequest() {
   const staticPages = [
     { loc: "https://earthquakeslive.com/", priority: "1.0", changefreq: "hourly" },
     { loc: "https://earthquakeslive.com/overview", priority: "0.9", changefreq: "hourly" },
@@ -240,7 +240,7 @@ export async function handleStaticPagesSitemapRequest(context) {
 }
 
 // 3. Earthquakes Sitemap Endpoint (/sitemap-earthquakes.xml)
-export async function handleEarthquakesSitemapRequest(context) {
+export async function handleEarthquakesSitemapRequest() {
   const sourceName = "earthquakes-sitemap-handler";
   // Use M2.5+ Earthquakes, Past 7 Days feed
   const usgsFeedUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson";
@@ -320,9 +320,9 @@ export async function handleEarthquakesSitemapRequest(context) {
 }
 
 // 4. Clusters Sitemap Endpoint (/sitemap-clusters.xml)
-export async function handleClustersSitemapRequest(context) {
+export async function handleClustersSitemapRequest(env) {
   const sourceName = "clusters-sitemap-handler";
-  const DB = context.env.DB;
+  const DB = env.DB;
   let clustersXml = "";
   const currentDate = new Date().toISOString(); // For lastmod fallback
 
@@ -431,8 +431,7 @@ export function isCrawler(request) {
 }
 
 // Prerendering function for Earthquake pages
-export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
-  const { request, env } = context;
+export async function handlePrerenderEarthquake(request, env, ctx, quakeIdPathSegment) {
   const sourceName = "prerender-earthquake";
   const siteUrl = "https://earthquakeslive.com"; // Base site URL
 
@@ -586,8 +585,7 @@ export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
 }
 
 // Prerendering function for Cluster pages
-export async function handlePrerenderCluster(context, urlSlugParam) { // Renamed param for clarity
-  const { request, env } = context;
+export async function handlePrerenderCluster(request, env, ctx, urlSlugParam) { // Renamed param for clarity
   const sourceName = "prerender-cluster";
   const siteUrl = "https://earthquakeslive.com"; // Base site URL
   const urlSlug = urlSlugParam; // Use urlSlug internally
@@ -800,38 +798,38 @@ export async function handlePrerenderCluster(context, urlSlugParam) { // Renamed
 }
 
 
-async function onRequest(context) {
+async function onRequest(request, env, ctx) {
   const mainSourceName = "worker-router"; // For errors originating from the router itself
-  const url = new URL(context.request.url);
+  const url = new URL(request.url);
   const pathname = url.pathname;
 
   // Prerendering for crawlers
-  if (isCrawler(context.request)) {
+  if (isCrawler(request)) {
     if (pathname.startsWith("/quake/")) {
       const quakeIdPathSegment = pathname.substring("/quake/".length);
       if (quakeIdPathSegment) {
-        return handlePrerenderEarthquake(context, quakeIdPathSegment);
+        return handlePrerenderEarthquake(request, env, ctx, quakeIdPathSegment);
       }
     } else if (pathname.startsWith("/cluster/")) {
       const clusterId = pathname.substring("/cluster/".length);
       if (clusterId) {
-        return handlePrerenderCluster(context, clusterId);
+        return handlePrerenderCluster(request, env, ctx, clusterId);
       }
     }
   }
 
   // Sitemap routes
   if (pathname === "/sitemap-index.xml") {
-    return handleSitemapIndexRequest(context);
+    return handleSitemapIndexRequest();
   }
   else if (pathname === "/sitemap-static-pages.xml") {
-    return handleStaticPagesSitemapRequest(context);
+    return handleStaticPagesSitemapRequest();
   }
   else if (pathname === "/sitemap-earthquakes.xml") {
-    return handleEarthquakesSitemapRequest(context);
+    return handleEarthquakesSitemapRequest();
   }
   else if (pathname === "/sitemap-clusters.xml") {
-    return handleClustersSitemapRequest(context);
+    return handleClustersSitemapRequest(env);
   }
 
   // Existing API routes
@@ -840,7 +838,7 @@ async function onRequest(context) {
     if (!apiUrl) {
       return jsonErrorResponse("Missing apiUrl query parameter for proxy request", 400, "usgs-proxy-router");
     }
-    return handleUsgsProxyRequest(context, apiUrl);
+    return handleUsgsProxyRequest(request, env, ctx, apiUrl);
   }
   else if (pathname.startsWith("/api/earthquake/")) {
     const parts = pathname.split('/');
@@ -849,7 +847,7 @@ async function onRequest(context) {
     if (parts.length === 4 && parts[3]) {
       try {
         const event_id = decodeURIComponent(parts[3]);
-        return handleEarthquakeDetailRequest(context, event_id);
+        return handleEarthquakeDetailRequest(env, ctx, event_id);
       } catch (e) {
         // Specifically catch URIError from decodeURIComponent, but catch others too just in case.
         if (e instanceof URIError) {
@@ -869,9 +867,6 @@ async function onRequest(context) {
   // or a 404 if the asset doesn't exist.
   // We are *not* returning a jsonErrorResponse for unknown paths here anymore,
   // to allow Pages to handle SPA routing and static assets.
-  if (context.next) {
-     return context.next();
-  }
   // For simple Pages _functions, not returning anything specific here means
   // the request might be passed to the static asset handler.
   // If this function is the *only* thing handling requests (e.g. not a Pages Function but a standalone Worker script for a route)
@@ -883,7 +878,7 @@ async function onRequest(context) {
   const apiUrlParam = url.searchParams.get("apiUrl");
   if (apiUrlParam) {
       console.warn(`Request to unspecific path ${pathname} with apiUrl, proceeding with proxy. Consider using /api/usgs-proxy explicitly.`);
-      return handleUsgsProxyRequest(context, apiUrlParam);
+      return handleUsgsProxyRequest(request, env, ctx, apiUrlParam);
   }
 
   // If we've reached here, it's not a path the worker actively handles.
@@ -910,10 +905,10 @@ async function onRequest(context) {
 }
 
 // --- Earthquake Detail API Handler ---
-async function handleEarthquakeDetailRequest(context, event_id) {
+async function handleEarthquakeDetailRequest(env, ctx, event_id) {
   const sourceName = "earthquake-detail-handler";
   const DATA_FRESHNESS_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
-  const DB = context.env.DB;
+  const DB = env.DB;
 
   if (!DB) {
     console.error(`[${sourceName}] D1 Database (DB) not configured for event: ${event_id}. Proceeding to USGS fetch only.`);
@@ -1012,7 +1007,7 @@ async function handleEarthquakeDetailRequest(context, event_id) {
         .catch(err => {
           console.error(`[${sourceName}] Exception during D1 upsert for event ${id} from USGS fallback: ${err.message}`, err);
         });
-      context.waitUntil(d1WritePromise);
+      ctx.waitUntil(d1WritePromise);
     } else {
       console.log(`[${sourceName}] DB not available, skipping D1 upsert for event ${event_id} after USGS fetch.`);
     }
