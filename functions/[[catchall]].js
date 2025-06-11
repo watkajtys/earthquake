@@ -14,6 +14,24 @@ const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefin
   });
 };
 
+// Slugify helper function (top-level)
+function slugify(text) {
+  if (!text) return 'unknown-location';
+  const slug = text
+    .toString()
+    .toLowerCase()
+    // Replace spaces and common non-alphanumeric characters (commas, slashes, parentheses) with a single hyphen.
+    .replace(/[\s,\/\(\)]+/g, '-')
+    // Replace any remaining non-alphanumeric characters (excluding hyphens) with nothing (remove them).
+    .replace(/[^\w-]+/g, '')
+    // Collapse multiple consecutive hyphens into a single hyphen.
+    .replace(/--+/g, '-')
+    // Remove leading or trailing hyphens.
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+  return slug || 'unknown-location'; // Ensure it returns 'unknown-location' if the slug becomes empty
+}
+
 async function handleUsgsProxyRequest(context, apiUrl) {
   const sourceName = "usgs-proxy-handler";
   const cacheKey = new Request(apiUrl, context.request);
@@ -304,49 +322,30 @@ export async function handleEarthquakesSitemapRequest(context) {
 
     if (data && data.features) {
       data.features.forEach(quake => {
-        if (quake.properties) {
-          // The detail URL from USGS geojson is often a full URL to their event page.
-          // We need to extract the event ID or use a parameter that our /quake/ route understands.
-          // The `id` field of the GeoJSON feature is usually the event ID.
-          // The requirement is /quake/${encodeURIComponent(quake.properties.detail || quake.properties.url)}
-          // Let's assume quake.id is the preferred unique identifier for our internal routing.
-          // If quake.properties.detail is a full URL, we need to parse it or use quake.id.
-          // For now, let's use quake.id as the detailUrlParam, assuming the app can handle it.
-          // A safer bet might be to ensure detailUrlParam is consistently an ID.
-          // The original spec mentioned `quake.properties.detail || quake.properties.url`.
-          // These are typically full URLs. If the app's /quake/ route expects the *USGS event ID*,
-          // then `quake.id` is the correct field.
-          // Let's stick to the spec: encodeURIComponent(quake.properties.detail || quake.properties.url)
-          // but be mindful this creates long, opaque URL parameters.
-          // A better approach for the future might be to use quake.id for cleaner URLs,
-          // if the frontend routing for /quake/:id expects the USGS event ID.
-          // For now, sticking to the provided spec:
-
-          let detailIdentifier = quake.properties.detail; // This is usually the USGS event page URL
-          if (!detailIdentifier && quake.properties.url) { // Fallback to properties.url
-            detailIdentifier = quake.properties.url;
+        if (quake && quake.id && quake.properties) {
+          const usgs_id = quake.id;
+          let formattedMagnitude = 'Munknown';
+          if (typeof quake.properties.mag === 'number' && !isNaN(quake.properties.mag)) {
+            formattedMagnitude = `m${quake.properties.mag.toFixed(1)}`;
+          } else {
+            console.warn(`[${sourceName}] Invalid or missing magnitude for quake ${usgs_id}: ${quake.properties.mag}. Using '${formattedMagnitude}'.`);
           }
-          // If we want to use the USGS event ID (e.g., "ci39P5E88S"), it's usually `quake.id`
-          // Let's assume for now the spec means "use the content of properties.detail or properties.url as the param"
-          // This seems to align with how EarthquakeDetailModalComponent gets detailUrl if it's a full URL.
 
-          if (detailIdentifier) {
-             // We need to make sure this detailIdentifier is what our /quake/ route expects.
-             // If /quake/ expects the *USGS event ID*, then `quake.id` is better.
-             // The spec for EarthquakeDetailModalComponent says `detailUrlParam` which is part of `canonicalPageUrl: https://earthquakeslive.com/quake/${data.detailUrlParam}`
-             // This implies `detailUrlParam` should be the unique part of our URL, not a full external URL.
-             // So, `quake.id` (USGS Event ID) is likely the intended `detailUrlParam`.
-            // Correcting to use detailIdentifier as per the new requirement for the subtask.
-            const loc = `https://earthquakeslive.com/quake/${encodeURIComponent(detailIdentifier)}`;
-            const lastmod = new Date(quake.properties.updated || quake.properties.time).toISOString();
-            earthquakesXml += `
+          const place = quake.properties.place || "Unknown Place";
+          const locationSlug = slugify(place);
+
+          const loc = `https://earthquakeslive.com/quake/${formattedMagnitude}-${locationSlug}-${usgs_id}`;
+          const lastmod = new Date(quake.properties.updated || quake.properties.time).toISOString();
+
+          earthquakesXml += `
   <url>
     <loc>${escapeXml(loc)}</loc>
     <lastmod>${lastmod}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>`;
-          }
+        } else {
+          console.warn(`[${sourceName}] Skipping quake in sitemap due to missing id or properties:`, quake);
         }
       });
     }
@@ -443,14 +442,28 @@ export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
   const siteUrl = "https://earthquakeslive.com"; // Base site URL
 
   try {
-    const detailUrl = decodeURIComponent(quakeIdPathSegment);
-    console.log(`[${sourceName}] Prerendering earthquake: ${detailUrl}`);
+    // Extract usgs-id from quakeIdPathSegment (e.g., m6.5-northern-california-nc73649170)
+    const parts = quakeIdPathSegment ? quakeIdPathSegment.split('-') : [];
+    const usgsId = parts.length > 1 ? parts[parts.length - 1] : null;
+
+    if (!usgsId) {
+      console.error(`[${sourceName}] Could not extract usgs-id from quakeIdPathSegment: ${quakeIdPathSegment}`);
+      return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Invalid earthquake identifier.</body></html>`, {
+        status: 404,
+        headers: {
+            "Content-Type": "text/html",
+            "Cache-Control": "public, s-maxage=3600"
+        },
+      });
+    }
+
+    const detailUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${usgsId}.geojson`;
+    console.log(`[${sourceName}] Prerendering earthquake. Extracted usgs-id: ${usgsId}. Constructed detailUrl: ${detailUrl}`);
 
     // Fetch earthquake data
-    // For simplicity, direct fetch. Consider using handleUsgsProxyRequest's caching logic if needed.
     const response = await fetch(detailUrl);
     if (!response.ok) {
-      console.error(`[${sourceName}] Failed to fetch earthquake data from ${detailUrl}: ${response.status}`);
+      console.error(`[${sourceName}] Failed to fetch earthquake data from ${detailUrl} (USGS ID: ${usgsId}): ${response.status}`);
       return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Earthquake data not found.</body></html>`, {
         status: 404,
         headers: {
@@ -462,7 +475,7 @@ export async function handlePrerenderEarthquake(context, quakeIdPathSegment) {
     const quakeData = await response.json();
 
     if (!quakeData || !quakeData.properties || !quakeData.geometry) {
-      console.error(`[${sourceName}] Invalid earthquake data structure from ${detailUrl}`);
+      console.error(`[${sourceName}] Invalid earthquake data structure from ${detailUrl} (USGS ID: ${usgsId})`);
       return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Invalid earthquake data.</body></html>`, {
         status: 500,
         headers: {
@@ -885,42 +898,49 @@ export async function onRequest(context) {
 async function handleEarthquakeDetailRequest(context, event_id) {
   const sourceName = "earthquake-detail-handler";
   const DATA_FRESHNESS_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
-
   const DB = context.env.DB;
+
   if (!DB) {
-    console.error(`[${sourceName}] D1 Database (DB) not available for event: ${event_id}`);
-    return jsonErrorResponse("Service configuration error: Database unavailable.", 500, sourceName);
+    console.error(`[${sourceName}] D1 Database (DB) not configured for event: ${event_id}. Proceeding to USGS fetch only.`);
+    // Skip D1 query and go directly to USGS fetch if DB is not available.
+  } else {
+    try {
+      // 1. Query D1 for the event
+      console.log(`[${sourceName}] Querying D1 for event: ${event_id}`);
+      const stmt = DB.prepare("SELECT geojson_feature, retrieved_at FROM EarthquakeEvents WHERE id = ?").bind(event_id);
+      const result = await stmt.first();
+
+      if (result && result.retrieved_at && (Date.now() - result.retrieved_at < DATA_FRESHNESS_THRESHOLD_MS)) {
+        console.log(`[${sourceName}] Fresh data found in D1 for event: ${event_id}. Freshness: ${Date.now() - result.retrieved_at}ms.`);
+        return new Response(result.geojson_feature, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Data-Source': 'D1-Cache'
+          }
+        });
+      }
+      if (result) {
+        console.log(`[${sourceName}] Data for event ${event_id} found in D1 but is stale (retrieved_at: ${result.retrieved_at}). Proceeding to USGS fetch.`);
+      } else {
+        console.log(`[${sourceName}] Event ${event_id} not found in D1. Proceeding to USGS fetch.`);
+      }
+    } catch (d1Error) {
+      console.error(`[${sourceName}] D1 query error for event ${event_id}: ${d1Error.message}. Falling back to USGS.`, d1Error);
+      // Do not return; proceed to USGS fetch as fallback.
+    }
   }
 
+  // 2. Fetch from USGS (if D1 not available, record not found, stale, or D1 query failed)
   try {
-    // 1. Query D1 for the event
-    const stmt = DB.prepare("SELECT geojson_feature, retrieved_at FROM EarthquakeEvents WHERE id = ?").bind(event_id);
-    const result = await stmt.first();
-
-    if (result && result.retrieved_at && (Date.now() - result.retrieved_at < DATA_FRESHNESS_THRESHOLD_MS)) {
-      console.log(`[${sourceName}] Cache hit in D1 for event: ${event_id}. Freshness: ${Date.now() - result.retrieved_at}ms.`);
-      return new Response(result.geojson_feature, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Data-Source': 'D1-Cache'
-        }
-      });
-    }
-    if (result) {
-        console.log(`[${sourceName}] Data for event ${event_id} found in D1 but is stale (retrieved_at: ${result.retrieved_at}). Fetching from USGS.`);
-    } else {
-        console.log(`[${sourceName}] Event ${event_id} not found in D1. Fetching from USGS.`);
-    }
-
-    // 2. Fetch from USGS if not in D1 or stale
     const usgsUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${event_id}.geojson`;
     console.log(`[${sourceName}] Fetching event ${event_id} from USGS: ${usgsUrl}`);
     let usgsResponse;
     try {
       usgsResponse = await fetch(usgsUrl);
-    } catch (error) {
-      console.error(`[${sourceName}] USGS API fetch failed for ${usgsUrl}: ${error.message}`, error);
-      return jsonErrorResponse(`USGS API fetch failed: ${error.message}`, 502, sourceName); // 502 Bad Gateway
+    } catch (fetchError) { // Catch network errors during fetch itself
+      console.error(`[${sourceName}] USGS API fetch failed for ${usgsUrl}: ${fetchError.message}`, fetchError);
+      // This is a critical failure if D1 also failed or was skipped.
+      return jsonErrorResponse(`USGS API fetch failed: ${fetchError.message}`, 502, sourceName);
     }
 
     if (!usgsResponse.ok) {
@@ -935,64 +955,63 @@ async function handleEarthquakeDetailRequest(context, event_id) {
 
     const geojsonFeature = await usgsResponse.json();
 
-    // 3. Upsert into D1 (don't await this promise, let it run in background)
-    const retrieved_at = Date.now();
-    const geojson_feature_string = JSON.stringify(geojsonFeature);
+    // 3. Upsert into D1 (conditionally, if DB is available)
+    if (DB) {
+      const retrieved_at = Date.now();
+      const geojson_feature_string = JSON.stringify(geojsonFeature);
 
-    // Extract properties for individual columns
-    const id = geojsonFeature.id;
-    const event_time = geojsonFeature.properties.time;
-    const latitude = geojsonFeature.geometry.coordinates[1];
-    const longitude = geojsonFeature.geometry.coordinates[0];
-    const depth = geojsonFeature.geometry.coordinates[2];
-    const magnitude = geojsonFeature.properties.mag;
-    const place = geojsonFeature.properties.place;
-    // Use the actual fetched URL for usgs_detail_url
-    const usgs_detail_json_url = usgsUrl;
+      const id = geojsonFeature.id;
+      const event_time = geojsonFeature.properties.time;
+      const latitude = geojsonFeature.geometry.coordinates[1];
+      const longitude = geojsonFeature.geometry.coordinates[0];
+      const depth = geojsonFeature.geometry.coordinates[2];
+      const magnitude = geojsonFeature.properties.mag;
+      const place = geojsonFeature.properties.place;
+      const usgs_detail_json_url = usgsUrl;
 
+      const upsertStmt = `
+        INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature, retrieved_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            event_time = excluded.event_time,
+            latitude = excluded.latitude,
+            longitude = excluded.longitude,
+            depth = excluded.depth,
+            magnitude = excluded.magnitude,
+            place = excluded.place,
+            usgs_detail_url = excluded.usgs_detail_url,
+            geojson_feature = excluded.geojson_feature,
+            retrieved_at = excluded.retrieved_at;
+      `;
 
-    const upsertStmt = `
-      INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature, retrieved_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-          event_time = excluded.event_time,
-          latitude = excluded.latitude,
-          longitude = excluded.longitude,
-          depth = excluded.depth,
-          magnitude = excluded.magnitude,
-          place = excluded.place,
-          usgs_detail_url = excluded.usgs_detail_url,
-          geojson_feature = excluded.geojson_feature,
-          retrieved_at = excluded.retrieved_at;
-    `;
-
-    const d1WritePromise = DB.prepare(upsertStmt)
-      .bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_json_url, geojson_feature_string, retrieved_at)
-      .run()
-      .then(({ success, error }) => {
-        if (success) {
-          console.log(`[${sourceName}] Successfully upserted event ${id} into D1.`);
-        } else {
-          //This error won't be sent to the client as we don't await it. Log it for server-side debugging.
-          console.error(`[${sourceName}] Failed to upsert event ${id} into D1: ${error}`);
-        }
-      })
-      .catch(err => {
-        console.error(`[${sourceName}] Exception during D1 upsert for event ${id}: ${err.message}`, err);
-      });
-
-    context.waitUntil(d1WritePromise);
+      const d1WritePromise = DB.prepare(upsertStmt)
+        .bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_json_url, geojson_feature_string, retrieved_at)
+        .run()
+        .then(({ success, error }) => {
+          if (success) {
+            console.log(`[${sourceName}] Successfully upserted event ${id} into D1 from USGS fallback.`);
+          } else {
+            console.error(`[${sourceName}] Failed to upsert event ${id} into D1 from USGS fallback: ${error}`);
+          }
+        })
+        .catch(err => {
+          console.error(`[${sourceName}] Exception during D1 upsert for event ${id} from USGS fallback: ${err.message}`, err);
+        });
+      context.waitUntil(d1WritePromise);
+    } else {
+      console.log(`[${sourceName}] DB not available, skipping D1 upsert for event ${event_id} after USGS fetch.`);
+    }
 
     // 4. Return the fetched GeoJSON
-    return new Response(geojson_feature_string, {
+    return new Response(JSON.stringify(geojsonFeature), { // Ensure stringify here
       headers: {
         'Content-Type': 'application/json',
         'X-Data-Source': 'USGS-API'
-       }
+      }
     });
 
-  } catch (error) {
-    console.error(`[${sourceName}] Unexpected error processing request for event ${event_id}: ${error.message}`, error);
-    return jsonErrorResponse(`Unexpected error processing your request: ${error.message}`, 500, sourceName);
+  } catch (usgsOrGeneralError) { // Catch errors from USGS JSON parsing or other unexpected errors in this block
+    console.error(`[${sourceName}] Error during USGS fetch/processing or other general error for event ${event_id}: ${usgsOrGeneralError.message}`, usgsOrGeneralError);
+    return jsonErrorResponse(`Error processing earthquake detail request: ${usgsOrGeneralError.message}`, 500, sourceName);
   }
 }
