@@ -94,6 +94,8 @@ preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" # For `wrangler pag
 [env.dev.d1_databases]
 DB = { preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" }
 
+[schedules]
+crons = ["*/1 * * * *"] # Run every minute
 
 # If you have other bindings (like R2, Services), define them here too.
 # Refer to Cloudflare Wrangler documentation for more details.

@@ -1,5 +1,11 @@
 import { onRequest, isCrawler, escapeXml, handleSitemapIndexRequest, handleStaticPagesSitemapRequest, handleEarthquakesSitemapRequest, handleClustersSitemapRequest, handlePrerenderEarthquake, handlePrerenderCluster } from './[[catchall]]'; // Adjust if main export is different
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { upsertEarthquakeFeaturesToD1 } from '../src/utils/d1Utils.js';
+
+// Mock d1Utils
+vi.mock('../src/utils/d1Utils.js', () => ({
+  upsertEarthquakeFeaturesToD1: vi.fn(),
+}));
 
 // --- Mocks for Cloudflare Environment ---
 
@@ -112,9 +118,12 @@ describe('onRequest (Main Router)', () => {
 
       const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
       const context = createMockContext(request, { WORKER_CACHE_DURATION_SECONDS: '300' });
+      // Ensure upsertEarthquakeFeaturesToD1 is reset and configured for this test
+      upsertEarthquakeFeaturesToD1.mockResolvedValue({ successCount: 1, errorCount: 0 });
+
 
       const response = await onRequest(context);
-      await context._awaitWaitUntilPromises(); // Wait for cache.put
+      await context._awaitWaitUntilPromises(); // Wait for cache.put and D1 upsert
 
       expect(response.status).toBe(200);
       const json = await response.json();
@@ -124,7 +133,47 @@ describe('onRequest (Main Router)', () => {
       expect(mockCache.put).toHaveBeenCalled();
       const cachedResponse = mockCache.put.mock.calls[0][1];
       expect(cachedResponse.headers.get('Cache-Control')).toBe('s-maxage=300');
+
+      // Verify that the D1 utility was called if data.features existed
+      if (mockApiResponseData.features && mockApiResponseData.features.length > 0) {
+        expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(context.env.DB, mockApiResponseData.features);
+      } else if (mockApiResponseData.id && mockApiResponseData.type === 'Feature') {
+        // If it's a single feature, current proxy logic doesn't call the bulk upsert.
+        // This part of the test might need adjustment based on whether single features should also be upserted by the proxy.
+        // For now, assume it's not called for single features by the proxy.
+        expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
+      } else {
+        expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
+      }
     });
+
+    it('should proxy to apiUrl, call D1 upsert for multiple features, cache response', async () => {
+      const targetApiUrl = 'http://example.com/earthquakes_multiple_features';
+      const mockApiResponseData = {
+        features: [
+          { id: 'feat1', properties: {}, geometry: { coordinates: [1,2,3] }},
+          { id: 'feat2', properties: {}, geometry: { coordinates: [4,5,6] }}
+        ]
+      };
+      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockApiResponseData), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
+      upsertEarthquakeFeaturesToD1.mockResolvedValue({ successCount: 2, errorCount: 0 });
+
+
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
+      const context = createMockContext(request, { WORKER_CACHE_DURATION_SECONDS: '300' });
+
+      const response = await onRequest(context);
+      await context._awaitWaitUntilPromises();
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json).toEqual(mockApiResponseData);
+      expect(fetch).toHaveBeenCalledWith(targetApiUrl);
+      expect(mockCache.put).toHaveBeenCalled();
+      expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(context.env.DB, mockApiResponseData.features);
+    });
+
 
     it('should return cached response on cache hit', async () => {
       const targetApiUrl = 'http://example.com/earthquakes_cached';
@@ -141,6 +190,7 @@ describe('onRequest (Main Router)', () => {
       expect(json).toEqual(cachedData);
       expect(fetch).not.toHaveBeenCalled();
       expect(mockCache.put).not.toHaveBeenCalled();
+      expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled(); // D1 util should not be called on cache hit
     });
 
     it('should handle fetch error during proxying', async () => {
@@ -156,6 +206,7 @@ describe('onRequest (Main Router)', () => {
       const json = await response.json();
       expect(json.message).toBe('USGS API fetch failed: Network Failure XYZ');
       expect(json.source).toBe('usgs-proxy-handler');
+      expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
     });
 
     it('should handle non-JSON response from upstream API', async () => {
@@ -171,18 +222,13 @@ describe('onRequest (Main Router)', () => {
       const context = createMockContext(request);
 
       const response = await onRequest(context);
-      // The main [[catchall]].js tries to parse response.json(), which will fail.
-      // This failure then leads to a 500 error from the proxy handler itself.
-      // Correction: If upstream provides non-ok status (like 503 here), that status is returned.
-      // If upstream is ok (200) but content is not JSON, then .json() fails, leading to 500.
-      // The current mock is status 503, so response.ok is false.
-      expect(response.status).toBe(503);
+      expect(response.status).toBe(503); // Status from upstream
       const json = await response.json();
-      // statusText might be empty in some test environments for mocked Response
       const expectedMessagePart = `Error fetching data from USGS API: 503`;
       expect(json.message.startsWith(expectedMessagePart)).toBe(true);
       expect(json.source).toBe('usgs-proxy-handler');
       expect(json.upstream_status).toBe(503);
+      expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
     });
 
     it('should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid', async () => {

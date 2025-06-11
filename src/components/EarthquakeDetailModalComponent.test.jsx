@@ -114,7 +114,7 @@ describe('EarthquakeDetailModalComponent', () => {
   beforeEach(() => {
     mockNavigateGlobal.mockClear();
     // Reset useParams to its default mock implementation for each test
-    mockUseParamsGlobal.mockImplementation(() => ({ detailUrlParam: encodeURIComponent('test-detail-url') }));
+    mockUseParamsGlobal.mockImplementation(() => ({ '*': encodeURIComponent('test-detail-url') }));
     if (EarthquakeDetailView.mockClear) EarthquakeDetailView.mockClear();
     if (SeoMetadata.mockClear) SeoMetadata.mockClear();
     mockOnDataLoadedForSeoCallback = undefined;
@@ -130,7 +130,7 @@ describe('EarthquakeDetailModalComponent', () => {
     return render(
       <MemoryRouter initialEntries={['/quake/test-detail-url']}>
         <Routes>
-          <Route path="/quake/:detailUrlParam" element={<EarthquakeDetailModalComponent {...defaultMockProps} {...props} />} />
+          <Route path="/quake/*" element={<EarthquakeDetailModalComponent {...defaultMockProps} {...props} />} />
         </Routes>
       </MemoryRouter>
     );
@@ -171,7 +171,7 @@ describe('EarthquakeDetailModalComponent', () => {
     const descriptionTime = new Date(props.time).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', timeZone: 'UTC'});
     const expectedDescription = `Detailed report of the M ${props.mag} earthquake that struck near ${props.place} on ${titleDate} at ${descriptionTime} (UTC). Magnitude: ${props.mag}, Depth: ${geom.coordinates[2]} km. Location: ${geom.coordinates[1]?.toFixed(2)}, ${geom.coordinates[0]?.toFixed(2)}. Stay updated with Earthquakes Live.`;
     const expectedKeywords = `earthquake, seismic event, M ${props.mag}, ${props.place.split(', ').join(', ')}, earthquake details, usgs event, ${usgsEventId}`;
-    const expectedCanonicalUrl = 'https://earthquakeslive.com/quake/test-detail-url'; // from useParams mock
+    const expectedCanonicalUrl = `https://earthquakeslive.com/quake/${encodeURIComponent('test-detail-url')}`; // from useParams mock
 
     expect(lastSeoCall.eventJsonLd).toEqual({
         '@context': 'https://schema.org',
@@ -292,6 +292,23 @@ describe('EarthquakeDetailModalComponent', () => {
     expect(mockNavigateGlobal).toHaveBeenCalledWith(-1);
   });
 
+  test('handles URL parameters with encoded slashes', () => {
+    const encodedUrl = encodeURIComponent('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000qjgf.geojson');
+    mockUseParamsGlobal.mockReturnValueOnce({ '*': encodedUrl });
+
+    render(
+      <MemoryRouter initialEntries={[`/quake/${encodedUrl}`]}>
+        <Routes>
+          <Route path="/quake/*" element={<EarthquakeDetailModalComponent />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(EarthquakeDetailView).toHaveBeenCalled();
+    const passedProps = EarthquakeDetailView.mock.calls[EarthquakeDetailView.mock.calls.length - 1][0];
+    expect(passedProps.detailUrl).toBe(decodeURIComponent(encodedUrl));
+  });
+
   describe('dataSourceTimespanDays logic', () => {
     // No need to mock react-router-dom here as it's done globally at the top of the file
     // Ensure EarthquakeDetailView mock is also available (done globally)
@@ -340,12 +357,12 @@ describe('EarthquakeDetailModalComponent', () => {
   describe('Handling of detailUrlParam', () => {
     test('does not render EarthquakeDetailView if detailUrlParam is missing/invalid', () => {
       // Override useParams mock for this test
-      mockUseParamsGlobal.mockReturnValueOnce({ detailUrlParam: undefined });
+      mockUseParamsGlobal.mockReturnValueOnce({ '*': undefined });
 
       render( // Render directly without initialEntries for this specific useParams case or provide matching route
         <MemoryRouter initialEntries={['/quake/']}> {/* Or a route that results in no param */}
             <Routes>
-                <Route path="/quake/:detailUrlParam?" element={<EarthquakeDetailModalComponent />} />
+                <Route path="/quake/*" element={<EarthquakeDetailModalComponent />} />
             </Routes>
         </MemoryRouter>
       );
