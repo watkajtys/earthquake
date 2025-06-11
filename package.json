@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest",
     "docs": "npx jsdoc -c jsdoc.json",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "publish:cf": "npm run build && npm run deploy"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
