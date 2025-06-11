@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "docs": "npx jsdoc -c jsdoc.json"
+    "docs": "npx jsdoc -c jsdoc.json",
+    "deploy": "wrangler deploy src/worker.js"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
