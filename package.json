@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && wrangler pages functions build --outdir ./dist/worker --sourcemap",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "docs": "npx jsdoc -c jsdoc.json"
+    "docs": "npx jsdoc -c jsdoc.json",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

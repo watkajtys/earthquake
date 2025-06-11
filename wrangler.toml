@@ -3,19 +3,15 @@ name = "earthquake"
 compatibility_date = "2024-06-05" # Feel free to update to a more recent date
 
 # Configuration for Cloudflare Pages Functions
-# Ensure this matches your project's build output directory (e.g., "dist", "build", "public")
-main = "./dist/worker/index.js"
+main = "functions/[[catchall]].js"
 workers_dev = true
 
 kv_namespaces = [
   { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
 ]
 
-[assets]
-directory = "./dist"
-not_found_handling = "single-page-application"
-binding = "ASSETS"
-run_worker_first = true
+[site]
+bucket = "./dist"
 
 # KV Namespace binding for cluster definitions
 # -----------------------------------------------------------------------------------------
@@ -38,8 +34,6 @@ run_worker_first = true
 #    precedence for deployed environments (production and preview).
 #    Ensure you also configure the 'CLUSTER_KV' binding there, pointing it to the
 #    respective KV namespaces for your production and preview environments.
-#    This wrangler.toml configuration is especially useful for local development
-#    with `wrangler pages dev`.
 # -----------------------------------------------------------------------------------------
 
 
@@ -50,8 +44,6 @@ run_worker_first = true
 # [env.preview.vars]
 # MY_VARIABLE = "preview_value"
 #
-# [env.dev.vars] # For 'wrangler pages dev'
-# MY_VARIABLE = "dev_value"
 
 # This explicitly tells 'wrangler dev' to use the preview_id for CLUSTER_KV.
 [env.dev.kv_namespaces]
@@ -79,8 +71,6 @@ CLUSTER_KV = { preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
 #    precedence for deployed environments (production and preview).
 #    Ensure you also configure the 'DB' binding there, pointing it to the
 #    respective D1 databases for your production and preview environments.
-#    This wrangler.toml configuration is especially useful for local development
-#    with `wrangler pages dev`.
 # -----------------------------------------------------------------------------------------
 [[d1_databases]]
 binding = "DB" # Binding name used in your Worker code
