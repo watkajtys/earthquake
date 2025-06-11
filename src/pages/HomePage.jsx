@@ -849,8 +849,17 @@ function App() {
     }, [navigate]);
 
     const handleClusterSummaryClick = useCallback((clusterData) => {
-        navigate(`/cluster/${clusterData.id}`);
-    }, [navigate]); // Added navigate to dependencies
+        const count = clusterData.quakeCount;
+        const locationSlug = clusterData.locationName
+            .toLowerCase()
+            .replace(/\s+/g, '-') // Replace spaces with hyphens
+            .replace(/[^a-z0-9-]/g, ''); // Remove non-alphanumeric characters except hyphens
+        const maxMagnitude = parseFloat(clusterData.maxMagnitude).toFixed(1);
+        const strongestQuakeId = clusterData.strongestQuakeId;
+
+        const newUrl = `/cluster/${count}-quakes-near-${locationSlug}-up-to-m${maxMagnitude}-${strongestQuakeId}`;
+        navigate(newUrl);
+    }, [navigate]);
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 
