@@ -4,7 +4,7 @@ compatibility_date = "2024-06-05" # Feel free to update to a more recent date
 
 # Configuration for Cloudflare Pages Functions
 # Ensure this matches your project's build output directory (e.g., "dist", "build", "public")
-main = "./dist/worker/index.js"
+main = "src/worker.js"
 workers_dev = true
 
 kv_namespaces = [
