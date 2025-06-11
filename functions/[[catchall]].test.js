@@ -88,6 +88,7 @@ describe('onRequest (Main Router)', () => {
     // Reset cache mock behavior
     mockCache.match.mockReset();
     mockCache.put.mockReset().mockResolvedValue(undefined);
+    fetch.mockReset(); // Reset global fetch mock
   });
 
   // -- API: /api/usgs-proxy --
@@ -237,6 +238,11 @@ describe('onRequest (Main Router)', () => {
 
   // -- Sitemap Handlers --
   describe('Sitemap Handlers', () => {
+    beforeEach(() => {
+        vi.resetAllMocks();
+        fetch.mockReset(); // Reset global fetch for sitemap tests too
+    });
+
     it('/sitemap-index.xml should return XML sitemap index', async () => {
       const request = new Request('http://localhost/sitemap-index.xml');
       const context = createMockContext(request);
@@ -275,26 +281,29 @@ describe('onRequest (Main Router)', () => {
         expect(fetch).toHaveBeenCalledWith(expect.stringContaining('2.5_week.geojson'));
     });
 
-    it('/sitemap-clusters.xml should list clusters from D1 and return XML', async () => {
+    it('/sitemap-clusters.xml should list clusters from D1 and return XML (old format)', async () => {
+        // This test remains to ensure the old logic (before new URL format changes) still works if needed,
+        // or serves as a baseline before testing the new changes.
+        // For the new URL format, specific tests are added in the suite below.
         const mockD1Results = [
-            { clusterId: "cluster1", updatedAt: new Date().toISOString() },
-            { clusterId: "cluster2", updatedAt: new Date(Date.now() - 86400000).toISOString() } // 1 day ago
+            { clusterId: "overview_cluster_cluster1_10", updatedAt: new Date().toISOString() },
         ];
         const request = new Request('http://localhost/sitemap-clusters.xml');
         const context = createMockContext(request);
         context.env.DB.all.mockResolvedValueOnce({ results: mockD1Results, success: true });
 
-        const response = await onRequest(context);
+        // Mock fetch for the new logic (it will be called by the updated sitemap handler)
+        fetch.mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Test Place", mag: 5.0 } }), { status: 200 }));
+
+
+        const response = await onRequest(context); // Calls handleClustersSitemapRequest
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('application/xml');
         const text = await response.text();
         expect(text).toContain('<urlset');
-        expect(text).toContain('/cluster/cluster1');
-        expect(text).toContain(mockD1Results[0].updatedAt);
-        expect(text).toContain('/cluster/cluster2');
-        expect(text).toContain(mockD1Results[1].updatedAt);
+        // The URL will now be in the new format due to the function updates
+        expect(text).toContain('https://earthquakeslive.com/cluster/10-quakes-near-test-place-up-to-m5.0-cluster1');
         expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT clusterId, updatedAt FROM ClusterDefinitions"));
-        expect(context.env.DB.all).toHaveBeenCalled();
     });
 
     it('/sitemap-earthquakes.xml should handle fetch error', async () => {
@@ -362,28 +371,121 @@ describe('onRequest (Main Router)', () => {
       consoleLogSpy.mockRestore();
     });
 
-    it('/sitemap-clusters.xml should use current date if updatedAt is null/missing from D1', async () => {
-      const mockD1Results = [{ clusterId: "cluster_no_date", updatedAt: null }];
-      const request = new Request('http://localhost/sitemap-clusters.xml');
-      const context = createMockContext(request);
-      context.env.DB.all.mockResolvedValueOnce({ results: mockD1Results, success: true });
-      const currentDate = new Date().toISOString().split('T')[0]; // Get YYYY-MM-DD part
+    // New tests for handleClustersSitemapRequest URL Generation
+    describe('handleClustersSitemapRequest New URL Generation', () => {
+        beforeEach(() => {
+            vi.resetAllMocks(); // Resets global fetch and D1 mocks from createMockContext
+            fetch.mockReset();
+        });
 
-      const response = await onRequest(context);
-      const text = await response.text();
-      expect(text).toContain(`<loc>https://earthquakeslive.com/cluster/cluster_no_date</loc>`);
-      expect(text).toContain(`<lastmod>${currentDate}`); // Check if it contains the current date part
+        it('should generate correct new format URLs for valid D1 entries with successful USGS fetches', async () => {
+            const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
+            const d1Results = [
+                { clusterId: "overview_cluster_us7000mfp9_15", updatedAt: "2023-01-01T00:00:00Z" },
+                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
+            ];
+            mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
+
+            fetch
+                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Southern Sumatra, Indonesia", mag: 5.8 } }), { status: 200 }))
+                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "California", mag: 4.2 } }), { status: 200 }));
+
+            const response = await handleClustersSitemapRequest(mockContext);
+            const xml = await response.text();
+
+            expect(response.status).toBe(200);
+            expect(xml).toContain('<loc>https://earthquakeslive.com/cluster/15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9</loc>');
+            expect(xml).toContain('<lastmod>2023-01-01T00:00:00.000Z</lastmod>');
+            expect(xml).toContain('<loc>https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345</loc>');
+            expect(xml).toContain('<lastmod>2023-01-02T00:00:00.000Z</lastmod>');
+            expect(fetch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should skip entries if D1 clusterId parsing fails and log a warning', async () => {
+            const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
+            const d1Results = [
+                { clusterId: "invalid_format_id", updatedAt: "2023-01-01T00:00:00Z" },
+                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
+            ];
+            mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
+            fetch.mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "California", mag: 4.2 } }), { status: 200 }));
+            const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            const response = await handleClustersSitemapRequest(mockContext);
+            const xml = await response.text();
+
+            expect(xml).not.toContain('invalid_format_id');
+            expect(xml).toContain('https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345');
+            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to parse D1 clusterId: invalid_format_id'));
+            expect(fetch).toHaveBeenCalledTimes(1);
+            consoleWarnSpy.mockRestore();
+        });
+
+        it('should skip entries if USGS fetch fails and log a warning/error', async () => {
+            const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
+            const d1Results = [
+                { clusterId: "overview_cluster_us7000mfp9_15", updatedAt: "2023-01-01T00:00:00Z" },
+                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
+            ];
+            mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
+
+            fetch
+                .mockResolvedValueOnce(new Response("USGS Error", { status: 500 })) // Fail for us7000mfp9
+                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "California", mag: 4.2 } }), { status: 200 }));
+            const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            const response = await handleClustersSitemapRequest(mockContext);
+            const xml = await response.text();
+
+            expect(xml).not.toContain('15-quakes-near'); // Should not contain the URL for the failed one
+            expect(xml).toContain('https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345');
+            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('USGS fetch failed for us7000mfp9: 500'));
+            expect(fetch).toHaveBeenCalledTimes(2);
+            consoleWarnSpy.mockRestore();
+        });
+
+        it('should skip entries if USGS response is missing place or mag and log a warning', async () => {
+            const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
+            const d1Results = [
+                { clusterId: "overview_cluster_usMissingPlace_10", updatedAt: "2023-01-03T00:00:00Z" },
+                { clusterId: "overview_cluster_usMissingMag_8", updatedAt: "2023-01-04T00:00:00Z" },
+                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
+            ];
+            mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
+
+            fetch
+                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { mag: 5.0 } }), { status: 200 })) // Missing place
+                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Some Place" } }), { status: 200 })) // Missing mag
+                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "California", mag: 4.2 } }), { status: 200 }));
+            const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            const response = await handleClustersSitemapRequest(mockContext);
+            const xml = await response.text();
+
+            expect(xml).not.toContain('usMissingPlace'); // URL part for usMissingPlace
+            expect(xml).not.toContain('usMissingMag');   // URL part for usMissingMag
+            expect(xml).toContain('https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345');
+            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Missing or invalid locationName for usMissingPlace'));
+            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Missing or invalid maxMagnitude for usMissingMag'));
+            expect(fetch).toHaveBeenCalledTimes(3);
+            consoleWarnSpy.mockRestore();
+        });
     });
   });
 
   // -- Prerendering Handlers --
   describe('Prerendering Handlers', () => {
+    beforeEach(() => {
+        vi.resetAllMocks();
+        fetch.mockReset();
+    });
+
     it('/quake/some-quake-id should trigger prerender for crawler', async () => {
         const quakeId = "usgs_event_abc123";
-        const quakeDetailUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=${quakeId}&format=geojson`; // Example, adapt to actual
+        const quakeDetailUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=${quakeId}&format=geojson`;
         const mockQuakeData = { properties: { mag: 5, place: "Test Place", time: Date.now(), detail: quakeDetailUrl }, geometry: { coordinates: [0,0,10] }, id: quakeId };
 
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockQuakeData))); // For prerender fetch
+        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockQuakeData)));
 
         const request = new Request(`http://localhost/quake/${encodeURIComponent(quakeDetailUrl)}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
@@ -393,40 +495,144 @@ describe('onRequest (Main Router)', () => {
         expect(response.headers.get('Content-Type')).toContain('text/html');
         const text = await response.text();
         expect(text).toContain(`<title>M 5 Earthquake - Test Place`);
-        expect(fetch).toHaveBeenCalledWith(quakeDetailUrl); // Decoded URL
+        expect(fetch).toHaveBeenCalledWith(quakeDetailUrl);
     });
 
-    it('/cluster/some-cluster-id should trigger prerender for crawler using D1', async () => {
-        const clusterId = "test-cluster-d1";
+    // Original test for /cluster/some-cluster-id (old format) - may be less relevant or removed if old URLs are not supported
+    it('/cluster/some-cluster-id (old format) should trigger prerender for crawler using D1', async () => {
+        const clusterIdOldFormat = "test-cluster-d1-old"; // This is an old format ID
         const mockClusterD1Data = {
-            earthquakeIds: JSON.stringify(['q1', 'q2']), // Stored as JSON string
-            strongestQuakeId: 'q1',
+            earthquakeIds: JSON.stringify(['q1', 'q2']),
+            strongestQuakeId: 'q1', // This ID would be used by USGS fetch
             updatedAt: new Date().toISOString()
         };
-        const mockStrongestQuakeDetails = { properties: { mag: 3, place: "Cluster Epicenter D1" }, geometry: { coordinates: [1,1,1]}, id: 'q1' };
+        const mockStrongestQuakeDetails = { properties: { mag: 3, place: "Cluster Epicenter D1 Old" }, geometry: { coordinates: [1,1,1]}, id: 'q1' };
 
-        const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const request = new Request(`http://localhost/cluster/${clusterIdOldFormat}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
 
-        // Setup mocks for D1
-        const mockD1First = vi.fn().mockResolvedValueOnce(mockClusterD1Data);
-        const mockD1Bind = vi.fn().mockReturnValueOnce({ first: mockD1First });
-        context.env.DB.prepare.mockReturnValueOnce({ bind: mockD1Bind });
+        // For old format, the regex in handlePrerenderCluster will fail.
+        // So, it should return 404 for "Invalid cluster URL format."
+        const response = await onRequest(context); // Calls handlePrerenderCluster
 
-        // Mock fetch for strongest quake details
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockStrongestQuakeDetails)));
-
-        const response = await onRequest(context);
-        expect(response.status).toBe(200);
-        expect(response.headers.get('Content-Type')).toContain('text/html');
+        expect(response.status).toBe(404);
         const text = await response.text();
-        expect(text).toContain(`<title>Earthquake Cluster near Cluster Epicenter D1`);
-        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT earthquakeIds, strongestQuakeId, updatedAt FROM ClusterDefinitions WHERE clusterId = ?"));
-        expect(mockD1Bind).toHaveBeenCalledWith(clusterId); // Assert on the captured mock
-        expect(mockD1First).toHaveBeenCalled(); // Assert on the captured mock
+        expect(text).toContain("Invalid cluster URL format.");
+        expect(context.env.DB.prepare).not.toHaveBeenCalled(); // D1 should not be called for invalid format
     });
 
-    // ... (other /quake/ tests remain unchanged) ...
+    describe('handlePrerenderCluster Slug Parsing and D1 Query (New URL Format)', () => {
+        beforeEach(() => {
+          vi.resetAllMocks();
+          fetch.mockReset();
+        });
+
+        const validSlugTestCase = {
+          description: 'Valid slug',
+          urlSlug: '15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9',
+          expectedStrongestQuakeId: 'us7000mfp9',
+          expectedCount: '15',
+          expectedD1QueryId: 'overview_cluster_us7000mfp9_15',
+        };
+
+        it(`should correctly parse slug, query D1, fetch USGS, and generate HTML for: ${validSlugTestCase.description}`, async () => {
+          const { urlSlug, expectedD1QueryId, expectedStrongestQuakeId } = validSlugTestCase;
+          const mockContext = createMockContext(new Request(`http://localhost/cluster/${urlSlug}`)); // Request not strictly needed by direct call
+
+          const mockD1ClusterData = {
+            earthquakeIds: JSON.stringify(['id1', 'id2']),
+            strongestQuakeId: expectedStrongestQuakeId,
+            updatedAt: new Date().toISOString(),
+          };
+          mockContext.env.DB.first.mockResolvedValueOnce(mockD1ClusterData);
+
+          const mockUsgsQuakeData = {
+            properties: { mag: 5.8, place: 'Southern Sumatra, Indonesia', time: Date.now() },
+            geometry: { coordinates: [100, -4, 10] },
+            id: expectedStrongestQuakeId,
+          };
+          fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockUsgsQuakeData), { status: 200 }));
+
+          const response = await handlePrerenderCluster(mockContext, urlSlug);
+          const html = await response.text();
+
+          expect(response.status).toBe(200);
+          expect(response.headers.get('Content-Type')).toContain('text/html');
+          expect(mockContext.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining('WHERE clusterId = ?'));
+          expect(mockContext.env.DB.bind).toHaveBeenCalledWith(expectedD1QueryId);
+          expect(fetch).toHaveBeenCalledWith(expect.stringContaining(`/detail/${expectedStrongestQuakeId}.geojson`));
+          expect(html).toContain(`<link rel="canonical" href="https://earthquakeslive.com/cluster/${urlSlug}">`);
+          expect(html).toContain('Southern Sumatra, Indonesia');
+        });
+
+        const anotherValidSlugTestCase = {
+          description: 'Valid slug with single-digit count',
+          urlSlug: '5-quakes-near-california-up-to-m4.2-ci12345',
+          expectedStrongestQuakeId: 'ci12345',
+          expectedCount: '5',
+          expectedD1QueryId: 'overview_cluster_ci12345_5',
+        };
+
+        it(`should correctly parse slug, query D1, fetch USGS, and generate HTML for: ${anotherValidSlugTestCase.description}`, async () => {
+            const { urlSlug, expectedD1QueryId, expectedStrongestQuakeId } = anotherValidSlugTestCase;
+            const mockContext = createMockContext(new Request(`http://localhost/cluster/${urlSlug}`));
+            const mockD1ClusterData = {
+                earthquakeIds: JSON.stringify(['id1']),
+                strongestQuakeId: expectedStrongestQuakeId,
+                updatedAt: new Date().toISOString(),
+            };
+            mockContext.env.DB.first.mockResolvedValueOnce(mockD1ClusterData);
+            const mockUsgsQuakeData = {
+                properties: { mag: 4.2, place: 'California', time: Date.now() },
+                geometry: { coordinates: [-120, 35, 5] },
+                id: expectedStrongestQuakeId,
+            };
+            fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockUsgsQuakeData), { status: 200 }));
+
+            const response = await handlePrerenderCluster(mockContext, urlSlug);
+            const html = await response.text();
+            expect(response.status).toBe(200);
+            expect(mockContext.env.DB.bind).toHaveBeenCalledWith(expectedD1QueryId);
+            expect(html).toContain(`<link rel="canonical" href="https://earthquakeslive.com/cluster/${urlSlug}">`);
+            expect(html).toContain('California');
+        });
+
+        const invalidSlugTestCases = [
+          { description: 'Completely invalid slug format', urlSlug: 'my-invalid-cluster-id-123' },
+          { description: 'Slug with non-numeric count', urlSlug: 'abc-quakes-near-location-up-to-m5.0-id1' },
+          { description: 'Slug missing final ID part', urlSlug: '10-quakes-near-location-up-to-m5.0-' },
+          { description: 'Slug missing count part', urlSlug: '-quakes-near-location-up-to-m5.0-id1' },
+          { description: 'Slug too short for regex', urlSlug: '1-q-n-l-u-m1-id1' },
+        ];
+
+        invalidSlugTestCases.forEach(({ description, urlSlug }) => {
+          it(`should return 404 for invalid slug (${description}): ${urlSlug}`, async () => {
+            const mockContext = createMockContext(new Request(`http://localhost/cluster/${urlSlug}`));
+            const response = await handlePrerenderCluster(mockContext, urlSlug);
+            const text = await response.text();
+
+            expect(response.status).toBe(404);
+            expect(text).toContain('Invalid cluster URL format.');
+            expect(mockContext.env.DB.prepare).not.toHaveBeenCalled();
+            expect(fetch).not.toHaveBeenCalled();
+          });
+        });
+
+        it('should return 404 if D1 returns null for a parsed D1 Query ID', async () => {
+            const { urlSlug, expectedD1QueryId } = validSlugTestCase; // Use a valid slug
+            const mockContext = createMockContext(new Request(`http://localhost/cluster/${urlSlug}`));
+            mockContext.env.DB.first.mockResolvedValueOnce(null); // D1 finds no record
+
+            const response = await handlePrerenderCluster(mockContext, urlSlug);
+            const text = await response.text();
+
+            expect(response.status).toBe(404);
+            expect(text).toContain("Cluster not found");
+            expect(mockContext.env.DB.bind).toHaveBeenCalledWith(expectedD1QueryId);
+            expect(fetch).not.toHaveBeenCalled();
+        });
+      });
+
 
     it('/quake/some-quake-id should handle fetch error during prerender', async () => {
         const quakeDetailUrl = "http://example.com/details/q_error";
@@ -434,7 +640,7 @@ describe('onRequest (Main Router)', () => {
         const request = new Request(`http://localhost/quake/${encodeURIComponent(quakeDetailUrl)}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
-        expect(response.status).toBe(500); // Or specific error handling
+        expect(response.status).toBe(500);
         const text = await response.text();
         expect(text).toContain("Error prerendering earthquake page");
     });
@@ -445,9 +651,9 @@ describe('onRequest (Main Router)', () => {
         const request = new Request(`http://localhost/quake/${encodeURIComponent(quakeDetailUrl)}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
-        expect(response.status).toBe(500); // Correct: response.json() fails, leading to catch block
+        expect(response.status).toBe(500);
         const text = await response.text();
-        expect(text).toContain("Error prerendering earthquake page"); // Corrected assertion
+        expect(text).toContain("Error prerendering earthquake page");
     });
 
     it('/quake/some-quake-id should handle invalid quake data structure during prerender', async () => {
@@ -473,48 +679,37 @@ describe('onRequest (Main Router)', () => {
     });
 
 
-    it('/cluster/some-cluster-id should handle D1 returning null for prerender', async () => {
-        const clusterId = "test-cluster-notfound-d1";
-        const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
-        const context = createMockContext(request);
-        context.env.DB.prepare.mockReturnValueOnce({ bind: vi.fn().mockReturnValueOnce({ first: vi.fn().mockResolvedValueOnce(null) }) }); // D1 returns null for the cluster
-
-        const response = await onRequest(context);
-        expect(response.status).toBe(404);
-        const text = await response.text();
-        expect(text).toContain("Cluster not found");
-    });
-
     it('/cluster/some-cluster-id should handle D1 error during prerender', async () => {
-        const clusterId = "test-cluster-d1-error";
-        const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const urlSlug = "10-quakes-near-anywhere-up-to-m1.0-error123"; // New format slug
+        const request = new Request(`http://localhost/cluster/${urlSlug}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         context.env.DB.prepare.mockReturnValueOnce({ bind: vi.fn().mockReturnValueOnce({ first: vi.fn().mockRejectedValueOnce(new Error("D1 .first() error")) }) });
 
-        const response = await onRequest(context);
+        const response = await onRequest(context); // Will call handlePrerenderCluster
         expect(response.status).toBe(500);
         const text = await response.text();
         expect(text).toContain("Error prerendering cluster page");
     });
 
     it('/cluster/some-cluster-id should handle fetch error for strongest quake during prerender (D1 context)', async () => {
-        const clusterId = "test-cluster-fetch-error-d1";
-        const mockClusterD1Data = { earthquakeIds: JSON.stringify(['q1']), strongestQuakeId: 'q1', updatedAt: new Date().toISOString() };
-        const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const urlSlug = "10-quakes-near-fetcherror-up-to-m1.0-fetcherr1"; // New format slug
+        const d1QueryId = "overview_cluster_fetcherr1_10";
+        const mockClusterD1Data = { earthquakeIds: JSON.stringify(['q1']), strongestQuakeId: 'fetcherr1', updatedAt: new Date().toISOString() };
+        const request = new Request(`http://localhost/cluster/${urlSlug}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         context.env.DB.prepare.mockReturnValueOnce({ bind: vi.fn().mockReturnValueOnce({ first: vi.fn().mockResolvedValueOnce(mockClusterD1Data) }) });
         fetch.mockRejectedValueOnce(new Error("Strongest Quake Fetch Error D1"));
 
         const response = await onRequest(context);
-        expect(response.status).toBe(200); // Should still render the page but with a fallback message
+        expect(response.status).toBe(200);
         const text = await response.text();
         expect(text).toContain("Further details about the most significant event in this cluster are currently unavailable.");
     });
 
     it('/cluster/some-cluster-id should handle DB undefined for prerender', async () => {
-        const clusterId = "test-cluster-no-db";
-        const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
-        const context = createMockContext(request, { DB: undefined }); // DB is not configured
+        const urlSlug = "10-quakes-near-nodb-up-to-m1.0-nodb1"; // New format slug
+        const request = new Request(`http://localhost/cluster/${urlSlug}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const context = createMockContext(request, { DB: undefined });
 
         const response = await onRequest(context);
         expect(response.status).toBe(500);
@@ -523,13 +718,14 @@ describe('onRequest (Main Router)', () => {
     });
 
     it('/cluster/some-cluster-id should handle error parsing earthquakeIds from D1', async () => {
-        const clusterId = "test-cluster-bad-json-d1";
+        const urlSlug = "10-quakes-near-badjson-up-to-m1.0-badjson1"; // New format slug
+        const d1QueryId = "overview_cluster_badjson1_10";
         const mockClusterD1DataBadJson = {
-            earthquakeIds: "this is not json", // Invalid JSON string
-            strongestQuakeId: 'q1',
+            earthquakeIds: "this is not json",
+            strongestQuakeId: 'badjson1',
             updatedAt: new Date().toISOString()
         };
-        const request = new Request(`http://localhost/cluster/${clusterId}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const request = new Request(`http://localhost/cluster/${urlSlug}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
 
         const mockD1First = vi.fn().mockResolvedValueOnce(mockClusterD1DataBadJson);
@@ -542,7 +738,7 @@ describe('onRequest (Main Router)', () => {
         const text = await response.text();
         expect(text).toContain("Error processing cluster data.");
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-            expect.stringContaining(`[prerender-cluster] Error parsing earthquakeIds for cluster ${clusterId}: Unexpected token`)
+            expect.stringContaining(`[prerender-cluster] Error parsing earthquakeIds for D1 Query ID ${d1QueryId}: Unexpected token`)
         );
         consoleErrorSpy.mockRestore();
     });
@@ -551,7 +747,7 @@ describe('onRequest (Main Router)', () => {
       const request = new Request('http://localhost/some/other/page', { headers: { 'User-Agent': 'Googlebot' }});
       const context = createMockContext(request);
       await onRequest(context);
-      expect(context.next).toHaveBeenCalled(); // Should still fall through if path doesn't match /quake or /cluster
+      expect(context.next).toHaveBeenCalled();
     });
 
     it('should fall through for crawler if quakeIdPathSegment is empty', async () => {
@@ -573,10 +769,10 @@ describe('onRequest (Main Router)', () => {
   describe('Fallback and SPA Routing', () => {
     it('should call context.next() for unhandled non-API, non-sitemap, non-prerender paths if context.next is defined', async () => {
       const request = new Request('http://localhost/some/spa/route');
-      const context = createMockContext(request); // This context has 'next' defined
+      const context = createMockContext(request);
       await onRequest(context);
       expect(context.next).toHaveBeenCalled();
-      expect(fetch).not.toHaveBeenCalled(); // Should not reach legacy proxy if 'next' is called
+      expect(fetch).not.toHaveBeenCalled();
     });
 
     it('should proxy if apiUrl param is present on an unhandled path and context.next is not defined/used', async () => {
