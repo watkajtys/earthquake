@@ -42,3 +42,5 @@ export async function scheduled(event, env, ctx) {
     console.error(`[scheduled-fetcher] Unhandled error in scheduled function: ${error.message}`, error);
   }
 }
+
+export default {};
