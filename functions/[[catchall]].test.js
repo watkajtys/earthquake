@@ -54,7 +54,7 @@ const createMockContext = (request, env = {}, cf = {}) => {
     },
     params: {}, // For route params if using a router like Hono, not directly used here
     waitUntil: vi.fn((promise) => { waitUntilPromises.push(promise); }),
-    next: vi.fn().mockResolvedValue(new Response("Fallthrough to Pages", { status: 200 })), // Mock for Pages passthrough
+    next: vi.fn().mockResolvedValue(new Response("Fallback to env.ASSETS.fetch for static assets", { status: 200 })), // Mock for Worker serving static assets
     cf, // Cloudflare-specific properties (e.g., for geolocation)
     // Utility to await all waitUntil promises
     _awaitWaitUntilPromises: async () => { await Promise.all(waitUntilPromises); }
@@ -848,11 +848,11 @@ describe('onRequest (Main Router)', () => {
       const response = await onRequest(context);
 
       // In this case, without context.next() and no matching route,
-      // the function implicitly returns undefined, which means Pages might serve a 404 or default asset.
+      // the function implicitly returns undefined, which means the Worker might rely on env.ASSETS.fetch or a default behavior.
       // The key is to check the console log.
       expect(response).toBeUndefined(); // onRequest implicitly returns undefined
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[worker-router] Path /very/unknown/path not handled by explicit routing in worker.")
+        expect.stringContaining("[worker-router] Path /very/unknown/path not handled by explicit routing in worker. Will attempt to serve from static assets (env.ASSETS) or SPA index.html.")
       );
       consoleLogSpy.mockRestore();
     });
