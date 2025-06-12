@@ -54,6 +54,50 @@ The application is deployed as a **Cloudflare Worker**, which handles both the s
     *   **Cost-Effectiveness**: A unified Worker-based architecture can be highly cost-effective.
     *   **Simplified DevOps**: CI/CD for the entire application (frontend and backend) is streamlined by deploying to Cloudflare Workers.
 
+## Environments and Deployment
+
+This project utilizes distinct environments for development, staging, and production, managed through Cloudflare Pages and Wrangler.
+
+### Environments
+
+*   **`production`**: This is the live environment that serves the application to end-users. It uses production-ready configurations, including the main D1 database and KV namespaces.
+*   **`staging`**: This environment is intended for pre-production testing. It mirrors the production setup and, importantly, **uses the same production D1 database and KV namespace bindings**. This allows for testing with live data to ensure changes are safe and performant before they are deployed to the live `production` environment. Use this environment with caution due to its use of live data.
+*   **`preview`**: Cloudflare Pages automatically generates preview deployments for each commit pushed to a branch (other than the production branch). These environments use preview-specific D1 and KV namespaces, suitable for testing new features in isolation without affecting production or staging data.
+*   **`dev`**: This refers to the local development environment when using `wrangler pages dev` or `vite`. It typically uses preview or development-specific bindings defined in `wrangler.toml` to avoid impacting live data.
+
+### Manual Deployment Commands
+
+Manual deployments to specific environments can be performed using npm or yarn scripts defined in `package.json`.
+
+*   **Deploying to Staging**:
+    *   **Purpose**: Deploys the current state of your project to the `staging` environment on Cloudflare.
+    *   **npm Command**: `npm run deploy:staging`
+    *   **Yarn Command**: `yarn deploy:staging`
+    *   **Usage**: Run the appropriate command from your terminal to push changes to staging. This is useful for final testing before a production release.
+    ```bash
+    # Using npm
+    npm run deploy:staging
+
+    # Or using Yarn
+    yarn deploy:staging
+    ```
+
+*   **Deploying to Production**:
+    *   **Purpose**: Deploys the current state of your project to the `production` (live) environment on Cloudflare.
+    *   **npm Command**: `npm run deploy:production`
+    *   **Yarn Command**: `yarn deploy:production`
+    *   **Usage**: Run the appropriate command from your terminal to push changes to production. This should only be done after changes have been thoroughly tested (e.g., in `staging` or preview deployments).
+    ```bash
+    # Using npm
+    npm run deploy:production
+
+    # Or using Yarn
+    yarn deploy:production
+    ```
+
+**Note on Automated Deployments:**
+Typically, the `production` environment is connected to the main branch of the Git repository, and deployments to production occur automatically when changes are merged into that branch. The `staging` environment might also be configured for automatic deployments from a specific branch (e.g., `develop` or `staging`), or manual deployments using the commands above can be used as part of the release process. Preview deployments are almost always automated by Cloudflare Pages.
+
 ## Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
 
 This Global Seismic Activity Monitor was brought to life through a dynamic and iterative development process, affectionately termed "vibe-coding." The project was conceptualized and significantly shaped within Gemini Canvas, leveraging a conversational AI-assisted development workflow.

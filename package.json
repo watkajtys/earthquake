@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest",
     "docs": "npx jsdoc -c jsdoc.json",
-    "deploy": "wrangler deploy src/worker.js"
+    "deploy": "wrangler deploy src/worker.js",
+    "deploy:staging": "npx wrangler deploy --env staging",
+    "deploy:production": "npx wrangler deploy --env production"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
