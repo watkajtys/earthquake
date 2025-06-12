@@ -2,7 +2,7 @@
 
 /**
  * @file functions/api/cluster-definition.js
- * @description Cloudflare Pages Function for managing earthquake cluster definitions.
+ * @description Cloudflare Worker module for managing earthquake cluster definitions.
  * This function handles POST requests to create or update cluster definitions
  * and GET requests to retrieve specific cluster definitions from a D1 database.
  */
@@ -20,7 +20,7 @@
  * - Other HTTP methods will result in a 405 Method Not Allowed response.
  *
  * @async
- * @param {object} context - The Cloudflare Pages Function context object.
+ * @param {object} context - The Cloudflare Worker request context object (commonly includes 'request', 'env', 'ctx').
  * @param {Request} context.request - The incoming HTTP request object.
  * @param {object} context.env - Environment variables, expected to contain `DB` (D1 Database binding).
  * @returns {Promise<Response>} A `Response` object.
