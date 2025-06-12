@@ -57,6 +57,20 @@ run_worker_first = true
 [env.dev.kv_namespaces]
 CLUSTER_KV = { preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
 
+
+# Staging environment configuration
+# Inherits from top-level, uses production KV and D1 bindings
+[env.staging]
+# For KV, staging uses the production ID
+kv_namespaces = [
+  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" }
+]
+# For D1, staging uses the production database_id
+d1_databases = [
+  { binding = "DB", database_name = "PrimaryDB", database_id = "8a0a26e9-ba3c-4984-9023-c1803f611a05" }
+]
+
+
 # D1 Database binding for primary data
 # -----------------------------------------------------------------------------------------
 # IMPORTANT INSTRUCTIONS FOR THE USER:
@@ -93,6 +107,7 @@ preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" # For `wrangler pag
 # or a specific local/dev D1 instance ID if you have one.
 [env.dev.d1_databases]
 DB = { preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" }
+
 
 [triggers]
 crons = ["*/1 * * * *"] # Run every minute
