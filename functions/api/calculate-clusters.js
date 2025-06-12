@@ -2,7 +2,7 @@
 
 /**
  * @file functions/api/calculate-clusters.js
- * @description Cloudflare Pages Function for calculating earthquake clusters.
+ * @description Cloudflare Worker module for calculating earthquake clusters.
  * This function receives a list of earthquakes and clustering parameters,
  * calculates clusters, and utilizes a D1 database for caching results.
  * It includes duplicated utility functions for distance calculation and cluster finding,
@@ -144,7 +144,7 @@ export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
  * Responses include an `X-Cache-Hit` header ('true' or 'false').
  *
  * @async
- * @param {object} context - The Cloudflare Pages Function context object.
+ * @param {object} context - The Cloudflare Worker request context object (commonly includes 'request', 'env', 'ctx').
  * @param {Request} context.request - The incoming HTTP request object, expected to have a JSON body.
  * @param {object} context.env - Environment variables, expected to contain `DB` (D1 Database binding).
  * @returns {Promise<Response>} A `Response` object containing either the calculated cluster data (Array of arrays of earthquake objects)
