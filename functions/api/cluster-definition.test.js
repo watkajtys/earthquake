@@ -81,7 +81,7 @@ describe('Cluster Definition API (/api/cluster-definition)', () => {
     });
 
     it('should return 400 if clusterId is missing', async () => {
-      const { clusterId, ...data } = validClusterData; // Create data without clusterId
+      const { clusterId: _clusterId, ...data } = validClusterData; // Create data without clusterId
       const request = new Request('http://localhost/api/cluster-definition', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

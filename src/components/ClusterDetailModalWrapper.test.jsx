@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import ClusterDetailModalWrapper from './ClusterDetailModalWrapper.jsx';
 // Assuming these are the contexts and services it uses or that need mocking for it to render
-import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
-import { fetchClusterDefinition } from '../services/clusterApiService.js';
+// import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Removed, using hoisted mock
+// import { fetchClusterDefinition } from '../services/clusterApiService.js'; // Removed, using hoisted mock
 
 // --- Mocks ---
 const mockNavigate = vi.fn();

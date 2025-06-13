@@ -7,7 +7,7 @@ vi.mock('../utils/utils.js', () => ({
   getMagnitudeColor: vi.fn(() => '#000000'),
 }));
 
-const getSortedDepthComparisons = () => actualDepthComparisons.filter(c => !c.isHeight).sort((a, b) => a.depth - b.depth);
+// const getSortedDepthComparisons = () => actualDepthComparisons.filter(c => !c.isHeight).sort((a, b) => a.depth - b.depth); // Unused function removed
 
 describe('SimplifiedDepthProfile', () => {
   test('displays fallback message and no contextual insights when earthquakeDepth is null', () => {
