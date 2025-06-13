@@ -46,6 +46,26 @@ run_worker_first = true
 #    with `wrangler dev`.
 # -----------------------------------------------------------------------------------------
 
+[env.preview]
+name = "earthquake-preview" # It's good practice to give preview a distinct name
+main = "src/worker.js"
+workers_dev = true # Assuming preview might also use a *.workers.dev subdomain initially
+
+# Use preview specific IDs for bindings
+kv_namespaces = [
+  { binding = "CLUSTER_KV", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
+]
+d1_databases = [
+  { binding = "DB", database_name = "PrimaryDB", preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" }
+]
+
+# Explicitly define how assets are handled for preview, mirroring top-level or production
+[env.preview.assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+binding = "ASSETS" # This might be optional if inherited, but explicit is safer.
+run_worker_first = true
+
 # Production environment configuration
 [env.production]
 name = "earthquake" # Explicitly set name for production environment
