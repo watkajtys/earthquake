@@ -85,11 +85,38 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   }, [originalQuakes]);
 
   const magDomain = useMemo(() => {
-    if (originalQuakes.length === 0) return [0, 1]; // Default domain
-    const mags = originalQuakes.map(d => d.properties.mag);
-    const maxMag = d3Max(mags);
-    const validMaxMag = isValidNumber(maxMag) ? maxMag : 0;
-    return [0, Math.max(1, Math.ceil(validMaxMag))]; // Ensure domain is at least [0,1]
+    if (originalQuakes.length === 0) return [0, 1]; // Fallback for no data
+
+    const mags = originalQuakes.map(d => d.properties.mag).filter(isValidNumber); // Ensure only valid numbers
+    if (mags.length === 0) return [0, 1]; // Fallback if no valid magnitudes
+
+    let minActualMag = d3Min(mags);
+    let maxActualMag = d3Max(mags);
+
+    // Handle case where minActualMag or maxActualMag might still be undefined if mags array is empty after filter
+    // Though the mags.length === 0 check above should catch this.
+    minActualMag = isValidNumber(minActualMag) ? minActualMag : 0;
+    maxActualMag = isValidNumber(maxActualMag) ? maxActualMag : 0;
+
+
+    let lowerBound = Math.max(0, minActualMag - 0.5);
+    let upperBound = maxActualMag + 0.5;
+
+    // Ensure a minimum span for the Y-axis, e.g., at least 1 unit
+    const MIN_DOMAIN_SPAN = 1.0;
+    if (upperBound - lowerBound < MIN_DOMAIN_SPAN) {
+      const midPoint = (lowerBound + upperBound) / 2; // Calculate midpoint before adjusting lowerBound
+      lowerBound = Math.max(0, midPoint - (MIN_DOMAIN_SPAN / 2));
+      upperBound = lowerBound + MIN_DOMAIN_SPAN;
+    }
+
+    // Final check if lower bound ended up being equal to or greater than upper bound
+    // This can happen if all mags are 0 or very close, and after padding and min_span logic.
+    if (upperBound <= lowerBound) {
+        upperBound = lowerBound + MIN_DOMAIN_SPAN;
+    }
+
+    return [lowerBound, upperBound];
   }, [originalQuakes]);
 
   const xScale = useMemo(() =>
@@ -119,29 +146,35 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   }, [xScale, width]);
 
   const yAxisTicks = useMemo(() => {
-    if (height <= 0 || !yScale.ticks) return [];
-    const domainMax = magDomain[1];
-    const tickCount = Math.min(Math.max(2, Math.floor(domainMax) + 1), 6); // Prefer integer ticks
+      if (height <= 0 || !yScale.ticks) return [];
 
-    let ticks = yScale.ticks(tickCount)
-      .filter(tick => tick >= 0 && tick <= domainMax && Number.isInteger(tick));
+      // Suggest a number of ticks (e.g., 5). D3 will try to find "nice" values around this count.
+      const suggestedTickCount = 5;
+      let ticks = yScale.ticks(suggestedTickCount);
 
-    // Ensure 0 and max magnitude are included if possible and integers
-    if (domainMax > 0 && Number.isInteger(domainMax) && !ticks.includes(domainMax)) {
-        ticks.push(domainMax);
-    }
-    if (!ticks.includes(0)) {
-        ticks.push(0);
-    }
-    ticks.sort((a,b) => a-b);
+      // Optional: Refine ticks if needed, e.g., ensure they are not too fractional for magnitudes
+      // For instance, round to nearest 0.5 if domain is small
+      const domainSpan = magDomain[1] - magDomain[0];
+      if (domainSpan <= 2 && domainSpan > 0) { // If domain span is small (but not zero), prefer ticks at .0 or .5
+          ticks = ticks.map(t => Math.round(t * 2) / 2);
+      } else if (domainSpan > 0) { // Otherwise, prefer integer ticks if possible, or let D3 decide
+          // Check if most ticks are already integers or close to them
+          const allNearInteger = ticks.every(t => Math.abs(t - Math.round(t)) < 0.01);
+          if (allNearInteger) {
+              ticks = ticks.map(t => Math.round(t));
+          }
+          // If not, D3's default choice is usually good.
+      }
 
-    // Remove duplicates that might arise from adding 0 and domainMax
-    ticks = [...new Set(ticks)];
+      // Remove duplicate ticks that might have resulted from rounding and ensure they are within domain
+      ticks = [...new Set(ticks)].filter(t => t >= magDomain[0] && t <= magDomain[1]);
+      ticks.sort((a,b) => a-b);
 
-    return ticks.map(value => ({
-      value,
-      offset: yScale(value),
-    })).filter(tick => tick.offset >= 0 && tick.offset <= height); // Ensure ticks are within drawable area
+      return ticks.map(value => ({
+          value,
+          offset: yScale(value),
+      // Allow slight overflow for edge ticks to be visible if they are just outside due to rounding/pixel alignment
+      })).filter(tick => tick.offset >= -1 && tick.offset <= height + 1);
   }, [yScale, height, magDomain]);
 
 

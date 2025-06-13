@@ -202,16 +202,18 @@ describe('EarthquakeSequenceChart', () => {
         test('renders some Y-axis tick labels (e.g., 0, 1, 2, 3, 4)', () => {
             // Check for presence of a few expected integer tick labels
             // The exact ticks depend on the magDomain, which is [0, Math.ceil(maxMag)]
-            // For mockClusterData, maxMag is 4.5, so domain is [0,5]. Expect 0,1,2,3,4,5
+            // For mockClusterData, magDomain is [2,5] based on new logic.
+            // Expected ticks could be [2, 2.5, 3, 3.5, 4, 4.5, 5]
             const svgElement = getSvgContainer(container);
             if (!svgElement) throw new Error("SVG container not found for Y-axis ticks test");
 
-            expect(within(svgElement).getByText('0')).toBeInTheDocument();
-            expect(within(svgElement).getByText('1')).toBeInTheDocument();
             expect(within(svgElement).getByText('2')).toBeInTheDocument();
+            expect(within(svgElement).queryByText('2.5')).toBeInTheDocument(); // d3 might produce this
             expect(within(svgElement).getByText('3')).toBeInTheDocument();
+            // expect(within(svgElement).queryByText('3.5')).toBeInTheDocument();
             expect(within(svgElement).getByText('4')).toBeInTheDocument();
-            expect(within(svgElement).getByText('5')).toBeInTheDocument(); // Since maxMag is 4.5, ceil is 5
+            // expect(within(svgElement).queryByText('4.5')).toBeInTheDocument();
+            expect(within(svgElement).getByText('5')).toBeInTheDocument();
         });
 
         test('renders some X-axis tick labels (formatted time)', () => {
