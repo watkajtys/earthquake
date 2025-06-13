@@ -2,6 +2,7 @@
 import React from 'react';
 import ClusterMiniMap from './ClusterMiniMap'; // Added import for the mini-map
 import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor
+import EarthquakeClusterSequenceChart from './EarthquakeClusterSequenceChart.jsx'; // Corrected filename
 
 /**
  * A modal component to display detailed information about an earthquake cluster.
@@ -154,6 +155,11 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 {/* Cluster Mini Map */}
                 <div className="my-4"> {/* Added margin for spacing */}
                     <ClusterMiniMap cluster={cluster} />
+                </div>
+
+                {/* Earthquake Sequence Chart */}
+                <div className="my-4">
+                    <EarthquakeClusterSequenceChart data={originalQuakes} />
                 </div>
 
                 {/* Individual Earthquakes List */}
