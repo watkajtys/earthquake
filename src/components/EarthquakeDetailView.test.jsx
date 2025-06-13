@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react'; // Removed 'within'
 import EarthquakeDetailView from './EarthquakeDetailView'; // Component to test
 import { vi } from 'vitest'; // Using Vitest's mocking utilities
 
@@ -74,106 +74,7 @@ const mockDefaultPropsGlobal = {
   onDataLoadedForSeo: vi.fn(),
 };
 
-/* Commented out Nearby Quakes Filtering tests remain unchanged */
-/*
-describe('EarthquakeDetailView - Nearby Quakes Filtering', () => {
-  const mockDetailUrl = 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=testmainquake&format=geojson';
-  const mockOnClose = vi.fn();
-
-  const mockDetailDataForNearbySuite = {
-    id: 'mainquake123',
-    properties: {
-      title: 'M 5.0 - Central Test Region',
-      mag: 5.0,
-      place: '10km N of Testville',
-      time: 1678886400000,
-      tsunami: 0,
-      status: 'reviewed',
-      felt: 10,
-      mmi: 4.5,
-      alert: 'green',
-    },
-    geometry: { coordinates: [-120.0, 35.0, 10.0] }
-  };
-
-  let fetchSpy;
-  let calculateDistanceMock;
-
-  beforeEach(() => {
-    fetchSpy = vi.spyOn(global, 'fetch');
-    fetchSpy.mockImplementation((url, options) => {
-      if (String(url).startsWith(mockDetailUrl)) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ ...mockDetailDataForNearbySuite }),
-        });
-      }
-      return Promise.reject(new Error(`[Nearby Quakes Test] Unexpected fetch call: ${url}`));
-    });
-    mockOnClose.mockClear();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('correctly filters broaderEarthquakeData and passes regionalQuakes to EarthquakeMap', async () => {
-    const utils = await import('./utils'); // This should be '../utils/utils.js'
-    calculateDistanceMock = utils.calculateDistance;
-
-    expect(vi.isMockFunction(calculateDistanceMock)).toBe(true);
-
-    calculateDistanceMock.mockImplementation((lat1, lon1, lat2, lon2) => {
-        if (lat2 === 35.1 && lon2 === -120.1) return REGIONAL_RADIUS_KM - 50;
-        if (lat2 === 34.9 && lon2 === -119.9) return REGIONAL_RADIUS_KM - 20;
-        if (lat2 === 38.0 && lon2 === -125.0) return REGIONAL_RADIUS_KM + 100;
-        return REGIONAL_RADIUS_KM + 200;
-    });
-
-    const simplifiedMockBroaderData = [
-      { id: 'nearby1', properties: { title: 'Nearby Quake (Close)', mag: 3.0 }, geometry: { coordinates: [-120.1, 35.1, 5.0] } },
-      { id: 'nearby5', properties: { title: 'Nearby Quake (Close 2)', mag: 3.2 }, geometry: { coordinates: [-119.9, 34.9, 8.0] } },
-      { id: 'nearby2', properties: { title: 'Nearby Quake (Far)', mag: 2.5 }, geometry: { coordinates: [-125.0, 38.0, 15.0] } }
-    ];
-
-    render(
-      <EarthquakeDetailView
-        detailUrl={mockDetailUrl}
-        onClose={mockOnClose}
-        broaderEarthquakeData={simplifiedMockBroaderData}
-        dataSourceTimespanDays={7}
-      />
-    );
-
-    let mockMapElement;
-    await waitFor(() => {
-      mockMapElement = screen.getByTestId('mock-earthquake-map');
-      expect(mockMapElement).toBeInTheDocument();
-    }, { timeout: 5000 });
-
-    expect(screen.getAllByText(mockDetailDataForNearbySuite.properties.title)[0]).toBeInTheDocument();
-    // These assertions would need to change to the new data attributes
-    // expect(mockMapElement).toHaveAttribute('data-latitude', String(mockDetailDataForNearbySuite.geometry.coordinates[1]));
-    // expect(mockMapElement).toHaveAttribute('data-longitude', String(mockDetailDataForNearbySuite.geometry.coordinates[0]));
-    expect(mockMapElement.getAttribute('data-nearby-quakes')).toBeTruthy();
-
-    const passedNearbyQuakesAttr = mockMapElement.getAttribute('data-nearby-quakes');
-    const passedNearbyQuakes = JSON.parse(passedNearbyQuakesAttr);
-
-    expect(passedNearbyQuakes).toBeInstanceOf(Array);
-    expect(passedNearbyQuakes.length).toBe(2);
-
-    expect(passedNearbyQuakes.find(q => q.id === 'nearby1')).toBeDefined();
-    expect(passedNearbyQuakes.find(q => q.id === 'nearby5')).toBeDefined();
-    expect(passedNearbyQuakes.find(q => q.id === 'nearby2')).toBeUndefined();
-
-    expect(calculateDistanceMock).toHaveBeenCalledTimes(3);
-    expect(calculateDistanceMock).toHaveBeenCalledWith(35.0, -120.0, 35.1, -120.1);
-    expect(calculateDistanceMock).toHaveBeenCalledWith(35.0, -120.0, 38.0, -125.0);
-    expect(calculateDistanceMock).toHaveBeenCalledWith(35.0, -120.0, 34.9, -119.9);
-  });
-});
-*/
+// Removed the large commented-out describe block for 'Nearby Quakes Filtering'
 
 describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () => {
   // Base mockDetailUrl and event_id for most tests
