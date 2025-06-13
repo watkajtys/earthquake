@@ -149,28 +149,36 @@ describe('EarthquakeSequenceChart', () => {
 
         test('renders mainshock with specific styling and label', () => {
             const mainshockData = mockClusterData.originalQuakes[1]; // eq2 is mainshock
-            const expectedLabel = `${formatNumber(mainshockData.properties.mag,1)}`; // Label is now just the magnitude
-            expect(screen.getByText(expectedLabel)).toBeInTheDocument();
+            const expectedLabelText = `${formatNumber(mainshockData.properties.mag,1)}`; // Label is now just the magnitude
 
-            // Find all circles, then identify mainshock by associated text or properties
-            // This is a bit indirect. A data-testid on the mainshock group would be better.
+            // Find all circle elements. Iterate to find the mainshock circle based on its unique properties.
             const allCircles = container.querySelectorAll('circle');
             let mainshockCircle;
+            let mainshockGroup;
+
+            // Calculate expected radius for mainshock (mag 4.5 in domain [2,5] for these tests, radiusScale domain [0,5])
+            // baseRadius = scaleSqrt().domain([0, 5.0]).range([2, 10])(4.5) approx 9.589
+            // mainshock circleRadius = baseRadius + 2 = 11.589
+            const expectedRadiusMainshockCalc = ((Math.sqrt(mainshockData.properties.mag) / Math.sqrt(5)) * (10 - 2)) + 2 + 2;
+
+
             allCircles.forEach(circle => {
-                const parentGroup = circle.closest('g');
-                if (parentGroup && within(parentGroup).queryByText(expectedLabel)) {
+                const r = parseFloat(circle.getAttribute('r'));
+                // Check for properties unique to the mainshock: fill 'none' and its specific, larger radius.
+                if (circle.getAttribute('fill') === 'none' && Math.abs(r - expectedRadiusMainshockCalc) < 0.1) {
                     mainshockCircle = circle;
+                    mainshockGroup = circle.closest('g');
                 }
             });
 
             expect(mainshockCircle).toBeInTheDocument();
+            expect(mainshockGroup).toBeInTheDocument();
 
-            // Calculate expected radius for mainshock (mag 4.5 in domain [0,5], range [2,10], then +2)
-            // scale = (sqrt(4.5/5) * (10-2)) + 2 = (sqrt(0.9) * 8) + 2 ~ 9.589
-            // expectedR = 9.589 + 2 = 11.589
-            const expectedRadiusMainshock = ((Math.sqrt(4.5) / Math.sqrt(5)) * 8 + 2 + 2).toFixed(2); // Approx
-            expect(parseFloat(mainshockCircle.getAttribute('r'))).toBeCloseTo(parseFloat(expectedRadiusMainshock), 1);
+            // Once the mainshock group is identified, query for the label *within* that group.
+            const mainshockLabelElement = within(mainshockGroup).getByText(expectedLabelText);
+            expect(mainshockLabelElement).toBeInTheDocument();
 
+            expect(parseFloat(mainshockCircle.getAttribute('r'))).toBeCloseTo(expectedRadiusMainshockCalc, 1);
             expect(mainshockCircle).toHaveAttribute('fill', 'none');
             expect(mainshockCircle).toHaveAttribute('stroke', getMagnitudeColor(mainshockData.properties.mag));
             expect(mainshockCircle).toHaveAttribute('stroke-width', '2');
