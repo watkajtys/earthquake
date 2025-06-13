@@ -16,7 +16,8 @@ const mockGlobeRefActions = {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   })),
-  toGlobeCoords: vi.fn((x,y) => ({lat: 0, lng: 0})), // Simulate returning some coords
+  // eslint-disable-next-line no-unused-vars
+  toGlobeCoords: vi.fn((_x,_y) => ({lat: 0, lng: 0})), // Simulate returning some coords, params unused
 };
 vi.mock('react-globe.gl', () => ({
   default: vi.fn((props) => {
@@ -41,7 +42,7 @@ vi.mock('react-globe.gl', () => ({
 }));
 
 // Mock context
-const mockUseEarthquakeDataState = vi.fn();
+// const mockUseEarthquakeDataState = vi.fn(); // Unused variable removed
 
 const renderWithContext = (ui, { providerProps, ...renderOptions }) => {
   return render(

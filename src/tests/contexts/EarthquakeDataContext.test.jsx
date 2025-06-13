@@ -2,7 +2,7 @@ import React from 'react';
 import { earthquakeReducer, initialState, actionTypes, EarthquakeDataContext, EarthquakeDataProvider } from '../../contexts/EarthquakeDataContext';
 
 // --- React specific testing imports ---
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 // contextActionTypes removed from import as it's unused
 import { initialState as contextInitialState, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext';
@@ -30,7 +30,7 @@ vi.mock('../../services/usgsApiService', () => ({
 const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0, now = Date.now()) => { if (!Array.isArray(data)) return []; const startTime = now - hoursAgoStart * 36e5; const endTime = now - hoursAgoEnd * 36e5; return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);};
 const filterMonthlyByTime = (data, daysAgoStart, daysAgoEnd = 0, now = Date.now()) => { if (!Array.isArray(data)) return []; const startTime = now - (daysAgoStart * 24 * 36e5); const endTime = now - (daysAgoEnd * 24 * 36e5); return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);};
 const consolidateMajorQuakesLogic = (currentLastMajor, currentPreviousMajor, newMajors) => { let potentialQuakes = [...newMajors]; if (currentLastMajor) potentialQuakes.push(currentLastMajor); if (currentPreviousMajor) potentialQuakes.push(currentPreviousMajor); const consolidated = potentialQuakes.sort((a, b) => b.properties.time - a.properties.time).filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id)); const newLastMajor = consolidated.length > 0 ? consolidated[0] : null; const newPreviousMajor = consolidated.length > 1 ? consolidated[1] : null; const newTimeBetween = newLastMajor && newPreviousMajor ? newLastMajor.properties.time - newPreviousMajor.properties.time : null; return { lastMajorQuake: newLastMajor, previousMajorQuake: newPreviousMajor, timeBetweenPreviousMajorQuakes: newTimeBetween };};
-const sampleArray = (array, sampleSize) => { if (!Array.isArray(array) || array.length === 0) return []; if (sampleSize <= 0) return []; if (sampleSize >= array.length) return [...array]; const shuffled = [...array]; for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled.slice(0, sampleSize);};
+// const sampleArray = (array, sampleSize) => { if (!Array.isArray(array) || array.length === 0) return []; if (sampleSize <= 0) return []; if (sampleSize >= array.length) return [...array]; const shuffled = [...array]; for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled.slice(0, sampleSize);}; // Unused function removed
 // function sampleArrayWithPriority (fullArray, sampleSize, priorityMagnitudeThreshold) { ... } // Removed unused helper
 const MAGNITUDE_RANGES = [ {name: '<1', min: -Infinity, max: 0.99}, {name : '1-1.9', min : 1, max : 1.99}, {name: '2-2.9', min: 2, max: 2.99}, {name : '3-3.9', min : 3, max : 3.99}, {name: '4-4.9', min: 4, max: 4.99}, {name : '5-5.9', min : 5, max : 5.99}, {name: '6-6.9', min: 6, max: 6.99}, {name : '7+', min : 7, max : Infinity}, ];
 // const formatDateForTimeline = (timestamp) => { ... }; // Removed, as getInitialDailyCounts which used it is also removed
@@ -90,11 +90,6 @@ describe('EarthquakeDataContext Reducer', () => {
     });
   });
 
-  // Original single SET_LOADING_FLAGS test (can be removed if covered by new describe block)
-  // it('should handle SET_LOADING_FLAGS', () => { const p = {isLoadingDaily:false,isLoadingWeekly:false}; expect(earthquakeReducer(initialState,{type:actionTypes.SET_LOADING_FLAGS,payload:p})).toEqual({...initialState,...p}); });
-  // it('should handle SET_LOADING_FLAGS for a single flag', () => { const p = {isLoadingMonthly:true}; expect(earthquakeReducer(initialState,{type:actionTypes.SET_LOADING_FLAGS,payload:p})).toEqual({...initialState,...p}); });
-  // it('should handle SET_ERROR', () => { const p = {error:'Test error',monthlyError:null}; expect(earthquakeReducer(initialState,{type:actionTypes.SET_ERROR,payload:p})).toEqual({...initialState,...p}); });
-  // it('should handle SET_ERROR for monthlyError', () => { const p = {monthlyError:'Failed'}; expect(earthquakeReducer(initialState,{type:actionTypes.SET_ERROR,payload:p})).toEqual({...initialState,...p}); });
   it('should handle SET_INITIAL_LOAD_COMPLETE', () => expect(earthquakeReducer(initialState, { type: actionTypes.SET_INITIAL_LOAD_COMPLETE })).toEqual({ ...initialState, isInitialAppLoad: false }));
   it('should handle UPDATE_LOADING_MESSAGE_INDEX', () => { const s = {...initialState,currentLoadingMessages:['1','2'],loadingMessageIndex:0}; expect(earthquakeReducer(s,{type:actionTypes.UPDATE_LOADING_MESSAGE_INDEX}).loadingMessageIndex).toBe(1);});
   it('should handle UPDATE_LOADING_MESSAGE_INDEX and cycle to 0', () => { const s = {...initialState,currentLoadingMessages:['1','2'],loadingMessageIndex:1}; expect(earthquakeReducer(s,{type:actionTypes.UPDATE_LOADING_MESSAGE_INDEX}).loadingMessageIndex).toBe(0);});

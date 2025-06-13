@@ -69,7 +69,7 @@ function EarthquakeRegionalMapPanel({
         console.log("[EarthquakeRegionalMapPanel] Skipping highlightProps due to invalid/missing properties or magnitude.");
     }
 
-    const fitMap = false;
+    // const fitMap = false; // Unused variable removed
     const finalMapProps = {
         mapCenterLatitude: mapCenterLat,
         mapCenterLongitude: mapCenterLng,

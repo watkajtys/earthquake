@@ -6,7 +6,7 @@ import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext';
 import * as Utils from '../utils/utils'; // To mock getMagnitudeColor
 
 // Mock the EarthquakeDataContext
-const mockUseEarthquakeDataState = vi.fn();
+// const mockUseEarthquakeDataState = vi.fn(); // Unused variable removed
 
 // Mock the skeleton component
 vi.mock('./skeletons/MagnitudeDistributionSVGChartSkeleton', () => ({
@@ -156,7 +156,7 @@ describe('MagnitudeDistributionSVGChart', () => {
 
     gElements.forEach(g => {
       const titleElement = g.querySelector('title');
-      const textElements = g.querySelectorAll('text');
+      // const textElements = g.querySelectorAll('text'); // Unused variable removed
       if (titleElement) {
         const title = titleElement.textContent; // e.g. "<1: 1"
         if (title.startsWith('<1:')) {

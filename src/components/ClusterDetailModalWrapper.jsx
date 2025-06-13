@@ -142,8 +142,8 @@ function ClusterDetailModalWrapper({
      * It also generates SEO properties using `generateSeo` based on the outcome.
      */
     useEffect(() => {
-        let isMounted = true;
-        let d1FetchAttempted = false;
+        // let isMounted = true; // Unused variable
+        // let d1FetchAttempted = false; // Unused variable
 
         // Parse the clusterId from URL to extract strongest quake ID
         if (fullSlugFromParams) {
@@ -163,8 +163,8 @@ function ClusterDetailModalWrapper({
 
 
     useEffect(() => {
-        let isMounted = true;
-        let d1FetchAttempted = false;
+        let isMounted = true; // This one IS used in the return of useEffect
+        // let d1FetchAttempted = false; // Unused variable
 
         const findAndSetCluster = async () => {
             if (!isMounted) return;
@@ -308,7 +308,7 @@ function ClusterDetailModalWrapper({
             let finalErrorMessage = null;
 
             if (!dynamicCluster && extractedStrongestQuakeId) { // Only fetch if we have an ID
-                d1FetchAttempted = true;
+                // d1FetchAttempted = true; // Unused assignment removed
                 try {
                     // Use extractedStrongestQuakeId for fetching
                     const workerResult = await fetchClusterDefinition(extractedStrongestQuakeId);

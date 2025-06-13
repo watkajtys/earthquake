@@ -179,17 +179,19 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                                 }
                             };
                             const quakeTitle = `Click to view details for M ${quake.properties?.mag?.toFixed(1) || 'N/A'} - ${quake.properties?.place || 'Unknown Place'}`;
-                            const originalClassName = `p-2.5 rounded-md border ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : 'bg-slate-700 border-slate-600'} hover:border-slate-500 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400`;
+                            // Applied to button: text-left to mimic div's default block behavior for text alignment
+                            const originalClassName = `w-full text-left p-2.5 rounded-md border ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : 'bg-slate-700 border-slate-600'} hover:border-slate-500 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400`;
 
                             return (
-                            <div
+                            // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-static-element-interactions
+                            <button
                                 key={quake.id}
-                                className={originalClassName} // Restored original className
+                                type="button" // Explicit type for button
+                                className={originalClassName}
                                 onClick={() => onIndividualQuakeSelect && onIndividualQuakeSelect(quake)}
                                 onKeyDown={(e) => handleQuakeKeyDown(e, quake)}
-                                tabIndex="0"
-                                role="button"
-                                title={quakeTitle} // Use pre-constructed title string
+                                // tabIndex="0" and role="button" are implicit for <button>
+                                title={quakeTitle}
                             >
                                 <div className="flex justify-between items-start mb-0.5">
                                     <p className="text-sm font-semibold">
@@ -209,7 +211,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                                         Depth: {quake.geometry?.coordinates?.[2]?.toFixed(1) || 'N/A'} km
                                     </span>
                                 </div>
-                            </div>
+                            </button>
                         ); // Restored semicolon for return
                     }) // Restored closing brace for map callback
                     ) : (
