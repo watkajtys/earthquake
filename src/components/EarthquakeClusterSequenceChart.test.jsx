@@ -6,18 +6,37 @@ import EarthquakeClusterSequenceChart from './EarthquakeClusterSequenceChart.jsx
 // No longer need to mock react-loader-spinner
 
 const mockData = [
-  { id: 'evt1', time: '2023-01-01T10:00:00Z', mag: 3.5, depthkm: 10, place: 'Location A', status: 'reviewed' },
-  { id: 'evt2', time: '2023-01-01T12:00:00Z', mag: 5.0, depthkm: 12, place: 'Location B', status: 'reviewed' }, // Mainshock
-  { id: 'evt3', time: '2023-01-01T14:00:00Z', mag: 4.0, depthkm: 8, place: 'Location C', status: 'reviewed' },
-  { id: 'evt4', time: '2023-01-02T08:00:00Z', mag: 3.0, depthkm: 15, place: 'Location D', status: 'reviewed' },
+  {
+    id: 'evt1',
+    properties: { time: '2023-01-01T10:00:00Z', mag: 3.5, place: 'Location A', status: 'reviewed' },
+    geometry: { coordinates: [0, 0, 10] }
+  },
+  {
+    id: 'evt2',
+    properties: { time: '2023-01-01T12:00:00Z', mag: 5.0, place: 'Location B', status: 'reviewed' }, // Mainshock
+    geometry: { coordinates: [0, 0, 12] }
+  },
+  {
+    id: 'evt3',
+    properties: { time: '2023-01-01T14:00:00Z', mag: 4.0, place: 'Location C', status: 'reviewed' },
+    geometry: { coordinates: [0, 0, 8] }
+  },
+  {
+    id: 'evt4',
+    properties: { time: '2023-01-02T08:00:00Z', mag: 3.0, place: 'Location D', status: 'reviewed' },
+    geometry: { coordinates: [0, 0, 15] }
+  },
 ];
 
-const mockMainshock = mockData[1]; // id: 'evt2', mag: 5.0
+const mockMainshock = mockData[1]; // id: 'evt2', properties.mag: 5.0
 
 const mockDataSingle = [
-  { id: 'evt1', time: '2023-01-01T12:00:00Z', mag: 4.5, depthkm: 10, place: 'Location A', status: 'reviewed' }, // Mainshock
+  {
+    id: 'evt1',
+    properties: { time: '2023-01-01T12:00:00Z', mag: 4.5, place: 'Location A', status: 'reviewed' }, // Mainshock
+    geometry: { coordinates: [0, 0, 10] }
+  },
 ];
-
 
 // Mock offsetWidth for consistent chart rendering
 const mockOffsetWidth = (width = 800) => {
@@ -42,6 +61,28 @@ describe('EarthquakeClusterSequenceChart', () => {
     expect(screen.getByText('No earthquake data available for this sequence.')).toBeInTheDocument();
   });
 
+  test('renders chart subtitle correctly when mainshock time is invalid', () => {
+    const dataWithInvalidMainshockTime = [
+      {
+        id: 'evt1',
+        properties: { time: '2023-01-01T10:00:00Z', mag: 3.5, place: 'Location A', status: 'reviewed' },
+        geometry: { coordinates: [0, 0, 10] }
+      },
+      {
+        id: 'evt2_no_time',
+        properties: { time: null, mag: 5.0, place: 'Location B (No Time)', status: 'reviewed' },
+        geometry: { coordinates: [0, 0, 12] }
+      }
+    ];
+    render(<EarthquakeClusterSequenceChart data={dataWithInvalidMainshockTime} />);
+    // The title text element contains EITHER "Sequence started: ..." OR "Earthquake Sequence"
+    const titleTextElement = screen.getByTestId('earthquake-sequence-chart-svg').querySelector('text.text-lg.font-bold.text-gray-800');
+    expect(titleTextElement).toBeInTheDocument();
+    expect(titleTextElement.textContent).toBe('Earthquake Sequence');
+    // Ensure the "Sequence started:" part is not present by querying the whole document
+    expect(screen.queryByText(/Sequence started:/i)).not.toBeInTheDocument();
+  });
+
   describe('With Data Rendered', () => {
     let view;
     beforeEach(() => {
@@ -53,7 +94,7 @@ describe('EarthquakeClusterSequenceChart', () => {
     });
 
     test('renders sequence start date in title', () => {
-        const mainshockTime = new Date(mockMainshock.time);
+        const mainshockTime = new Date(mockMainshock.properties.time);
         // Format date as MM/DD/YYYY (toLocaleDateString might vary by environment, adjust if needed)
         const expectedDateString = mainshockTime.toLocaleDateString();
         expect(screen.getByText(`Sequence started: ${expectedDateString}`)).toBeInTheDocument();
@@ -170,12 +211,12 @@ describe('EarthquakeClusterSequenceChart', () => {
         const titleElement = firstCircle.querySelector('title'); // Get title content
 
         expect(titleElement).not.toBeNull();
-        const eventData = mockData[0];
-        expect(titleElement.textContent).toContain(`Time: ${new Date(eventData.time).toLocaleString()}`);
-        expect(titleElement.textContent).toContain(`Magnitude: ${eventData.mag}`);
-        expect(titleElement.textContent).toContain(`Depth: ${eventData.depthkm} km`);
-        expect(titleElement.textContent).toContain(`Place: ${eventData.place}`);
-        expect(titleElement.textContent).toContain(`Status: ${eventData.status}`);
+        const eventData = mockData[0]; // eventData here refers to the item from the *original* flat mockData structure for comparison
+        expect(titleElement.textContent).toContain(`Time: ${new Date(eventData.properties.time).toLocaleString()}`);
+        expect(titleElement.textContent).toContain(`Magnitude: ${eventData.properties.mag}`);
+        expect(titleElement.textContent).toContain(`Depth: ${eventData.geometry.coordinates[2]} km`);
+        expect(titleElement.textContent).toContain(`Place: ${eventData.properties.place}`);
+        expect(titleElement.textContent).toContain(`Status: ${eventData.properties.status}`);
     });
   });
 
@@ -186,7 +227,7 @@ describe('EarthquakeClusterSequenceChart', () => {
 
     test('renders chart title and axis labels', () => {
         expect(screen.getByText('Earthquake Sequence: Time vs. Magnitude')).toBeInTheDocument();
-        const mainshockTime = new Date(mockDataSingle[0].time);
+        const mainshockTime = new Date(mockDataSingle[0].properties.time);
         const expectedDateString = mainshockTime.toLocaleDateString();
         expect(screen.getByText(`Sequence started: ${expectedDateString}`)).toBeInTheDocument();
         expect(screen.getByText('Days from Mainshock')).toBeInTheDocument();

@@ -3,7 +3,7 @@ import { scaleLinear, scaleTime } from 'd3-scale';
 import { timeFormat } from 'd3-time-format';
 import { select } from 'd3-selection'; // Added
 
-const EarthqueueClusterSequenceChart = ({ data }) => {
+const EarthquakeClusterSequenceChart = ({ data }) => {
   const [containerWidth, setContainerWidth] = useState(0);
   const containerRef = React.useRef(null);
 
@@ -22,14 +22,18 @@ const EarthqueueClusterSequenceChart = ({ data }) => {
 
   const mainshock = useMemo(() => {
     if (!data || data.length === 0) return null;
-    return data.reduce((prev, current) => (prev.mag > current.mag) ? prev : current);
+    // GeoJSON: properties are nested
+    return data.reduce((prev, current) =>
+      (prev.properties.mag > current.properties.mag) ? prev : current
+    );
   }, [data]);
 
   const processedData = useMemo(() => {
     if (!data || !mainshock) return [];
     return data.map(event => ({
-      ...event,
-      time_after_mainshock: (new Date(event.time) - new Date(mainshock.time)) / (1000 * 60 * 60 * 24), // in days
+      ...event, // Spread original event (includes id, type, geometry, properties)
+      // Ensure time is accessed from properties for calculation
+      time_after_mainshock: (new Date(event.properties.time) - new Date(mainshock.properties.time)) / (1000 * 60 * 60 * 24), // in days
     }));
   }, [data, mainshock]);
 
@@ -40,10 +44,10 @@ const EarthqueueClusterSequenceChart = ({ data }) => {
   const xScale = useMemo(() => {
     if (!processedData || processedData.length === 0 || !mainshock) return null;
     const timeDomain = [
-        (new Date(mainshock.time).getTime() - 1 * 24 * 60 * 60 * 1000) / (1000 * 60 * 60 * 24), // 1 day before mainshock
+        // Ensure time is accessed from properties for calculation
+        (new Date(mainshock.properties.time).getTime() - 1 * 24 * 60 * 60 * 1000) / (1000 * 60 * 60 * 24), // 1 day before mainshock
         Math.max(...processedData.map(d => d.time_after_mainshock), 1) // Ensure at least 1 day shown
     ];
-    // Corrected xScale to handle time_after_mainshock values directly
     return scaleLinear()
       .domain(timeDomain)
       .range([0, width]);
@@ -52,8 +56,9 @@ const EarthqueueClusterSequenceChart = ({ data }) => {
 
   const yScale = useMemo(() => {
     if (!processedData || processedData.length === 0) return null;
-    const magMin = Math.min(...processedData.map(d => d.mag), 0);
-    const magMax = Math.max(...processedData.map(d => d.mag), 5);
+    // Ensure mag is accessed from properties
+    const magMin = Math.min(...processedData.map(d => d.properties.mag), 0);
+    const magMax = Math.max(...processedData.map(d => d.properties.mag), 5);
     return scaleLinear()
       .domain([magMin > 0 ? 0 : magMin, magMax])
       .range([height, 0]);
@@ -61,8 +66,9 @@ const EarthqueueClusterSequenceChart = ({ data }) => {
 
   const radiusScale = useMemo(() => {
     if (!processedData || processedData.length === 0) return null;
-    const magMin = Math.min(...processedData.map(d => d.mag));
-    const magMax = Math.max(...processedData.map(d => d.mag));
+    // Ensure mag is accessed from properties
+    const magMin = Math.min(...processedData.map(d => d.properties.mag));
+    const magMax = Math.max(...processedData.map(d => d.properties.mag));
     return scaleLinear()
       .domain([magMin, magMax])
       .range([3, 15]);
@@ -186,31 +192,31 @@ const EarthqueueClusterSequenceChart = ({ data }) => {
                 textAnchor="middle"
                 className="text-lg font-bold text-gray-800"
             >
-                {mainshock ? `Sequence started: ${new Date(mainshock.time).toLocaleDateString()}` : 'Earthquake Sequence'}
+                {mainshock && mainshock.properties && mainshock.properties.time ? `Sequence started: ${new Date(mainshock.properties.time).toLocaleDateString()}` : 'Earthquake Sequence'}
             </text>
 
 
           {/* Data points */}
-          {processedData.map((event, i) => (
+          {processedData.map((event, i) => ( // event here is from processedData, which includes original GeoJSON structure
             <circle
-              key={i}
+              key={event.id || i} // Use event.id if available, otherwise fallback to index
               cx={xScale(event.time_after_mainshock)}
-              cy={yScale(event.mag)}
-              r={radiusScale(event.mag)}
+              cy={yScale(event.properties.mag)}
+              r={radiusScale(event.properties.mag)}
               fill={event.id === mainshock.id ? 'rgba(255, 0, 0, 0.7)' : 'rgba(0, 100, 255, 0.5)'}
               stroke={event.id === mainshock.id ? 'rgba(200, 0, 0, 1)' : 'rgba(0, 80, 200, 0.8)'}
               strokeWidth="1"
             >
               <title>
-                {`Time: ${new Date(event.time).toLocaleString()}\nMagnitude: ${event.mag}\nDepth: ${event.depthkm} km\nPlace: ${event.place}\nStatus: ${event.status}${event.id === mainshock.id ? ' (Mainshock)' : ''}`}
+                {`Time: ${new Date(event.properties.time).toLocaleString()}\nMagnitude: ${event.properties.mag}\nDepth: ${event.geometry.coordinates[2]} km\nPlace: ${event.properties.place}\nStatus: ${event.properties.status}${event.id === mainshock.id ? ' (Mainshock)' : ''}`}
               </title>
             </circle>
           ))}
            {/* Mainshock Label */}
-           {mainshock && xScale(0) >=0 && xScale(0) <= width && yScale(mainshock.mag) >=0 && yScale(mainshock.mag) <= height && (
+           {mainshock && mainshock.properties && xScale(0) >=0 && xScale(0) <= width && yScale(mainshock.properties.mag) >=0 && yScale(mainshock.properties.mag) <= height && (
              <text
                 x={xScale(0)} // Mainshock is at time_after_mainshock = 0
-                y={yScale(mainshock.mag) - radiusScale(mainshock.mag) - 5} // Position above the circle
+                y={yScale(mainshock.properties.mag) - radiusScale(mainshock.properties.mag) - 5} // Position above the circle
                 textAnchor="middle"
                 className="text-xs fill-current text-red-600 font-semibold"
              >
@@ -233,4 +239,4 @@ const EarthqueueClusterSequenceChart = ({ data }) => {
   );
 };
 
-export default EarthqueueClusterSequenceChart;
+export default EarthquakeClusterSequenceChart;
