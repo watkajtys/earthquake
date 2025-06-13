@@ -108,7 +108,7 @@ describe('EarthquakeSequenceChart', () => {
 
     test('renders basic chart with title', () => {
         render(<EarthquakeSequenceChart cluster={mockClusterSingleQuake} />);
-        expect(screen.getByText('When quakes and aftershocks occurred')).toBeInTheDocument();
+        expect(screen.getByText('Earthquake Sequence (UTC)')).toBeInTheDocument();
     });
 
     test('renders "No data available" message when originalQuakes is empty', () => {
@@ -136,7 +136,7 @@ describe('EarthquakeSequenceChart', () => {
 
         test('renders mainshock with specific styling and label', () => {
             const mainshockData = mockClusterData.originalQuakes[1]; // eq2 is mainshock
-            const expectedLabel = `Magnitude ${formatNumber(mainshockData.properties.mag,1)} earthquake`;
+            const expectedLabel = `${formatNumber(mainshockData.properties.mag,1)}`; // Label is now just the magnitude
             expect(screen.getByText(expectedLabel)).toBeInTheDocument();
 
             // Find all circles, then identify mainshock by associated text or properties
@@ -195,8 +195,8 @@ describe('EarthquakeSequenceChart', () => {
             });
         });
 
-        test('renders Y-axis label "Mag."', () => {
-            expect(screen.getByText('Mag.')).toBeInTheDocument();
+        test('renders Y-axis label "Magnitude"', () => {
+            expect(screen.getByText('Magnitude')).toBeInTheDocument();
         });
 
         test('renders some Y-axis tick labels (e.g., 0, 1, 2, 3, 4)', () => {
@@ -216,9 +216,15 @@ describe('EarthquakeSequenceChart', () => {
             expect(within(svgElement).getByText('5')).toBeInTheDocument();
         });
 
+        test('renders X-axis label "Time (UTC)"', () => {
+            expect(screen.getByText('Time (UTC)')).toBeInTheDocument();
+        });
+
         test('renders some X-axis tick labels (formatted time)', () => {
             // Check for text elements that are X-axis ticks.
             // This is harder to be specific about due to dynamic generation.
+            // For mockClusterData, duration is ~2 hours. Tick interval should be 2 hours.
+            // Expected labels: "Aug 26, 11AM", "Aug 26, 01PM"
             // We check for presence of multiple text elements at y = height + 20 (approx)
             const svgElement = getSvgContainer(container);
             if (!svgElement) throw new Error("SVG container not found for X-axis ticks test");
@@ -231,8 +237,11 @@ describe('EarthquakeSequenceChart', () => {
             // The exact ticks depend on d3.ticks() behavior.
             // We look for at least two distinct time labels.
             const xTickTexts = within(svgElement)
-                .getAllByText(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{1,2}(AM|PM)$/i);
-            expect(xTickTexts.length).toBeGreaterThanOrEqual(2); // Expect at least a couple of time labels
+                .getAllByText(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{1,2}(AM|PM)$/i); // Format: %b %d, %I%p
+            expect(xTickTexts.length).toBeGreaterThanOrEqual(2); // Expect at least start and end time labels
+            // Optionally, be more specific if mock data and tick logic are very stable:
+            // expect(screen.getByText('Aug 26, 11AM')).toBeInTheDocument();
+            // expect(screen.getByText('Aug 26, 01PM')).toBeInTheDocument();
         });
 
         test('renders gridlines', () => {
@@ -261,6 +270,44 @@ describe('EarthquakeSequenceChart', () => {
             expect(titleTexts).toContain(expectedMainshockTooltip);
             expect(titleTexts).toContain(expectedAftershockTooltip);
         });
+
+        describe('Legend', () => {
+            test('renders legend with "Mainshock" and "Other Quake" items', () => {
+                const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
+                const svgElement = getSvgContainer(container);
+                if (!svgElement) throw new Error("SVG container not found for legend test");
+
+                const mainshockText = within(svgElement).getByText('Mainshock');
+                const otherQuakeText = within(svgElement).getByText('Other Quake');
+
+                expect(mainshockText).toBeInTheDocument();
+                expect(otherQuakeText).toBeInTheDocument();
+
+                // Verify Mainshock symbol
+                const mainshockSymbol = mainshockText.previousSibling; // Assumes circle is immediately before text
+                expect(mainshockSymbol.tagName).toBe('circle');
+                expect(mainshockSymbol).toHaveAttribute('fill', 'none');
+                expect(mainshockSymbol).toHaveAttribute('stroke'); // Check that stroke attribute exists
+                expect(mainshockSymbol.getAttribute('stroke')).not.toBe(''); // Check it's not empty
+                expect(mainshockSymbol).toHaveAttribute('stroke-width', '2'); // mainshockStrokeWidth
+                expect(mainshockSymbol).toHaveAttribute('r', '5');
+
+                // Verify Other Quake symbol
+                const otherQuakeSymbol = otherQuakeText.previousSibling; // Assumes circle is immediately before text
+                expect(otherQuakeSymbol.tagName).toBe('circle');
+                expect(otherQuakeSymbol).toHaveAttribute('fill');
+                expect(otherQuakeSymbol.getAttribute('fill')).not.toBe('none');
+                expect(otherQuakeSymbol.getAttribute('fill')).not.toBe('');
+                expect(otherQuakeSymbol).toHaveAttribute('fill-opacity', '0.7');
+                expect(otherQuakeSymbol).toHaveAttribute('r', '5');
+
+                // Check colors are based on getMagnitudeColor (indirectly by checking they are not empty)
+                // A more robust test might involve mocking getMagnitudeColor if specific color values were critical
+                const sampleColor = getMagnitudeColor(5); // Used in component for legend
+                expect(mainshockSymbol).toHaveAttribute('stroke', sampleColor);
+                expect(otherQuakeSymbol).toHaveAttribute('fill', sampleColor);
+            });
+        });
     });
 
     test('renders skeleton when isLoading is true', () => {
@@ -284,6 +331,6 @@ describe('EarthquakeSequenceChart', () => {
         expect(titlePlaceholder).toBeInTheDocument();
 
         // Check for absence of actual chart title (which is not part of skeleton)
-        expect(screen.queryByText('When quakes and aftershocks occurred')).not.toBeInTheDocument();
+        expect(screen.queryByText('Earthquake Sequence (UTC)')).not.toBeInTheDocument();
     });
 });
