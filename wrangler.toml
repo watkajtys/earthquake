@@ -2,15 +2,18 @@
 name = "earthquake"
 compatibility_date = "2024-06-05" # Feel free to update to a more recent date
 
-# Configuration for Cloudflare Worker
-# Ensure this matches your project's build output directory (e.g., "dist", "build", "public")
-# main entry point for the worker script
-main = "src/worker.js"
-workers_dev = true
+# Top-level main and workers_dev removed, now in [env.production]
 
+# Top-level bindings can define defaults or include preview IDs for 'wrangler dev'
 kv_namespaces = [
   { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
 ]
+
+[[d1_databases]]
+binding = "DB" # Binding name used in your Worker code
+database_name = "PrimaryDB" # Name of the D1 database (used in wrangler d1 commands)
+database_id = "8a0a26e9-ba3c-4984-9023-c1803f611a05" # Production D1 ID
+preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" # Preview D1 ID for `wrangler dev`
 
 [assets]
 directory = "./dist"
@@ -43,6 +46,16 @@ run_worker_first = true
 #    with `wrangler dev`.
 # -----------------------------------------------------------------------------------------
 
+# Production environment configuration
+[env.production]
+main = "src/worker.js"
+workers_dev = true # Set to false if using custom domain for production and not workers.dev
+kv_namespaces = [
+  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" } # Production KV
+]
+d1_databases = [
+  { binding = "DB", database_name = "PrimaryDB", database_id = "8a0a26e9-ba3c-4984-9023-c1803f611a05" } # Production D1
+]
 
 # Example of other potential configurations (uncomment and adjust if needed):
 # [vars]
@@ -62,11 +75,12 @@ CLUSTER_KV = { preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
 # Staging environment configuration
 # Inherits from top-level, uses production KV and D1 bindings
 [env.staging]
-# For KV, staging uses the production ID
+main = "src/worker.js"
+# For KV, staging uses the production ID. This is consistent with original.
 kv_namespaces = [
   { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" }
 ]
-# For D1, staging uses the production database_id
+# For D1, staging uses the production database_id. This is consistent with original.
 d1_databases = [
   { binding = "DB", database_name = "PrimaryDB", database_id = "8a0a26e9-ba3c-4984-9023-c1803f611a05" }
 ]
@@ -97,15 +111,8 @@ d1_databases = [
 #    This wrangler.toml configuration is especially useful for local development
 #    with `wrangler dev`.
 # -----------------------------------------------------------------------------------------
-[[d1_databases]]
-binding = "DB" # Binding name used in your Worker code
-database_name = "PrimaryDB" # Name of the D1 database (used in wrangler d1 commands)
-database_id = "8a0a26e9-ba3c-4984-9023-c1803f611a05"
-preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" # For `wrangler dev --preview` or deployed previews
 
 # This explicitly tells 'wrangler dev' (local development) to use the preview_database_id for DB.
-# Make sure 'REPLACE_WITH_PREVIEW_D1_ID' here matches the preview_database_id above,
-# or a specific local/dev D1 instance ID if you have one.
 [env.dev.d1_databases]
 DB = { preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" }
 
