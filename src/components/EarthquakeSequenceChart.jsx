@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { scaleLinear, scaleTime } from 'd3-scale';
+import { scaleLinear, scaleTime, scaleSqrt } from 'd3-scale'; // Import scaleSqrt
 import { max as d3Max, min as d3Min, extent as d3Extent } from 'd3-array';
 import { timeFormat } from 'd3-time-format';
 import { getMagnitudeColor, formatDate, isValidNumber, isValuePresent, formatNumber } from '../utils/utils'; // Corrected path
@@ -99,6 +99,13 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   const yScale = useMemo(() =>
     scaleLinear().domain(magDomain).range([height, 0]),
   [magDomain, height]);
+
+  const radiusScale = useMemo(() =>
+    scaleSqrt()
+      .domain([0, magDomain[1]]) // Domain from 0 to max magnitude in the dataset
+      .range([2, 10]) // Output radius from 2px to 10px
+      .clamp(true), // Prevent values outside the range (optional, but good for safety)
+  [magDomain]);
 
   // Axes and Gridlines
   const xAxisTicks = useMemo(() => {
@@ -221,8 +228,11 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
             const isMain = processedMainshock && processedMainshock.id === id;
 
             // Basic check if points are outside the main plot area before rendering
+            const baseRadius = radiusScale(mag);
+            const circleRadius = isMain ? baseRadius + 2 : baseRadius; // Mainshock slightly larger
+
             // Add a small buffer for radius for visibility at edges
-            if (cx < -eventRadius || cx > width + eventRadius || cy < -eventRadius || cy > height + eventRadius) {
+            if (cx < -circleRadius || cx > width + circleRadius || cy < -circleRadius || cy > height + circleRadius) {
               return null;
             }
 
@@ -231,17 +241,19 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
                 <circle
                   cx={cx}
                   cy={cy}
-                  r={isMain ? mainshockRadius : eventRadius}
+                  r={circleRadius}
                   fill={isMain ? 'none' : color}
                   stroke={isMain ? color : 'none'}
                   strokeWidth={isMain ? mainshockStrokeWidth : 0}
-                  className="transition-opacity duration-200 hover:opacity-70"
+                  fillOpacity={isMain ? 1.0 : 0.7}
+                  strokeOpacity={isMain ? 1.0 : 0.7} // Mainshock stroke is its color, others usually no stroke
+                  className="transition-opacity duration-200 hover:opacity-100" // Hover to full opacity
                 >
                   <title>{`Mag ${formatNumber(mag,1)} ${place || 'Unknown location'} - ${formatDate(time)}`}</title>
                 </circle>
                 {isMain && (
                   <text
-                    x={cx + mainshockRadius + 5}
+                    x={cx + circleRadius + 5} // Adjust label position based on new radius
                     y={cy}
                     alignmentBaseline="middle"
                     className={`text-xs fill-current ${tickLabelColor}`}
