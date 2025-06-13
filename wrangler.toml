@@ -48,6 +48,7 @@ run_worker_first = true
 
 # Production environment configuration
 [env.production]
+name = "earthquake" # Explicitly set name for production environment
 main = "src/worker.js"
 workers_dev = true # Set to false if using custom domain for production and not workers.dev
 kv_namespaces = [
