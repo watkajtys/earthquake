@@ -4,6 +4,7 @@ import { scaleLinear, scaleTime, scaleSqrt } from 'd3-scale'; // Import scaleSqr
 import { max as d3Max, min as d3Min, extent as d3Extent } from 'd3-array';
 import { timeFormat } from 'd3-time-format';
 import { timeHour } from 'd3-time'; // Import timeHour
+import { line as d3Line } from 'd3-shape'; // Import d3Line
 import { getMagnitudeColor, formatDate, isValidNumber, isValuePresent, formatNumber } from '../utils/utils'; // Corrected path
 import EarthquakeSequenceChartSkeleton from './skeletons/EarthquakeSequenceChartSkeleton'; // Import skeleton
 
@@ -224,6 +225,23 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
       })).filter(tick => tick.offset >= -1 && tick.offset <= height + 1);
   }, [yScale, height, magDomain]);
 
+  const { sortedQuakes, linePath } = useMemo(() => {
+    if (!originalQuakes || originalQuakes.length < 2) {
+        return { sortedQuakes: originalQuakes || [], linePath: null };
+    }
+
+    // Explicitly sort quakes by time
+    const sorted = [...originalQuakes].sort((a, b) =>
+        new Date(a.properties.time) - new Date(b.properties.time)
+    );
+
+    const lineGenerator = d3Line()
+        .x(d => xScale(new Date(d.properties.time)))
+        .y(d => yScale(d.properties.mag));
+
+    return { sortedQuakes: sorted, linePath: lineGenerator(sorted) };
+  }, [originalQuakes, xScale, yScale]); // Dependencies
+
   return (
     <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md">
       <h3 className={`text-lg font-semibold mb-4 text-center text-indigo-400`}>
@@ -303,6 +321,17 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
           >
             Time (UTC)
           </text>
+
+          {/* Connecting Line for Quakes */}
+          {linePath && (
+            <path
+                d={linePath}
+                strokeDasharray="3,3" // Dashed line
+                className={`stroke-current ${tickLabelColor} opacity-75`} // Use existing tickLabelColor for theme consistency, add opacity
+                strokeWidth={1}
+                fill="none"
+            />
+          )}
 
           {/* Data Points */}
           {originalQuakes.map(quake => {
