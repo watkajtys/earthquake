@@ -296,6 +296,40 @@ describe('EarthquakeSequenceChart', () => {
         });
     });
 
+    describe('Connecting Line', () => {
+        const linePathSelector = 'svg g path[fill="none"][stroke-dasharray="3,3"]';
+
+        test('renders a connecting line when there are multiple quakes', () => {
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
+            const pathElement = container.querySelector(linePathSelector);
+
+            expect(pathElement).toBeInTheDocument();
+            expect(pathElement).toHaveAttribute('d');
+            expect(pathElement.getAttribute('d')).not.toBe('');
+            expect(pathElement).toHaveAttribute('stroke-dasharray', '3,3');
+            expect(pathElement).toHaveAttribute('stroke-width', '1');
+            expect(pathElement).toHaveAttribute('fill', 'none');
+            // Check for Tailwind classes for styling
+            // The component uses: className={`stroke-current ${tickLabelColor} opacity-75`}
+            // tickLabelColor is "text-slate-500"
+            expect(pathElement).toHaveClass('stroke-current');
+            expect(pathElement).toHaveClass('text-slate-500');
+            expect(pathElement).toHaveClass('opacity-75');
+        });
+
+        test('does not render a connecting line when there is only one quake', () => {
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterSingleQuake} />);
+            const pathElement = container.querySelector(linePathSelector);
+            expect(pathElement).not.toBeInTheDocument();
+        });
+
+        test('does not render a connecting line when there are no quakes', () => {
+            const { container } = render(<EarthquakeSequenceChart cluster={mockEmptyClusterData} />);
+            const pathElement = container.querySelector(linePathSelector);
+            expect(pathElement).not.toBeInTheDocument();
+        });
+    });
+
     test('renders skeleton when isLoading is true', () => {
         const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} isLoading={true} />);
 
