@@ -1,3 +1,4 @@
+/* globals process */
 // src/components/ErrorBoundary.jsx
 import React from 'react';
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Added useMemo and useCallback
+import React, { useState, useMemo, useCallback } from 'react'; // Added useMemo and useCallback, removed useEffect
 import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 import { useParams, useNavigate } from 'react-router-dom';
