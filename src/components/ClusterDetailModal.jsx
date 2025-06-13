@@ -1,6 +1,7 @@
 // src/ClusterDetailModal.jsx
 import React from 'react';
 import ClusterMiniMap from './ClusterMiniMap'; // Added import for the mini-map
+import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the new chart
 import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor
 
 /**
@@ -156,8 +157,14 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                     <ClusterMiniMap cluster={cluster} />
                 </div>
 
+                {/* Earthquake Sequence Chart */}
+                {/* The chart component handles its own "No data" state internally */}
+                <div className="my-4 py-4 border-t border-b border-slate-700">
+                    <EarthquakeSequenceChart cluster={cluster} />
+                </div>
+
                 {/* Individual Earthquakes List */}
-                <h3 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2 border-t border-slate-700">
+                <h3 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2"> {/* Removed border-t as chart section has it now */}
                     Earthquakes in this Cluster
                 </h3>
                 <div className="flex-grow space-y-2 pr-1">
