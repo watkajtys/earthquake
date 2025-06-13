@@ -1,5 +1,5 @@
-import { onRequest, isCrawler, escapeXml, handleSitemapIndexRequest, handleStaticPagesSitemapRequest, handleEarthquakesSitemapRequest, handleClustersSitemapRequest, handlePrerenderEarthquake, handlePrerenderCluster } from './[[catchall]]'; // Adjust if main export is different
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { onRequest, isCrawler, escapeXml, handleClustersSitemapRequest, handlePrerenderCluster } from './[[catchall]]'; // Adjust if main export is different
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { upsertEarthquakeFeaturesToD1 } from '../src/utils/d1Utils.js';
 
 // Mock d1Utils
@@ -547,12 +547,8 @@ describe('onRequest (Main Router)', () => {
     // Original test for /cluster/some-cluster-id (old format) - may be less relevant or removed if old URLs are not supported
     it('/cluster/some-cluster-id (old format) should trigger prerender for crawler using D1', async () => {
         const clusterIdOldFormat = "test-cluster-d1-old"; // This is an old format ID
-        const mockClusterD1Data = {
-            earthquakeIds: JSON.stringify(['q1', 'q2']),
-            strongestQuakeId: 'q1', // This ID would be used by USGS fetch
-            updatedAt: new Date().toISOString()
-        };
-        const mockStrongestQuakeDetails = { properties: { mag: 3, place: "Cluster Epicenter D1 Old" }, geometry: { coordinates: [1,1,1]}, id: 'q1' };
+        // Unused mockClusterD1Data and its properties removed
+        // const mockStrongestQuakeDetails = { properties: { mag: 3, place: "Cluster Epicenter D1 Old" }, geometry: { coordinates: [1,1,1]}, id: 'q1' }; // Unused
 
         const request = new Request(`http://localhost/cluster/${clusterIdOldFormat}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
@@ -739,7 +735,7 @@ describe('onRequest (Main Router)', () => {
 
     it('/cluster/some-cluster-id should handle fetch error for strongest quake during prerender (D1 context)', async () => {
         const urlSlug = "10-quakes-near-fetcherror-up-to-m1.0-fetcherr1"; // New format slug
-        const d1QueryId = "overview_cluster_fetcherr1_10";
+        // const d1QueryId = "overview_cluster_fetcherr1_10"; // Unused variable removed
         const mockClusterD1Data = { earthquakeIds: JSON.stringify(['q1']), strongestQuakeId: 'fetcherr1', updatedAt: new Date().toISOString() };
         const request = new Request(`http://localhost/cluster/${urlSlug}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);

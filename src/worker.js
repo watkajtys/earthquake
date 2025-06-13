@@ -23,7 +23,7 @@ function slugify(text) {
   const slug = text
     .toString()
     .toLowerCase()
-    .replace(/[\s,\/\(\)]+/g, '-') // Corrected regex escaping for characters like / ( )
+    .replace(/[\s,()/]+/g, '-') // Removed unnecessary escapes
     .replace(/[^\w-]+/g, '')
     .replace(/--+/g, '-')
     .replace(/^-+/, '')
@@ -136,6 +136,7 @@ async function handleUsgsProxyRequest(request, env, ctx, apiUrl) {
   }
 }
 
+// eslint-disable-next-line no-unused-vars
 async function handleSitemapIndexRequest(request, env, ctx) {
   const sitemapIndexXML = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -152,6 +153,7 @@ async function handleSitemapIndexRequest(request, env, ctx) {
   return new Response(sitemapIndexXML, { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=21600" }});
 }
 
+// eslint-disable-next-line no-unused-vars
 async function handleStaticPagesSitemapRequest(request, env, ctx) {
   const staticPages = [
     { loc: "https://earthquakeslive.com/", priority: "1.0", changefreq: "hourly" },
@@ -176,6 +178,7 @@ async function handleStaticPagesSitemapRequest(request, env, ctx) {
   return new Response(sitemapXML, { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=86400" }});
 }
 
+// eslint-disable-next-line no-unused-vars
 async function handleEarthquakesSitemapRequest(request, env, ctx) {
   const sourceName = "earthquakes-sitemap-handler";
   const usgsFeedUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson";
@@ -211,6 +214,7 @@ async function handleEarthquakesSitemapRequest(request, env, ctx) {
   return new Response(sitemapXML, { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" }});
 }
 
+// eslint-disable-next-line no-unused-vars
 async function handleClustersSitemapRequest(request, env, ctx) {
   const sourceName = "clusters-sitemap-handler";
   const DB = env.DB;

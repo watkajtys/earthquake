@@ -40,8 +40,8 @@ import { registerClusterDefinition, fetchActiveClusters } from '../services/clus
 import {
     CLUSTER_MAX_DISTANCE_KM,
     CLUSTER_MIN_QUAKES,
-    // FELT_REPORTS_THRESHOLD, // Directly used in PaginatedEarthquakeTable, not here
-    // SIGNIFICANCE_THRESHOLD, // Directly used in PaginatedEarthquakeTable, not here
+    FELT_REPORTS_THRESHOLD, // Directly used in PaginatedEarthquakeTable, not here
+    SIGNIFICANCE_THRESHOLD, // Directly used in PaginatedEarthquakeTable, not here
     HEADER_TIME_UPDATE_INTERVAL_MS,
     // TOP_N_CLUSTERS_OVERVIEW, // Used in App component
     REGIONS, // Used in App component
@@ -102,8 +102,8 @@ const GlobeLayout = (props) => {
     keyStatsForGlobe,
     coastlineData,
     tectonicPlatesData,
-    areGeoJsonAssetsLoading,
-    areClustersLoading
+    areGeoJsonAssetsLoading
+    // areClustersLoading // Prop removed from destructuring
   } = props;
 
   return (
@@ -180,7 +180,7 @@ const GlobeLayout = (props) => {
 function App() {
     const {
         activeSidebarView, setActiveSidebarView,
-        activeFeedPeriod,
+        // activeFeedPeriod, // Unused variable removed
         globeFocusLng, setGlobeFocusLng,
         setFocusedNotableQuake
     } = useUIState();
@@ -303,9 +303,9 @@ function App() {
 
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Kept local
-    // activeSidebarView, activeFeedPeriod, globeFocusLng, focusedNotableQuake are from useUIState()
+    // activeSidebarView, globeFocusLng, focusedNotableQuake are from useUIState()
     const [calculatedClusters, setCalculatedClusters] = useState([]); // NEW state for API fetched clusters
-    const [areClustersLoading, setAreClustersLoading] = useState(false); // New state for cluster loading
+    // const [areClustersLoading, setAreClustersLoading] = useState(false); // Ensured this is removed
 
     // State for GeoJSON data
     const [coastlineData, setCoastlineData] = useState(null);
@@ -346,12 +346,12 @@ function App() {
         earthquakesLast30Days,
         prev7DayData,
         prev14DayData,
-        loadMonthlyData,
-        // New pre-filtered lists
-        feelableQuakes7Days_ctx,
-        significantQuakes7Days_ctx,
-        feelableQuakes30Days_ctx,
-        significantQuakes30Days_ctx
+        loadMonthlyData
+        // New pre-filtered lists (removed as they became unused)
+        // feelableQuakes7Days_ctx,
+        // significantQuakes7Days_ctx,
+        // feelableQuakes30Days_ctx,
+        // significantQuakes30Days_ctx
     } = useEarthquakeDataState();
 
     // Unused currentFeedTitle, currentFeedisLoading, previousDataForCurrentFeed useMemo hooks will be removed below
@@ -364,29 +364,29 @@ function App() {
             .slice(0, 3);
     }, [earthquakesLast24Hours]);
 
-    const currentFeedData = useMemo(() => {
+    // const currentFeedData = useMemo(() => { // Unused variable removed
         // const baseDataForFilters = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days; // Removed
-        switch (activeFeedPeriod) {
-            case 'last_hour': return earthquakesLastHour;
-            case 'last_24_hours': return earthquakesLast24Hours;
-            case 'last_7_days': return earthquakesLast7Days;
-            case 'last_14_days': return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast14Days : null;
-            case 'last_30_days': return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast30Days : null;
-            // Updated cases to use pre-filtered lists from context
-            case 'feelable_quakes': 
-                return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? feelableQuakes30Days_ctx : feelableQuakes7Days_ctx;
-            case 'significant_quakes': 
-                return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? significantQuakes30Days_ctx : significantQuakes7Days_ctx;
-            default: return earthquakesLast24Hours;
-        }
-    }, [
-        activeFeedPeriod, earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
-        earthquakesLast14Days, earthquakesLast30Days,
-        allEarthquakes, hasAttemptedMonthlyLoad, // Still needed for the conditional logic
-        // Added new context dependencies
-        feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
-        feelableQuakes30Days_ctx, significantQuakes30Days_ctx
-    ]);
+        // switch (activeFeedPeriod) {
+            // case 'last_hour': return earthquakesLastHour; // Part of removed useMemo
+            // case 'last_24_hours': return earthquakesLast24Hours; // Part of removed useMemo
+            // case 'last_7_days': return earthquakesLast7Days; // Part of removed useMemo
+            // case 'last_14_days': return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast14Days : null; // Part of removed useMemo
+            // case 'last_30_days': return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? earthquakesLast30Days : null; // Part of removed useMemo
+            // // Updated cases to use pre-filtered lists from context
+            // case 'feelable_quakes':  // Part of removed useMemo
+                // return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? feelableQuakes30Days_ctx : feelableQuakes7Days_ctx;
+            // case 'significant_quakes':  // Part of removed useMemo
+                // return (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? significantQuakes30Days_ctx : significantQuakes7Days_ctx;
+            // default: return earthquakesLast24Hours; // Part of removed useMemo
+        // } // Part of removed useMemo
+    // }, [ // Part of removed useMemo
+        // activeFeedPeriod, earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days, // activeFeedPeriod was unused here
+        // earthquakesLast14Days, earthquakesLast30Days,
+        // allEarthquakes, hasAttemptedMonthlyLoad, // Still needed for the conditional logic
+        // // Added new context dependencies
+        // feelableQuakes7Days_ctx, significantQuakes7Days_ctx, // These were unused here
+        // // feelableQuakes30Days_ctx, significantQuakes30Days_ctx // These were unused here
+    // ]);
 
     // const currentFeedTitle = useMemo(() => { // Unused variable
     //     const filterPeriodSuffix = (hasAttemptedMonthlyLoad && allEarthquakes.length > 0) ? "(Last 30 Days)" : "(Last 7 Days)";
@@ -433,20 +433,16 @@ function App() {
     // Effect to fetch active clusters from the API
     useEffect(() => {
         if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
-            setAreClustersLoading(true); // Set loading true before fetch
             fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
                 .then(clusters => {
                     setCalculatedClusters(clusters);
-                    setAreClustersLoading(false); // Set loading false on success
                 })
                 .catch(error => {
                     console.error("Error fetching active clusters:", error);
                     setCalculatedClusters([]);
-                    setAreClustersLoading(false); // Set loading false on error
                 });
         } else {
             setCalculatedClusters([]);
-            setAreClustersLoading(false); // Set loading false if no data to fetch for
         }
     }, [earthquakesLast7Days]); // Dependency: earthquakesLast7Days
 
@@ -960,7 +956,7 @@ function App() {
                                       formatTimeDuration={formatTimeDuration}
                                       handleNotableQuakeSelect={handleNotableQuakeSelect}
                                       keyStatsForGlobe={keyStatsForGlobe}
-                                      areClustersLoading={areClustersLoading} // Pass new prop
+                                      // areClustersLoading prop removed
                                     />
                                   </>
                                 }
@@ -980,7 +976,7 @@ function App() {
                                       onIndividualQuakeSelect={handleQuakeClick}
                                       formatTimeAgo={formatTimeAgo}
                                       formatTimeDuration={formatTimeDuration}
-                                      areParentClustersLoading={areClustersLoading} // Pass the new prop
+                                      areParentClustersLoading={false} // Pass static false
                                     />
                                   }
                                 />
@@ -1109,9 +1105,7 @@ function App() {
                                 {/* Active Earthquake Clusters Section - Desktop Sidebar */}
                                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
                                 <h3 className="text-md font-semibold mb-2 text-indigo-300"> Active Earthquake Clusters </h3>
-                                {areClustersLoading && (!overviewClusters || overviewClusters.length === 0) ? (
-                                    <div className="space-y-2"> <SkeletonListItem /><SkeletonListItem /> </div>
-                                ) : overviewClusters && overviewClusters.length > 0 ? (
+                                {overviewClusters && overviewClusters.length > 0 ? (
                                     <ul className="space-y-2"> {overviewClusters.map(cluster => ( <ClusterSummaryItem clusterData={cluster} key={cluster.id} onClusterSelect={handleClusterSummaryClick} /> ))} </ul>
                                 ) : ( <p className="text-xs text-slate-400 text-center py-2"> No significant active clusters detected. </p> )}
                                 </div>

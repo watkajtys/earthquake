@@ -194,7 +194,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                     let errorData;
                     try {
                         errorData = await response.json();
-                    } catch (parseError) {
+                    // eslint-disable-next-line no-unused-vars
+                    } catch (_parseError) { // Prefixed with underscore
                         // If parsing JSON fails, use statusText
                         errorData = { message: response.statusText };
                     }

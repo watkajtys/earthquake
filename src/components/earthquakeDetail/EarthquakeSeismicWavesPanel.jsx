@@ -6,7 +6,9 @@ function EarthquakeSeismicWavesPanel({
     exhibitPanelClass,
     exhibitTitleClass,
     captionClass,
+    // eslint-disable-next-line no-unused-vars
     eventTime, // Not used in current calculations, but available
+    // eslint-disable-next-line no-unused-vars
     eventDepth // Not used in current calculations, but available
 }) {
     const hypotheticalDistances = [50, 150, 300, 500]; // in km
