@@ -75,6 +75,7 @@ CLUSTER_KV = { preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
 # Staging environment configuration
 # Inherits from top-level, uses production KV and D1 bindings
 [env.staging]
+name = "earthquake" # Explicitly set name for staging environment
 main = "src/worker.js"
 # For KV, staging uses the production ID. This is consistent with original.
 kv_namespaces = [
