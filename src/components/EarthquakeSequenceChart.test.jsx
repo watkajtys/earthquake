@@ -5,9 +5,11 @@ import '@testing-library/jest-dom';
 import EarthquakeSequenceChart from './EarthquakeSequenceChart';
 import { getMagnitudeColor, formatDate, formatNumber } from '../utils/utils'; // Corrected path
 
+import { scaleSqrt } from 'd3-scale'; // Import for replicating scale logic in test
+
 // Mock constants from the component for verification (not ideal, but useful for specific checks like radius)
-const mainshockRadius = 8;
-const eventRadius = 5;
+// const mainshockRadius = 8; // No longer fixed
+// const eventRadius = 5;   // No longer fixed
 
 const mockClusterBase = {
     type: "Feature",
@@ -39,37 +41,37 @@ const aftershockTime1 = new Date('2023-01-01T12:30:00Z').getTime();
 const aftershockTime2 = new Date('2023-01-01T13:00:00Z').getTime();
 const foreshockTime = new Date('2023-01-01T11:00:00Z').getTime();
 
-
+// Restructured mock data to align with component expecting cluster.originalQuakes directly
 const mockClusterData = {
-    ...mockClusterBase,
-    properties: {
-        ...mockClusterBase.properties,
-        originalQuakes: [
-            mockQuake("eq1", foreshockTime, 2.5, "10km N of Testville"),
-            mockQuake("eq2", mainshockTime, 4.5, "5km E of Testville"), // Mainshock
-            mockQuake("eq3", aftershockTime1, 3.0, "Testville"),
-            mockQuake("eq4", aftershockTime2, 2.8, "2km S of Testville"),
-        ]
-    }
+    // type: "Feature", // Not strictly needed by chart, but good for context
+    // properties: { ...mockClusterBase.properties }, // If other base props are needed
+    originalQuakes: [
+        mockQuake("eq1", foreshockTime, 2.5, "10km N of Testville"),
+        mockQuake("eq2", mainshockTime, 4.5, "5km E of Testville"), // Mainshock
+        mockQuake("eq3", aftershockTime1, 3.0, "Testville"),
+        mockQuake("eq4", aftershockTime2, 2.8, "2km S of Testville"),
+    ]
 };
 
 const mockClusterSingleQuake = {
-    ...mockClusterBase,
-    properties: {
-        ...mockClusterBase.properties,
-        max_mag: 3.3,
-        originalQuakes: [
-            mockQuake("single1", singleQuakeTime, 3.3, "Lone Mountain")
-        ]
-    }
+    originalQuakes: [
+        mockQuake("single1", singleQuakeTime, 3.3, "Lone Mountain")
+    ]
+    // properties: { max_mag: 3.3, ... } // If needed for other parts of cluster prop
 };
 
 const mockEmptyClusterData = {
-    ...mockClusterBase,
+    originalQuakes: []
+};
+
+// This mock is for the test: 'renders "No data available" message when cluster.properties is missing'
+// which is now less relevant as originalQuakes is top-level.
+// However, testing with a cluster object that *doesn't* have originalQuakes is still valid.
+const mockClusterWithoutOriginalQuakes = {
     properties: {
-        ...mockClusterBase.properties,
-        originalQuakes: []
+        cluster_id: "some_id"
     }
+    // no originalQuakes key
 };
 
 // To make tests less verbose and more resilient to minor parentElement changes
@@ -119,8 +121,8 @@ describe('EarthquakeSequenceChart', () => {
         expect(screen.getByText('No data available for chart.')).toBeInTheDocument();
     });
 
-    test('renders "No data available" message when cluster.properties is missing', () => {
-        render(<EarthquakeSequenceChart cluster={{...mockClusterBase, properties: undefined }} />);
+    test('renders "No data available" message when cluster.properties is missing or originalQuakes is not on cluster', () => {
+        render(<EarthquakeSequenceChart cluster={mockClusterWithoutOriginalQuakes} />);
         expect(screen.getByText('No data available for chart.')).toBeInTheDocument();
     });
 
@@ -133,7 +135,7 @@ describe('EarthquakeSequenceChart', () => {
         });
 
         test('renders mainshock with specific styling and label', () => {
-            const mainshockData = mockClusterData.properties.originalQuakes[1]; // eq2 is mainshock
+            const mainshockData = mockClusterData.originalQuakes[1]; // eq2 is mainshock
             const expectedLabel = `Magnitude ${formatNumber(mainshockData.properties.mag,1)} earthquake`;
             expect(screen.getByText(expectedLabel)).toBeInTheDocument();
 
@@ -149,17 +151,25 @@ describe('EarthquakeSequenceChart', () => {
             });
 
             expect(mainshockCircle).toBeInTheDocument();
-            expect(mainshockCircle).toHaveAttribute('r', String(mainshockRadius));
+
+            // Calculate expected radius for mainshock (mag 4.5 in domain [0,5], range [2,10], then +2)
+            // scale = (sqrt(4.5/5) * (10-2)) + 2 = (sqrt(0.9) * 8) + 2 ~ 9.589
+            // expectedR = 9.589 + 2 = 11.589
+            const expectedRadiusMainshock = ((Math.sqrt(4.5) / Math.sqrt(5)) * 8 + 2 + 2).toFixed(2); // Approx
+            expect(parseFloat(mainshockCircle.getAttribute('r'))).toBeCloseTo(parseFloat(expectedRadiusMainshock), 1);
+
             expect(mainshockCircle).toHaveAttribute('fill', 'none');
             expect(mainshockCircle).toHaveAttribute('stroke', getMagnitudeColor(mainshockData.properties.mag));
             expect(mainshockCircle).toHaveAttribute('stroke-width', '2');
+            expect(mainshockCircle).toHaveAttribute('fill-opacity', '1');
+            expect(mainshockCircle).toHaveAttribute('stroke-opacity', '1');
         });
 
-        test('renders aftershocks/foreshocks with correct styling', () => {
+        test('renders aftershocks/foreshocks with correct styling, radius and opacity', () => {
             const otherQuakes = [
-                mockClusterData.properties.originalQuakes[0], // foreshock
-                mockClusterData.properties.originalQuakes[2], // aftershock
-                mockClusterData.properties.originalQuakes[3], // aftershock
+                mockClusterData.originalQuakes[0], // foreshock
+                mockClusterData.originalQuakes[2], // aftershock
+                mockClusterData.originalQuakes[3], // aftershock
             ];
             const allCircles = Array.from(container.querySelectorAll('circle'));
 
@@ -172,10 +182,15 @@ describe('EarthquakeSequenceChart', () => {
                 });
 
                 expect(circle).toBeInTheDocument();
-                if (circle) { // to satisfy typescript if TS were used
-                    expect(circle).toHaveAttribute('r', String(eventRadius));
+                if (circle) {
+                    // Calculate expected radius for this quake
+                    // Example for mag 2.5: (sqrt(2.5/5) * 8) + 2 ~ 7.65
+                    const expectedR = ((Math.sqrt(quake.properties.mag) / Math.sqrt(5)) * 8 + 2);
+                    expect(parseFloat(circle.getAttribute('r'))).toBeCloseTo(expectedR,1);
                     expect(circle).toHaveAttribute('fill', getMagnitudeColor(quake.properties.mag));
                     expect(circle).not.toHaveAttribute('fill', 'none');
+                    expect(circle).toHaveAttribute('fill-opacity', '0.7');
+                    expect(circle).toHaveAttribute('stroke-opacity', '0.7');
                 }
             });
         });
@@ -229,10 +244,10 @@ describe('EarthquakeSequenceChart', () => {
         });
 
         test('renders tooltips for data points', () => {
-            const mainshockData = mockClusterData.properties.originalQuakes[1];
+            const mainshockData = mockClusterData.originalQuakes[1]; // Corrected path
             const expectedMainshockTooltip = `Mag ${formatNumber(mainshockData.properties.mag,1)} ${mainshockData.properties.place} - ${formatDate(mainshockData.properties.time)}`;
 
-            const aftershockData = mockClusterData.properties.originalQuakes[2];
+            const aftershockData = mockClusterData.originalQuakes[2]; // Corrected path
             const expectedAftershockTooltip = `Mag ${formatNumber(aftershockData.properties.mag,1)} ${aftershockData.properties.place} - ${formatDate(aftershockData.properties.time)}`;
 
             const svgElement = getSvgContainer(container);
