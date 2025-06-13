@@ -130,9 +130,13 @@ describe('EarthquakeClusterSequenceChart', () => {
       expect(mainshockCircle.getAttribute('fill')).toBe('rgba(255, 0, 0, 0.7)');
       expect(mainshockCircle.getAttribute('stroke')).toBe('rgba(200, 0, 0, 1)');
 
-      // Check for mainshock label
-      expect(screen.getByText('Mainshock')).toBeInTheDocument();
-      // More precise check for label position could be added if needed, but it's complex
+      // Check for mainshock label within SVG, distinct from legend
+      const svgMainshockLabel = within(svg).getByText((content, element) =>
+        element.tagName.toLowerCase() === 'text' &&
+        element.classList.contains('text-red-600') &&
+        content === 'Mainshock'
+      );
+      expect(svgMainshockLabel).toBeInTheDocument();
     });
 
     test('renders aftershocks/foreshocks correctly', () => {
@@ -153,44 +157,26 @@ describe('EarthquakeClusterSequenceChart', () => {
 
     test('renders Y-axis ticks (checks for some expected values)', () => {
       const svg = screen.getByTestId('earthquake-sequence-chart-svg');
-      // Magnitudes range from 3 to 5. Ticks should include these.
-      // yScale domain is [0, 5] in the component for this data.
-      expect(within(svg).getByText('0')).toBeInTheDocument(); // Tick for 0
-      expect(within(svg).getByText('1')).toBeInTheDocument(); // Tick for 1
-      expect(within(svg).getByText('2')).toBeInTheDocument();
-      expect(within(svg).getByText('3')).toBeInTheDocument();
-      expect(within(svg).getByText('4')).toBeInTheDocument();
-      expect(within(svg).getByText('5')).toBeInTheDocument(); // Tick for 5
+      const yAxisTickTexts = Array.from(svg.querySelectorAll("g.text-gray-600 text[text-anchor='end']"))
+        .map(el => el.textContent);
+      // yScale domain is [0, 5] for mockData.
+      expect(yAxisTickTexts).toEqual(expect.arrayContaining(["0", "1", "2", "3", "4", "5"]));
     });
 
     test('renders X-axis ticks (checks for some expected values)', () => {
         const svg = screen.getByTestId('earthquake-sequence-chart-svg');
-        // Mainshock is at day 0. One event is ~1 day after. One event is ~ -0.08 days before.
-        // xScale domain is roughly [-1, 1] for this data.
-        // The component logic for ticks is `xScale.ticks(width / 80)`
-        // For width 800, that's 10 ticks.
-        // Given the domain of roughly [-1, 1] (days from mainshock)
-        // We'd expect ticks like -1, -0.8, ..., 0, ..., 0.8, 1 (or similar based on d3 logic)
-        expect(within(svg).getByText('0')).toBeInTheDocument(); // Tick for mainshock day
-        // Other ticks depend on d3's tick generation, presence of '0' is a good sign.
-        // We can check for at least one negative and one positive tick if data spans across 0
-        // For mockData:
-        // evt1: (2023-01-01T10:00:00Z - 2023-01-01T12:00:00Z) / (1000 * 3600 * 24) = -2 / 24 = -0.083 days
-        // evt2: 0 days (mainshock)
-        // evt3: (2023-01-01T14:00:00Z - 2023-01-01T12:00:00Z) / (1000 * 3600 * 24) = 2 / 24 = 0.083 days
-        // evt4: (2023-01-02T08:00:00Z - 2023-01-01T12:00:00Z) / (1000 * 3600 * 24) = 20 / 24 = 0.833 days
-        // Domain: min(-0.083, -1 (padding)) = -1. max(0.833, 1 (padding)) = 1. So domain is [-1, 1]
-        // expect(within(svg).getByText('-1')).toBeInTheDocument(); // This can be brittle
-        // expect(within(svg).getByText('1')).toBeInTheDocument(); // This can be brittle
-        // Check for a few more ticks based on d3's behavior for this range
-        expect(within(svg).getByText('0.5')).toBeInTheDocument();
-        // expect(within(svg).getByText('-0.5')).toBeInTheDocument(); // This can also be brittle
+        const xAxisTickTexts = Array.from(svg.querySelectorAll("g.text-gray-600 text[text-anchor='middle']"))
+          .map(el => el.textContent)
+          .filter(text => !["Days from Mainshock", "Magnitude"].includes(text) && !text.startsWith("Sequence started:")); // Filter out axis/chart titles
+
+        // For mockData, domain is [-1, 1]. D3 generates ticks like -1, -0.8, ..., 0, ..., 0.8, 1.
+        expect(xAxisTickTexts).toContain("0");
+        expect(xAxisTickTexts).toContain("0.2"); // Adjusted from 0.5 based on actual output
+        expect(xAxisTickTexts).toContain("-0.2"); // Check for a negative fractional tick
     });
 
     test('renders legend correctly', () => {
-        expect(screen.getByText('Mainshock')).toBeInTheDocument(); // This is the label near the mainshock circle itself
-
-        // Check for legend items specifically
+        // Check for legend items specifically (not the SVG label for mainshock here)
         // The component uses divs for legend items, not LIs.
         const mainshockLegend = screen.getByText((content, element) => {
             return element.tagName.toLowerCase() === 'span' && content === 'Mainshock' && element.previousElementSibling?.classList.contains('bg-red-500');
@@ -245,26 +231,30 @@ describe('EarthquakeClusterSequenceChart', () => {
         expect(titleElement.textContent).toContain('(Mainshock)');
         expect(mainshockCircle.getAttribute('fill')).toBe('rgba(255, 0, 0, 0.7)');
 
-        expect(screen.getByText('Mainshock')).toBeInTheDocument(); // The label
+        // Check for mainshock label within SVG for the single data point
+        const svgMainshockLabel = within(svg).getByText((content, element) =>
+          element.tagName.toLowerCase() === 'text' &&
+          element.classList.contains('text-red-600') &&
+          content === 'Mainshock'
+        );
+        expect(svgMainshockLabel).toBeInTheDocument();
     });
 
     test('renders Y-axis ticks correctly for single data point', () => {
         const svg = screen.getByTestId('earthquake-sequence-chart-svg');
+        const yAxisTickTexts = Array.from(svg.querySelectorAll("g.text-gray-600 text[text-anchor='end']"))
+          .map(el => el.textContent);
         // Magnitude is 4.5. yScale domain [0, 5]
-        expect(within(svg).getByText('0')).toBeInTheDocument();
-        expect(within(svg).getByText('1')).toBeInTheDocument();
-        expect(within(svg).getByText('2')).toBeInTheDocument();
-        expect(within(svg).getByText('3')).toBeInTheDocument();
-        expect(within(svg).getByText('4')).toBeInTheDocument();
-        expect(within(svg).getByText('5')).toBeInTheDocument();
+        expect(yAxisTickTexts).toEqual(expect.arrayContaining(["0", "1", "2", "3", "4", "5"]));
     });
 
     test('renders X-axis ticks correctly for single data point (mainshock at day 0)', () => {
         const svg = screen.getByTestId('earthquake-sequence-chart-svg');
-        // Mainshock is at day 0. xScale domain is [-1, 1] (due to padding)
-        expect(within(svg).getByText('0')).toBeInTheDocument(); // Mainshock day
-        // expect(within(svg).getByText('-1')).toBeInTheDocument(); // This can be brittle
-        // expect(within(svg).getByText('1')).toBeInTheDocument(); // This can be brittle
+        const xAxisTickTexts = Array.from(svg.querySelectorAll("g.text-gray-600 text[text-anchor='middle']"))
+          .map(el => el.textContent)
+          .filter(text => !["Days from Mainshock", "Magnitude"].includes(text) && !text.startsWith("Sequence started:")); // Filter out axis/chart titles
+        // Mainshock is at day 0. xScale domain is effectively [-0.5, 0.5] due to single point handling, or [-1,1] with padding.
+        expect(xAxisTickTexts).toContain("0"); // Mainshock day
     });
   });
 

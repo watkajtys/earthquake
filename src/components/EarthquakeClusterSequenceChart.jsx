@@ -43,11 +43,12 @@ const EarthquakeClusterSequenceChart = ({ data }) => {
 
   const xScale = useMemo(() => {
     if (!processedData || processedData.length === 0 || !mainshock) return null;
-    const timeDomain = [
-        // Ensure time is accessed from properties for calculation
-        (new Date(mainshock.properties.time).getTime() - 1 * 24 * 60 * 60 * 1000) / (1000 * 60 * 60 * 24), // 1 day before mainshock
-        Math.max(...processedData.map(d => d.time_after_mainshock), 1) // Ensure at least 1 day shown
-    ];
+    // Calculate min and max days from mainshock, ensuring a default padding of at least -1 to +1 day
+    const eventTimes = processedData.map(d => d.time_after_mainshock);
+    const minTime = Math.min(...eventTimes, -1);
+    const maxTime = Math.max(...eventTimes, 1);
+    // Ensure domain is not zero-width if only one event or all events at same time_after_mainshock
+    const timeDomain = (minTime === maxTime) ? [minTime - 0.5, maxTime + 0.5] : [minTime, maxTime];
     return scaleLinear()
       .domain(timeDomain)
       .range([0, width]);
