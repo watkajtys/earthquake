@@ -34,7 +34,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   const height = chartHeight - margin.top - margin.bottom;
 
   const { originalQuakes, processedMainshock } = useMemo(() => {
-    const quakes = cluster?.properties?.originalQuakes || [];
+    const quakes = cluster?.originalQuakes || []; // Corrected path to originalQuakes
     // Filter out quakes with invalid time or magnitude early on
     const validQuakes = quakes.filter(q =>
       isValuePresent(q?.properties?.time) &&
@@ -260,18 +260,22 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
 
 EarthquakeSequenceChart.propTypes = {
   cluster: PropTypes.shape({
-    properties: PropTypes.shape({
-      originalQuakes: PropTypes.arrayOf(
-        PropTypes.shape({
-          id: PropTypes.string.isRequired,
-          properties: PropTypes.shape({
-            time: PropTypes.number, // Can be null/undefined if data is inconsistent
-            mag: PropTypes.number,  // Can be null/undefined
-            place: PropTypes.string,
-          }).isRequired, // properties object itself is required
-        })
-      ),
-    }),
+    // originalQuakes is now expected directly on cluster, not cluster.properties
+    originalQuakes: PropTypes.arrayOf(
+      PropTypes.shape({
+        id: PropTypes.string.isRequired,
+        properties: PropTypes.shape({
+          time: PropTypes.number,
+          mag: PropTypes.number,
+          place: PropTypes.string,
+        }).isRequired,
+      })
+    ),
+    // If other properties are still expected on cluster.properties, they can be defined here
+    // For example, if cluster_id was used:
+    // properties: PropTypes.shape({
+    //   cluster_id: PropTypes.string,
+    // })
   }).isRequired,
   isLoading: PropTypes.bool,
 };
