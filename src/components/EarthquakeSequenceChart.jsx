@@ -73,7 +73,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   if (originalQuakes.length === 0 && width > 0 && !isLoading) {
     return (
       <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md flex flex-col justify-center items-center" style={{ height: `${chartHeight}px` }}>
-        <h3 className={`text-lg font-semibold text-indigo-400 mb-2`}>When quakes and aftershocks occurred</h3>
+        <h3 className={`text-lg font-semibold text-indigo-400 mb-2`}>Earthquake Sequence (UTC)</h3>
         <p className={`${tickLabelColor} p-4 text-center text-sm`}>No data available for chart.</p>
       </div>
     );
@@ -137,29 +137,60 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
 
   // Axes and Gridlines
   const xAxisTicks = useMemo(() => {
-    if (width <= 0 || !xScale.ticks || !timeDomain || timeDomain.length < 2) return [];
+      // Ensure timeDomain is valid and width is positive for xScale creation
+      if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1]) return [];
 
-    const [startTime, endTime] = timeDomain.map(d => new Date(d));
-    const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+      // xScale is derived from timeDomain and width, used for positioning
+      // A temporary scale is used for tick generation if specific intervals are needed.
+      const tempScale = scaleTime().domain(timeDomain).range([0, width]);
 
-    let tickInterval;
-    if (durationHours < 12) {
-      tickInterval = 2; // Aim for every 2 hours
-    } else if (durationHours < 24) {
-      tickInterval = 3; // Every 3 hours
-    } else if (durationHours < 48) {
-      tickInterval = 6; // Every 6 hours
-    } else {
-      tickInterval = 12; // Every 12 hours, D3 might choose 24 based on space
-    }
+      const [domainStartTime, domainEndTime] = timeDomain;
+      const durationMs = domainEndTime.getTime() - domainStartTime.getTime();
+      const durationHours = durationMs / (1000 * 60 * 60);
 
-    // d3.timeHour.every(step) creates a filter for tick values
-    return xScale.ticks(timeHour.every(tickInterval)).map(value => ({
-      value,
-      offset: xScale(value),
-      label: timeFormat("%b %d, %I%p")(value).replace(", 0",", ") // Compact format e.g. "Jan 01, 11AM"
-    }));
-  }, [xScale, width, timeDomain]);
+      let tickIntervalHours;
+      if (durationHours <= 1) tickIntervalHours = 1; // Min 1 hour interval for very short spans
+      else if (durationHours < 12) tickIntervalHours = 2;
+      else if (durationHours < 24) tickIntervalHours = 3;
+      else if (durationHours < 48) tickIntervalHours = 6;
+      else tickIntervalHours = 12;
+
+      const potentialTicks = tempScale.ticks(timeHour.every(tickIntervalHours));
+
+      let allSameDay = true;
+      if (potentialTicks.length > 0) {
+          const firstTickDate = new Date(potentialTicks[0].getTime());
+          const firstDay = firstTickDate.getDate();
+          const firstMonth = firstTickDate.getMonth();
+          const firstYear = firstTickDate.getFullYear();
+
+          for (let i = 1; i < potentialTicks.length; i++) {
+              const currentTickDate = new Date(potentialTicks[i].getTime());
+              if (currentTickDate.getDate() !== firstDay || currentTickDate.getMonth() !== firstMonth || currentTickDate.getFullYear() !== firstYear) {
+                  allSameDay = false;
+                  break;
+              }
+          }
+      } else {
+          allSameDay = false; // Default if no ticks
+      }
+      // If only one tick, allSameDay remains true from initialization, which is correct.
+
+      const useShortFormat = durationHours < 24 && allSameDay && potentialTicks.length > 0;
+      // Use %-I for non-padded hour (e.g., "1PM" instead of "01PM") for brevity.
+      // Use %p for AM/PM.
+      const currentFormat = useShortFormat ? timeFormat("%-I%p") : timeFormat("%b %d, %-I%p");
+
+      return potentialTicks.map(value => {
+          let label = currentFormat(value);
+          return {
+              value,
+              offset: xScale(value), // Use the main xScale passed to component for positioning
+              label
+          };
+      // Filter ticks to be within or very close to the visible plot area
+      }).filter(tick => tick.offset >= -5 && tick.offset <= width + 5);
+  }, [xScale, width, timeDomain]); // Dependencies: xScale (captures scale changes), width, timeDomain
 
   const yAxisTicks = useMemo(() => {
       if (height <= 0 || !yScale.ticks) return [];
@@ -193,9 +224,6 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
       })).filter(tick => tick.offset >= -1 && tick.offset <= height + 1);
   }, [yScale, height, magDomain]);
 
-
-  const magnitudeColorSample = getMagnitudeColor(5); // For legend
-
   return (
     <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md">
       <h3 className={`text-lg font-semibold mb-4 text-center text-indigo-400`}>
@@ -203,44 +231,6 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
       </h3>
       <svg ref={svgRef} width="100%" height={chartHeight} viewBox={`0 0 ${chartRenderWidth} ${chartHeight}`}>
         <g transform={`translate(${margin.left},${margin.top})`}>
-          {/* Legend */}
-          <g transform={`translate(${width - 120}, ${-margin.top + 20})`}>
-            {/* Mainshock Legend Item */}
-            <circle
-              cx="5"
-              cy="5"
-              r="5"
-              fill="none"
-              stroke={magnitudeColorSample}
-              strokeWidth={mainshockStrokeWidth}
-            />
-            <text
-              x="15"
-              y="9"
-              className={`text-xs fill-current ${tickLabelColor}`}
-              alignmentBaseline="middle"
-            >
-              Mainshock
-            </text>
-
-            {/* Other Quake Legend Item */}
-            <circle
-              cx="5"
-              cy="25"
-              r="5"
-              fill={magnitudeColorSample}
-              fillOpacity={0.7}
-            />
-            <text
-              x="15"
-              y="29"
-              className={`text-xs fill-current ${tickLabelColor}`}
-              alignmentBaseline="middle"
-            >
-              Other Quake
-            </text>
-          </g>
-
           {/* Y-Axis Gridlines */}
           {yAxisTicks.map(({ value, offset }) => (
             <line

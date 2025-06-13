@@ -41,6 +41,11 @@ const aftershockTime1 = new Date('2023-01-01T12:30:00Z').getTime();
 const aftershockTime2 = new Date('2023-01-01T13:00:00Z').getTime();
 const foreshockTime = new Date('2023-01-01T11:00:00Z').getTime();
 
+// Mock times for long span data
+const longSpanQuake1Time = new Date('2023-01-01T22:00:00Z').getTime(); // Jan 01, 10 PM
+const longSpanQuake2Time = new Date('2023-01-02T00:00:00Z').getTime(); // Jan 02, 12 AM (Midnight)
+const longSpanQuake3Time = new Date('2023-01-02T04:00:00Z').getTime(); // Jan 02, 4 AM
+
 // Restructured mock data to align with component expecting cluster.originalQuakes directly
 const mockClusterData = {
     // type: "Feature", // Not strictly needed by chart, but good for context
@@ -50,6 +55,14 @@ const mockClusterData = {
         mockQuake("eq2", mainshockTime, 4.5, "5km E of Testville"), // Mainshock
         mockQuake("eq3", aftershockTime1, 3.0, "Testville"),
         mockQuake("eq4", aftershockTime2, 2.8, "2km S of Testville"),
+    ]
+};
+
+const mockClusterDataLongSpan = {
+    originalQuakes: [
+        mockQuake("ls_eq1", longSpanQuake1Time, 3.0, "West End"),
+        mockQuake("ls_eq2", longSpanQuake2Time, 4.0, "Midnight Point"), // Mainshock for this set
+        mockQuake("ls_eq3", longSpanQuake3Time, 3.5, "East Bay"),
     ]
 };
 
@@ -220,28 +233,39 @@ describe('EarthquakeSequenceChart', () => {
             expect(screen.getByText('Time (UTC)')).toBeInTheDocument();
         });
 
-        test('renders some X-axis tick labels (formatted time)', () => {
-            // Check for text elements that are X-axis ticks.
-            // This is harder to be specific about due to dynamic generation.
-            // For mockClusterData, duration is ~2 hours. Tick interval should be 2 hours.
-            // Expected labels: "Aug 26, 11AM", "Aug 26, 01PM"
-            // We check for presence of multiple text elements at y = height + 20 (approx)
+        test('renders X-axis tick labels with short format (time only) for short, same-day spans', () => {
+            // Using default mockClusterData (approx 2-hour span on Aug 26)
+            // Expects format like "11AM", "1PM" (%-I%p)
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
             const svgElement = getSvgContainer(container);
-            if (!svgElement) throw new Error("SVG container not found for X-axis ticks test");
+            if (!svgElement) throw new Error("SVG container not found for X-axis short format ticks test");
 
-            // Example formatted times from mock data:
-            // foreshockTime: Jan 01, 11AM
-            // mainshockTime: Jan 01, 12PM
-            // aftershockTime1: Jan 01, 12PM (might be combined with mainshock if ticks are sparse)
-            // aftershockTime2: Jan 01, 01PM
-            // The exact ticks depend on d3.ticks() behavior.
-            // We look for at least two distinct time labels.
+            // Regex for short format: 1 or 2 digits for hour, followed by AM/PM.
+            // Should not contain month/day.
+            const xTickTexts = within(svgElement).getAllByText(/^\d{1,2}(?:AM|PM)$/i);
+            expect(xTickTexts.length).toBeGreaterThanOrEqual(1); // Expect at least one, likely "12PM" or "11AM", "1PM"
+            xTickTexts.forEach(textElement => {
+                expect(textElement.textContent).not.toMatch(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+            });
+        });
+
+        test('renders X-axis tick labels with long format (date and time) for longer or multi-day spans', () => {
+            // Using mockClusterDataLongSpan (approx 6-hour span across midnight)
+            // Expects format like "Jan 01, 10PM" (%b %d, %-I%p)
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterDataLongSpan} />);
+            const svgElement = getSvgContainer(container);
+            if (!svgElement) throw new Error("SVG container not found for X-axis long format ticks test");
+
+            // Regex for long format: Month Day, Hour AM/PM
             const xTickTexts = within(svgElement)
-                .getAllByText(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{1,2}(AM|PM)$/i); // Format: %b %d, %I%p
-            expect(xTickTexts.length).toBeGreaterThanOrEqual(2); // Expect at least start and end time labels
-            // Optionally, be more specific if mock data and tick logic are very stable:
-            // expect(screen.getByText('Aug 26, 11AM')).toBeInTheDocument();
-            // expect(screen.getByText('Aug 26, 01PM')).toBeInTheDocument();
+                .getAllByText(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s\d{1,2},\s\d{1,2}(?:AM|PM)$/i);
+            expect(xTickTexts.length).toBeGreaterThanOrEqual(2); // Expect multiple ticks like "Jan 01, 10PM", "Jan 02, 12AM", etc.
+
+            // Example specific checks (adjust if mock data or tick logic is very stable)
+            // expect(screen.getByText('Jan 01, 10PM')).toBeInTheDocument();
+            // expect(screen.getByText('Jan 02, 12AM')).toBeInTheDocument();
+            // expect(screen.getByText('Jan 02, 2AM')).toBeInTheDocument();
+            // expect(screen.getByText('Jan 02, 4AM')).toBeInTheDocument();
         });
 
         test('renders gridlines', () => {
@@ -269,44 +293,6 @@ describe('EarthquakeSequenceChart', () => {
 
             expect(titleTexts).toContain(expectedMainshockTooltip);
             expect(titleTexts).toContain(expectedAftershockTooltip);
-        });
-
-        describe('Legend', () => {
-            test('renders legend with "Mainshock" and "Other Quake" items', () => {
-                const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
-                const svgElement = getSvgContainer(container);
-                if (!svgElement) throw new Error("SVG container not found for legend test");
-
-                const mainshockText = within(svgElement).getByText('Mainshock');
-                const otherQuakeText = within(svgElement).getByText('Other Quake');
-
-                expect(mainshockText).toBeInTheDocument();
-                expect(otherQuakeText).toBeInTheDocument();
-
-                // Verify Mainshock symbol
-                const mainshockSymbol = mainshockText.previousSibling; // Assumes circle is immediately before text
-                expect(mainshockSymbol.tagName).toBe('circle');
-                expect(mainshockSymbol).toHaveAttribute('fill', 'none');
-                expect(mainshockSymbol).toHaveAttribute('stroke'); // Check that stroke attribute exists
-                expect(mainshockSymbol.getAttribute('stroke')).not.toBe(''); // Check it's not empty
-                expect(mainshockSymbol).toHaveAttribute('stroke-width', '2'); // mainshockStrokeWidth
-                expect(mainshockSymbol).toHaveAttribute('r', '5');
-
-                // Verify Other Quake symbol
-                const otherQuakeSymbol = otherQuakeText.previousSibling; // Assumes circle is immediately before text
-                expect(otherQuakeSymbol.tagName).toBe('circle');
-                expect(otherQuakeSymbol).toHaveAttribute('fill');
-                expect(otherQuakeSymbol.getAttribute('fill')).not.toBe('none');
-                expect(otherQuakeSymbol.getAttribute('fill')).not.toBe('');
-                expect(otherQuakeSymbol).toHaveAttribute('fill-opacity', '0.7');
-                expect(otherQuakeSymbol).toHaveAttribute('r', '5');
-
-                // Check colors are based on getMagnitudeColor (indirectly by checking they are not empty)
-                // A more robust test might involve mocking getMagnitudeColor if specific color values were critical
-                const sampleColor = getMagnitudeColor(5); // Used in component for legend
-                expect(mainshockSymbol).toHaveAttribute('stroke', sampleColor);
-                expect(otherQuakeSymbol).toHaveAttribute('fill', sampleColor);
-            });
         });
     });
 
