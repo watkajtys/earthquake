@@ -100,14 +100,49 @@ const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(
     const chartContentHeight = dynamicHeight - p.t - p.b;
 
     const mags = data.map(d => d.mag);
-    const depths = data.map(d => d.depth);
+    // const depths = data.map(d => d.depth); // Will be calculated below
     const minMag = mags.length > 0 ? Math.min(...mags) : 0;
     const maxMag = mags.length > 0 ? Math.max(...mags) : 0;
-    const minDepth = depths.length > 0 ? Math.min(...depths) : 0;
-    const maxDepth = depths.length > 0 ? Math.max(...depths) : 0;
+    // const minDepth = depths.length > 0 ? Math.min(...depths) : 0; // Will be replaced by dataMinDepth
+    // const maxDepth = depths.length > 0 ? Math.max(...depths) : 0; // Will be replaced by dataMaxDepth
+
+    const depths = data.map(d => d.depth);
+    const dataMinDepth = depths.length > 0 ? Math.min(...depths) : 0;
+    const dataMaxDepth = depths.length > 0 ? Math.max(...depths) : 0;
+
+    let effectiveMinDepth, effectiveMaxDepth;
+
+    if (dataMinDepth === dataMaxDepth) {
+        const padding = dataMaxDepth === 0 ? 5 : Math.abs(dataMaxDepth * 0.15); // 15% padding, or 5 units if depth is 0
+        effectiveMinDepth = dataMinDepth - padding;
+        effectiveMaxDepth = dataMaxDepth + padding;
+    } else {
+        const depthRange = dataMaxDepth - dataMinDepth;
+        const padding = depthRange * 0.1; // 10% padding top and bottom
+        effectiveMinDepth = dataMinDepth - padding;
+        effectiveMaxDepth = dataMaxDepth + padding;
+    }
+
+    // Ensure effectiveMinDepth does not go below 0 if actual dataMinDepth is non-negative.
+    if (dataMinDepth >= 0 && effectiveMinDepth < 0) {
+        effectiveMinDepth = 0;
+    }
+    // Ensure there's a minimal range if effectiveMinDepth and effectiveMaxDepth end up being the same after padding logic.
+    // For example, if dataMinDepth is 0, padding calculation might still result in effectiveMinDepth being 0.
+    // Or if dataMinDepth and dataMaxDepth are equal.
+    if (effectiveMinDepth >= effectiveMaxDepth) {
+      effectiveMaxDepth = effectiveMinDepth + 1; // Add a small amount to ensure a positive range for the scale.
+    }
 
     const xScale = (value) => (maxMag === minMag) ? p.l + chartContentWidth / 2 : p.l + ((value - minMag) / (maxMag - minMag)) * chartContentWidth;
-    const yScale = (value) => (maxDepth === minDepth) ? p.t + chartContentHeight / 2 : p.t + ((value - minDepth) / (maxDepth - minDepth)) * chartContentHeight;
+    const yScale = (value) => {
+        if (effectiveMaxDepth <= effectiveMinDepth) { // Check for zero or negative range
+            return p.t + chartContentHeight / 2; // Single point or invalid range, center it
+        }
+        // Clamp value to the effective domain to prevent points drawing outside due to floating point math
+        const clampedValue = Math.max(effectiveMinDepth, Math.min(effectiveMaxDepth, value));
+        return p.t + ((clampedValue - effectiveMinDepth) / (effectiveMaxDepth - effectiveMinDepth)) * chartContentHeight;
+    };
 
     const xTicks = [];
     const numXTicks = Math.max(2, Math.min(Math.floor(chartContentWidth / 80), 7));
@@ -118,14 +153,72 @@ const MagnitudeDepthScatterSVGChart = React.memo(({earthquakes, titleSuffix = "(
         xTicks.push(minMag.toFixed(1));
     }
 
-    const yTicks = [];
-    const numYTicks = Math.max(2, Math.min(Math.floor(chartContentHeight / 50), 7));
-    if (maxDepth > minDepth) {
-        const yStep = (maxDepth - minDepth) / (numYTicks-1) || 1;
-        for (let i = 0; i < numYTicks; i++) yTicks.push(Math.round(minDepth + i * yStep));
-    } else {
-        yTicks.push(Math.round(minDepth));
-    }
+    const yTicks = (() => {
+        const ticks = [];
+        // Aim for a dynamic number of ticks based on available height, e.g., 40px per tick label space
+        const numTargetYTicks = Math.max(2, Math.min(Math.floor(chartContentHeight / 40), 5));
+
+        if (effectiveMaxDepth <= effectiveMinDepth) {
+            ticks.push(Number(effectiveMinDepth.toFixed(1)));
+            // If range was corrected to be minimal (e.g. effectiveMaxDepth = effectiveMinDepth + 1)
+            // ensure that tick is also added if different.
+            if (effectiveMaxDepth > effectiveMinDepth) {
+                 ticks.push(Number(effectiveMaxDepth.toFixed(1)));
+            }
+            return [...new Set(ticks)].sort((a,b)=>a-b);
+        }
+
+        const range = effectiveMaxDepth - effectiveMinDepth;
+        // Calculate a "nice" step value
+        let step = Math.pow(10, Math.floor(Math.log10(range / Math.max(1, numTargetYTicks -1 ))));
+        const errorFactor = range / (step * (numTargetYTicks - 1));
+
+        // Adjust step based on error factor to get nicer intervals (e.g., 1, 2, 5, 10)
+        if (errorFactor > 5) step *= 5; // If step is too small, increase it
+        else if (errorFactor > 2) step *= 2;
+        else if (errorFactor < 0.5) step /=2; // If step is too large, decrease it
+
+
+        let firstTick = Math.floor(effectiveMinDepth / step) * step;
+         // Adjust firstTick to be at or after effectiveMinDepth
+        while(firstTick < effectiveMinDepth - 1e-9) { // Use epsilon for float comparison
+            firstTick += step;
+        }
+        // If firstTick is now slightly above effectiveMinDepth due to adjustments, consider starting from effectiveMinDepth itself
+        if (Math.abs(firstTick - effectiveMinDepth) > step * 0.5 && firstTick > effectiveMinDepth) {
+            // ticks.push(Number(effectiveMinDepth.toFixed(1))); // Optional: force include effectiveMinDepth
+        }
+
+
+        for (let currentTick = firstTick; currentTick <= effectiveMaxDepth + 1e-9; currentTick += step) {
+            ticks.push(Number(currentTick.toFixed(1)));
+        }
+
+        // Fallback if no ticks generated
+        if (ticks.length === 0) {
+            ticks.push(Number(effectiveMinDepth.toFixed(1)));
+            if (effectiveMaxDepth !== effectiveMinDepth) { // Check again, as it might have been adjusted
+                ticks.push(Number(effectiveMaxDepth.toFixed(1)));
+            }
+        }
+
+        // Post-process ticks: filter to be within bounds, unique, and sorted.
+        let finalTicks = [...new Set(ticks)]
+            .sort((a, b) => a - b)
+            .filter(tick => tick >= effectiveMinDepth - 1e-9 && tick <= effectiveMaxDepth + 1e-9);
+
+        // If filtering removed all ticks (e.g. very narrow range and step logic was too aggressive)
+        // ensure at least min and max are present.
+        if (finalTicks.length === 0) {
+            finalTicks.push(Number(effectiveMinDepth.toFixed(1)));
+            if (effectiveMaxDepth !== effectiveMinDepth) {
+                 finalTicks.push(Number(effectiveMaxDepth.toFixed(1)));
+            }
+            finalTicks = [...new Set(finalTicks)].sort((a,b) => a-b);
+        }
+
+        return finalTicks;
+    })();
     const memoizedGetMagnitudeColor = getMagnitudeColor;
 
     return (
