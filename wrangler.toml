@@ -1,6 +1,7 @@
 # wrangler.toml
 name = "earthquake"
 compatibility_date = "2024-06-05" # Feel free to update to a more recent date
+main = "src/worker.js"
 
 # Top-level main and workers_dev removed, now in [env.production]
 
