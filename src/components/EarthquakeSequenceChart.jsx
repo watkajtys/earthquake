@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { scaleLinear, scaleTime, scaleSqrt } from 'd3-scale'; // Import scaleSqrt
 import { max as d3Max, min as d3Min, extent as d3Extent } from 'd3-array';
 import { timeFormat } from 'd3-time-format';
+import { timeHour } from 'd3-time'; // Import timeHour
 import { getMagnitudeColor, formatDate, isValidNumber, isValuePresent, formatNumber } from '../utils/utils'; // Corrected path
 import EarthquakeSequenceChartSkeleton from './skeletons/EarthquakeSequenceChartSkeleton'; // Import skeleton
 
@@ -27,9 +28,8 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     // This useEffect only sets the initial width based on the parent.
   }, []);
 
-  const newMarginBottom = 80; // For legend
-  const chartHeight = 350 + (newMarginBottom - 60); // Adjust chart height to accommodate new margin
-  const margin = { top: 40, right: 50, bottom: newMarginBottom, left: 60 };
+  const chartHeight = 350;
+  const margin = { top: 40, right: 50, bottom: 60, left: 60 }; // Increased bottom for time labels, top for title
 
   const width = chartRenderWidth - margin.left - margin.right;
   const height = chartHeight - margin.top - margin.bottom;
@@ -137,23 +137,27 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
 
   // Axes and Gridlines
   const xAxisTicks = useMemo(() => {
-    if (width <= 0 || !xScale.ticks) return [];
-    const [startTime, endTime] = timeDomain;
-    const timeDiffHours = (endTime - startTime) / (1000 * 60 * 60);
+    if (width <= 0 || !xScale.ticks || !timeDomain || timeDomain.length < 2) return [];
 
-    let interval;
-    if (timeDiffHours <= 24) {
-      interval = d3.timeHour.every(3); // Every 3 hours if span is 1 day or less
-    } else if (timeDiffHours <= 72) {
-      interval = d3.timeHour.every(6); // Every 6 hours if span is 3 days or less
+    const [startTime, endTime] = timeDomain.map(d => new Date(d));
+    const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+
+    let tickInterval;
+    if (durationHours < 12) {
+      tickInterval = 2; // Aim for every 2 hours
+    } else if (durationHours < 24) {
+      tickInterval = 3; // Every 3 hours
+    } else if (durationHours < 48) {
+      tickInterval = 6; // Every 6 hours
     } else {
-      interval = d3.timeHour.every(12); // Every 12 hours for longer spans
+      tickInterval = 12; // Every 12 hours, D3 might choose 24 based on space
     }
 
-    return xScale.ticks(interval).map(value => ({
+    // d3.timeHour.every(step) creates a filter for tick values
+    return xScale.ticks(timeHour.every(tickInterval)).map(value => ({
       value,
       offset: xScale(value),
-      label: timeFormat("%b %d, %H:%M")(value)
+      label: timeFormat("%b %d, %I%p")(value).replace(", 0",", ") // Compact format e.g. "Jan 01, 11AM"
     }));
   }, [xScale, width, timeDomain]);
 
@@ -190,13 +194,53 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   }, [yScale, height, magDomain]);
 
 
+  const magnitudeColorSample = getMagnitudeColor(5); // For legend
+
   return (
     <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md">
       <h3 className={`text-lg font-semibold mb-4 text-center text-indigo-400`}>
-        Seismic Activity Timeline (UTC)
+        Earthquake Sequence (UTC)
       </h3>
       <svg ref={svgRef} width="100%" height={chartHeight} viewBox={`0 0 ${chartRenderWidth} ${chartHeight}`}>
         <g transform={`translate(${margin.left},${margin.top})`}>
+          {/* Legend */}
+          <g transform={`translate(${width - 120}, ${-margin.top + 20})`}>
+            {/* Mainshock Legend Item */}
+            <circle
+              cx="5"
+              cy="5"
+              r="5"
+              fill="none"
+              stroke={magnitudeColorSample}
+              strokeWidth={mainshockStrokeWidth}
+            />
+            <text
+              x="15"
+              y="9"
+              className={`text-xs fill-current ${tickLabelColor}`}
+              alignmentBaseline="middle"
+            >
+              Mainshock
+            </text>
+
+            {/* Other Quake Legend Item */}
+            <circle
+              cx="5"
+              cy="25"
+              r="5"
+              fill={magnitudeColorSample}
+              fillOpacity={0.7}
+            />
+            <text
+              x="15"
+              y="29"
+              className={`text-xs fill-current ${tickLabelColor}`}
+              alignmentBaseline="middle"
+            >
+              Other Quake
+            </text>
+          </g>
+
           {/* Y-Axis Gridlines */}
           {yAxisTicks.map(({ value, offset }) => (
             <line
@@ -205,7 +249,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
               x2={width}
               y1={offset}
               y2={offset}
-              className={`${gridLineColor} stroke-dasharray-2 stroke-opacity-30`}
+              className={`${gridLineColor} stroke-dasharray-2 stroke-opacity-50`}
               strokeDasharray="2,2"
             />
           ))}
@@ -260,6 +304,15 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
               {label}
             </text>
           ))}
+          {/* X-Axis Label */}
+          <text
+            x={width / 2}
+            y={height + margin.bottom - 10} // Adjusted y position
+            textAnchor="middle"
+            className={`text-sm fill-current ${axisLabelColor}`}
+          >
+            Time (UTC)
+          </text>
 
           {/* Data Points */}
           {originalQuakes.map(quake => {
@@ -272,23 +325,9 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
             const color = getMagnitudeColor(mag);
             const isMain = processedMainshock && processedMainshock.id === id;
 
+            // Basic check if points are outside the main plot area before rendering
             const baseRadius = radiusScale(mag);
-            let circleRadius;
-            let fillStyle;
-            let strokeStyle;
-            let strokeWidthStyle;
-
-            if (isMain) {
-              circleRadius = baseRadius * 1.5;
-              fillStyle = color; // Solid color for mainshock
-              strokeStyle = 'none';
-              strokeWidthStyle = 0;
-            } else {
-              circleRadius = baseRadius;
-              fillStyle = 'transparent'; // Hollow for aftershocks
-              strokeStyle = color; // Border color for aftershocks
-              strokeWidthStyle = 1; // Thin border for aftershocks
-            }
+            const circleRadius = isMain ? baseRadius + 2 : baseRadius; // Mainshock slightly larger
 
             // Add a small buffer for radius for visibility at edges
             if (cx < -circleRadius || cx > width + circleRadius || cy < -circleRadius || cy > height + circleRadius) {
@@ -301,28 +340,18 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
                   cx={cx}
                   cy={cy}
                   r={circleRadius}
-                  fill={fillStyle}
-                  stroke={strokeStyle}
-                  strokeWidth={strokeWidthStyle}
-                  fillOpacity={0.8} // Adjusted for better visibility
-                  strokeOpacity={0.8}
-                  className="transition-opacity duration-200 hover:opacity-100"
+                  fill={isMain ? 'none' : color}
+                  stroke={isMain ? color : 'none'}
+                  strokeWidth={isMain ? mainshockStrokeWidth : 0}
+                  fillOpacity={isMain ? 1.0 : 0.7}
+                  strokeOpacity={isMain ? 1.0 : 0.7} // Mainshock stroke is its color, others usually no stroke
+                  className="transition-opacity duration-200 hover:opacity-100" // Hover to full opacity
                 >
                   <title>{`Mag ${formatNumber(mag,1)} ${place || 'Unknown location'} - ${formatDate(time)}`}</title>
                 </circle>
                 {isMain && (
                   <text
-                    x={cx + circleRadius + 3} // Adjusted x position
-                    y={cy}
-                    alignmentBaseline="middle"
-                    className={`text-xs fill-current ${tickLabelColor}`}
-                  >
-                    {formatNumber(mag,1)}
-                  </text>
-                )}
-                {!isMain && mag >= 3.0 && ( // Labels for aftershocks M >= 3.0
-                  <text
-                    x={cx + circleRadius + 3}
+                    x={cx + circleRadius + 5} // Adjust label position based on new radius
                     y={cy}
                     alignmentBaseline="middle"
                     className={`text-xs fill-current ${tickLabelColor}`}
@@ -333,31 +362,6 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
               </g>
             );
           })}
-        </g>
-        {/* Legend */}
-        <g transform={`translate(${margin.left}, ${margin.top + height + 45})`}>
-          {/* Mainshock Legend Item */}
-          <g transform={`translate(0, 0)`}>
-            <circle
-              cx="0"
-              cy="0"
-              r={6} // mainshockLegendRadius
-              fill={getMagnitudeColor(5.5)} // Representative color
-            />
-            <text x="15" y="4" className={`text-xs fill-current ${tickLabelColor}`}>Mainshock</text>
-          </g>
-          {/* Aftershock Legend Item */}
-          <g transform={`translate(100, 0)`}> {/* Offset for second item */}
-            <circle
-              cx="0"
-              cy="0"
-              r={4} // aftershockLegendRadius
-              fill="transparent"
-              stroke={getMagnitudeColor(4.5)} // Representative color
-              strokeWidth="1"
-            />
-            <text x="15" y="4" className={`text-xs fill-current ${tickLabelColor}`}>Aftershock</text>
-          </g>
         </g>
       </svg>
     </div>
