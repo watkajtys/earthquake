@@ -167,7 +167,7 @@ describe('EarthquakeTimelineSVGChart', () => {
         // Check if it's a text element for bar count (y - 5 or 10, specific class)
         if (element.tagName.toLowerCase() === 'text' && parentNode.tagName.toLowerCase() === 'g') {
             const yPos = parseFloat(element.getAttribute('y'));
-            const xPos = parseFloat(element.getAttribute('x'));
+            // const xPos = parseFloat(element.getAttribute('x')); // Unused variable removed
             // Heuristic: bar count labels are above the bar or at y=10.
             // Date labels are at chartHeight + 15.
             // Y-axis labels are at x=yOffset-5.

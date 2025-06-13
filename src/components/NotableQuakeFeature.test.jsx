@@ -6,7 +6,7 @@ import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext';
 import * as Utils from '../utils/utils'; // Original import
 
 // Mock the EarthquakeDataContext
-const mockUseEarthquakeDataState = vi.fn();
+// const mockUseEarthquakeDataState = vi.fn(); // Unused variable removed
 
 // Mock getMagnitudeColor from utils.js robustly
 vi.mock('../utils/utils.js', async (importOriginal) => {

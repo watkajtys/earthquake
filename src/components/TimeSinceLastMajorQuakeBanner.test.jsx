@@ -17,13 +17,14 @@ vi.mock('./SkeletonText', () => ({
 }));
 
 const mockFormatTimeDuration = vi.fn(duration => `formatted:${duration}`);
-const mockGetMagnitudeColor = vi.fn(mag => 'text-red-500'); // Example color
+// eslint-disable-next-line no-unused-vars
+const mockGetMagnitudeColor = vi.fn(_mag => 'text-red-500'); // Example color, _mag to avoid no-unused-vars
 
 const mockLastMajorQuake = {
     properties: {
         time: MOCKED_NOW - 3600000, // 1 hour ago
         place: 'Test Place Last',
-        mag: 5.0,
+        mag: 5.0, // This 'mag' is used by the component, the unused one was a local destructure
         url: 'http://example.com/last',
         alert: 'green',
     },

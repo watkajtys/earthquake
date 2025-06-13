@@ -32,7 +32,7 @@ export const fetchDataCb = async (url) => {
             let errorBody = '';
             try {
                 errorBody = await response.text();
-            } catch (_) { // e variable removed as it's unused
+            } catch { // Parameter removed as it's unused
                 // Ignore if reading error body fails
             }
             throw new Error(`HTTP error! status: ${response.status} ${response.statusText}. ${errorBody}`);

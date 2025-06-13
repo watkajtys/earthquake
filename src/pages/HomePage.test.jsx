@@ -1,17 +1,17 @@
 import React from 'react';
 import { render, act, screen, waitFor } from '@testing-library/react';
-import { axe } from 'jest-axe';
+// import { axe } from 'jest-axe'; // Removed unused import
 import { MemoryRouter, Routes, Route } from 'react-router-dom'; // Import Routes and Route
-import { expect, describe, it, vi, beforeEach, afterEach } from 'vitest';
+import { expect, describe, it, vi, beforeEach } from 'vitest'; // Removed unused import: afterEach
 
 // Mock context hooks
 // Note: Actual import of useEarthquakeDataState is deferred or handled by Vitest's hoisting/mocking mechanism.
 // We will define our mock function first, then tell Vitest to use it for the module.
 // import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Keep if HomePage itself imports it directly
-import { useUIState } from '../contexts/UIStateContext.jsx';
+// import { useUIState } from '../contexts/UIStateContext.jsx'; // Removed unused import (using hoisted mock)
 
 // Mock services
-import { fetchActiveClusters, registerClusterDefinition } from '../services/clusterApiService.js';
+// import { fetchActiveClusters, registerClusterDefinition } from '../services/clusterApiService.js'; // Removed unused imports (using hoisted mocks)
 
 // Mock child components
 vi.mock('../components/InteractiveGlobeView', () => ({
@@ -82,7 +82,7 @@ vi.mock('../services/clusterApiService.js', () => ({
 // Keep the original import for useEarthquakeDataState if it's directly used by HomePage component.
 // If HomePage only gets it via context, this import might not be strictly necessary at the top level of the test file.
 // For now, the critical part is the vi.mock factory.
-import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
+// import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Removed unused import (using hoisted mock)
 // The original import for useUIState at the top of the file is sufficient.
 // The original import for clusterApiService functions at the top of the file is sufficient.
 
