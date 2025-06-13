@@ -15,6 +15,9 @@
     "deploy:production": "npx wrangler deploy --env production"
   },
   "dependencies": {
+    "d3-array": "^3.2.4",
+    "d3-scale": "^4.0.2",
+    "d3-time-format": "^4.1.0",
     "leaflet": "^1.9.4",
     "prop-types": "^15.8.1",
     "react": "^19.1.0",
