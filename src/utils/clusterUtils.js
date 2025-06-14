@@ -1,6 +1,9 @@
-// NOTE: This function is duplicated in functions/api/calculate-clusters.js
-// Any algorithmic changes should be synchronized.
-import { calculateDistance } from './utils.js'; // Assuming utils.js is in the same directory
+// NOTE: This frontend version of findActiveClusters is largely synchronized with the backend version
+// in functions/api/calculate-clusters.js. Key differences in the backend version include
+// a duplicate cluster check and adjusted logging.
+// This function uses calculateDistance imported from '../../common/mathUtils.js'.
+// Algorithmic changes to core clustering logic should be synchronized with the backend version where applicable.
+import { calculateDistance } from '../../common/mathUtils.js'; // Assuming utils.js is in the same directory
 
 /**
  * @file clusterUtils.js
