@@ -6,10 +6,10 @@ High Priority:
     *   Rationale: PropTypes are largely missing. Adding them improves API clarity, helps catch errors, and serves as documentation. Foundational for JS React.
     *   Action: Systematically add `propTypes` and `defaultProps` to components in `src/components/`.
 
-2.  Task: Address Duplication of `calculateDistance` and `findActiveClusters` between Frontend and Backend. (Original Task 2)
-    *   Rationale: Duplication between `src/utils/` and `functions/api/` is a maintenance risk.
-    *   Action (Ideal): Share code via a common directory or local package.
-    *   Action (Pragmatic): Ensure strict synchronization with clear comments if sharing is infeasible.
+~~2.  Task: Address Duplication of `calculateDistance` and `findActiveClusters` between Frontend and Backend. (Original Task 2)~~
+~~    *   Rationale: Duplication between `src/utils/` and `functions/api/` is a maintenance risk.~~
+~~    *   Action (Ideal): Share code via a common directory or local package.~~
+~~    *   Action (Pragmatic): Ensure strict synchronization with clear comments if sharing is infeasible.~~
 
 3.  Task: Consolidate and Centralize Formatting Utilities. (Original Task 3)
     *   Rationale: Different versions of formatters (e.g., `formatDate`) in `utils.js` and `HomePage.jsx` cause inconsistency.
