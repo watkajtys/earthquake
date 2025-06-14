@@ -4,16 +4,18 @@ import { getMagnitudeColor as getMagnitudeColorUtil } from '../utils/utils.js'; 
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 
 /**
- * @const {Array<object>} historicalNotableQuakes
- * A curated list of historically significant earthquakes, used as a fallback or secondary display
- * when no recent dynamic featured quake is available. Each object contains:
- * @property {string} id - A unique identifier for the historical quake.
- * @property {string} name - The common name or location of the earthquake.
- * @property {number} year - The year the earthquake occurred.
- * @property {number} mag - The magnitude of the earthquake.
- * @property {string} source - Indicates the source as 'Historical'.
- * @property {string} url - A URL to a page with more information about the quake.
- * @property {string} description - A brief description of the earthquake's significance.
+ * A module-level constant array of curated historically significant earthquake objects.
+ * This list is used as a fallback or secondary display when no recent dynamic featured quake
+ * (i.e., `lastMajorQuake` from context) is available.
+ * Each object in the array contains:
+ * - `id` (string): A unique identifier for the historical quake.
+ * - `name` (string): The common name or location of the earthquake.
+ * - `year` (number): The year the earthquake occurred.
+ * - `mag` (number): The magnitude of the earthquake.
+ * - `source` (string): Indicates the source, typically 'Historical'.
+ * - `url` (string): A URL to a page with more information about the quake.
+ * - `description` (string): A brief description of the earthquake's significance.
+ * @const {Array<Object>} historicalNotableQuakes
  */
 const historicalNotableQuakes = [
     { id: 'nqh1', name: "Valdivia, Chile", year: 1960, mag: 9.5, source: 'Historical', url: 'https://earthquake.usgs.gov/earthquakes/eventpage/official19600522191120_30/executive', description: "Most powerful earthquake ever recorded." },
@@ -23,19 +25,24 @@ const historicalNotableQuakes = [
 ];
 
 /**
- * A React component that displays a feature card for a notable earthquake.
- * It can show a dynamically provided recent significant quake or cycle through a predefined list of historical quakes if no dynamic quake is available.
- * @param {object} props - The component's props.
- * @param {function(object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card is clicked. Receives the quake data object.
- * @param {function(number):string} [props.getMagnitudeColorFunc] - Optional: Function that returns a color string based on earthquake magnitude. If not provided, util is used.
- * @returns {JSX.Element} The rendered NotableQuakeFeature component.
+ * Displays a feature card for a notable earthquake. This component is memoized using `React.memo`.
+ * It prioritizes displaying the `lastMajorQuake` from `EarthquakeDataContext` if available and not loading.
+ * If no recent major quake is found, or if data is still loading, it falls back to cycling through
+ * a predefined list of `historicalNotableQuakes`.
+ * Internal state manages which quake to display (`displayQuake`) and the cycling mechanism for historical quakes.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {function(Object):void} props.onNotableQuakeSelect - Callback function triggered when the feature card (button) is clicked.
+ *   It receives the full data object of the displayed quake (either the recent one from context or an object from `historicalNotableQuakes`).
+ * @param {function(number):string} [props.getMagnitudeColorFunc] - Optional function to determine the color for the magnitude display.
+ *   If not provided, a default utility function (`getMagnitudeColorUtil`) is used.
+ * @returns {JSX.Element} The NotableQuakeFeature component, or a loading/empty state placeholder.
  */
 const NotableQuakeFeature = ({
-                                 // dynamicFeaturedQuake, // From context
-                                 // isLoadingDynamicQuake, // From context
-                                 onNotableQuakeSelect,
-                                 getMagnitudeColorFunc // Optional prop
-                             }) => {
+    onNotableQuakeSelect,
+    getMagnitudeColorFunc
+}) => {
     const { lastMajorQuake: dynamicFeaturedQuake, isLoadingInitialData: isLoadingDynamicQuake } = useEarthquakeDataState();
     const [displayQuake, setDisplayQuake] = useState(null);
     const [historicalIndex, setHistoricalIndex] = useState(0);
@@ -85,7 +92,7 @@ const NotableQuakeFeature = ({
             }, 15000); // Rotate historical every 15 seconds
         }
         return () => clearInterval(timer);
-    }, [isCyclingHistorical, historicalNotableQuakes.length]);
+    }, [isCyclingHistorical]); // Removed historicalNotableQuakes as it's a module-level constant
 
 
     if (isLoadingDynamicQuake && !dynamicFeaturedQuake) { // Show loading state only if dynamic quake is loading and not yet available

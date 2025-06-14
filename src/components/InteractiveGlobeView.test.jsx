@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import InteractiveGlobeView from './InteractiveGlobeView'; // Assuming path is correct
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext';
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils'; // Corrected import path
 
 // Mock react-globe.gl
 const mockGlobeRefActions = {
@@ -16,7 +16,8 @@ const mockGlobeRefActions = {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   })),
-  toGlobeCoords: vi.fn((x,y) => ({lat: 0, lng: 0})), // Simulate returning some coords
+  // eslint-disable-next-line no-unused-vars
+  toGlobeCoords: vi.fn((_x,_y) => ({lat: 0, lng: 0})), // Simulate returning some coords, params unused
 };
 vi.mock('react-globe.gl', () => ({
   default: vi.fn((props) => {
@@ -41,7 +42,7 @@ vi.mock('react-globe.gl', () => ({
 }));
 
 // Mock context
-const mockUseEarthquakeDataState = vi.fn();
+// const mockUseEarthquakeDataState = vi.fn(); // Unused variable removed
 
 const renderWithContext = (ui, { providerProps, ...renderOptions }) => {
   return render(
@@ -53,11 +54,24 @@ const renderWithContext = (ui, { providerProps, ...renderOptions }) => {
 };
 
 // Mock ResizeObserver
-global.ResizeObserver = vi.fn(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+let mockResizeObserverCallback;
+global.ResizeObserver = vi.fn((callback) => {
+  mockResizeObserverCallback = callback; // Store the callback
+  return {
+    observe: vi.fn(() => {
+      // Immediately invoke the callback with mock dimensions
+      // This simulates the observer firing right after observe is called.
+      // Use act to wrap this callback invocation if it causes state updates.
+      act(() => {
+        if (mockResizeObserverCallback) {
+          mockResizeObserverCallback([{ contentRect: { width: 500, height: 500 } }]);
+        }
+      });
+    }),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  };
+});
 
 // Helper to create mock earthquake data
 const createMockQuake = (id, mag, lat, lon, place = "Test Place", time = Date.now()) => ({
@@ -141,19 +155,13 @@ describe('InteractiveGlobeView', () => {
     );
 
     // Simulate container having dimensions
-    // We need to use `act` because ResizeObserver callback and subsequent state updates will happen
+    // With the new ResizeObserver mock, dimensions should be set automatically
+    // when the component mounts and its useEffect calls observe().
+    // We might still need to wait for the state update to propagate.
     await act(async () => {
-      const globeContainer = container.firstChild; // The div with ref="containerRef"
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
-      // Manually trigger what ResizeObserver would do
-      // This is tricky because ResizeObserver is mocked.
-      // The internal `updateDimensions` is called, which sets `globeDimensions`.
-      // Let's rely on the `useEffect` for `initialLayoutComplete` and `window.load`.
-      // Since `document.readyState` is 'complete' by default in beforeEach,
-      // `initialLayoutComplete` should become true, and dimensions should be set.
-      // We might need a small timeout if there are async operations.
-      await new Promise(resolve => setTimeout(resolve, 0)); // Allow microtasks to flush
+      // Just wait for any microtasks/macrotasks to flush to ensure state updates from
+      // the ResizeObserver mock (which calls its callback within an act) are processed.
+      await new Promise(resolve => setTimeout(resolve, 0));
     });
 
     expect(screen.getByTestId('mock-globe')).toBeInTheDocument();
@@ -164,16 +172,14 @@ describe('InteractiveGlobeView', () => {
       createMockQuake('q1', 5, 10, 20),
       createMockQuake('q2', 6, 30, 40),
     ];
-    const { container } = renderWithContext(
+    renderWithContext( // container no longer needed
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
       />, { providerProps }
     );
     await act(async () => {
-      const globeContainer = container.firstChild;
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
+      // Dimensions are set by the new ResizeObserver mock. Wait for effects.
       await new Promise(resolve => setTimeout(resolve, 0));
     });
 
@@ -189,7 +195,7 @@ describe('InteractiveGlobeView', () => {
     const coastlineData = { type: "GeometryCollection", geometries: [{ type: "LineString", coordinates: [[1,1],[2,2]] }] };
     const tectonicData = { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "LineString", coordinates: [[3,3],[4,4]] }, properties: { Boundary_Type: 'Convergent' } }] };
 
-    const { container } = renderWithContext(
+    renderWithContext( // container no longer needed
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
@@ -198,9 +204,7 @@ describe('InteractiveGlobeView', () => {
       />, { providerProps }
     );
      await act(async () => {
-      const globeContainer = container.firstChild;
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
+      // Dimensions are set by the new ResizeObserver mock. Wait for effects.
       await new Promise(resolve => setTimeout(resolve, 0));
     });
 
@@ -216,16 +220,14 @@ describe('InteractiveGlobeView', () => {
     providerProps.value.lastMajorQuake = createMockQuake('lmq1', 7, 50, 60);
     providerProps.value.previousMajorQuake = createMockQuake('pmq1', 6.5, 70, 80);
 
-    const { container } = renderWithContext(
+    renderWithContext( // container no longer needed
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
       />, { providerProps }
     );
     await act(async () => {
-      const globeContainer = container.firstChild;
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
+      // Dimensions are set by the new ResizeObserver mock. Wait for effects.
       await new Promise(resolve => setTimeout(resolve, 0));
     });
 
@@ -239,16 +241,14 @@ describe('InteractiveGlobeView', () => {
 
   it('calls onQuakeClick when a point is clicked on the mock globe', async () => {
     providerProps.value.globeEarthquakes = [createMockQuake('q1', 5, 10, 20)];
-    const { container } = renderWithContext(
+    renderWithContext( // container no longer needed
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
       />, { providerProps }
     );
     await act(async () => {
-      const globeContainer = container.firstChild;
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
+      // Dimensions are set by the new ResizeObserver mock. Wait for effects.
       await new Promise(resolve => setTimeout(resolve, 0));
     });
 
@@ -257,7 +257,7 @@ describe('InteractiveGlobeView', () => {
   });
 
   it('updates globe pointOfView when defaultFocus props change', async () => {
-    const { rerender, container } = renderWithContext(
+    const { rerender } = renderWithContext( // container no longer needed
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
@@ -265,9 +265,7 @@ describe('InteractiveGlobeView', () => {
       />, { providerProps }
     );
     await act(async () => {
-      const globeContainer = container.firstChild;
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
+      // Dimensions are set by the new ResizeObserver mock. Wait for effects.
       await new Promise(resolve => setTimeout(resolve, 0));
     });
     expect(mockGlobeRefActions.pointOfView).toHaveBeenCalledWith({ lat: 10, lng: 20, altitude: 2.0 }, 0);

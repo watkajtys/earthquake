@@ -1,466 +1,144 @@
 // src/contexts/EarthquakeDataContext.jsx
-import React, { createContext, useContext, useEffect, useCallback, useMemo, useReducer } from 'react'; // Removed useState, useRef; Added useReducer
+import React, { useContext, useEffect, useCallback, useMemo, useReducer } from 'react'; // Removed createContext
 import { fetchUsgsData } from '../services/usgsApiService';
 import {
     USGS_API_URL_DAY,
     USGS_API_URL_WEEK,
     USGS_API_URL_MONTH,
     REFRESH_INTERVAL_MS,
-    FEELABLE_QUAKE_THRESHOLD, // Added
+    FEELABLE_QUAKE_THRESHOLD,
     MAJOR_QUAKE_THRESHOLD,
-    ALERT_LEVELS,
-    INITIAL_LOADING_MESSAGES,
+    // ALERT_LEVELS, // Moved to utils as it's used by reducer
+    INITIAL_LOADING_MESSAGES, // This is part of initialState from utils
     LOADING_MESSAGE_INTERVAL_MS
 } from '../constants/appConstants';
-import { getMagnitudeColor } from '../utils/utils.js'; // Added import
+// import { getMagnitudeColor } from '../utils/utils.js'; // Not directly used in Provider, but in utils by reducer helpers
 
-const EarthquakeDataContext = createContext(null);
+// Import helpers, reducer, initialState, and actionTypes from the new utils file
+import {
+    earthquakeReducer,
+    initialState, // This now comes from utils
+    actionTypes,
+    // Specific helpers used by the Provider itself (if any)
+    // filterByTime, // Used by reducer
+    // filterMonthlyByTime, // Used by reducer
+    // consolidateMajorQuakesLogic, // Used by reducer
+    // sampleArray, // Used by reducer
+    // sampleArrayWithPriority, // Used by reducer
+    // SCATTER_SAMPLING_THRESHOLD_7_DAYS, // Used by reducer
+    // SCATTER_SAMPLING_THRESHOLD_14_DAYS, // Used by reducer
+    // SCATTER_SAMPLING_THRESHOLD_30_DAYS, // Used by reducer
+    // MAGNITUDE_RANGES, // Used by reducer
+    // formatDateForTimeline, // Used by reducer
+    // getInitialDailyCounts, // Used by reducer
+    // calculateMagnitudeDistribution // Used by reducer
+} from './earthquakeDataContextUtils.js';
+import { EarthquakeDataContext } from './earthquakeDataContextUtils.js'; // Import the context
 
-// Helper function for filtering by time (used by reducer)
-const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0, now = Date.now()) => {
-    if (!Array.isArray(data)) return [];
-    const startTime = now - hoursAgoStart * 36e5;
-    const endTime = now - hoursAgoEnd * 36e5;
-    return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);
-};
+/**
+ * @typedef {object} EarthquakeDataProviderProps
+ * @property {React.ReactNode} children - The child components that will have access to the earthquake data context.
+ */
 
-// Helper for monthly data (days to hours)
-const filterMonthlyByTime = (data, daysAgoStart, daysAgoEnd = 0, now = Date.now()) => {
-    if (!Array.isArray(data)) return [];
-    const startTime = now - (daysAgoStart * 24 * 36e5);
-    const endTime = now - (daysAgoEnd * 24 * 36e5);
-    return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);
-};
-
-// Helper function for major quake consolidation (used by reducer)
-const consolidateMajorQuakesLogic = (currentLastMajor, currentPreviousMajor, newMajors) => {
-    let consolidated = [...newMajors];
-    if (currentLastMajor && !consolidated.find(q => q.id === currentLastMajor.id)) {
-        consolidated.push(currentLastMajor);
-    }
-    if (currentPreviousMajor && !consolidated.find(q => q.id === currentPreviousMajor.id)) {
-        consolidated.push(currentPreviousMajor);
-    }
-    consolidated = consolidated
-        .sort((a, b) => b.properties.time - a.properties.time)
-        .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id));
-
-    const newLastMajor = consolidated.length > 0 ? consolidated[0] : null;
-    const newPreviousMajor = consolidated.length > 1 ? consolidated[1] : null;
-    const newTimeBetween = newLastMajor && newPreviousMajor ? newLastMajor.properties.time - newPreviousMajor.properties.time : null;
-    
-    return { 
-        lastMajorQuake: newLastMajor, 
-        previousMajorQuake: newPreviousMajor, 
-        timeBetweenPreviousMajorQuakes: newTimeBetween 
-    };
-};
-
-// Helper function for random sampling (Fisher-Yates shuffle)
-const sampleArray = (array, sampleSize) => {
-    if (!Array.isArray(array) || array.length === 0) return [];
-    if (sampleSize >= array.length) return [...array]; // Return a copy if sample size is larger or equal
-
-    const shuffled = [...array]; // Create a copy to avoid mutating the original array
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; // Swap elements
-    }
-    return shuffled.slice(0, sampleSize);
-};
-
-// Helper function for sampling with priority for significant earthquakes
-function sampleArrayWithPriority(fullArray, sampleSize, priorityMagnitudeThreshold) {
-    if (!fullArray || fullArray.length === 0) {
-        return [];
-    }
-    if (sampleSize <= 0) {
-        return [];
-    }
-
-    const priorityQuakes = fullArray.filter(
-        q => q.properties && typeof q.properties.mag === 'number' && q.properties.mag >= priorityMagnitudeThreshold
-    );
-
-    const otherQuakes = fullArray.filter(
-        q => !q.properties || typeof q.properties.mag !== 'number' || q.properties.mag < priorityMagnitudeThreshold
-    );
-
-    if (priorityQuakes.length >= sampleSize) {
-        // If priority quakes alone meet or exceed sample size, sample from them
-        return sampleArray(priorityQuakes, sampleSize);
-    } else {
-        // All priority quakes are included
-        const remainingSlots = sampleSize - priorityQuakes.length;
-        // The check 'remainingSlots <= 0' is theoretically redundant here if priorityQuakes.length < sampleSize,
-        // but kept for robustness, though it implies sampleSize was already filled by priorityQuakes.
-        // If remainingSlots is 0 or less, means priorityQuakes filled or exceeded sampleSize.
-        // However, the outer 'if' handles priorityQuakes.length >= sampleSize.
-        // This path means priorityQuakes.length < sampleSize, so remainingSlots > 0.
-
-        // Sample from otherQuakes to fill remaining slots
-        const sampledOtherQuakes = sampleArray(otherQuakes, remainingSlots);
-
-        return [...priorityQuakes, ...sampledOtherQuakes];
-    }
-}
-
-// const SCATTER_PLOT_SAMPLING_THRESHOLD = 500; // Commented out old threshold
-const SCATTER_SAMPLING_THRESHOLD_7_DAYS = 300;
-const SCATTER_SAMPLING_THRESHOLD_14_DAYS = 500;
-const SCATTER_SAMPLING_THRESHOLD_30_DAYS = 700;
-
-// Define magnitude ranges locally for pre-aggregation
-const MAGNITUDE_RANGES = [
-    {name: '<1', min: -Infinity, max: 0.99},
-    {name : '1-1.9', min : 1, max : 1.99},
-    {name: '2-2.9', min: 2, max: 2.99},
-    {name : '3-3.9', min : 3, max : 3.99},
-    {name: '4-4.9', min: 4, max: 4.99},
-    {name : '5-5.9', min : 5, max : 5.99},
-    {name: '6-6.9', min: 6, max: 6.99},
-    {name : '7+', min : 7, max : Infinity},
-];
-
-// Helper to format date as 'MMM D' (e.g., "Oct 26") - Moved to global scope
-const formatDateForTimeline = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-};
-
-// Helper to generate initial daily counts array - Moved to global scope
-const getInitialDailyCounts = (numDays, baseTime) => {
-    const counts = [];
-    for (let i = 0; i < numDays; i++) {
-        const date = new Date(baseTime);
-        date.setDate(date.getDate() - i);
-        counts.push({ dateString: formatDateForTimeline(date.getTime()), count: 0 });
-    }
-    return counts.reverse(); // Ensure chronological order
-};
-
-// Helper to calculate Magnitude Distributions - Moved to global scope
-const calculateMagnitudeDistribution = (earthquakes) => {
-    const distribution = MAGNITUDE_RANGES.map(range => ({
-        name: range.name,
-        count: 0,
-        color: getMagnitudeColor(range.min === -Infinity ? 0 : range.min) // Use range.min for color, handle -Infinity
-    }));
-
-    earthquakes.forEach(quake => {
-        const mag = quake.properties.mag;
-        if (mag === null || typeof mag !== 'number') return;
-
-        for (const range of distribution) {
-            // Find the correct range from MAGNITUDE_RANGES to check min/max
-            const rangeDetails = MAGNITUDE_RANGES.find(r => r.name === range.name);
-            if (mag >= rangeDetails.min && mag <= rangeDetails.max) {
-                range.count++;
-                break;
-            }
-        }
-    });
-    return distribution;
-};
-
-const initialState = {
-    isLoadingDaily: true,
-    isLoadingWeekly: true,
-    isLoadingMonthly: false,
-    isInitialAppLoad: true,
-    error: null,
-    monthlyError: null,
-    dataFetchTime: null,
-    lastUpdated: null,
-    earthquakesLastHour: [],
-    earthquakesPriorHour: [],
-    earthquakesLast24Hours: [],
-    earthquakesLast72Hours: [],
-    earthquakesLast7Days: [],
-    prev24HourData: [],
-    prev7DayData: [],
-    prev14DayData: [],
-    allEarthquakes: [],
-    earthquakesLast14Days: [],
-    earthquakesLast30Days: [],
-    globeEarthquakes: [],
-    hasRecentTsunamiWarning: false,
-    highestRecentAlert: null,
-    activeAlertTriggeringQuakes: [],
-    lastMajorQuake: null,
-    previousMajorQuake: null,
-    timeBetweenPreviousMajorQuakes: null,
-    loadingMessageIndex: 0,
-    currentLoadingMessages: INITIAL_LOADING_MESSAGES,
-    hasAttemptedMonthlyLoad: false, // Added this from previous useState
-    dailyCounts14Days: [],
-    dailyCounts30Days: [],
-    sampledEarthquakesLast14Days: [],
-    sampledEarthquakesLast30Days: [],
-    magnitudeDistribution14Days: [],
-    magnitudeDistribution30Days: [],
-    dailyCounts7Days: [],
-    sampledEarthquakesLast7Days: [],
-    magnitudeDistribution7Days: [],
-};
-
-const actionTypes = {
-    SET_LOADING_FLAGS: 'SET_LOADING_FLAGS',
-    SET_ERROR: 'SET_ERROR',
-    DAILY_DATA_PROCESSED: 'DAILY_DATA_PROCESSED',
-    WEEKLY_DATA_PROCESSED: 'WEEKLY_DATA_PROCESSED',
-    MONTHLY_DATA_PROCESSED: 'MONTHLY_DATA_PROCESSED',
-    SET_INITIAL_LOAD_COMPLETE: 'SET_INITIAL_LOAD_COMPLETE',
-    UPDATE_LOADING_MESSAGE_INDEX: 'UPDATE_LOADING_MESSAGE_INDEX',
-    SET_LOADING_MESSAGES: 'SET_LOADING_MESSAGES', // For setting initial messages
-};
-
-function earthquakeReducer(state = initialState, action) { // Set initialState as default for state
-    switch (action.type) {
-        case actionTypes.SET_LOADING_FLAGS:
-            return { ...state, ...action.payload };
-        case actionTypes.SET_ERROR:
-            return { ...state, ...action.payload };
-        case actionTypes.DAILY_DATA_PROCESSED: {
-            const { features, metadata, fetchTime } = action.payload;
-            const l24 = filterByTime(features, 24, 0, fetchTime);
-            const alertsIn24hr = l24.map(q => q.properties.alert).filter(a => a && a !== 'green' && ALERT_LEVELS[a.toUpperCase()]);
-            const currentHighestAlert = alertsIn24hr.length > 0 ? alertsIn24hr.sort((a,b) => ({ 'red':0, 'orange':1, 'yellow':2 }[a] - { 'red':0, 'orange':1, 'yellow':2 }[b]))[0] : null;
-            
-            const dailyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
-            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, dailyMajors);
-
-            return {
-                ...state,
-                isLoadingDaily: false,
-                dataFetchTime: fetchTime,
-                lastUpdated: new Date(metadata?.generated || fetchTime).toLocaleString(),
-                earthquakesLastHour: filterByTime(features, 1, 0, fetchTime),
-                earthquakesPriorHour: filterByTime(features, 2, 1, fetchTime),
-                earthquakesLast24Hours: l24,
-                hasRecentTsunamiWarning: l24.some(q => q.properties.tsunami === 1),
-                highestRecentAlert: currentHighestAlert,
-                activeAlertTriggeringQuakes: currentHighestAlert ? l24.filter(q => q.properties.alert === currentHighestAlert) : [],
-                ...majorQuakeUpdates,
-            };
-        }
-        case actionTypes.WEEKLY_DATA_PROCESSED: {
-            const { features, fetchTime } = action.payload;
-            const last72HoursData = filterByTime(features, 72, 0, fetchTime);
-
-            // Deduplication step
-            const uniqueEarthquakeIds = new Set();
-            const deduplicatedLast72HoursData = last72HoursData.filter(quake => {
-                if (!uniqueEarthquakeIds.has(quake.id)) {
-                    uniqueEarthquakeIds.add(quake.id);
-                    return true;
-                }
-                return false;
-            });
-
-            const currentEarthquakesLast7Days = filterByTime(features, 7 * 24, 0, fetchTime);
-
-            const weeklyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
-            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, weeklyMajors);
-
-            // Calculate dailyCounts7Days
-            const dailyCounts7Days = getInitialDailyCounts(7, fetchTime);
-            const sevenDaysAgo = fetchTime - 7 * 24 * 3600 * 1000;
-            currentEarthquakesLast7Days.forEach(quake => {
-                const quakeTime = quake.properties.time;
-                // Ensure quake is within the 7-day window for daily counts (already filtered by currentEarthquakesLast7Days, but good for sanity)
-                if (quakeTime >= sevenDaysAgo && quakeTime <= fetchTime) {
-                    const dateString = formatDateForTimeline(quakeTime);
-                    const dayEntry = dailyCounts7Days.find(d => d.dateString === dateString);
-                    if (dayEntry) {
-                        dayEntry.count += 1;
-                    }
-                }
-            });
-
-            // Calculate sampledEarthquakesLast7Days
-            const sampledEarthquakesLast7Days = sampleArrayWithPriority(currentEarthquakesLast7Days, SCATTER_SAMPLING_THRESHOLD_7_DAYS, MAJOR_QUAKE_THRESHOLD);
-
-            // Calculate magnitudeDistribution7Days
-            const magnitudeDistribution7Days = calculateMagnitudeDistribution(currentEarthquakesLast7Days);
-
-            return {
-                ...state,
-                isLoadingWeekly: false,
-                earthquakesLast72Hours: deduplicatedLast72HoursData, // Use deduplicated data
-                prev24HourData: filterByTime(features, 48, 24, fetchTime),
-                earthquakesLast7Days: currentEarthquakesLast7Days,
-                globeEarthquakes: [...deduplicatedLast72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900),
-                dailyCounts7Days,
-                sampledEarthquakesLast7Days,
-                magnitudeDistribution7Days,
-                ...majorQuakeUpdates,
-            };
-        }
-        case actionTypes.MONTHLY_DATA_PROCESSED: {
-            const { features, fetchTime } = action.payload;
-            const monthlyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
-            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, monthlyMajors);
-
-            const dailyCounts30Days = getInitialDailyCounts(30, fetchTime);
-            const dailyCounts14Days = getInitialDailyCounts(14, fetchTime);
-
-            // Filter earthquakes for the last 30 days from fetchTime
-            const thirtyDaysAgo = fetchTime - 30 * 24 * 3600 * 1000;
-            const fourteenDaysAgo = fetchTime - 14 * 24 * 3600 * 1000;
-
-            const currentEarthquakesLast30Days = filterMonthlyByTime(features, 30, 0, fetchTime);
-            const currentEarthquakesLast14Days = filterMonthlyByTime(features, 14, 0, fetchTime);
-
-            const magnitudeDistribution30Days = calculateMagnitudeDistribution(currentEarthquakesLast30Days);
-            const magnitudeDistribution14Days = calculateMagnitudeDistribution(currentEarthquakesLast14Days);
-
-            features.forEach(quake => {
-                const quakeTime = quake.properties.time;
-                const dateString = formatDateForTimeline(quakeTime);
-
-                // Check if within 30 days
-                if (quakeTime >= thirtyDaysAgo && quakeTime <= fetchTime) {
-                    const dayEntry30 = dailyCounts30Days.find(d => d.dateString === dateString);
-                    if (dayEntry30) {
-                        dayEntry30.count += 1;
-                    }
-                }
-                // Check if within 14 days
-                if (quakeTime >= fourteenDaysAgo && quakeTime <= fetchTime) {
-                    const dayEntry14 = dailyCounts14Days.find(d => d.dateString === dateString);
-                    if (dayEntry14) {
-                        dayEntry14.count += 1;
-                    }
-                }
-            });
-            
-            return {
-                ...state,
-                isLoadingMonthly: false,
-                hasAttemptedMonthlyLoad: true,
-                monthlyError: null, // Clear error on success
-                allEarthquakes: features,
-                earthquakesLast14Days: currentEarthquakesLast14Days,
-                earthquakesLast30Days: currentEarthquakesLast30Days,
-                sampledEarthquakesLast14Days: sampleArrayWithPriority(currentEarthquakesLast14Days, SCATTER_SAMPLING_THRESHOLD_14_DAYS, MAJOR_QUAKE_THRESHOLD),
-                sampledEarthquakesLast30Days: sampleArrayWithPriority(currentEarthquakesLast30Days, SCATTER_SAMPLING_THRESHOLD_30_DAYS, MAJOR_QUAKE_THRESHOLD),
-                dailyCounts14Days, // Add to state
-                dailyCounts30Days, // Add to state
-                magnitudeDistribution14Days, // Add to state
-                magnitudeDistribution30Days, // Add to state
-                prev7DayData: filterMonthlyByTime(features, 14, 7, fetchTime),
-                prev14DayData: filterMonthlyByTime(features, 28, 14, fetchTime),
-                ...majorQuakeUpdates,
-            };
-        }
-        case actionTypes.SET_INITIAL_LOAD_COMPLETE:
-            return { ...state, isInitialAppLoad: false };
-        case actionTypes.UPDATE_LOADING_MESSAGE_INDEX:
-            return { ...state, loadingMessageIndex: (state.loadingMessageIndex + 1) % state.currentLoadingMessages.length };
-        case actionTypes.SET_LOADING_MESSAGES: // Added to set initial messages
-            return { ...state, currentLoadingMessages: action.payload, loadingMessageIndex: 0 };
-        default:
-            return state;
-    }
-}
-
+/**
+ * Provides earthquake data to its child components through context.
+ * It fetches, processes, and manages earthquake data from the USGS API.
+ *
+ * @param {EarthquakeDataProviderProps} props - The props for the EarthquakeDataProvider.
+ * @returns {JSX.Element} The EarthquakeDataProvider component.
+ */
 export const EarthquakeDataProvider = ({ children }) => {
     const [state, dispatch] = useReducer(earthquakeReducer, initialState);
-    
+
+    const performDataFetch = useCallback(async (isInitialFetch = false) => {
+        dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingDaily: true, isLoadingWeekly: true } });
+        if (!isInitialFetch) {
+            dispatch({ type: actionTypes.SET_ERROR, payload: { error: null } });
+        }
+
+        const nowForFiltering = Date.now();
+        let dailyError = null, weeklyError = null;
+        let dailyFeatures = null, weeklyFeatures = null;
+        let dailyMetadata = null;
+
+        try {
+            const dailyRes = await fetchUsgsData(USGS_API_URL_DAY);
+            if (dailyRes.error || !dailyRes.features) {
+                dailyError = dailyRes?.error?.message || "Daily data features missing.";
+            } else {
+                dailyFeatures = dailyRes.features;
+                dailyMetadata = dailyRes.metadata;
+            }
+        } catch (e) { dailyError = e.message || "Error fetching daily data."; }
+        finally { dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingDaily: false } }); }
+
+        try {
+            const weeklyResult = await fetchUsgsData(USGS_API_URL_WEEK);
+            if (weeklyResult.error || !weeklyResult.features) {
+                weeklyError = weeklyResult?.error?.message || "Weekly data features missing.";
+            } else {
+                weeklyFeatures = weeklyResult.features;
+            }
+        } catch (e) { weeklyError = e.message || "Error fetching weekly data."; }
+        finally { dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingWeekly: false } });}
+
+        if (dailyFeatures) {
+            dispatch({ type: actionTypes.DAILY_DATA_PROCESSED, payload: { features: dailyFeatures, metadata: dailyMetadata, fetchTime: nowForFiltering } });
+        }
+        if (weeklyFeatures) {
+            dispatch({ type: actionTypes.WEEKLY_DATA_PROCESSED, payload: { features: weeklyFeatures, fetchTime: nowForFiltering } });
+        }
+
+        let finalErrorMsg = null;
+        if (dailyError && weeklyError) finalErrorMsg = "Failed to fetch critical daily and weekly data.";
+        else if (dailyError) finalErrorMsg = `Daily data error: ${dailyError}.`;
+        else if (weeklyError) finalErrorMsg = `Weekly data error: ${weeklyError}.`;
+
+        if (finalErrorMsg) {
+            dispatch({ type: actionTypes.SET_ERROR, payload: { error: finalErrorMsg } });
+        }
+    }, [dispatch]); // dispatch is stable
+
     useEffect(() => {
         let isMounted = true;
-        const orchestrateInitialDataLoad = async () => {
+        const initialLoadSequence = async () => {
             if (!isMounted) return;
+            // INITIAL_LOADING_MESSAGES is part of initialState from utils, so no need to dispatch SET_LOADING_MESSAGES here
+            // if it's correctly set in the imported initialState.
+            // dispatch({ type: actionTypes.SET_LOADING_MESSAGES, payload: INITIAL_LOADING_MESSAGES }); // This might be redundant
+            dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
 
-            if (state.isInitialAppLoad) {
-                dispatch({ type: actionTypes.SET_LOADING_MESSAGES, payload: INITIAL_LOADING_MESSAGES });
-            }
-            dispatch({ 
-                type: actionTypes.SET_LOADING_FLAGS, 
-                payload: { isLoadingDaily: true, isLoadingWeekly: true } 
-            });
-            dispatch({ type: actionTypes.SET_ERROR, payload: { generalError: null } });
+            await performDataFetch(true);
 
-            const nowForFiltering = Date.now();
-            let dailyError = null;
-            let weeklyError = null;
-
-            // Fetch Daily Data
-            try {
-                if (isMounted && state.isInitialAppLoad) dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
-                const dailyRes = await fetchUsgsData(USGS_API_URL_DAY);
-                if (!isMounted) return;
-
-                if (!dailyRes.error && dailyRes.features) {
-                    if (isMounted && state.isInitialAppLoad) dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
-                    dispatch({
-                        type: actionTypes.DAILY_DATA_PROCESSED,
-                        payload: { features: dailyRes.features, metadata: dailyRes.metadata, fetchTime: nowForFiltering }
-                    });
-                } else {
-                    dailyError = dailyRes?.error?.message || "Daily data features are missing.";
-                }
-            } catch (e) {
-                if (!isMounted) return;
-                dailyError = e.message || "Error processing daily data.";
-            } finally {
-                if (isMounted && !dailyError) { // Only set loading false if no error during fetch itself
-                     // isLoadingDaily is set by DAILY_DATA_PROCESSED
-                } else if (isMounted && dailyError) {
-                    dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingDaily: false } });
-                }
-            }
-
-            // Fetch Weekly Data
-            try {
-                if (isMounted && state.isInitialAppLoad) dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
-                const weeklyResult = await fetchUsgsData(USGS_API_URL_WEEK);
-                if (!isMounted) return;
-
-                if (!weeklyResult.error && weeklyResult.features) {
-                     if (isMounted && state.isInitialAppLoad) dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
-                    dispatch({
-                        type: actionTypes.WEEKLY_DATA_PROCESSED,
-                        payload: { features: weeklyResult.features, fetchTime: nowForFiltering }
-                    });
-                } else {
-                    weeklyError = weeklyResult?.error?.message || "Weekly data features are missing.";
-                }
-            } catch (e) {
-                if (!isMounted) return;
-                weeklyError = e.message || "Error processing weekly data.";
-            } finally {
-                 if (isMounted && !weeklyError) {
-                    // isLoadingWeekly is set by WEEKLY_DATA_PROCESSED
-                 } else if (isMounted && weeklyError) {
-                    dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingWeekly: false } });
-                 }
-            }
-            
             if (isMounted) {
-                let finalError = null;
-                if (dailyError && weeklyError) finalError = "Failed to fetch critical daily and weekly earthquake data.";
-                else if (dailyError) finalError = `Daily data error: ${dailyError}. Weekly data loaded if available.`;
-                else if (weeklyError) finalError = `Weekly data error: ${weeklyError}. Daily data loaded if available.`;
-                dispatch({ type: actionTypes.SET_ERROR, payload: { error: finalError } });
-                
-                if (state.isInitialAppLoad) {
-                    dispatch({ type: actionTypes.SET_INITIAL_LOAD_COMPLETE });
-                }
+                dispatch({ type: actionTypes.SET_INITIAL_LOAD_COMPLETE });
             }
         };
 
-        orchestrateInitialDataLoad();
-        const intervalId = setInterval(orchestrateInitialDataLoad, REFRESH_INTERVAL_MS);
+        if (state.isInitialAppLoad) {
+            initialLoadSequence();
+        }
+        return () => { isMounted = false; };
+    }, [state.isInitialAppLoad, dispatch, performDataFetch]); // Added dispatch and performDataFetch
+
+    useEffect(() => {
+        if (state.isInitialAppLoad) {
+            return;
+        }
+
+        let isMounted = true;
+        const intervalId = setInterval(() => {
+            if (isMounted) {
+                performDataFetch(false);
+            }
+        }, REFRESH_INTERVAL_MS);
+
         return () => {
             isMounted = false;
             clearInterval(intervalId);
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [state.isInitialAppLoad]); // Dependency on isInitialAppLoad to re-initiate message cycling logic if app were to somehow reset to initial load state.
+    }, [state.isInitialAppLoad, performDataFetch]); // Added performDataFetch
 
-    // Loading message cycling effect
     useEffect(() => {
         let messageInterval;
         if (state.isInitialAppLoad && (state.isLoadingDaily || state.isLoadingWeekly)) {
@@ -469,93 +147,53 @@ export const EarthquakeDataProvider = ({ children }) => {
             }, LOADING_MESSAGE_INTERVAL_MS);
         }
         return () => clearInterval(messageInterval);
-    }, [state.isInitialAppLoad, state.isLoadingDaily, state.isLoadingWeekly]);
+    }, [state.isInitialAppLoad, state.isLoadingDaily, state.isLoadingWeekly, dispatch]); // Added dispatch
 
-
+    /**
+     * Fetches and processes monthly earthquake data from the USGS API.
+     * Updates the state with the fetched data or an error message if the fetch fails.
+     * Sets loading flags during the fetch operation.
+     */
     const loadMonthlyData = useCallback(async () => {
         dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: true, hasAttemptedMonthlyLoad: true }});
         dispatch({type: actionTypes.SET_ERROR, payload: { monthlyError: null }});
-        
+
         const nowForFiltering = Date.now();
         try {
             const monthlyResult = await fetchUsgsData(USGS_API_URL_MONTH);
             if (!monthlyResult.error && monthlyResult.features && monthlyResult.features.length > 0) {
-                dispatch({
-                    type: actionTypes.MONTHLY_DATA_PROCESSED,
-                    payload: { features: monthlyResult.features, fetchTime: nowForFiltering }
-                });
+                dispatch({ type: actionTypes.MONTHLY_DATA_PROCESSED, payload: { features: monthlyResult.features, fetchTime: nowForFiltering } });
             } else {
-                dispatch({type: actionTypes.SET_ERROR, payload: { monthlyError: monthlyResult?.error?.message || "Monthly data is unavailable or incomplete." }});
-                dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false }}); // Also set loading false on error
+                const errorMsg = monthlyResult?.error?.message || "Monthly data is unavailable or incomplete.";
+                dispatch({type: actionTypes.SET_ERROR, payload: { monthlyError: errorMsg }});
+                dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false }});
             }
         } catch (e) {
-            dispatch({ type: actionTypes.SET_ERROR, payload: { monthlyError: `Monthly Data Processing Error: ${e.message || "An unexpected error occurred."}` }});
-            dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false }}); // Also set loading false on error
+            const errorMsg = `Monthly Data Processing Error: ${e.message || "An unexpected error occurred."}`;
+            dispatch({ type: actionTypes.SET_ERROR, payload: { monthlyError: errorMsg }});
+            dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false }});
         }
-    }, []); 
-
+    }, [dispatch]); // Added dispatch
 
     const isLoadingInitialData = useMemo(() => (state.isLoadingDaily || state.isLoadingWeekly) && state.isInitialAppLoad, [state.isLoadingDaily, state.isLoadingWeekly, state.isInitialAppLoad]);
     const currentLoadingMessage = useMemo(() => state.currentLoadingMessages[state.loadingMessageIndex], [state.currentLoadingMessages, state.loadingMessageIndex]);
 
-    // Memoized filtered lists
-    const feelableQuakes7Days_ctx = useMemo(() => {
-        if (!state.earthquakesLast7Days) return [];
-        return state.earthquakesLast7Days.filter(
-            quake => quake.properties.mag !== null && quake.properties.mag >= FEELABLE_QUAKE_THRESHOLD
-        );
-    }, [state.earthquakesLast7Days]);
+    const feelableQuakes7Days_ctx = useMemo(() => state.earthquakesLast7Days?.filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD) || [], [state.earthquakesLast7Days]);
+    const significantQuakes7Days_ctx = useMemo(() => state.earthquakesLast7Days?.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD) || [], [state.earthquakesLast7Days]);
+    const feelableQuakes30Days_ctx = useMemo(() => state.allEarthquakes?.filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD) || [], [state.allEarthquakes]);
+    const significantQuakes30Days_ctx = useMemo(() => state.allEarthquakes?.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD) || [], [state.allEarthquakes]);
 
-    const significantQuakes7Days_ctx = useMemo(() => {
-        if (!state.earthquakesLast7Days) return [];
-        return state.earthquakesLast7Days.filter(
-            quake => quake.properties.mag !== null && quake.properties.mag >= MAJOR_QUAKE_THRESHOLD
-        );
-    }, [state.earthquakesLast7Days]);
-
-    const feelableQuakes30Days_ctx = useMemo(() => {
-        if (!state.allEarthquakes) return [];
-        return state.allEarthquakes.filter(
-            quake => quake.properties.mag !== null && quake.properties.mag >= FEELABLE_QUAKE_THRESHOLD
-        );
-    }, [state.allEarthquakes]);
-
-    const significantQuakes30Days_ctx = useMemo(() => {
-        if (!state.allEarthquakes) return [];
-        return state.allEarthquakes.filter(
-            quake => quake.properties.mag !== null && quake.properties.mag >= MAJOR_QUAKE_THRESHOLD
-        );
-    }, [state.allEarthquakes]);
-    
     const contextValue = useMemo(() => ({
-        ...state, // Spread all state properties
-        isLoadingInitialData, 
+        ...state,
+        isLoadingInitialData,
         currentLoadingMessage,
-        // Function to trigger monthly data load (already uses dispatch)
         loadMonthlyData,
-        // New filtered lists (derived from state)
         feelableQuakes7Days_ctx,
         significantQuakes7Days_ctx,
         feelableQuakes30Days_ctx,
         significantQuakes30Days_ctx,
-        // Add dailyCounts to context for direct access if needed, though they are in state
-        dailyCounts14Days: state.dailyCounts14Days,
-        dailyCounts30Days: state.dailyCounts30Days,
-        // Add sampled earthquake lists to context
-        sampledEarthquakesLast14Days: state.sampledEarthquakesLast14Days,
-        sampledEarthquakesLast30Days: state.sampledEarthquakesLast30Days,
-        // Add magnitude distributions to context
-        magnitudeDistribution14Days: state.magnitudeDistribution14Days,
-        magnitudeDistribution30Days: state.magnitudeDistribution30Days,
-        // Add 7-day aggregated data to context
-        dailyCounts7Days: state.dailyCounts7Days,
-        sampledEarthquakesLast7Days: state.sampledEarthquakesLast7Days,
-        magnitudeDistribution7Days: state.magnitudeDistribution7Days,
     }), [
-        state, // Main state object from reducer
-        isLoadingInitialData, 
-        currentLoadingMessage, 
-        loadMonthlyData, // useCallback ensures this is stable if its deps are empty
+        state, isLoadingInitialData, currentLoadingMessage, loadMonthlyData,
         feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
         feelableQuakes30Days_ctx, significantQuakes30Days_ctx
     ]);
@@ -567,6 +205,13 @@ export const EarthquakeDataProvider = ({ children }) => {
     );
 };
 
+/**
+ * Custom hook to access the earthquake data state.
+ * This hook must be used within a component that is a descendant of `EarthquakeDataProvider`.
+ *
+ * @returns {object} The earthquake data context, including state and action dispatchers.
+ * @throws {Error} If used outside of an EarthquakeDataProvider.
+ */
 export const useEarthquakeDataState = () => {
     const context = useContext(EarthquakeDataContext);
     if (context === null) {
@@ -575,4 +220,6 @@ export const useEarthquakeDataState = () => {
     return context;
 };
 
-export { EarthquakeDataContext, initialState, actionTypes, earthquakeReducer };
+// Only export the provider and hook. Context is exported from utils.
+// initialState, actionTypes, and earthquakeReducer are now imported from utils by components/tests that need them.
+// All necessary exports (EarthquakeDataProvider, useEarthquakeDataState) are done inline.

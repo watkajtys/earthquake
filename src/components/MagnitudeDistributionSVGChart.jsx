@@ -6,7 +6,23 @@ import MagnitudeDistributionSVGChartSkeleton from './skeletons/MagnitudeDistribu
 import { getMagnitudeColor } from '../utils/utils.js';
 
 /**
- * A React component that displays an SVG bar chart of earthquake magnitude distribution.
+ * Renders an SVG bar chart visualizing the distribution of earthquake magnitudes across predefined ranges.
+ * This component is memoized using `React.memo` for performance.
+ * It attempts to use pre-calculated magnitude distribution data from `EarthquakeDataContext`
+ * (e.g., `magnitudeDistribution7Days`, `magnitudeDistribution30Days`) based on the `titleSuffix` prop.
+ * If corresponding pre-calculated data isn't available, it processes the raw `earthquakes` prop
+ * to count events within internally defined `magnitudeRanges`.
+ * A skeleton loader (`MagnitudeDistributionSVGChartSkeleton`) is displayed if `isLoading` is true.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {Array<Object>} [props.earthquakes] - An array of earthquake feature objects. This is used as a fallback
+ *   if pre-calculated distribution data for the period indicated by `titleSuffix` is not available in context.
+ *   Each object should have `properties.mag`.
+ * @param {string} [props.titleSuffix='(Last 30 Days)'] - Suffix for the chart's title (e.g., "(Last 7 Days)").
+ *   This suffix also influences which pre-calculated distribution dataset is attempted to be loaded from context.
+ * @param {boolean} props.isLoading - Flag indicating whether data is currently loading. If true, a skeleton loader is displayed.
+ * @returns {JSX.Element} The MagnitudeDistributionSVGChart component.
  */
 const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
     const { magnitudeDistribution7Days, magnitudeDistribution14Days, magnitudeDistribution30Days } = useEarthquakeDataState();
@@ -26,7 +42,7 @@ const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(
         { name : '5-5.9', min : 5, max : 5.99, color: getMagnitudeColor(5.5) },
         {name: '6-6.9', min: 6, max: 6.99, color: getMagnitudeColor(6.5)},
         { name : '7+', min : 7, max : Infinity, color: getMagnitudeColor(7.5) },
-    ], [getMagnitudeColor]);
+    ], []); // getMagnitudeColor removed from dependency array
 
     const data = useMemo(() => {
         if (titleSuffix === "(Last 7 Days)" && magnitudeDistribution7Days && magnitudeDistribution7Days.length > 0) {

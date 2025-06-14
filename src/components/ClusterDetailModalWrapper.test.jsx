@@ -1,0 +1,208 @@
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import ClusterDetailModalWrapper from './ClusterDetailModalWrapper.jsx';
+// Assuming these are the contexts and services it uses or that need mocking for it to render
+// import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Removed, using hoisted mock
+// import { fetchClusterDefinition } from '../services/clusterApiService.js'; // Removed, using hoisted mock
+
+// --- Mocks ---
+const mockNavigate = vi.fn();
+const mockFetchClusterDefinition = vi.fn();
+const mockUseParams = vi.fn();
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    useParams: () => mockUseParams(), // Will be customized per test
+    useNavigate: () => mockNavigate,
+  };
+});
+
+vi.mock('../services/clusterApiService.js', () => ({
+  fetchClusterDefinition: mockFetchClusterDefinition,
+}));
+
+// Mock the actual modal content to simplify testing the wrapper
+vi.mock('./ClusterDetailModal', () => ({
+  default: vi.fn(({ cluster }) => <div data-testid="mock-cluster-detail-modal">Cluster: {cluster.id}</div>),
+}));
+
+vi.mock('./SeoMetadata', () => ({
+  default: vi.fn(() => null), // Mock SeoMetadata to do nothing
+}));
+
+// Mock context hooks
+const { mockUseEarthquakeDataState } = vi.hoisted(() => ({
+  mockUseEarthquakeDataState: vi.fn(),
+}));
+vi.mock('../contexts/EarthquakeDataContext.jsx', () => ({
+  useEarthquakeDataState: mockUseEarthquakeDataState,
+}));
+
+// Default props needed by ClusterDetailModalWrapper
+const defaultProps = {
+  overviewClusters: [],
+  formatDate: vi.fn(timestamp => new Date(timestamp).toISOString()),
+  getMagnitudeColorStyle: vi.fn(() => ({ backgroundColor: 'red', color: 'white' })),
+  onIndividualQuakeSelect: vi.fn(),
+  formatTimeAgo: vi.fn(ms => `${ms / 1000}s ago`),
+  formatTimeDuration: vi.fn(ms => `${ms / 1000}s`),
+  areParentClustersLoading: false,
+};
+
+// Default state for EarthquakeDataContext
+const defaultEarthquakeData = {
+  allEarthquakes: [],
+  earthquakesLast72Hours: [],
+  isLoadingWeekly: false,
+  isLoadingMonthly: false,
+  isInitialAppLoad: false,
+  hasAttemptedMonthlyLoad: false,
+  loadMonthlyData: vi.fn(),
+  monthlyError: null,
+};
+
+describe('ClusterDetailModalWrapper URL Slug Parsing and Data Fetching', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockUseEarthquakeDataState.mockReturnValue(defaultEarthquakeData);
+    mockFetchClusterDefinition.mockResolvedValue(null); // Default to not finding a definition
+  });
+
+  const parsingTestCases = [
+    {
+      description: 'Valid full slug',
+      slug: '15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9',
+      expectedId: 'us7000mfp9',
+      expectError: false,
+    },
+    {
+      description: 'Valid slug with simpler location',
+      slug: '5-quakes-near-california-up-to-m4.2-ci12345',
+      expectedId: 'ci12345',
+      expectError: false,
+    },
+    {
+      description: 'Slug with numbers in location part',
+      slug: '10-quakes-near-region-51-up-to-m6.0-ev999',
+      expectedId: 'ev999',
+      expectError: false,
+    },
+    {
+      description: 'Slug with only ID-like part after last hyphen (permissive regex)',
+      // The regex /-([a-zA-Z0-9]+)$/ will match the last segment.
+      slug: 'invalid-slug-format-usGSX1',
+      expectedId: 'usGSX1',
+      expectError: false, // The current regex will parse this successfully
+    },
+    {
+      description: 'Invalid slug - empty ID at the end',
+      slug: '10-quakes-near-some-place-up-to-m5.0-',
+      expectedId: null,
+      expectError: true,
+      errorMessageContent: /Invalid cluster URL format|Could not extract quake ID/i,
+    },
+    {
+      description: 'Slug with ID containing hyphen (current regex captures part after last hyphen)',
+      // Current regex: /-([a-zA-Z0-9]+)$/
+      slug: '2-quakes-near-test-up-to-m3.0-id-with-hyphen',
+      expectedId: 'hyphen', // Only 'hyphen' because [a-zA-Z0-9]+ does not include '-'
+      expectError: false,
+    },
+     {
+      description: 'Slug with ID containing hyphen (if regex were /-([a-zA-Z0-9-]+)$/) - for future ref',
+      slug: '2-quakes-near-test-up-to-m3.0-id-with-hyphen-part2',
+      // If regex was /-([a-zA-Z0-9-]+)$/, expected would be 'id-with-hyphen-part2'
+      // But with current regex, it's 'part2'
+      expectedId: 'part2',
+      expectError: false,
+    },
+    {
+      description: 'Null slug (e.g. route not fully loaded)',
+      slug: null,
+      expectedId: null,
+      expectError: true,
+      errorMessageContent: /No cluster slug specified/i,
+    },
+    {
+      description: 'Empty string slug',
+      slug: "",
+      expectedId: null,
+      expectError: true,
+      errorMessageContent: /No cluster slug specified/i,
+    }
+  ];
+
+  parsingTestCases.forEach(({ description, slug, expectedId, expectError, errorMessageContent }) => {
+    it(`should handle slug: "${slug}" (${description})`, async () => {
+      mockUseParams.mockReturnValue({ clusterId: slug });
+
+      // Mock that the cluster is not found in overviewClusters prop initially
+      const propsWithEmptyOverview = { ...defaultProps, overviewClusters: [] };
+
+      render(
+        <MemoryRouter initialEntries={slug !== null ? [`/cluster/${slug}`] : ['/cluster/']}>
+          <Routes>
+            <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper {...propsWithEmptyOverview} />} />
+             {/* Added a fallback route for null/empty slug to avoid router errors in test setup */}
+            <Route path="/cluster/" element={<ClusterDetailModalWrapper {...propsWithEmptyOverview} />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      if (expectError) {
+        // Wait for error message to appear
+        const errorElement = await screen.findByText(errorMessageContent);
+        expect(errorElement).toBeInTheDocument();
+        expect(mockFetchClusterDefinition).not.toHaveBeenCalled();
+      } else {
+        // Should attempt to fetch with the extracted ID
+        await waitFor(() => {
+          expect(mockFetchClusterDefinition).toHaveBeenCalledWith(expectedId);
+        });
+        // Check that no general error message (like "Invalid URL format") is shown
+        // It might show "Cluster details could not be found" if fetch returns null, which is fine for this test.
+        if (errorMessageContent) { // Only if a specific error is NOT expected for this valid case
+             expect(screen.queryByText(errorMessageContent)).toBeNull();
+        }
+      }
+    });
+  });
+
+  it('should use cluster data from overviewClusters if found, matching by strongestQuakeId', async () => {
+    const slug = '10-quakes-near-test-area-up-to-m5.0-testquake1';
+    const strongestQuakeId = 'testquake1';
+    mockUseParams.mockReturnValue({ clusterId: slug });
+
+    const mockClusterFromProps = {
+      id: `overview_cluster_${strongestQuakeId}_10`, // Original ID format from overview
+      strongestQuakeId: strongestQuakeId,
+      locationName: 'Test Area from Prop',
+      quakeCount: 10,
+      maxMagnitude: 5.0,
+      originalQuakes: [{ id: strongestQuakeId, properties: { place: 'Test Area from Prop', mag: 5.0 }, geometry: { coordinates: [0,0,0] }}],
+      // ... other necessary fields for the modal like _latestTimeInternal, _earliestTimeInternal for timeRange
+      _latestTimeInternal: Date.now(),
+      _earliestTimeInternal: Date.now() - 100000
+    };
+
+    render(
+      <MemoryRouter initialEntries={[`/cluster/${slug}`]}>
+        <Routes>
+          <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper {...defaultProps} overviewClusters={[mockClusterFromProps]} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // Check if the modal is rendered with data from the prop
+    // The mock modal displays cluster.id. In the wrapper, if clusterFromProp is used,
+    // its 'id' is replaced with `fullSlugFromParams`.
+    await screen.findByText(`Cluster: ${slug}`);
+    expect(mockFetchClusterDefinition).not.toHaveBeenCalled(); // Should not fetch if found in props
+  });
+
+});

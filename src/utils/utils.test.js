@@ -1,4 +1,14 @@
-import { formatTimeAgo, calculateDistance, getMagnitudeColor, isValidNumber, formatDate, isValidString, isValuePresent, formatNumber, formatLargeNumber } from './utils';
+import {
+  formatTimeAgo,
+  calculateDistance,
+  getMagnitudeColor,
+  isValidNumber,
+  formatDate,
+  isValidString,
+  isValuePresent,
+  formatNumber,
+  formatLargeNumber
+} from './utils';
 
 describe('formatTimeAgo', () => {
   const MOCKED_NOW = 1678886400000; // March 15, 2023, 12:00:00 PM UTC
@@ -327,9 +337,7 @@ describe('isValidNumber', () => {
 
   it('should return false for non-numeric strings, null, undefined, NaN', () => {
     expect(isValidNumber("abc")).toBe(false);
-    // Note: parseFloat("12a") returns 12, so isValidNumber("12a") is true with current implementation.
-    // This specific assertion is removed to align with current parseFloat behavior.
-    // A stricter isValidNumber would require changes to the function itself.
+    expect(isValidNumber("12a")).toBe(false);
     expect(isValidNumber(null)).toBe(false);
     expect(isValidNumber(undefined)).toBe(false);
     expect(isValidNumber(NaN)).toBe(false);
@@ -383,7 +391,8 @@ describe('formatDate', () => {
     // The current implementation returns "N/A" due to the initial `if (!timestamp)` check for falsy values.
     // If "not-a-date-string" is passed, it's truthy, so it proceeds.
     // `new Date("not-a-date-string").toLocaleString()` is "Invalid Date" in Node.
-    expect(result).toBe("Invalid Date");
+    // However, our function's `isNaN(date.getTime())` check should catch this and return "N/A".
+    expect(result).toBe("N/A");
   });
 });
 
@@ -448,7 +457,7 @@ describe('formatNumber', () => {
     expect(formatNumber(null)).toBe("N/A");
   });
 
-  it('should handle null by returning "N/A" as parseFloat(null) is NaN', () => {
+  it('should handle null by returning "N/A" as it is not a parseable number', () => {
     expect(formatNumber(null)).toBe("N/A");
   });
 });

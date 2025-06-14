@@ -1,10 +1,15 @@
 // src/ClusterDetailModal.jsx
 import React from 'react';
 import ClusterMiniMap from './ClusterMiniMap'; // Added import for the mini-map
-import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor
+import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the new chart
+// import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor - Unused
 
 /**
  * A modal component to display detailed information about an earthquake cluster.
+ * It includes a mini-map, summary statistics, and a list of individual earthquakes within the cluster.
+ * The modal implements accessibility features like focus trapping and closing with the Escape key.
+ *
+ * @component
  * @param {object} props - The component's props.
  * @param {object} props.cluster - Data for the cluster to display. Expected structure:
  *   {
@@ -15,16 +20,16 @@ import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for g
  *     originalQuakes: Array<object> // Array of individual quake objects
  *   }
  * @param {function} props.onClose - Function to call when the modal should be closed.
- * @param {function} props.formatDate - Function to format timestamps.
- * @param {function} props.getMagnitudeColorStyle - Function to get Tailwind CSS color styles for magnitude.
- * @param {function} [props.onIndividualQuakeSelect] - Callback when an individual quake item is selected.
- * @returns {JSX.Element | null} The rendered ClusterDetailModal component or null if no cluster data.
+ * @param {function} props.formatDate - Function to format timestamps (e.g., from a timestamp number to a human-readable string).
+ * @param {function} props.getMagnitudeColorStyle - Function that returns Tailwind CSS class string for magnitude-based coloring.
+ * @param {function} [props.onIndividualQuakeSelect] - Optional callback function triggered when an individual earthquake item within the modal is selected. Receives the quake object as an argument.
+ * @returns {JSX.Element | null} The rendered ClusterDetailModal component or null if no `cluster` data is provided.
  */
 function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
     const modalContentRef = React.useRef(null);
     const closeButtonRef = React.useRef(null);
 
-    // Handle Escape key press & Focus Trapping
+    // Effect for handling Escape key press for closing the modal and implementing focus trapping.
     React.useEffect(() => {
         const modalElement = modalContentRef.current;
         if (!modalElement) return;
@@ -109,18 +114,22 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
     const depthRangeStr = depthDataAvailable ? `${minDepth.toFixed(1)}km - ${maxDepth.toFixed(1)}km` : 'N/A';
 
     return (
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div
             className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[51] p-4 transition-opacity duration-300 ease-in-out"
-            onClick={onClose} // Removed backdrop click to close, rely on Esc key and close button
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="cluster-detail-title"
+            onClick={(e) => { if (e.target === e.currentTarget) { onClose(); } }}
+            // Removed role="button", tabIndex, onKeyDown, and aria-label from backdrop to avoid nested-interactive
+            // Escape key is handled by global event listener and focus trap.
         >
             <div
                 ref={modalContentRef}
-                tabIndex="-1" // Make modal container focusable for trap if no inner elements are
+                tabIndex="-1"
+                role="dialog" // This is the actual dialog panel
+                aria-modal="true" // Indicates this is a modal dialog
+                aria-labelledby="cluster-detail-title" // Associates with the title
+                // onKeyDown={(e) => { if (e.key === 'Escape') { onClose(); e.stopPropagation(); } }} // Removed as Escape is handled by useEffect
                 className="bg-slate-800 p-4 sm:p-6 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90svh] flex flex-col border border-slate-700 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700"
-                onClick={e => e.stopPropagation()} // Prevent backdrop click from triggering inside modal
+                // onClick={e => e.stopPropagation()} // This was already removed
             >
                 {/* Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-slate-700 mb-4">
@@ -152,8 +161,14 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                     <ClusterMiniMap cluster={cluster} />
                 </div>
 
+                {/* Earthquake Sequence Chart */}
+                {/* The chart component handles its own "No data" state internally */}
+                <div className="my-4 py-4 border-t border-b border-slate-700">
+                    <EarthquakeSequenceChart cluster={cluster} />
+                </div>
+
                 {/* Individual Earthquakes List */}
-                <h3 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2 border-t border-slate-700">
+                <h3 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2"> {/* Removed border-t as chart section has it now */}
                     Earthquakes in this Cluster
                 </h3>
                 <div className="flex-grow space-y-2 pr-1">
@@ -168,17 +183,19 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                                 }
                             };
                             const quakeTitle = `Click to view details for M ${quake.properties?.mag?.toFixed(1) || 'N/A'} - ${quake.properties?.place || 'Unknown Place'}`;
-                            const originalClassName = `p-2.5 rounded-md border ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : 'bg-slate-700 border-slate-600'} hover:border-slate-500 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400`;
+                            // Applied to button: text-left to mimic div's default block behavior for text alignment
+                            const originalClassName = `w-full text-left p-2.5 rounded-md border ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : 'bg-slate-700 border-slate-600'} hover:border-slate-500 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400`;
 
                             return (
-                            <div
+                            // The eslint-disable-next-line previously here was removed as it was unused.
+                            <button
                                 key={quake.id}
-                                className={originalClassName} // Restored original className
+                                type="button" // Explicit type for button
+                                className={originalClassName}
                                 onClick={() => onIndividualQuakeSelect && onIndividualQuakeSelect(quake)}
                                 onKeyDown={(e) => handleQuakeKeyDown(e, quake)}
-                                tabIndex="0"
-                                role="button"
-                                title={quakeTitle} // Use pre-constructed title string
+                                // tabIndex="0" and role="button" are implicit for <button>
+                                title={quakeTitle}
                             >
                                 <div className="flex justify-between items-start mb-0.5">
                                     <p className="text-sm font-semibold">
@@ -198,7 +215,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                                         Depth: {quake.geometry?.coordinates?.[2]?.toFixed(1) || 'N/A'} km
                                     </span>
                                 </div>
-                            </div>
+                            </button>
                         ); // Restored semicolon for return
                     }) // Restored closing brace for map callback
                     ) : (

@@ -1,5 +1,16 @@
 import React from 'react';
 
+/**
+ * Displays the most active seismic regions in the last 24 hours.
+ *
+ * @component
+ * @param {Object} props - The component props.
+ * @param {Array<Object>} props.topActiveRegionsOverview - An array of objects, each representing an active region with its name and event count.
+ * @param {Array<Object>} props.REGIONS - An array of region objects, used to find the color for each region.
+ * @param {boolean} props.isLoadingDaily - A boolean indicating if the daily earthquake data is currently loading.
+ * @param {Array<Object>} props.earthquakesLast24Hours - An array of earthquake objects from the last 24 hours. Used to determine if data is available.
+ * @returns {JSX.Element} The ActiveRegionDisplay component.
+ */
 const ActiveRegionDisplay = ({ topActiveRegionsOverview, REGIONS, isLoadingDaily, earthquakesLast24Hours }) => {
   return (
     <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">

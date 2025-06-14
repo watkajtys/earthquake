@@ -6,7 +6,7 @@ import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext';
 import * as Utils from '../utils/utils'; // Original import
 
 // Mock the EarthquakeDataContext
-const mockUseEarthquakeDataState = vi.fn();
+// const mockUseEarthquakeDataState = vi.fn(); // Unused variable removed
 
 // Mock getMagnitudeColor from utils.js robustly
 vi.mock('../utils/utils.js', async (importOriginal) => {
@@ -186,7 +186,7 @@ describe('NotableQuakeFeature', () => {
 
       expect(screen.getByText(`M ${secondInternalHistorical.mag.toFixed(1)}`)).toBeInTheDocument();
       expect(Utils.getMagnitudeColor).toHaveBeenCalledWith(secondInternalHistorical.mag);
-    }, 20000); // Increased timeout to 20 seconds
+    });
 
     it('calls onNotableQuakeSelect with historical quake data on button click', async () => {
       renderWithContext(<NotableQuakeFeature onNotableQuakeSelect={mockOnNotableQuakeSelect} />, { providerProps });

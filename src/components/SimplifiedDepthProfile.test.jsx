@@ -1,13 +1,14 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
-import SimplifiedDepthProfile, { DEPTH_COMPARISONS as actualDepthComparisons, getDynamicContextualComparisons } from './SimplifiedDepthProfile';
+import SimplifiedDepthProfile from './SimplifiedDepthProfile';
+import { DEPTH_COMPARISONS as actualDepthComparisons, getDynamicContextualComparisons } from './simplifiedDepthProfileUtils.js';
 
 vi.mock('../utils/utils.js', () => ({
   getMagnitudeColor: vi.fn(() => '#000000'),
 }));
 
-const getSortedDepthComparisons = () => actualDepthComparisons.filter(c => !c.isHeight).sort((a, b) => a.depth - b.depth);
+// const getSortedDepthComparisons = () => actualDepthComparisons.filter(c => !c.isHeight).sort((a, b) => a.depth - b.depth); // Unused function removed
 
 describe('SimplifiedDepthProfile', () => {
   test('displays fallback message and no contextual insights when earthquakeDepth is null', () => {

@@ -2,19 +2,21 @@
 import React, { memo } from 'react';
 
 /**
- * Renders a summary for a single earthquake cluster.
- * @param {object} props - The component's props.
- * @param {object} props.clusterData - Data for the cluster to display.
- * Expected structure:
- *   {
- *     id: string, // Unique ID for key prop
- *     locationName: string,
- *     quakeCount: number,
- *     maxMagnitude: number,
- *     timeRange: string
- *   }
- * @param {function} [props.onClusterSelect] - Optional callback when the item is clicked.
- * @returns {JSX.Element} The rendered ClusterSummaryItem component.
+ * Renders a summary card for a single earthquake cluster, typically for display in a list.
+ * This component is memoized for performance optimization.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {Object} props.clusterData - Data object for the cluster to display.
+ *   Expected structure:
+ *   - `id` (string|number): Unique identifier for the cluster (used for keys in lists).
+ *   - `locationName` (string): The geographical name of the cluster's location.
+ *   - `quakeCount` (number): The total number of earthquakes in this cluster.
+ *   - `maxMagnitude` (number): The maximum magnitude recorded in this cluster.
+ *   - `timeRange` (string): A human-readable string describing the cluster's active period.
+ * @param {function} [props.onClusterSelect] - Optional callback function that is triggered when the cluster item is clicked.
+ *   Receives the `clusterData` object as an argument.
+ * @returns {JSX.Element|null} The ClusterSummaryItem component, or null if `clusterData` is not provided.
  */
 function ClusterSummaryItem({ clusterData, onClusterSelect }) {
     if (!clusterData) {

@@ -2,12 +2,11 @@
 import React, { useState, memo } from 'react';
 
 /**
+ * A module-level constant object containing predefined information snippets for various earthquake-related topics.
+ * Each key in `infoData` corresponds to a topic (e.g., "magnitude", "depth").
+ * The value for each key is an object with `title` (string), `content` (string), and `icon` (string emoji).
+ *
  * @const {Object.<string, {title: string, content: string, icon: string}>} infoData
- * A dictionary containing information snippets for various earthquake-related topics.
- * Each key is a topic string, and its value is an object with:
- * - `title`: The title of the snippet.
- * - `content`: The detailed explanation for the topic.
- * - `icon`: An emoji icon representing the topic.
  */
 const infoData = {
     magnitude: {
@@ -78,11 +77,14 @@ const infoData = {
 };
 
 /**
- * A React component that displays an expandable information snippet about a specific earthquake-related topic.
- * The content for the snippet is sourced from the `infoData` object based on the provided topic.
- * @param {object} props - The component's props.
- * @param {string} props.topic - The topic key to display information for (e.g., "magnitude", "depth").
- * @returns {JSX.Element | null} The rendered InfoSnippet component, or null if the topic is not found in `infoData`.
+ * Displays an expandable/collapsible information snippet about a specific earthquake-related topic.
+ * The content (title, detailed explanation, icon) is sourced from the `infoData` object
+ * based on the `topic` prop. This component is memoized using `React.memo`.
+ *
+ * @component
+ * @param {Object} props - The component's props.
+ * @param {string} props.topic - The key corresponding to a topic in the `infoData` object (e.g., "magnitude", "depth").
+ * @returns {JSX.Element|null} The InfoSnippet component, or null if the provided `topic` is not found in `infoData`.
  */
 const InfoSnippet = ({ topic }) => {
     const [isOpen, setIsOpen] = useState(false);

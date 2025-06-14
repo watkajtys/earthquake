@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import vitest from 'eslint-plugin-vitest'
 
 export default [
-  { ignores: ['dist'] },
+  { ignores: ['dist', 'docs/jsdoc', '.wrangler'] },
   {
     files: ['**/*.{js,jsx}'],
     languageOptions: {
