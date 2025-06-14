@@ -30,7 +30,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   }, []);
 
   const chartHeight = 350;
-  const margin = { top: 40, right: 20, bottom: 40, left: 20 }; // Adjusted all margins
+  const margin = { top: 40, right: 20, bottom: 80, left: 20 }; // Adjusted margin.bottom to 80
 
   const width = chartRenderWidth - margin.left - margin.right;
   const height = chartHeight - margin.top - margin.bottom;
@@ -145,26 +145,36 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     const durationMs = domainEndTime.getTime() - domainStartTime.getTime();
     const durationHours = durationMs / (1000 * 60 * 60);
 
-    let tickIntervalHours;
-    if (durationHours <= 1) tickIntervalHours = 1;
-    else if (durationHours < 12) tickIntervalHours = 2;
-    else if (durationHours < 24) tickIntervalHours = 3;
-    else if (durationHours < 48) tickIntervalHours = 6;
-    else tickIntervalHours = 12;
+    let tickInterval; // D3 time interval function
+    if (durationHours < 12) { // Aim for ticks every 1-2 hours
+      tickInterval = timeHour.every(durationHours < 6 ? 1 : 2); // More granular for very short durations
+    } else if (durationHours < 24) { // Aim for ticks every 3 hours
+      tickInterval = timeHour.every(3);
+    } else if (durationHours < 48) { // Aim for ticks every 6 hours
+      tickInterval = timeHour.every(6);
+    } else if (durationHours < 7 * 24) { // Less than a week, aim for 12 hour ticks
+      tickInterval = timeHour.every(12);
+    }
+    else { // Otherwise, aim for daily ticks
+      tickInterval = timeHour.every(24);
+    }
 
-    const potentialTicks = tempScale.ticks(timeHour.every(tickIntervalHours));
-    const timeTickFormat = timeFormat("%-I%p");
+    const potentialTicks = tempScale.ticks(tickInterval);
+    // Ensure timeFormat handles date changes correctly if sequence spans multiple days
+    const timeTickFormat = timeFormat("%b %d, %-I%p");
 
     return potentialTicks.map(value => ({
         value,
         offset: xScale(value),
         label: timeTickFormat(value)
-    })).filter(tick => tick.offset >= -5 && tick.offset <= width + 5);
+    })).filter(tick => tick.offset >= -5 && tick.offset <= width + 5); // Keep existing filter
   }, [xScale, width, timeDomain]);
 
   const dateAxisTicks = useMemo(() => {
     if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
 
+    // This logic might need adjustment or could be simplified if the main timeAxisTicks now include date info.
+    // For now, let's keep it to see how it behaves with the new timeAxisTicks format.
     const dates = [];
     const [domainStart, domainEnd] = timeDomain;
     let current = new Date(domainStart);
@@ -297,13 +307,13 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
           {/* X-Axis */}
           <line x1={0} y1={height} x2={width} y2={height} className={gridLineColor} />
 
-          {/* Time Tier Labels (Upper Tier) */}
+          {/* Time Tier Labels (Upper Tier with new format) */}
           {timeAxisTicks.map(({ value, offset, label }) =>
             (offset >= 0 && offset <= width) && (
             <text
               key={`time-label-${value.toISOString()}`}
               x={offset}
-              y={height + 20}
+              y={height + 20} // This might need adjustment if labels are too long
               textAnchor="middle"
               className={`text-xs fill-current ${tickLabelColor}`}
             >
@@ -311,10 +321,12 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
             </text>
           ))}
 
-          {/* Date Tier Labels (Lower Tier) */}
-          {dateAxisTicks.map(({ label: dateLabel, x, dayStartDate }) => (
+          {/* Date Tier Labels (Lower Tier) - Potentially remove or adjust */}
+          {/* With the new timeFormat in timeAxisTicks, this separate date tier might be redundant. */}
+          {/* For now, let's comment it out to see the effect of the changes above. */}
+          {/* {dateAxisTicks.map(({ label: dateLabel, x, dayStartDate }) => (
             <text
-              key={`date-label-${dayStartDate.toISOString()}`} // Use dayStartDate for a more stable key
+              key={`date-label-${dayStartDate.toISOString()}`}
               x={x}
               y={height + 40}
               textAnchor="middle"
@@ -322,12 +334,14 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
             >
               {dateLabel}
             </text>
-          ))}
+          ))} */}
 
           {/* X-Axis Label */}
           <text
             x={width / 2}
-            y={height + 65} // Positioned below the two tiers of labels
+            // Adjusted y position since dateAxisTicks is commented out.
+            // If dateAxisTicks is kept, this y value might need to be height + 65.
+            y={height + 45} // Tentative new position
             textAnchor="middle"
             className={`text-sm fill-current ${axisLabelColor}`}
           >
