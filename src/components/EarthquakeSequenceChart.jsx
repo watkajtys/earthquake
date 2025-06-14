@@ -30,7 +30,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   }, []);
 
   const chartHeight = 350;
-  const margin = { top: 40, right: 50, bottom: 60, left: 60 }; // Increased bottom for time labels, top for title
+  const margin = { top: 40, right: 50, bottom: 80, left: 60 }; // Adjusted margin.bottom to 80
 
   const width = chartRenderWidth - margin.left - margin.right;
   const height = chartHeight - margin.top - margin.bottom;
@@ -137,61 +137,65 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   [magDomain]);
 
   // Axes and Gridlines
-  const xAxisTicks = useMemo(() => {
-      // Ensure timeDomain is valid and width is positive for xScale creation
-      if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1]) return [];
+  const timeAxisTicks = useMemo(() => {
+    if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
 
-      // xScale is derived from timeDomain and width, used for positioning
-      // A temporary scale is used for tick generation if specific intervals are needed.
-      const tempScale = scaleTime().domain(timeDomain).range([0, width]);
+    const tempScale = scaleTime().domain(timeDomain).range([0, width]);
+    const [domainStartTime, domainEndTime] = timeDomain;
+    const durationMs = domainEndTime.getTime() - domainStartTime.getTime();
+    const durationHours = durationMs / (1000 * 60 * 60);
 
-      const [domainStartTime, domainEndTime] = timeDomain;
-      const durationMs = domainEndTime.getTime() - domainStartTime.getTime();
-      const durationHours = durationMs / (1000 * 60 * 60);
+    let tickIntervalHours;
+    if (durationHours <= 1) tickIntervalHours = 1;
+    else if (durationHours < 12) tickIntervalHours = 2;
+    else if (durationHours < 24) tickIntervalHours = 3;
+    else if (durationHours < 48) tickIntervalHours = 6;
+    else tickIntervalHours = 12;
 
-      let tickIntervalHours;
-      if (durationHours <= 1) tickIntervalHours = 1; // Min 1 hour interval for very short spans
-      else if (durationHours < 12) tickIntervalHours = 2;
-      else if (durationHours < 24) tickIntervalHours = 3;
-      else if (durationHours < 48) tickIntervalHours = 6;
-      else tickIntervalHours = 12;
+    const potentialTicks = tempScale.ticks(timeHour.every(tickIntervalHours));
+    const timeTickFormat = timeFormat("%-I%p");
 
-      const potentialTicks = tempScale.ticks(timeHour.every(tickIntervalHours));
+    return potentialTicks.map(value => ({
+        value,
+        offset: xScale(value),
+        label: timeTickFormat(value)
+    })).filter(tick => tick.offset >= -5 && tick.offset <= width + 5);
+  }, [xScale, width, timeDomain]);
 
-      let allSameDay = true;
-      if (potentialTicks.length > 0) {
-          const firstTickDate = new Date(potentialTicks[0].getTime());
-          const firstDay = firstTickDate.getDate();
-          const firstMonth = firstTickDate.getMonth();
-          const firstYear = firstTickDate.getFullYear();
+  const dateAxisTicks = useMemo(() => {
+    if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
 
-          for (let i = 1; i < potentialTicks.length; i++) {
-              const currentTickDate = new Date(potentialTicks[i].getTime());
-              if (currentTickDate.getDate() !== firstDay || currentTickDate.getMonth() !== firstMonth || currentTickDate.getFullYear() !== firstYear) {
-                  allSameDay = false;
-                  break;
-              }
-          }
-      } else {
-          allSameDay = false; // Default if no ticks
-      }
-      // If only one tick, allSameDay remains true from initialization, which is correct.
+    const dates = [];
+    const [domainStart, domainEnd] = timeDomain;
+    let current = new Date(domainStart);
+    current.setHours(0, 0, 0, 0); // Start of the first day
 
-      const useShortFormat = durationHours < 24 && allSameDay && potentialTicks.length > 0;
-      // Use %-I for non-padded hour (e.g., "1PM" instead of "01PM") for brevity.
-      // Use %p for AM/PM.
-      const currentFormat = useShortFormat ? timeFormat("%-I%p") : timeFormat("%b %d, %-I%p");
+    while (current <= domainEnd) {
+        const dayStartOffset = xScale(current);
 
-      return potentialTicks.map(value => {
-          let label = currentFormat(value);
-          return {
-              value,
-              offset: xScale(value), // Use the main xScale passed to component for positioning
-              label
-          };
-      // Filter ticks to be within or very close to the visible plot area
-      }).filter(tick => tick.offset >= -5 && tick.offset <= width + 5);
-  }, [xScale, width, timeDomain]); // Dependencies: xScale (captures scale changes), width, timeDomain
+        const nextDay = new Date(current);
+        nextDay.setDate(current.getDate() + 1);
+        // Ensure the end of the day segment does not exceed the domain end for xScale calculation
+        const endOfDayInDomain = nextDay > domainEnd ? domainEnd : nextDay;
+        const dayEndOffset = xScale(endOfDayInDomain);
+
+        const visibleStart = Math.max(0, dayStartOffset);
+        const visibleEnd = Math.min(width, dayEndOffset);
+
+        if (visibleEnd > visibleStart && (visibleEnd - visibleStart > 1)) { // Ensure there's some visible portion of the day (e.g. > 1px)
+            dates.push({
+                label: timeFormat("%b %d")(current),
+                x: visibleStart + (visibleEnd - visibleStart) / 2,
+                dayStartDate: new Date(current)
+            });
+        }
+
+        // Safety break for invalid date increments or extreme conditions
+        if (current.getTime() === nextDay.getTime() || nextDay > new Date(domainEnd.getTime() + 24*60*60*1000 /* allow one day beyond for last tick */) ) break;
+        current = nextDay;
+    }
+    return dates;
+  }, [timeDomain, xScale, width]);
 
   const yAxisTicks = useMemo(() => {
       if (height <= 0 || !yScale.ticks) return [];
@@ -262,8 +266,8 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
             />
           ))}
 
-          {/* X-Axis Gridlines */}
-          {xAxisTicks.map(({ value, offset }) =>
+          {/* X-Axis Gridlines (using timeAxisTicks for vertical lines) */}
+          {timeAxisTicks.map(({ value, offset }) =>
              (offset >= 0 && offset <= width) && ( // Render only if within bounds
             <line
               key={`x-grid-${value.toISOString()}`}
@@ -300,10 +304,12 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
 
           {/* X-Axis */}
           <line x1={0} y1={height} x2={width} y2={height} className={gridLineColor} />
-          {xAxisTicks.map(({ value, offset, label }) =>
-            (offset >= 0 && offset <= width) && ( // Render only if within bounds
+
+          {/* Time Tier Labels (Upper Tier) */}
+          {timeAxisTicks.map(({ value, offset, label }) =>
+            (offset >= 0 && offset <= width) && (
             <text
-              key={`x-tick-${value.toISOString()}`}
+              key={`time-label-${value.toISOString()}`}
               x={offset}
               y={height + 20}
               textAnchor="middle"
@@ -312,10 +318,24 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
               {label}
             </text>
           ))}
+
+          {/* Date Tier Labels (Lower Tier) */}
+          {dateAxisTicks.map(({ label: dateLabel, x, dayStartDate }) => (
+            <text
+              key={`date-label-${dayStartDate.toISOString()}`} // Use dayStartDate for a more stable key
+              x={x}
+              y={height + 40}
+              textAnchor="middle"
+              className={`text-xs fill-current ${tickLabelColor}`}
+            >
+              {dateLabel}
+            </text>
+          ))}
+
           {/* X-Axis Label */}
           <text
             x={width / 2}
-            y={height + margin.bottom - 10} // Adjusted y position
+            y={height + 65} // Positioned below the two tiers of labels
             textAnchor="middle"
             className={`text-sm fill-current ${axisLabelColor}`}
           >
