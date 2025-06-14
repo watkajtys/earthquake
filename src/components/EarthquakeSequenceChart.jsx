@@ -246,10 +246,28 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     return { sortedQuakes: sorted, linePath: lineGenerator(sorted) };
   }, [originalQuakes, xScale, yScale]); // Dependencies
 
+  let displayLocation;
+  const place = processedMainshock?.properties?.place;
+
+  if (place && place.trim() !== "") {
+      const placeStr = place.trim();
+      const ofIndex = placeStr.toLowerCase().indexOf(" of ");
+      if (ofIndex !== -1) {
+          displayLocation = placeStr.substring(ofIndex + 4).trim();
+      } else {
+          displayLocation = placeStr;
+      }
+      if (!displayLocation) { // If substring result is empty
+          displayLocation = "Unknown Location";
+      }
+  } else {
+      displayLocation = "Unknown Location";
+  }
+
   return (
     <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md">
       <h3 className={`text-lg font-semibold mb-4 text-center text-indigo-400`}>
-        Earthquake Sequence (UTC)
+        {`${displayLocation}: Earthquake Sequence (UTC)`}
       </h3>
       <svg ref={svgRef} width="100%" height={chartHeight} viewBox={`0 0 ${chartRenderWidth} ${chartHeight}`}>
         <g transform={`translate(${margin.left},${margin.top})`}>
