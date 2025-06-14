@@ -5,24 +5,24 @@ import '@testing-library/jest-dom';
 import EarthquakeSequenceChart from './EarthquakeSequenceChart';
 import { getMagnitudeColor, formatDate, formatNumber } from '../utils/utils'; // Corrected path
 
-import { scaleSqrt } from 'd3-scale'; // Import for replicating scale logic in test
+// import { scaleSqrt } from 'd3-scale'; // Unused variable
 
 // Mock constants from the component for verification (not ideal, but useful for specific checks like radius)
 // const mainshockRadius = 8; // No longer fixed
 // const eventRadius = 5;   // No longer fixed
 
-const mockClusterBase = {
-    type: "Feature",
-    properties: {
-        cluster_id: "ci39695658_0",
-        event_count: 3,
-        max_mag: 4.5,
-        min_mag: 2.0,
-        avg_mag: 3.0,
-        // other properties as needed by the component if any
-    },
-    geometry: { /* ... */ }
-};
+// const mockClusterBase = { // Unused variable
+//     type: "Feature",
+//     properties: {
+//         cluster_id: "ci39695658_0",
+//         event_count: 3,
+//         max_mag: 4.5,
+//         min_mag: 2.0,
+//         avg_mag: 3.0,
+//         // other properties as needed by the component if any
+//     },
+//     geometry: { /* ... */ }
+// };
 
 const mockQuake = (id, time, mag, place = "Test Place") => ({
     id: id,
@@ -122,7 +122,7 @@ describe('EarthquakeSequenceChart', () => {
     // The test below confirms the static title in the "No data" view.
 
     test('renders "No data available" message with static title when originalQuakes is empty', () => {
-        const { container } = render(<EarthquakeSequenceChart cluster={mockEmptyClusterData} />);
+        render(<EarthquakeSequenceChart cluster={mockEmptyClusterData} />);
         const noDataView = screen.getByText('No data available for chart.').closest('div');
         expect(within(noDataView).getByRole('heading', { name: 'Earthquake Sequence (UTC)' })).toBeInTheDocument();
     });
@@ -324,68 +324,11 @@ describe('EarthquakeSequenceChart', () => {
             });
         });
 
-        // This 'renders gridlines' test is correctly placed and its assertions are general.
-        test('renders gridlines correctly', () => { // Renamed for clarity
-                const svgElement = getSvgContainer(container);
-                if (!svgElement) throw new Error("SVG container not found for time labels test");
-
-                // foreshockTime: Aug 26 2021 11:00:00 GMT+0000
-                // This redundant block of tests is being removed.
-                // The assertions for time and date labels are covered in the 'Two-Tiered X-Axis Labels' describe block.
-                // The gridline check is covered by 'renders gridlines correctly'.
-            /*
-            test('renders gridlines', () => {
-                const svgElement = getSvgContainer(container);
-                if (!svgElement) throw new Error("SVG container not found for time labels test");
-
-                // foreshockTime: Aug 26 2021 11:00:00 GMT+0000
-                // aftershockTime2: Aug 26 2021 13:00:00 GMT+0000
-                // Duration 2hr -> interval 2hr. Expect "12PM"
-                const timeLabels = within(svgElement).getAllByText(/^\d{1,2}(?:AM|PM)$/i);
-                expect(timeLabels.length).toBeGreaterThanOrEqual(1);
-                expect(timeLabels[0]).toHaveTextContent("12PM"); // Based on mock data and 2hr interval
-                timeLabels.forEach(label => {
-                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20)); // 230 + 20 = 250
-                    expect(label.getAttribute('text-anchor')).toBe('middle');
-                });
-            });
-
-            test('renders date labels (lower tier) correctly for short span (same day)', () => {
-                // mockClusterData is rendered in beforeEach
-                const svgElement = getSvgContainer(container);
-                if (!svgElement) throw new Error("SVG container not found for date labels test");
-
-                // Expect "Jan 01" for mockClusterData, as `foreshockTime` is Jan 01.
-                const dateLabels = within(svgElement).getAllByText(/^Jan\s01$/i);
-                expect(dateLabels.length).toBe(1); // Only one unique date
-                dateLabels.forEach(label => {
-                    expect(label.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
-                    expect(label.getAttribute('text-anchor')).toBe('middle');
-                });
-            });
-
-            test('renders date labels (lower tier) correctly for multi-day span', () => {
-                const { container: longSpanContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataLongSpan} />);
-                const svgElement = getSvgContainer(longSpanContainer);
-                if (!svgElement) throw new Error("SVG container not found for multi-day date labels test");
-
-                const dateLabelsJan01 = within(svgElement).getByText(/^Jan\s01$/i);
-                const dateLabelsJan02 = within(svgElement).getByText(/^Jan\s02$/i);
-
-                expect(dateLabelsJan01).toBeInTheDocument();
-                expect(dateLabelsJan01.getAttribute('y')).toBe(String(plotHeight + 40));
-                expect(dateLabelsJan01.getAttribute('text-anchor')).toBe('middle');
-
-                expect(dateLabelsJan02).toBeInTheDocument();
-                expect(dateLabelsJan02.getAttribute('y')).toBe(String(plotHeight + 40));
-                expect(dateLabelsJan02.getAttribute('text-anchor')).toBe('middle');
-            });
-        });
-            */
-        test('renders gridlines correctly', () => { // This was the original 'renders gridlines' test from the 'With Data' block. It's correctly placed.
+        // The following block (original lines 332-420) is removed to fix parsing error.
+        test('renders gridlines correctly', () => {
              const svgElement = getSvgContainer(container);
              if (!svgElement) throw new Error("SVG container not found for gridlines test");
-            const lines = within(svgElement).queryAllByRole('graphics-symbol', { hidden: true }); // Not standard role, need better query
+            // const lines = within(svgElement).queryAllByRole('graphics-symbol', { hidden: true }); // Unused variable
 
             // Querying lines more directly by looking for stroke-dasharray
             const gridlines = Array.from(svgElement.querySelectorAll('line[stroke-dasharray="2,2"]'));

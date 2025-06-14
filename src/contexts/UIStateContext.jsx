@@ -1,14 +1,6 @@
-import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
+import React, { useState, useContext, useCallback, useEffect } from 'react'; // Removed createContext
 import { useSearchParams } from 'react-router-dom';
-
-/**
- * React Context for managing global UI state across the application.
- * This includes states like the active sidebar view, selected feed period,
- * globe focusing parameters, and any currently focused notable earthquake.
- *
- * @type {React.Context<Object|undefined>}
- */
-export const UIStateContext = createContext();
+import { UIStateContext } from './uiStateContextUtils.js'; // Import the context object
 
 /**
  * Provides UI state to its children components via the UIStateContext.

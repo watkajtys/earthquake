@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, memo, useState } from 'react'; // Added useState
+import React, { useRef, useEffect, memo, useState, useMemo } from 'react'; // Added useState and useMemo
 // PropTypes import removed
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import { Link } from 'react-router-dom';
@@ -132,10 +132,13 @@ const EarthquakeMap = ({
   const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);
   const [isTectonicPlatesLoading, setIsTectonicPlatesLoading] = useState(true);
 
-  const initialMapCenter = [mapCenterLatitude, mapCenterLongitude];
-  const highlightedQuakePosition = highlightQuakeLatitude !== undefined && highlightQuakeLongitude !== undefined
-    ? [highlightQuakeLatitude, highlightQuakeLongitude]
-    : null;
+  const initialMapCenter = useMemo(() => [mapCenterLatitude, mapCenterLongitude], [mapCenterLatitude, mapCenterLongitude]);
+  const highlightedQuakePosition = useMemo(() => {
+    if (highlightQuakeLatitude !== undefined && highlightQuakeLongitude !== undefined) {
+      return [highlightQuakeLatitude, highlightQuakeLongitude];
+    }
+    return null;
+  }, [highlightQuakeLatitude, highlightQuakeLongitude]);
 
   const mapStyle = {
     height: '100%',
