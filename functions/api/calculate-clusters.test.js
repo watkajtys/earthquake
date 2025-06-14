@@ -1,4 +1,4 @@
-import { onRequestPost, calculateDistance, findActiveClusters } from './calculate-clusters';
+import { onRequestPost, findActiveClusters } from './calculate-clusters';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // Helper to create mock context for calculate-clusters
@@ -245,32 +245,6 @@ describe('onRequestPost in calculate-clusters.js', () => {
       expect(json.details).toBe(prepareError.message);
       expect(consoleErrorSpy).toHaveBeenCalledWith('Unhandled error processing request:', prepareError.message, expect.any(String));
     });
-  });
-});
-
-// --- Tests for calculateDistance ---
-describe('calculateDistance (internal)', () => {
-  it('should return 0 for the same point', () => {
-    expect(calculateDistance(10, 20, 10, 20)).toBe(0);
-  });
-
-  it('should calculate known distances correctly', () => {
-    // Paris (48.8566 N, 2.3522 E) to London (51.5074 N, 0.1278 W)
-    expect(calculateDistance(48.8566, 2.3522, 51.5074, -0.1278)).toBeCloseTo(343.5, 0);
-    // New York (40.7128 N, 74.0060 W) to Los Angeles (34.0522 N, 118.2437 W)
-    expect(calculateDistance(40.7128, -74.0060, 34.0522, -118.2437)).toBeCloseTo(3935.7, 0);
-  });
-
-  it('should handle points across the equator', () => {
-    // Point in Northern Hemisphere to Southern Hemisphere (approx 20 deg latitude = 20 * 111.195km)
-    // Note: 1 degree of latitude is approx 111.195 km (varies slightly)
-    expect(calculateDistance(10, 0, -10, 0)).toBeCloseTo(20 * 111.195, 0);
-  });
-
-  it('should handle points across the prime meridian', () => {
-    // Point East of PM to West of PM (approx 20 deg longitude at equator)
-    // Note: 1 degree of longitude at the equator is also approx 111.195 km
-    expect(calculateDistance(0, 10, 0, -10)).toBeCloseTo(20 * 111.195, 0);
   });
 });
 

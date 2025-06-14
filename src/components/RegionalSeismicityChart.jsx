@@ -1,6 +1,7 @@
 // src/RegionalSeismicityChart.jsx
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { calculateDistance, getMagnitudeColor } from '../utils/utils.js';
+import { getMagnitudeColor } from '../utils/utils.js';
+import { calculateDistance } from '../../common/mathUtils.js';
 
 // Not needed locally anymore as they are imported from utils.js
 // const getMagnitudeColor = (magnitude) => { ... };

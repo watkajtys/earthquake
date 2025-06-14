@@ -4,7 +4,7 @@ import RegionalSeismicityChart from './RegionalSeismicityChart';
 import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
-import { calculateDistance } from '../utils/utils.js'; // isValidNumber import removed
+import { calculateDistance } from '../../common/mathUtils.js'; // isValidNumber import removed, calculateDistance moved
 // getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
 
 // Define REGIONAL_RADIUS_KM

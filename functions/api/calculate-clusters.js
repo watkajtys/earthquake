@@ -8,33 +8,14 @@
  * It includes duplicated utility functions for distance calculation and cluster finding,
  * which should be kept in sync with their counterparts in `src/utils/`.
  */
+import { calculateDistance } from '../utils/mathUtils.js';
 
-// NOTE: This function is duplicated in src/utils/utils.js
-// Any algorithmic changes should be synchronized.
-/**
- * Calculates the distance between two geographical coordinates using the Haversine formula.
- * (Duplicated from `src/utils/utils.js` - keep synchronized)
- * @param {number} lat1 Latitude of the first point.
- * @param {number} lon1 Longitude of the first point.
- * @param {number} lat2 Latitude of the second point.
- * @param {number} lon2 Longitude of the second point.
- * @returns {number} Distance in kilometers.
- */
-export function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Radius of the Earth in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
-    return distance;
-}
-
-// NOTE: This function is duplicated in src/utils/clusterUtils.js
-// Any algorithmic changes should be synchronized.
+// NOTE: This version of findActiveClusters is adapted for backend use.
+// It differs from the frontend version in src/utils/clusterUtils.js primarily in:
+//    - Includes a check to prevent adding duplicate clusters based on quake IDs.
+//    - Logging is adjusted for a backend environment.
+// It uses calculateDistance imported from '../utils/mathUtils.js' (synced from /common/mathUtils.js).
+// Algorithmic changes to core clustering logic should be synchronized with the frontend version where applicable.
 /**
  * Finds clusters of earthquakes based on proximity.
  * (Duplicated from `src/utils/clusterUtils.js` - keep synchronized)
