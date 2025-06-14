@@ -1,0 +1,83 @@
+Re-prioritized Task List for Codebase Improvement
+
+High Priority:
+
+1.  Task: Reinstate and Add PropTypes to Components. (Original Task 1)
+    *   Rationale: PropTypes are largely missing. Adding them improves API clarity, helps catch errors, and serves as documentation. Foundational for JS React.
+    *   Action: Systematically add `propTypes` and `defaultProps` to components in `src/components/`.
+
+2.  Task: Address Duplication of `calculateDistance` and `findActiveClusters` between Frontend and Backend. (Original Task 2)
+    *   Rationale: Duplication between `src/utils/` and `functions/api/` is a maintenance risk.
+    *   Action (Ideal): Share code via a common directory or local package.
+    *   Action (Pragmatic): Ensure strict synchronization with clear comments if sharing is infeasible.
+
+3.  Task: Consolidate and Centralize Formatting Utilities. (Original Task 3)
+    *   Rationale: Different versions of formatters (e.g., `formatDate`) in `utils.js` and `HomePage.jsx` cause inconsistency.
+    *   Action: Consolidate into canonical versions in `src/utils/utils.js`; update consumers.
+
+4.  Task: Provide Core Utility Functions (Formatters, Style Getters) via Context or Custom Hooks. (Original Task 4)
+    *   Rationale: Heavy prop drilling of utilities from `HomePage.jsx`.
+    *   Action: Use React Context or custom hooks to provide these functions directly, removing prop drilling.
+
+5.  Task: Refactor `HomePage.jsx`: Remove `useEffect` for `globeFocusLng`. (Original Task 12)
+    *   Rationale: `globeFocusLng` (UI state) updated in Effect based on `lastMajorQuake` (data state) causes cascading renders ("updating state based on props or state").
+    *   Action: Remove Effect. Derive focus longitude directly in the rendering logic of the consuming component (e.g., `InteractiveGlobeView`).
+    *   Reference: "Updating state based on props or state" - react.dev/learn/you-might-not-need-an-effect
+
+6.  Task: Refactor `NotableQuakeFeature.jsx`: Remove `useEffect` for `displayQuake` and `isCyclingHistorical`. (Original Task 13)
+    *   Rationale: `displayQuake` and `isCyclingHistorical` states are derived in an Effect from other state/props/context ("updating state based on props or state", "transforming data for rendering" via Effects).
+    *   Action: Remove Effect and corresponding state. Calculate these values directly during rendering.
+    *   Reference: "Updating state based on props or state", "Transform data for rendering" - react.dev/learn/you-might-not-need-an-effect
+
+7.  Task: Add Race Condition Cleanup to Data Fetching `useEffect` Hooks. (Original Task 14)
+    *   Rationale: Fetching Effects in `HomePage.jsx` (for `fetchActiveClusters`) and `ClusterDetailModalWrapper.jsx` (for `fetchClusterDefinition`) lack cleanup, risking stale data from race conditions.
+    *   Action: Implement cleanup (e.g., `ignore` flag or `AbortController`) in these Effects.
+    *   Reference: "Fetching data" (race conditions) - react.dev/learn/you-might-not-need-an-effect
+
+8.  Task: Refactor `ClusterDetailModalWrapper.jsx`: Remove `useEffect` for `extractedStrongestQuakeId` state. (Original Task 15)
+    *   Rationale: `extractedStrongestQuakeId` state is derived in an Effect from URL parameters ("updating state based on props or state").
+    *   Action: Remove Effect and state. Calculate `extractedStrongestQuakeId` directly in render using `useMemo`.
+    *   Reference: "Updating state based on props or state" - react.dev/learn/you-might-not-need-an-effect
+
+9.  Task: Refactor `ClusterDetailModalWrapper.jsx`: Derive `seoProps` in render. (Original Task 16)
+    *   Rationale: `seoProps` state is set in an Effect but is entirely derivable from other state/props.
+    *   Action: Remove `seoProps` state. Calculate it directly in render using `useMemo`.
+    *   Reference: "If you can calculate something during render, you don’t need an Effect." - react.dev/learn/you-might-not-need-an-effect
+
+Medium Priority:
+
+10. Task: Refactor `EarthquakeMap.jsx` by Extracting Icon Creation Logic and Creating `useTectonicPlatesData` Hook. (Original Task 5)
+    *   Rationale: Improves modularity and maintainability of `EarthquakeMap.jsx`.
+    *   Action: Move icon creation to `src/utils/mapIconUtils.js`; create `useTectonicPlatesData` hook for tectonic plate data fetching.
+
+11. Task: Document Context Value Shapes (JSDoc/TypeScript). (Original Task 6)
+    *   Rationale: `EarthquakeDataContext` provides complex data; its shape needs clear documentation.
+    *   Action: Use JSDoc for `initialState` and `contextValue` in `EarthquakeDataContext` files, or define TypeScript interfaces.
+
+12. Task: Ensure `fetchUsgsData` Service Handles Race Conditions. (Original Task 17)
+    *   Rationale: The underlying `fetchUsgsData` service should be robust against race conditions.
+    *   Action: Review `fetchUsgsData` in `usgsApiService.js` and add race condition handling (e.g., `AbortController`) if absent.
+    *   Reference: General best practice for robust data fetching services.
+
+13. Task: Enhance User Feedback for Non-Critical Data Loading Failures. (Original Task 7)
+    *   Rationale: Failures for non-critical data (e.g., tectonic plates) only show console errors.
+    *   Action: Implement subtle UI indicators or messages if optional data fails to load.
+
+Low Priority:
+
+14. Task: Establish Consistent Approach for Long Tailwind CSS Class Strings. (Original Task 8)
+    *   Rationale: Improves readability and maintainability within component files.
+    *   Action: Consistently use local constants for lengthy/reused Tailwind class sets.
+
+15. Task: Consider Utility for Complex Conditional Classes (e.g., `clsx`). (Original Task 9)
+    *   Rationale: `clsx` can improve readability of complex conditional `className` definitions.
+    *   Action: Evaluate and potentially introduce `clsx` for components with highly complex conditional styling.
+
+16. Task: Standardize Logging Practices and Consider Advanced Logging. (Original Task 10)
+    *   Rationale: Consistent logging and potential external service improve debugging.
+    *   Action: Define guidelines for `console.error`/`warn`. Evaluate services like Sentry/LogRocket.
+
+17. Task: Review and Refine Specific Error Messages from APIs Shown to User. (Original Task 11)
+    *   Rationale: More specific, actionable API error messages improve UX.
+    *   Action: Review error messages in `EarthquakeDataContext`; tailor them if possible using distinct error info from fetches.
+---
