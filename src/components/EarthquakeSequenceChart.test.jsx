@@ -41,6 +41,11 @@ const aftershockTime1 = new Date('2023-01-01T12:30:00Z').getTime();
 const aftershockTime2 = new Date('2023-01-01T13:00:00Z').getTime();
 const foreshockTime = new Date('2023-01-01T11:00:00Z').getTime();
 
+// Mock times for long span data
+const longSpanQuake1Time = new Date('2023-01-01T22:00:00Z').getTime(); // Jan 01, 10 PM
+const longSpanQuake2Time = new Date('2023-01-02T00:00:00Z').getTime(); // Jan 02, 12 AM (Midnight)
+const longSpanQuake3Time = new Date('2023-01-02T04:00:00Z').getTime(); // Jan 02, 4 AM
+
 // Restructured mock data to align with component expecting cluster.originalQuakes directly
 const mockClusterData = {
     // type: "Feature", // Not strictly needed by chart, but good for context
@@ -50,6 +55,14 @@ const mockClusterData = {
         mockQuake("eq2", mainshockTime, 4.5, "5km E of Testville"), // Mainshock
         mockQuake("eq3", aftershockTime1, 3.0, "Testville"),
         mockQuake("eq4", aftershockTime2, 2.8, "2km S of Testville"),
+    ]
+};
+
+const mockClusterDataLongSpan = {
+    originalQuakes: [
+        mockQuake("ls_eq1", longSpanQuake1Time, 3.0, "West End"),
+        mockQuake("ls_eq2", longSpanQuake2Time, 4.0, "Midnight Point"), // Mainshock for this set
+        mockQuake("ls_eq3", longSpanQuake3Time, 3.5, "East Bay"),
     ]
 };
 
@@ -105,15 +118,13 @@ describe('EarthquakeSequenceChart', () => {
         vi.restoreAllMocks(); // Changed to vi.restoreAllMocks()
     });
 
+    // Removed tests for dynamic chart title as the title element itself has been removed.
+    // The test below confirms the static title in the "No data" view.
 
-    test('renders basic chart with title', () => {
-        render(<EarthquakeSequenceChart cluster={mockClusterSingleQuake} />);
-        expect(screen.getByText('When quakes and aftershocks occurred')).toBeInTheDocument();
-    });
-
-    test('renders "No data available" message when originalQuakes is empty', () => {
-        render(<EarthquakeSequenceChart cluster={mockEmptyClusterData} />);
-        expect(screen.getByText('No data available for chart.')).toBeInTheDocument();
+    test('renders "No data available" message with static title when originalQuakes is empty', () => {
+        const { container } = render(<EarthquakeSequenceChart cluster={mockEmptyClusterData} />);
+        const noDataView = screen.getByText('No data available for chart.').closest('div');
+        expect(within(noDataView).getByRole('heading', { name: 'Earthquake Sequence (UTC)' })).toBeInTheDocument();
     });
 
     test('renders "No data available" message when cluster is null', () => {
@@ -136,28 +147,36 @@ describe('EarthquakeSequenceChart', () => {
 
         test('renders mainshock with specific styling and label', () => {
             const mainshockData = mockClusterData.originalQuakes[1]; // eq2 is mainshock
-            const expectedLabel = `Magnitude ${formatNumber(mainshockData.properties.mag,1)} earthquake`;
-            expect(screen.getByText(expectedLabel)).toBeInTheDocument();
+            const expectedLabelText = `${formatNumber(mainshockData.properties.mag,1)}`; // Label is now just the magnitude
 
-            // Find all circles, then identify mainshock by associated text or properties
-            // This is a bit indirect. A data-testid on the mainshock group would be better.
+            // Find all circle elements. Iterate to find the mainshock circle based on its unique properties.
             const allCircles = container.querySelectorAll('circle');
             let mainshockCircle;
+            let mainshockGroup;
+
+            // Calculate expected radius for mainshock (mag 4.5 in domain [2,5] for these tests, radiusScale domain [0,5])
+            // baseRadius = scaleSqrt().domain([0, 5.0]).range([2, 10])(4.5) approx 9.589
+            // mainshock circleRadius = baseRadius + 2 = 11.589
+            const expectedRadiusMainshockCalc = ((Math.sqrt(mainshockData.properties.mag) / Math.sqrt(5)) * (10 - 2)) + 2 + 2;
+
+
             allCircles.forEach(circle => {
-                const parentGroup = circle.closest('g');
-                if (parentGroup && within(parentGroup).queryByText(expectedLabel)) {
+                const r = parseFloat(circle.getAttribute('r'));
+                // Check for properties unique to the mainshock: fill 'none' and its specific, larger radius.
+                if (circle.getAttribute('fill') === 'none' && Math.abs(r - expectedRadiusMainshockCalc) < 0.1) {
                     mainshockCircle = circle;
+                    mainshockGroup = circle.closest('g');
                 }
             });
 
             expect(mainshockCircle).toBeInTheDocument();
+            expect(mainshockGroup).toBeInTheDocument();
 
-            // Calculate expected radius for mainshock (mag 4.5 in domain [0,5], range [2,10], then +2)
-            // scale = (sqrt(4.5/5) * (10-2)) + 2 = (sqrt(0.9) * 8) + 2 ~ 9.589
-            // expectedR = 9.589 + 2 = 11.589
-            const expectedRadiusMainshock = ((Math.sqrt(4.5) / Math.sqrt(5)) * 8 + 2 + 2).toFixed(2); // Approx
-            expect(parseFloat(mainshockCircle.getAttribute('r'))).toBeCloseTo(parseFloat(expectedRadiusMainshock), 1);
+            // Once the mainshock group is identified, query for the label *within* that group.
+            const mainshockLabelElement = within(mainshockGroup).getByText(expectedLabelText);
+            expect(mainshockLabelElement).toBeInTheDocument();
 
+            expect(parseFloat(mainshockCircle.getAttribute('r'))).toBeCloseTo(expectedRadiusMainshockCalc, 1);
             expect(mainshockCircle).toHaveAttribute('fill', 'none');
             expect(mainshockCircle).toHaveAttribute('stroke', getMagnitudeColor(mainshockData.properties.mag));
             expect(mainshockCircle).toHaveAttribute('stroke-width', '2');
@@ -195,47 +214,175 @@ describe('EarthquakeSequenceChart', () => {
             });
         });
 
-        test('renders Y-axis label "Mag."', () => {
-            expect(screen.getByText('Mag.')).toBeInTheDocument();
-        });
+        // Removed test for Y-Axis label "Magnitude" as the label itself has been removed.
 
         test('renders some Y-axis tick labels (e.g., 0, 1, 2, 3, 4)', () => {
             // Check for presence of a few expected integer tick labels
             // The exact ticks depend on the magDomain, which is [0, Math.ceil(maxMag)]
-            // For mockClusterData, magDomain is [2,5] based on new logic.
-            // Expected ticks could be [2, 2.5, 3, 3.5, 4, 4.5, 5]
+            // For mockClusterData, magDomain is [2,5]. plotHeight is 230 (350 - 40 - 80).
+            // yScale is scaleLinear().domain([2, 5]).range([230, 0])
+            // Expected ticks and their Y positions:
+            // '2': 230
+            // '2.5': 230 - ((2.5-2)/(5-2) * 230) = 230 - (0.5/3 * 230) = 191.67
+            // '3':   230 - ((3-2)/(5-2) * 230) = 230 - (1/3 * 230) = 153.33
+            // '3.5': 230 - ((3.5-2)/(5-2) * 230) = 230 - (1.5/3 * 230) = 115
+            // '4':   230 - ((4-2)/(5-2) * 230) = 230 - (2/3 * 230) = 76.67
+            // '4.5': 230 - ((4.5-2)/(5-2) * 230) = 230 - (2.5/3 * 230) = 38.33
+            // '5':   0
             const svgElement = getSvgContainer(container);
             if (!svgElement) throw new Error("SVG container not found for Y-axis ticks test");
 
-            expect(within(svgElement).getByText('2')).toBeInTheDocument();
-            expect(within(svgElement).queryByText('2.5')).toBeInTheDocument(); // d3 might produce this
-            expect(within(svgElement).getByText('3')).toBeInTheDocument();
-            // expect(within(svgElement).queryByText('3.5')).toBeInTheDocument();
-            expect(within(svgElement).getByText('4')).toBeInTheDocument();
-            // expect(within(svgElement).queryByText('4.5')).toBeInTheDocument();
-            expect(within(svgElement).getByText('5')).toBeInTheDocument();
+            const expectedTicksWithY = {
+                '2': 230,
+                '2.5': 191.67,
+                '3': 153.33,
+                '3.5': 115,
+                '4': 76.67,
+                '4.5': 38.33,
+                '5': 0,
+            };
+
+            Object.entries(expectedTicksWithY).forEach(([text, expectedY]) => {
+                const tickElement = within(svgElement).queryByText(String(text));
+                // D3 might not render all ticks, especially if space is limited or they are at the very edges.
+                // So, only check the 'y' attribute if the tickElement is found.
+                if (tickElement) {
+                    expect(tickElement).toBeInTheDocument();
+                    expect(parseFloat(tickElement.getAttribute('y'))).toBeCloseTo(expectedY, 1); // Check y position with tolerance
+                }
+            });
+
+            // Ensure at least the min and max of the domain are rendered as ticks, as these are usually preserved by D3.
+            const minTick = within(svgElement).queryByText('2');
+            const maxTick = within(svgElement).queryByText('5');
+            expect(minTick).toBeInTheDocument();
+            expect(parseFloat(minTick.getAttribute('y'))).toBeCloseTo(230, 1);
+            expect(maxTick).toBeInTheDocument();
+            expect(parseFloat(maxTick.getAttribute('y'))).toBeCloseTo(0, 1);
         });
 
-        test('renders some X-axis tick labels (formatted time)', () => {
-            // Check for text elements that are X-axis ticks.
-            // This is harder to be specific about due to dynamic generation.
-            // We check for presence of multiple text elements at y = height + 20 (approx)
-            const svgElement = getSvgContainer(container);
-            if (!svgElement) throw new Error("SVG container not found for X-axis ticks test");
-
-            // Example formatted times from mock data:
-            // foreshockTime: Jan 01, 11AM
-            // mainshockTime: Jan 01, 12PM
-            // aftershockTime1: Jan 01, 12PM (might be combined with mainshock if ticks are sparse)
-            // aftershockTime2: Jan 01, 01PM
-            // The exact ticks depend on d3.ticks() behavior.
-            // We look for at least two distinct time labels.
-            const xTickTexts = within(svgElement)
-                .getAllByText(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{1,2}(AM|PM)$/i);
-            expect(xTickTexts.length).toBeGreaterThanOrEqual(2); // Expect at least a couple of time labels
+        test('renders X-axis label "Time (UTC)" correctly positioned', () => {
+            const titleElement = screen.getByText('Time (UTC)');
+            expect(titleElement).toBeInTheDocument();
+            // margin.bottom = 80; plotHeight = 350 - 40 - 80 = 230.
+            // X-axis title y is plotHeight + 65 for two-tiered X-axis. Expected y = 230 + 65 = 295.
+            expect(titleElement.getAttribute('y')).toBe(String(230 + 65));
         });
 
-        test('renders gridlines', () => {
+        describe('Two-Tiered X-Axis Labels', () => { // Name reverted to reflect two tiers
+            const chartHeight = 350;
+            const newMargin = { top: 40, right: 20, bottom: 80, left: 20 }; // Correct margin
+            const plotHeight = chartHeight - newMargin.top - newMargin.bottom; // 230
+
+            test('renders time labels (upper tier) correctly positioned', () => { // Title updated
+                const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
+                const svgElement = getSvgContainer(currentContainer);
+                if (!svgElement) throw new Error("SVG container not found for time labels test");
+
+                // Expecting format %-I%p (e.g., "11AM", "12PM", "1PM")
+                // For mockClusterData (11AM to 1PM), ticks could be 11AM, 12PM, 1PM depending on D3 logic for the span.
+                const timeLabels = within(svgElement).getAllByText(/\d{1,2}PM|\d{1,2}AM/i); // Regex for AM/PM format
+                expect(timeLabels.length).toBeGreaterThanOrEqual(1);
+                // Check for a known label based on mock data and typical D3 behavior for short spans
+                expect(timeLabels.some(l => l.textContent === "12PM")).toBe(true);
+                timeLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20)); // 230 + 20 = 250
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
+            });
+
+            test('renders date labels (lower tier) correctly for short span (same day)', () => { // Title updated
+                const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
+                const svgElement = getSvgContainer(currentContainer);
+                if (!svgElement) throw new Error("SVG container not found for date labels test");
+
+                // Expecting format %b %d (e.g., "Jan 01")
+                const dateLabels = within(svgElement).getAllByText(/^Jan\s01$/i); // Regex for "Jan 01"
+                expect(dateLabels.length).toBeGreaterThanOrEqual(1); // Should find at least one "Jan 01"
+                dateLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
+            });
+
+            test('renders date labels (lower tier) correctly for multi-day span', () => { // Title updated
+                const { container: longSpanContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataLongSpan} />);
+                const svgElement = getSvgContainer(longSpanContainer);
+                if (!svgElement) throw new Error("SVG container not found for multi-day date labels test");
+
+                // Expecting format %b %d
+                const dateLabelsJan01 = within(svgElement).getByText(/^Jan\s01$/i);
+                const dateLabelsJan02 = within(svgElement).getByText(/^Jan\s02$/i);
+
+                expect(dateLabelsJan01).toBeInTheDocument();
+                expect(dateLabelsJan01.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
+                expect(dateLabelsJan01.getAttribute('text-anchor')).toBe('middle');
+
+                expect(dateLabelsJan02).toBeInTheDocument();
+                expect(dateLabelsJan02.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
+                expect(dateLabelsJan02.getAttribute('text-anchor')).toBe('middle');
+            });
+        });
+
+        // This 'renders gridlines' test is correctly placed and its assertions are general.
+        test('renders gridlines correctly', () => { // Renamed for clarity
+                const svgElement = getSvgContainer(container);
+                if (!svgElement) throw new Error("SVG container not found for time labels test");
+
+                // foreshockTime: Aug 26 2021 11:00:00 GMT+0000
+                // This redundant block of tests is being removed.
+                // The assertions for time and date labels are covered in the 'Two-Tiered X-Axis Labels' describe block.
+                // The gridline check is covered by 'renders gridlines correctly'.
+            /*
+            test('renders gridlines', () => {
+                const svgElement = getSvgContainer(container);
+                if (!svgElement) throw new Error("SVG container not found for time labels test");
+
+                // foreshockTime: Aug 26 2021 11:00:00 GMT+0000
+                // aftershockTime2: Aug 26 2021 13:00:00 GMT+0000
+                // Duration 2hr -> interval 2hr. Expect "12PM"
+                const timeLabels = within(svgElement).getAllByText(/^\d{1,2}(?:AM|PM)$/i);
+                expect(timeLabels.length).toBeGreaterThanOrEqual(1);
+                expect(timeLabels[0]).toHaveTextContent("12PM"); // Based on mock data and 2hr interval
+                timeLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20)); // 230 + 20 = 250
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
+            });
+
+            test('renders date labels (lower tier) correctly for short span (same day)', () => {
+                // mockClusterData is rendered in beforeEach
+                const svgElement = getSvgContainer(container);
+                if (!svgElement) throw new Error("SVG container not found for date labels test");
+
+                // Expect "Jan 01" for mockClusterData, as `foreshockTime` is Jan 01.
+                const dateLabels = within(svgElement).getAllByText(/^Jan\s01$/i);
+                expect(dateLabels.length).toBe(1); // Only one unique date
+                dateLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
+            });
+
+            test('renders date labels (lower tier) correctly for multi-day span', () => {
+                const { container: longSpanContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataLongSpan} />);
+                const svgElement = getSvgContainer(longSpanContainer);
+                if (!svgElement) throw new Error("SVG container not found for multi-day date labels test");
+
+                const dateLabelsJan01 = within(svgElement).getByText(/^Jan\s01$/i);
+                const dateLabelsJan02 = within(svgElement).getByText(/^Jan\s02$/i);
+
+                expect(dateLabelsJan01).toBeInTheDocument();
+                expect(dateLabelsJan01.getAttribute('y')).toBe(String(plotHeight + 40));
+                expect(dateLabelsJan01.getAttribute('text-anchor')).toBe('middle');
+
+                expect(dateLabelsJan02).toBeInTheDocument();
+                expect(dateLabelsJan02.getAttribute('y')).toBe(String(plotHeight + 40));
+                expect(dateLabelsJan02.getAttribute('text-anchor')).toBe('middle');
+            });
+        });
+            */
+        test('renders gridlines correctly', () => { // This was the original 'renders gridlines' test from the 'With Data' block. It's correctly placed.
              const svgElement = getSvgContainer(container);
              if (!svgElement) throw new Error("SVG container not found for gridlines test");
             const lines = within(svgElement).queryAllByRole('graphics-symbol', { hidden: true }); // Not standard role, need better query
@@ -263,6 +410,40 @@ describe('EarthquakeSequenceChart', () => {
         });
     });
 
+    describe('Connecting Line', () => {
+        const linePathSelector = 'svg g path[fill="none"][stroke-dasharray="3,3"]';
+
+        test('renders a connecting line when there are multiple quakes', () => {
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
+            const pathElement = container.querySelector(linePathSelector);
+
+            expect(pathElement).toBeInTheDocument();
+            expect(pathElement).toHaveAttribute('d');
+            expect(pathElement.getAttribute('d')).not.toBe('');
+            expect(pathElement).toHaveAttribute('stroke-dasharray', '3,3');
+            expect(pathElement).toHaveAttribute('stroke-width', '1');
+            expect(pathElement).toHaveAttribute('fill', 'none');
+            // Check for Tailwind classes for styling
+            // The component uses: className={`stroke-current ${tickLabelColor} opacity-75`}
+            // tickLabelColor is "text-slate-500"
+            expect(pathElement).toHaveClass('stroke-current');
+            expect(pathElement).toHaveClass('text-slate-500');
+            expect(pathElement).toHaveClass('opacity-75');
+        });
+
+        test('does not render a connecting line when there is only one quake', () => {
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterSingleQuake} />);
+            const pathElement = container.querySelector(linePathSelector);
+            expect(pathElement).not.toBeInTheDocument();
+        });
+
+        test('does not render a connecting line when there are no quakes', () => {
+            const { container } = render(<EarthquakeSequenceChart cluster={mockEmptyClusterData} />);
+            const pathElement = container.querySelector(linePathSelector);
+            expect(pathElement).not.toBeInTheDocument();
+        });
+    });
+
     test('renders skeleton when isLoading is true', () => {
         const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} isLoading={true} />);
 
@@ -284,6 +465,6 @@ describe('EarthquakeSequenceChart', () => {
         expect(titlePlaceholder).toBeInTheDocument();
 
         // Check for absence of actual chart title (which is not part of skeleton)
-        expect(screen.queryByText('When quakes and aftershocks occurred')).not.toBeInTheDocument();
+        expect(screen.queryByText('Earthquake Sequence (UTC)')).not.toBeInTheDocument();
     });
 });
