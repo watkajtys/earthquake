@@ -118,40 +118,8 @@ describe('EarthquakeSequenceChart', () => {
         vi.restoreAllMocks(); // Changed to vi.restoreAllMocks()
     });
 
-
-    test('renders basic chart with title for single quake (full place name)', () => {
-        render(<EarthquakeSequenceChart cluster={mockClusterSingleQuake} />);
-        // mockClusterSingleQuake mainshock place is "Lone Mountain"
-        expect(screen.getByRole('heading', { name: "Lone Mountain: Earthquake Sequence (UTC)" })).toBeInTheDocument();
-    });
-
-    test('renders chart title with extracted location for multi-quake data', () => {
-        render(<EarthquakeSequenceChart cluster={mockClusterData} />);
-        // mockClusterData mainshock place is "5km E of Testville", extracts to "Testville"
-        expect(screen.getByRole('heading', { name: "Testville: Earthquake Sequence (UTC)" })).toBeInTheDocument();
-    });
-
-    test('renders "Unknown Location" in title when place is not available', () => {
-        const mockClusterNoPlace = {
-            originalQuakes: [
-                // Ensure this is the mainshock by making it the largest magnitude
-                mockQuake("np1", mainshockTime, 5.0, null),
-                mockQuake("np2", aftershockTime1, 2.0, "Some other place")
-            ]
-        };
-        render(<EarthquakeSequenceChart cluster={mockClusterNoPlace} />);
-        expect(screen.getByRole('heading', { name: "Unknown Location: Earthquake Sequence (UTC)" })).toBeInTheDocument();
-    });
-
-    test('renders full place name in title when " of " is not present', () => {
-        const mockClusterDirectPlace = {
-            originalQuakes: [
-                mockQuake("dp1", mainshockTime, 4.0, "Metro Manila")
-            ]
-        };
-        render(<EarthquakeSequenceChart cluster={mockClusterDirectPlace} />);
-        expect(screen.getByRole('heading', { name: "Metro Manila: Earthquake Sequence (UTC)" })).toBeInTheDocument();
-    });
+    // Removed tests for dynamic chart title as the title element itself has been removed.
+    // The test below confirms the static title in the "No data" view.
 
     test('renders "No data available" message with static title when originalQuakes is empty', () => {
         const { container } = render(<EarthquakeSequenceChart cluster={mockEmptyClusterData} />);
@@ -246,9 +214,7 @@ describe('EarthquakeSequenceChart', () => {
             });
         });
 
-        test('renders Y-axis label "Magnitude"', () => {
-            expect(screen.getByText('Magnitude')).toBeInTheDocument();
-        });
+        // Removed test for Y-Axis label "Magnitude" as the label itself has been removed.
 
         test('renders some Y-axis tick labels (e.g., 0, 1, 2, 3, 4)', () => {
             // Check for presence of a few expected integer tick labels
@@ -270,17 +236,69 @@ describe('EarthquakeSequenceChart', () => {
         test('renders X-axis label "Time (UTC)" correctly positioned', () => {
             const titleElement = screen.getByText('Time (UTC)');
             expect(titleElement).toBeInTheDocument();
-            // margin.bottom = 80; height = 350 - 40 - 80 = 230. Expected y = 230 + 65 = 295
-            expect(titleElement.getAttribute('y')).toBe(String(230 + 65));
+            // New margin.bottom = 40; new plotHeight = 350 - 40 - 40 = 270. Expected y = 270 + 65 = 335
+            expect(titleElement.getAttribute('y')).toBe(String(270 + 65));
         });
 
         describe('Two-Tiered X-Axis Labels', () => {
             const chartHeight = 350;
-            const margin = { top: 40, right: 50, bottom: 80, left: 60 };
-            const plotHeight = chartHeight - margin.top - margin.bottom; // 230
+            // New margins: { top: 40, right: 20, bottom: 40, left: 20 }
+            const newMargin = { top: 40, right: 20, bottom: 40, left: 20 };
+            const plotHeight = chartHeight - newMargin.top - newMargin.bottom; // 270
 
             test('renders time labels (upper tier) correctly for short span', () => {
-                // mockClusterData is rendered in beforeEach
+                // mockClusterData is rendered in beforeEach which uses old margins for its 'container'
+                // Re-render with new margins implied by component default for this specific test context
+                const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
+                const svgElement = getSvgContainer(currentContainer);
+                if (!svgElement) throw new Error("SVG container not found for time labels test");
+
+                // foreshockTime: Jan 01 2023 11:00:00 GMT+0000
+                // aftershockTime2: Jan 01 2023 13:00:00 GMT+0000
+                // Duration 2hr -> interval 2hr. Expect "12PM"
+                const timeLabels = within(svgElement).getAllByText(/^\d{1,2}(?:AM|PM)$/i);
+                expect(timeLabels.length).toBeGreaterThanOrEqual(1);
+                // Example check, exact ticks depend on d3's behavior with the new width
+                expect(timeLabels.some(l => l.textContent === "12PM")).toBe(true);
+                timeLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20)); // 270 + 20 = 290
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
+            });
+
+            test('renders date labels (lower tier) correctly for short span (same day)', () => {
+                // mockClusterData is rendered in beforeEach - re-render for clarity or use its container
+                const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
+                const svgElement = getSvgContainer(currentContainer);
+                if (!svgElement) throw new Error("SVG container not found for date labels test");
+
+                const dateLabels = within(svgElement).getAllByText(/^Jan\s01$/i);
+                expect(dateLabels.length).toBe(1); // Only one unique date
+                dateLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 40)); // 270 + 40 = 310
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
+            });
+
+            test('renders date labels (lower tier) correctly for multi-day span', () => {
+                const { container: longSpanContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataLongSpan} />);
+                const svgElement = getSvgContainer(longSpanContainer);
+                if (!svgElement) throw new Error("SVG container not found for multi-day date labels test");
+
+                const dateLabelsJan01 = within(svgElement).getByText(/^Jan\s01$/i);
+                const dateLabelsJan02 = within(svgElement).getByText(/^Jan\s02$/i);
+
+                expect(dateLabelsJan01).toBeInTheDocument();
+                expect(dateLabelsJan01.getAttribute('y')).toBe(String(plotHeight + 40)); // 270 + 40 = 310
+                expect(dateLabelsJan01.getAttribute('text-anchor')).toBe('middle');
+
+                expect(dateLabelsJan02).toBeInTheDocument();
+                expect(dateLabelsJan02.getAttribute('y')).toBe(String(plotHeight + 40)); // 270 + 40 = 310
+                expect(dateLabelsJan02.getAttribute('text-anchor')).toBe('middle');
+            });
+        });
+
+        test('renders gridlines', () => {
                 const svgElement = getSvgContainer(container);
                 if (!svgElement) throw new Error("SVG container not found for time labels test");
 
