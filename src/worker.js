@@ -99,7 +99,7 @@ async function handleUsgsProxyRequest(request, env, ctx, apiUrl) {
       }));
     }
 
-    const DEFAULT_CACHE_DURATION_SECONDS = 600;
+    const DEFAULT_CACHE_DURATION_SECONDS = 60;
     let durationInSeconds = DEFAULT_CACHE_DURATION_SECONDS;
     const envCacheDuration = env.WORKER_CACHE_DURATION_SECONDS;
     if (envCacheDuration) {
