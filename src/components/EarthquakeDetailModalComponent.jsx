@@ -124,6 +124,7 @@ const EarthquakeDetailModalComponent = () => {
         const eventLocation = {
             '@type': 'Place',
             name: place,
+            address: place, // Using place directly for address
         };
 
         if (typeof latitude === 'number' && typeof longitude === 'number') {
@@ -141,13 +142,23 @@ const EarthquakeDetailModalComponent = () => {
             name: `M ${mag} - ${place}`, // Shorter name for JSON-LD
             description: pageDescription,
             startDate: time ? new Date(time).toISOString() : undefined,
-            // endDate: time ? new Date(time).toISOString() : undefined, // For earthquakes, startDate is usually sufficient
+            endDate: time ? new Date(time).toISOString() : undefined, // Added endDate
+            eventAttendanceMode: 'https://schema.org/OnlineEvent', // Added eventAttendanceMode
+            eventStatus: 'https://schema.org/EventScheduled', // Added eventStatus
             location: eventLocation,
-            image: shakemapIntensityImageUrl || undefined,
+            image: shakemapIntensityImageUrl || 'https://earthquakeslive.com/placeholder-image.jpg', // Added default image
             keywords: pageKeywords.toLowerCase(),
             url: canonicalPageUrl,
             identifier: usgsEventId, // Using the actual USGS Event ID
             ...(usgsEventPageUrl && { sameAs: usgsEventPageUrl }), // Link to authoritative USGS event page
+            performer: {
+                '@type': 'Organization',
+                name: 'USGS' // Generic performer
+            },
+            organizer: {
+                '@type': 'Organization',
+                name: 'USGS' // Generic organizer
+            }
             // subjectOf is not typically used on Event itself, but on the WebPage about the event.
             // However, canonicalUrl serves a similar purpose for the event's own page.
         };
