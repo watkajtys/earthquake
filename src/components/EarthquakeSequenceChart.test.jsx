@@ -237,43 +237,65 @@ describe('EarthquakeSequenceChart', () => {
             expect(within(svgElement).getByText('5')).toBeInTheDocument();
         });
 
-        test('renders X-axis label "Time (UTC)"', () => {
-            expect(screen.getByText('Time (UTC)')).toBeInTheDocument();
+        test('renders X-axis label "Time (UTC)" correctly positioned', () => {
+            const titleElement = screen.getByText('Time (UTC)');
+            expect(titleElement).toBeInTheDocument();
+            // margin.bottom = 80; height = 350 - 40 - 80 = 230. Expected y = 230 + 65 = 295
+            expect(titleElement.getAttribute('y')).toBe(String(230 + 65));
         });
 
-        test('renders X-axis tick labels with short format (time only) for short, same-day spans', () => {
-            // Using default mockClusterData (approx 2-hour span on Aug 26)
-            // Expects format like "11AM", "1PM" (%-I%p)
-            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
-            const svgElement = getSvgContainer(container);
-            if (!svgElement) throw new Error("SVG container not found for X-axis short format ticks test");
+        describe('Two-Tiered X-Axis Labels', () => {
+            const chartHeight = 350;
+            const margin = { top: 40, right: 50, bottom: 80, left: 60 };
+            const plotHeight = chartHeight - margin.top - margin.bottom; // 230
 
-            // Regex for short format: 1 or 2 digits for hour, followed by AM/PM.
-            // Should not contain month/day.
-            const xTickTexts = within(svgElement).getAllByText(/^\d{1,2}(?:AM|PM)$/i);
-            expect(xTickTexts.length).toBeGreaterThanOrEqual(1); // Expect at least one, likely "12PM" or "11AM", "1PM"
-            xTickTexts.forEach(textElement => {
-                expect(textElement.textContent).not.toMatch(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+            test('renders time labels (upper tier) correctly for short span', () => {
+                // mockClusterData is rendered in beforeEach
+                const svgElement = getSvgContainer(container);
+                if (!svgElement) throw new Error("SVG container not found for time labels test");
+
+                // foreshockTime: Aug 26 2021 11:00:00 GMT+0000
+                // aftershockTime2: Aug 26 2021 13:00:00 GMT+0000
+                // Duration 2hr -> interval 2hr. Expect "12PM"
+                const timeLabels = within(svgElement).getAllByText(/^\d{1,2}(?:AM|PM)$/i);
+                expect(timeLabels.length).toBeGreaterThanOrEqual(1);
+                expect(timeLabels[0]).toHaveTextContent("12PM"); // Based on mock data and 2hr interval
+                timeLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20)); // 230 + 20 = 250
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
             });
-        });
 
-        test('renders X-axis tick labels with long format (date and time) for longer or multi-day spans', () => {
-            // Using mockClusterDataLongSpan (approx 6-hour span across midnight)
-            // Expects format like "Jan 01, 10PM" (%b %d, %-I%p)
-            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterDataLongSpan} />);
-            const svgElement = getSvgContainer(container);
-            if (!svgElement) throw new Error("SVG container not found for X-axis long format ticks test");
+            test('renders date labels (lower tier) correctly for short span (same day)', () => {
+                // mockClusterData is rendered in beforeEach
+                const svgElement = getSvgContainer(container);
+                if (!svgElement) throw new Error("SVG container not found for date labels test");
 
-            // Regex for long format: Month Day, Hour AM/PM
-            const xTickTexts = within(svgElement)
-                .getAllByText(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s\d{1,2},\s\d{1,2}(?:AM|PM)$/i);
-            expect(xTickTexts.length).toBeGreaterThanOrEqual(2); // Expect multiple ticks like "Jan 01, 10PM", "Jan 02, 12AM", etc.
+                // Expect "Jan 01" for mockClusterData, as `foreshockTime` is Jan 01.
+                const dateLabels = within(svgElement).getAllByText(/^Jan\s01$/i);
+                expect(dateLabels.length).toBe(1); // Only one unique date
+                dateLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
+            });
 
-            // Example specific checks (adjust if mock data or tick logic is very stable)
-            // expect(screen.getByText('Jan 01, 10PM')).toBeInTheDocument();
-            // expect(screen.getByText('Jan 02, 12AM')).toBeInTheDocument();
-            // expect(screen.getByText('Jan 02, 2AM')).toBeInTheDocument();
-            // expect(screen.getByText('Jan 02, 4AM')).toBeInTheDocument();
+            test('renders date labels (lower tier) correctly for multi-day span', () => {
+                const { container: longSpanContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataLongSpan} />);
+                const svgElement = getSvgContainer(longSpanContainer);
+                if (!svgElement) throw new Error("SVG container not found for multi-day date labels test");
+
+                const dateLabelsJan01 = within(svgElement).getByText(/^Jan\s01$/i);
+                const dateLabelsJan02 = within(svgElement).getByText(/^Jan\s02$/i);
+
+                expect(dateLabelsJan01).toBeInTheDocument();
+                expect(dateLabelsJan01.getAttribute('y')).toBe(String(plotHeight + 40));
+                expect(dateLabelsJan01.getAttribute('text-anchor')).toBe('middle');
+
+                expect(dateLabelsJan02).toBeInTheDocument();
+                expect(dateLabelsJan02.getAttribute('y')).toBe(String(plotHeight + 40));
+                expect(dateLabelsJan02.getAttribute('text-anchor')).toBe('middle');
+            });
         });
 
         test('renders gridlines', () => {
