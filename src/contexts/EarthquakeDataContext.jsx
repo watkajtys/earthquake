@@ -35,7 +35,18 @@ import {
 } from './earthquakeDataContextUtils.js';
 import { EarthquakeDataContext } from './earthquakeDataContextUtils.js'; // Import the context
 
+/**
+ * @typedef {object} EarthquakeDataProviderProps
+ * @property {React.ReactNode} children - The child components that will have access to the earthquake data context.
+ */
 
+/**
+ * Provides earthquake data to its child components through context.
+ * It fetches, processes, and manages earthquake data from the USGS API.
+ *
+ * @param {EarthquakeDataProviderProps} props - The props for the EarthquakeDataProvider.
+ * @returns {JSX.Element} The EarthquakeDataProvider component.
+ */
 export const EarthquakeDataProvider = ({ children }) => {
     const [state, dispatch] = useReducer(earthquakeReducer, initialState);
 
@@ -138,6 +149,11 @@ export const EarthquakeDataProvider = ({ children }) => {
         return () => clearInterval(messageInterval);
     }, [state.isInitialAppLoad, state.isLoadingDaily, state.isLoadingWeekly, dispatch]); // Added dispatch
 
+    /**
+     * Fetches and processes monthly earthquake data from the USGS API.
+     * Updates the state with the fetched data or an error message if the fetch fails.
+     * Sets loading flags during the fetch operation.
+     */
     const loadMonthlyData = useCallback(async () => {
         dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: true, hasAttemptedMonthlyLoad: true }});
         dispatch({type: actionTypes.SET_ERROR, payload: { monthlyError: null }});
@@ -189,6 +205,13 @@ export const EarthquakeDataProvider = ({ children }) => {
     );
 };
 
+/**
+ * Custom hook to access the earthquake data state.
+ * This hook must be used within a component that is a descendant of `EarthquakeDataProvider`.
+ *
+ * @returns {object} The earthquake data context, including state and action dispatchers.
+ * @throws {Error} If used outside of an EarthquakeDataProvider.
+ */
 export const useEarthquakeDataState = () => {
     const context = useContext(EarthquakeDataContext);
     if (context === null) {
