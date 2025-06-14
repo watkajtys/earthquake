@@ -42,7 +42,7 @@ const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(
         { name : '5-5.9', min : 5, max : 5.99, color: getMagnitudeColor(5.5) },
         {name: '6-6.9', min: 6, max: 6.99, color: getMagnitudeColor(6.5)},
         { name : '7+', min : 7, max : Infinity, color: getMagnitudeColor(7.5) },
-    ], [getMagnitudeColor]);
+    ], []); // getMagnitudeColor removed from dependency array
 
     const data = useMemo(() => {
         if (titleSuffix === "(Last 7 Days)" && magnitudeDistribution7Days && magnitudeDistribution7Days.length > 0) {

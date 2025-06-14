@@ -412,7 +412,9 @@ function ClusterDetailModalWrapper({
         isLoadingWeekly, isLoadingMonthly, isInitialAppLoad, hasAttemptedMonthlyLoad, loadMonthlyData, monthlyError,
         isWaitingForMonthlyData,
         formatDate, formatTimeAgo, formatTimeDuration, generateSeo,
-        dynamicCluster
+        dynamicCluster,
+        errorMessage, // Added
+        internalIsLoading // Added
     ]);
 
     const handleClose = () => navigate(-1);

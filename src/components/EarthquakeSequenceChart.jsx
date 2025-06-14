@@ -12,8 +12,8 @@ const axisLabelColor = "text-slate-400"; // From EarthquakeTimelineSVGChart
 const tickLabelColor = "text-slate-500"; // From EarthquakeTimelineSVGChart
 const gridLineColor = "stroke-slate-600"; // Similar to border color in EarthquakeTimelineSVGChart
 const mainshockStrokeWidth = 2;
-const mainshockRadius = 8;
-const eventRadius = 5;
+// const mainshockRadius = 8; // Unused
+// const eventRadius = 5; // Unused
 
 const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   const svgRef = useRef(null);
@@ -65,21 +65,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     return { originalQuakes: validQuakes, processedMainshock: mainshock };
   }, [cluster]);
 
-  if (isLoading) {
-    return <EarthquakeSequenceChartSkeleton />;
-  }
-
-  // Note: The "No data available" message is now primarily handled here, after isLoading check.
-  // This ensures skeleton shows for loading state, then no-data message if applicable.
-  if (originalQuakes.length === 0 && width > 0 && !isLoading) {
-    return (
-      <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md flex flex-col justify-center items-center" style={{ height: `${chartHeight}px` }}>
-        <h3 className={`text-lg font-semibold text-indigo-400 mb-2`}>Earthquake Sequence (UTC)</h3>
-        <p className={`${tickLabelColor} p-4 text-center text-sm`}>No data available for chart.</p>
-      </div>
-    );
-  }
-
+  // All other useMemo hooks moved here, before any conditional returns
   const timeDomain = useMemo(() => {
     if (originalQuakes.length === 0) return [new Date(0), new Date()]; // Default to prevent crash
     const times = originalQuakes.map(d => new Date(d.properties.time));
@@ -95,29 +81,22 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     let minActualMag = d3Min(mags);
     let maxActualMag = d3Max(mags);
 
-    // Handle case where minActualMag or maxActualMag might still be undefined if mags array is empty after filter
-    // Though the mags.length === 0 check above should catch this.
     minActualMag = isValidNumber(minActualMag) ? minActualMag : 0;
     maxActualMag = isValidNumber(maxActualMag) ? maxActualMag : 0;
-
 
     let lowerBound = Math.max(0, minActualMag - 0.5);
     let upperBound = maxActualMag + 0.5;
 
-    // Ensure a minimum span for the Y-axis, e.g., at least 1 unit
     const MIN_DOMAIN_SPAN = 1.0;
     if (upperBound - lowerBound < MIN_DOMAIN_SPAN) {
-      const midPoint = (lowerBound + upperBound) / 2; // Calculate midpoint before adjusting lowerBound
+      const midPoint = (lowerBound + upperBound) / 2;
       lowerBound = Math.max(0, midPoint - (MIN_DOMAIN_SPAN / 2));
       upperBound = lowerBound + MIN_DOMAIN_SPAN;
     }
 
-    // Final check if lower bound ended up being equal to or greater than upper bound
-    // This can happen if all mags are 0 or very close, and after padding and min_span logic.
     if (upperBound <= lowerBound) {
         upperBound = lowerBound + MIN_DOMAIN_SPAN;
     }
-
     return [lowerBound, upperBound];
   }, [originalQuakes]);
 
@@ -131,130 +110,124 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
 
   const radiusScale = useMemo(() =>
     scaleSqrt()
-      .domain([0, magDomain[1]]) // Domain from 0 to max magnitude in the dataset
-      .range([2, 10]) // Output radius from 2px to 10px
-      .clamp(true), // Prevent values outside the range (optional, but good for safety)
+      .domain([0, magDomain[1]])
+      .range([2, 10])
+      .clamp(true),
   [magDomain]);
 
-  // Axes and Gridlines
   const timeAxisTicks = useMemo(() => {
     if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
-
     const tempScale = scaleTime().domain(timeDomain).range([0, width]);
     const [domainStartTime, domainEndTime] = timeDomain;
     const durationMs = domainEndTime.getTime() - domainStartTime.getTime();
     const durationHours = durationMs / (1000 * 60 * 60);
 
-    let tickInterval; // D3 time interval function
-    if (durationHours < 12) { // Aim for ticks every 1-2 hours
-      tickInterval = timeHour.every(durationHours < 6 ? 1 : 2); // More granular for very short durations
-    } else if (durationHours < 24) { // Aim for ticks every 3 hours
+    let tickInterval;
+    if (durationHours < 12) {
+      tickInterval = timeHour.every(durationHours < 6 ? 1 : 2);
+    } else if (durationHours < 24) {
       tickInterval = timeHour.every(3);
-    } else if (durationHours < 48) { // Aim for ticks every 6 hours
+    } else if (durationHours < 48) {
       tickInterval = timeHour.every(6);
-    } else if (durationHours < 7 * 24) { // Less than a week, aim for 12 hour ticks
+    } else if (durationHours < 7 * 24) {
       tickInterval = timeHour.every(12);
-    }
-    else { // Otherwise, aim for daily ticks
+    } else {
       tickInterval = timeHour.every(24);
     }
 
     const potentialTicks = tempScale.ticks(tickInterval);
-    // Ensure timeFormat handles date changes correctly if sequence spans multiple days
     const timeTickFormat = timeFormat("%b %d, %-I%p");
 
     return potentialTicks.map(value => ({
         value,
         offset: xScale(value),
         label: timeTickFormat(value)
-    })).filter(tick => tick.offset >= -5 && tick.offset <= width + 5); // Keep existing filter
+    })).filter(tick => tick.offset >= -5 && tick.offset <= width + 5);
   }, [xScale, width, timeDomain]);
 
-  const dateAxisTicks = useMemo(() => {
-    if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
+  // const dateAxisTicks = useMemo(() => { // Unused variable
+  //   if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
+  //   const dates = [];
+  //   const [domainStart, domainEnd] = timeDomain;
+  //   let current = new Date(domainStart);
+  //   current.setHours(0, 0, 0, 0);
 
-    // This logic might need adjustment or could be simplified if the main timeAxisTicks now include date info.
-    // For now, let's keep it to see how it behaves with the new timeAxisTicks format.
-    const dates = [];
-    const [domainStart, domainEnd] = timeDomain;
-    let current = new Date(domainStart);
-    current.setHours(0, 0, 0, 0); // Start of the first day
+  //   while (current <= domainEnd) {
+  //       const dayStartOffset = xScale(current);
+  //       const nextDay = new Date(current);
+  //       nextDay.setDate(current.getDate() + 1);
+  //       const endOfDayInDomain = nextDay > domainEnd ? domainEnd : nextDay;
+  //       const dayEndOffset = xScale(endOfDayInDomain);
+  //       const visibleStart = Math.max(0, dayStartOffset);
+  //       const visibleEnd = Math.min(width, dayEndOffset);
 
-    while (current <= domainEnd) {
-        const dayStartOffset = xScale(current);
-
-        const nextDay = new Date(current);
-        nextDay.setDate(current.getDate() + 1);
-        // Ensure the end of the day segment does not exceed the domain end for xScale calculation
-        const endOfDayInDomain = nextDay > domainEnd ? domainEnd : nextDay;
-        const dayEndOffset = xScale(endOfDayInDomain);
-
-        const visibleStart = Math.max(0, dayStartOffset);
-        const visibleEnd = Math.min(width, dayEndOffset);
-
-        if (visibleEnd > visibleStart && (visibleEnd - visibleStart > 1)) { // Ensure there's some visible portion of the day (e.g. > 1px)
-            dates.push({
-                label: timeFormat("%b %d")(current),
-                x: visibleStart + (visibleEnd - visibleStart) / 2,
-                dayStartDate: new Date(current)
-            });
-        }
-
-        // Safety break for invalid date increments or extreme conditions
-        if (current.getTime() === nextDay.getTime() || nextDay > new Date(domainEnd.getTime() + 24*60*60*1000 /* allow one day beyond for last tick */) ) break;
-        current = nextDay;
-    }
-    return dates;
-  }, [timeDomain, xScale, width]);
+  //       if (visibleEnd > visibleStart && (visibleEnd - visibleStart > 1)) {
+  //           dates.push({
+  //               label: timeFormat("%b %d")(current),
+  //               x: visibleStart + (visibleEnd - visibleStart) / 2,
+  //               dayStartDate: new Date(current)
+  //           });
+  //       }
+  //       if (current.getTime() === nextDay.getTime() || nextDay > new Date(domainEnd.getTime() + 24*60*60*1000)) break;
+  //       current = nextDay;
+  //   }
+  //   return dates;
+  // }, [timeDomain, xScale, width]);
 
   const yAxisTicks = useMemo(() => {
       if (height <= 0 || !yScale.ticks) return [];
-
-      // Suggest a number of ticks (e.g., 5). D3 will try to find "nice" values around this count.
       const suggestedTickCount = 5;
       let ticks = yScale.ticks(suggestedTickCount);
-
-      // Optional: Refine ticks if needed, e.g., ensure they are not too fractional for magnitudes
-      // For instance, round to nearest 0.5 if domain is small
       const domainSpan = magDomain[1] - magDomain[0];
-      if (domainSpan <= 2 && domainSpan > 0) { // If domain span is small (but not zero), prefer ticks at .0 or .5
+
+      if (domainSpan <= 2 && domainSpan > 0) {
           ticks = ticks.map(t => Math.round(t * 2) / 2);
-      } else if (domainSpan > 0) { // Otherwise, prefer integer ticks if possible, or let D3 decide
-          // Check if most ticks are already integers or close to them
+      } else if (domainSpan > 0) {
           const allNearInteger = ticks.every(t => Math.abs(t - Math.round(t)) < 0.01);
           if (allNearInteger) {
               ticks = ticks.map(t => Math.round(t));
           }
-          // If not, D3's default choice is usually good.
       }
-
-      // Remove duplicate ticks that might have resulted from rounding and ensure they are within domain
       ticks = [...new Set(ticks)].filter(t => t >= magDomain[0] && t <= magDomain[1]);
       ticks.sort((a,b) => a-b);
 
       return ticks.map(value => ({
           value,
           offset: yScale(value),
-      // Allow slight overflow for edge ticks to be visible if they are just outside due to rounding/pixel alignment
       })).filter(tick => tick.offset >= -1 && tick.offset <= height + 1);
   }, [yScale, height, magDomain]);
 
-  const { sortedQuakes, linePath } = useMemo(() => {
+  const { linePath } = useMemo(() => { // sortedQuakes removed as it's not used directly
     if (!originalQuakes || originalQuakes.length < 2) {
-        return { sortedQuakes: originalQuakes || [], linePath: null };
+        // Return an object that includes sortedQuakes if it's expected by callers,
+        // otherwise, just return { linePath: null }
+        return { linePath: null };
     }
-
-    // Explicitly sort quakes by time
-    const sorted = [...originalQuakes].sort((a, b) =>
+    // Sort quakes by time specifically for the line generator
+    const sortedForLine = [...originalQuakes].sort((a, b) =>
         new Date(a.properties.time) - new Date(b.properties.time)
     );
-
     const lineGenerator = d3Line()
         .x(d => xScale(new Date(d.properties.time)))
         .y(d => yScale(d.properties.mag));
+    // If sortedQuakes is needed by other parts of the component (it's not, currently), return it as well.
+    // For now, it was only used to generate linePath.
+    return { linePath: lineGenerator(sortedForLine) };
+  }, [originalQuakes, xScale, yScale]);
 
-    return { sortedQuakes: sorted, linePath: lineGenerator(sorted) };
-  }, [originalQuakes, xScale, yScale]); // Dependencies
+  // Conditional returns now happen *after* all useMemo hooks have been called
+  if (isLoading) {
+    return <EarthquakeSequenceChartSkeleton />;
+  }
+
+  if (originalQuakes.length === 0 && width > 0 && !isLoading) {
+    return (
+      <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md flex flex-col justify-center items-center" style={{ height: `${chartHeight}px` }}>
+        <h3 className={`text-lg font-semibold text-indigo-400 mb-2`}>Earthquake Sequence (UTC)</h3>
+        <p className={`${tickLabelColor} p-4 text-center text-sm`}>No data available for chart.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md">
