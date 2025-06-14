@@ -8,6 +8,7 @@ import { line as d3Line } from 'd3-shape'; // Import d3Line
 import { getMagnitudeColor, formatDate, isValidNumber, isValuePresent, formatNumber } from '../utils/utils'; // Corrected path
 import EarthquakeSequenceChartSkeleton from './skeletons/EarthquakeSequenceChartSkeleton'; // Import skeleton
 
+const MAGNITUDE_THRESHOLD_FOR_CONNECTOR = 2.5;
 const axisLabelColor = "text-slate-400"; // From EarthquakeTimelineSVGChart
 const tickLabelColor = "text-slate-500"; // From EarthquakeTimelineSVGChart
 const gridLineColor = "stroke-slate-600"; // Similar to border color in EarthquakeTimelineSVGChart
@@ -239,9 +240,9 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
       })).filter(tick => tick.offset >= -1 && tick.offset <= height + 1);
   }, [yScale, height, magDomain]);
 
-  const { sortedQuakes, linePath } = useMemo(() => {
-    if (!originalQuakes || originalQuakes.length < 2) {
-        return { sortedQuakes: originalQuakes || [], linePath: null };
+  const { sortedQuakes, lineSegments } = useMemo(() => {
+    if (!originalQuakes || originalQuakes.length === 0) { // Changed length check to 0 as segments require at least 2
+        return { sortedQuakes: originalQuakes || [], lineSegments: [] };
     }
 
     // Explicitly sort quakes by time
@@ -249,12 +250,30 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
         new Date(a.properties.time) - new Date(b.properties.time)
     );
 
-    const lineGenerator = d3Line()
-        .x(d => xScale(new Date(d.properties.time)))
-        .y(d => yScale(d.properties.mag));
+    const segments = [];
+    if (sorted.length >= 2) { // Ensure there are at least two quakes to form a segment
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const quakeA = sorted[i];
+        const quakeB = sorted[i+1];
 
-    return { sortedQuakes: sorted, linePath: lineGenerator(sorted) };
-  }, [originalQuakes, xScale, yScale]); // Dependencies
+        if (quakeA.properties.mag > MAGNITUDE_THRESHOLD_FOR_CONNECTOR &&
+            quakeB.properties.mag > MAGNITUDE_THRESHOLD_FOR_CONNECTOR) {
+
+          const x1 = xScale(new Date(quakeA.properties.time));
+          const y1 = yScale(quakeA.properties.mag);
+          const x2 = xScale(new Date(quakeB.properties.time));
+          const y2 = yScale(quakeB.properties.mag);
+
+          // Add segment if it's likely to be visible (optional, but good for performance)
+          // This check is basic; more sophisticated culling could be added if needed.
+          if (isValidNumber(x1) && isValidNumber(y1) && isValidNumber(x2) && isValidNumber(y2)) {
+            segments.push({ x1, y1, x2, y2, id: quakeA.id + '-' + quakeB.id });
+          }
+        }
+      }
+    }
+    return { sortedQuakes: sorted, lineSegments: segments };
+  }, [originalQuakes, xScale, yScale, MAGNITUDE_THRESHOLD_FOR_CONNECTOR]); // Added MAGNITUDE_THRESHOLD_FOR_CONNECTOR to dependencies
 
   return (
     <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md">
@@ -349,15 +368,18 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
           </text>
 
           {/* Connecting Line for Quakes */}
-          {linePath && (
-            <path
-                d={linePath}
-                strokeDasharray="3,3" // Dashed line
-                className={`stroke-current ${tickLabelColor} opacity-75`} // Use existing tickLabelColor for theme consistency, add opacity
-                strokeWidth={1}
-                fill="none"
+          {lineSegments.map(segment => (
+            <line
+              key={segment.id}
+              x1={segment.x1}
+              y1={segment.y1}
+              x2={segment.x2}
+              y2={segment.y2}
+              strokeDasharray="3,3" // Dashed line
+              className={`stroke-current ${tickLabelColor} opacity-75`} // Use existing tickLabelColor
+              strokeWidth={1}
             />
-          )}
+          ))}
 
           {/* Data Points */}
           {originalQuakes.map(quake => {

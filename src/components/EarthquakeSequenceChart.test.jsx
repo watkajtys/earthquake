@@ -410,37 +410,87 @@ describe('EarthquakeSequenceChart', () => {
         });
     });
 
-    describe('Connecting Line', () => {
-        const linePathSelector = 'svg g path[fill="none"][stroke-dasharray="3,3"]';
+    describe('Connecting Line Segments', () => {
+        const lineSegmentSelector = 'svg g line[stroke-dasharray="3,3"]';
+        const MAGNITUDE_THRESHOLD_FOR_CONNECTOR = 2.5; // Align with component
 
-        test('renders a connecting line when there are multiple quakes', () => {
-            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
-            const pathElement = container.querySelector(linePathSelector);
-
-            expect(pathElement).toBeInTheDocument();
-            expect(pathElement).toHaveAttribute('d');
-            expect(pathElement.getAttribute('d')).not.toBe('');
-            expect(pathElement).toHaveAttribute('stroke-dasharray', '3,3');
-            expect(pathElement).toHaveAttribute('stroke-width', '1');
-            expect(pathElement).toHaveAttribute('fill', 'none');
-            // Check for Tailwind classes for styling
-            // The component uses: className={`stroke-current ${tickLabelColor} opacity-75`}
-            // tickLabelColor is "text-slate-500"
-            expect(pathElement).toHaveClass('stroke-current');
-            expect(pathElement).toHaveClass('text-slate-500');
-            expect(pathElement).toHaveClass('opacity-75');
+        // Helper to create mock data with specific magnitudes for line segment tests
+        const createSegmentTestData = (quakesSetup) => ({
+            originalQuakes: quakesSetup.map(q => mockQuake(q.id, q.time, q.mag, q.place))
         });
 
-        test('does not render a connecting line when there is only one quake', () => {
+        test('renders connecting line segments when multiple quakes are above threshold', () => {
+            const clusterWithConnectableQuakes = createSegmentTestData([
+                { id: "q1", time: foreshockTime, mag: MAGNITUDE_THRESHOLD_FOR_CONNECTOR + 0.5 },
+                { id: "q2", time: mainshockTime, mag: MAGNITUDE_THRESHOLD_FOR_CONNECTOR + 1.0 },
+                { id: "q3", time: aftershockTime1, mag: MAGNITUDE_THRESHOLD_FOR_CONNECTOR + 0.2 },
+            ]);
+            const { container } = render(<EarthquakeSequenceChart cluster={clusterWithConnectableQuakes} />);
+            const lineElements = container.querySelectorAll(lineSegmentSelector);
+
+            // Expect 2 segments: (q1-q2) and (q2-q3)
+            expect(lineElements.length).toBe(2);
+            lineElements.forEach(line => {
+                expect(line).toBeInTheDocument();
+                expect(line).toHaveAttribute('stroke-dasharray', '3,3');
+                expect(line).toHaveAttribute('stroke-width', '1');
+                // Check for Tailwind classes for styling (tickLabelColor is "text-slate-500")
+                expect(line).toHaveClass('stroke-current');
+                expect(line).toHaveClass('text-slate-500');
+                expect(line).toHaveClass('opacity-75');
+                // Check for valid coordinate attributes
+                expect(line).toHaveAttribute('x1');
+                expect(line).toHaveAttribute('y1');
+                expect(line).toHaveAttribute('x2');
+                expect(line).toHaveAttribute('y2');
+                expect(parseFloat(line.getAttribute('x1'))).toBeFinite();
+                expect(parseFloat(line.getAttribute('y1'))).toBeFinite();
+                expect(parseFloat(line.getAttribute('x2'))).toBeFinite();
+                expect(parseFloat(line.getAttribute('y2'))).toBeFinite();
+            });
+        });
+
+        test('does not render line segments if one quake in a pair is below threshold', () => {
+            const clusterWithOneBelowThreshold = createSegmentTestData([
+                { id: "q1", time: foreshockTime, mag: MAGNITUDE_THRESHOLD_FOR_CONNECTOR + 0.5 },
+                { id: "q2", time: mainshockTime, mag: MAGNITUDE_THRESHOLD_FOR_CONNECTOR - 0.1 }, // Below threshold
+                { id: "q3", time: aftershockTime1, mag: MAGNITUDE_THRESHOLD_FOR_CONNECTOR + 0.2 },
+            ]);
+            const { container } = render(<EarthquakeSequenceChart cluster={clusterWithOneBelowThreshold} />);
+            const lineElements = container.querySelectorAll(lineSegmentSelector);
+            // Expect 0 segments, as q1-q2 fails (q2 too small), and q2-q3 fails (q2 too small)
+            expect(lineElements.length).toBe(0);
+        });
+
+        test('renders segments only between consecutive quakes above threshold', () => {
+            const clusterWithMixedThresholds = createSegmentTestData([
+                { id: "q1", time: foreshockTime, mag: MAGNITUDE_THRESHOLD_FOR_CONNECTOR + 1.0 }, // q1 > T
+                { id: "q2", time: mainshockTime, mag: MAGNITUDE_THRESHOLD_FOR_CONNECTOR + 0.5 }, // q2 > T (segment q1-q2)
+                { id: "q3", time: aftershockTime1, mag: MAGNITUDE_THRESHOLD_FOR_CONNECTOR - 0.2 }, // q3 < T
+                { id: "q4", time: aftershockTime2, mag: MAGNITUDE_THRESHOLD_FOR_CONNECTOR + 0.8 }, // q4 > T (no segment q3-q4)
+            ]);
+            const { container } = render(<EarthquakeSequenceChart cluster={clusterWithMixedThresholds} />);
+            const lineElements = container.querySelectorAll(lineSegmentSelector);
+            // Expect 1 segment: (q1-q2). q2-q3 fails (q3 too small). q3-q4 fails (q3 too small).
+            expect(lineElements.length).toBe(1);
+             if (lineElements.length > 0) {
+                // Verify the segment is indeed q1-q2 by checking its ID (if we could pass it)
+                // Since we can't directly check ID from SVG, we rely on the count and conditions.
+                 const line = lineElements[0];
+                 expect(line).toBeInTheDocument();
+            }
+        });
+
+        test('does not render connecting lines when there is only one quake', () => {
             const { container } = render(<EarthquakeSequenceChart cluster={mockClusterSingleQuake} />);
-            const pathElement = container.querySelector(linePathSelector);
-            expect(pathElement).not.toBeInTheDocument();
+            const lineElements = container.querySelectorAll(lineSegmentSelector);
+            expect(lineElements.length).toBe(0);
         });
 
-        test('does not render a connecting line when there are no quakes', () => {
+        test('does not render connecting lines when there are no quakes', () => {
             const { container } = render(<EarthquakeSequenceChart cluster={mockEmptyClusterData} />);
-            const pathElement = container.querySelector(linePathSelector);
-            expect(pathElement).not.toBeInTheDocument();
+            const lineElements = container.querySelectorAll(lineSegmentSelector);
+            expect(lineElements.length).toBe(0);
         });
     });
 
