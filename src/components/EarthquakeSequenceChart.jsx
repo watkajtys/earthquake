@@ -30,7 +30,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   }, []);
 
   const chartHeight = 350;
-  const margin = { top: 40, right: 50, bottom: 80, left: 60 }; // Adjusted margin.bottom to 80
+  const margin = { top: 40, right: 20, bottom: 40, left: 20 }; // Adjusted all margins
 
   const width = chartRenderWidth - margin.left - margin.right;
   const height = chartHeight - margin.top - margin.bottom;
@@ -246,29 +246,9 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     return { sortedQuakes: sorted, linePath: lineGenerator(sorted) };
   }, [originalQuakes, xScale, yScale]); // Dependencies
 
-  let displayLocation;
-  const place = processedMainshock?.properties?.place;
-
-  if (place && place.trim() !== "") {
-      const placeStr = place.trim();
-      const ofIndex = placeStr.toLowerCase().indexOf(" of ");
-      if (ofIndex !== -1) {
-          displayLocation = placeStr.substring(ofIndex + 4).trim();
-      } else {
-          displayLocation = placeStr;
-      }
-      if (!displayLocation) { // If substring result is empty
-          displayLocation = "Unknown Location";
-      }
-  } else {
-      displayLocation = "Unknown Location";
-  }
-
   return (
     <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md">
-      <h3 className={`text-base font-semibold mb-2 text-center text-indigo-400`}>
-        {`${displayLocation}: Earthquake Sequence (UTC)`}
-      </h3>
+      {/* Chart Title H3 element removed */}
       <svg ref={svgRef} width="100%" height={chartHeight} viewBox={`0 0 ${chartRenderWidth} ${chartHeight}`}>
         <g transform={`translate(${margin.left},${margin.top})`}>
           {/* Y-Axis Gridlines */}
@@ -312,13 +292,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
               {value}
             </text>
           ))}
-          <text
-            transform={`translate(${-margin.left / 1.5}, ${height / 2}) rotate(-90)`}
-            textAnchor="middle"
-            className={`text-sm fill-current ${axisLabelColor}`}
-          >
-            Magnitude
-          </text>
+          {/* Y-Axis Label "Magnitude" removed */}
 
           {/* X-Axis */}
           <line x1={0} y1={height} x2={width} y2={height} className={gridLineColor} />
