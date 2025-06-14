@@ -1,11 +1,12 @@
 import React from 'react';
-import { earthquakeReducer, initialState, actionTypes, EarthquakeDataContext, EarthquakeDataProvider } from '../../contexts/EarthquakeDataContext';
+import { EarthquakeDataProvider, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext';
+import { earthquakeReducer, initialState, actionTypes, initialState as contextInitialState, EarthquakeDataContext } from '../../contexts/earthquakeDataContextUtils.js'; // Corrected path and consolidated initialState, added EarthquakeDataContext
 
 // --- React specific testing imports ---
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 // contextActionTypes removed from import as it's unused
-import { initialState as contextInitialState, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext';
+// import { initialState as contextInitialState, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext'; // This initialState might need to change too if it's the same one.
 import { fetchUsgsData } from '../../services/usgsApiService';
 import {
     FEELABLE_QUAKE_THRESHOLD,
@@ -672,10 +673,10 @@ describe('EarthquakeDataContext: Memoized Selectors', () => {
   it('should correctly compute memoized selectors based on context state', () => {
     const TestProvider = ({ children, mockState }) => {
       const currentMockState = mockState || {};
-      const feelableQuakes7Days_ctx = React.useMemo(() => { const data = currentMockState.earthquakesLast7Days || []; return data.filter( q => q.properties && q.properties.mag !== null && typeof q.properties.mag === 'number' && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD ); }, [currentMockState.earthquakesLast7Days, FEELABLE_QUAKE_THRESHOLD]);
-      const significantQuakes7Days_ctx = React.useMemo(() => { const data = currentMockState.earthquakesLast7Days || []; return data.filter( q => q.properties && q.properties.mag !== null && typeof q.properties.mag === 'number' && q.properties.mag >= MAJOR_QUAKE_THRESHOLD ); }, [currentMockState.earthquakesLast7Days, MAJOR_QUAKE_THRESHOLD]);
-      const feelableQuakes30Days_ctx = React.useMemo(() => { const data = currentMockState.allEarthquakes || []; return data.filter( q => q.properties && q.properties.mag !== null && typeof q.properties.mag === 'number' && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD ); }, [currentMockState.allEarthquakes, FEELABLE_QUAKE_THRESHOLD]);
-      const significantQuakes30Days_ctx = React.useMemo(() => { const data = currentMockState.allEarthquakes || []; return data.filter( q => q.properties && q.properties.mag !== null && typeof q.properties.mag === 'number' && q.properties.mag >= MAJOR_QUAKE_THRESHOLD ); }, [currentMockState.allEarthquakes, MAJOR_QUAKE_THRESHOLD]);
+      const feelableQuakes7Days_ctx = React.useMemo(() => { const data = currentMockState.earthquakesLast7Days || []; return data.filter( q => q.properties && q.properties.mag !== null && typeof q.properties.mag === 'number' && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD ); }, [currentMockState.earthquakesLast7Days]);
+      const significantQuakes7Days_ctx = React.useMemo(() => { const data = currentMockState.earthquakesLast7Days || []; return data.filter( q => q.properties && q.properties.mag !== null && typeof q.properties.mag === 'number' && q.properties.mag >= MAJOR_QUAKE_THRESHOLD ); }, [currentMockState.earthquakesLast7Days]);
+      const feelableQuakes30Days_ctx = React.useMemo(() => { const data = currentMockState.allEarthquakes || []; return data.filter( q => q.properties && q.properties.mag !== null && typeof q.properties.mag === 'number' && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD ); }, [currentMockState.allEarthquakes]);
+      const significantQuakes30Days_ctx = React.useMemo(() => { const data = currentMockState.allEarthquakes || []; return data.filter( q => q.properties && q.properties.mag !== null && typeof q.properties.mag === 'number' && q.properties.mag >= MAJOR_QUAKE_THRESHOLD ); }, [currentMockState.allEarthquakes]);
       const contextValueForTestProvider = { ...currentMockState, feelableQuakes7Days_ctx, significantQuakes7Days_ctx, feelableQuakes30Days_ctx, significantQuakes30Days_ctx, };
       return <EarthquakeDataContext.Provider value={contextValueForTestProvider}>{children}</EarthquakeDataContext.Provider>;
     };

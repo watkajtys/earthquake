@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 
 // Base styling from EarthquakeSequenceChart & EarthquakeTimelineSVGChartSkeleton
 const cardBg = "bg-slate-700";
-const titleColor = "text-indigo-400"; // Match main chart title
-const axisLabelColor = "text-slate-400";
+// const titleColor = "text-indigo-400"; // Unused: Match main chart title
+// const axisLabelColor = "text-slate-400"; // Unused
 const tickLabelColor = "text-slate-500"; // For placeholder text rects
 const placeholderElementColor = "bg-slate-600"; // For larger rects like plot area, circles
 const gridLineColor = "stroke-slate-600";
