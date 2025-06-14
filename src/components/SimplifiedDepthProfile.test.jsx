@@ -1,7 +1,8 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
-import SimplifiedDepthProfile, { DEPTH_COMPARISONS as actualDepthComparisons, getDynamicContextualComparisons } from './SimplifiedDepthProfile';
+import SimplifiedDepthProfile from './SimplifiedDepthProfile';
+import { DEPTH_COMPARISONS as actualDepthComparisons, getDynamicContextualComparisons } from './simplifiedDepthProfileUtils.js';
 
 vi.mock('../utils/utils.js', () => ({
   getMagnitudeColor: vi.fn(() => '#000000'),

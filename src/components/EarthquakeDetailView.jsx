@@ -351,18 +351,21 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     const eventDepth = geometry?.coordinates?.[2]; // Depth in km
 
     return (
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
         <div
             className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-[55] p-2 sm:p-4 pt-10 md:pt-16"
-            onClick={onClose}
+            onClick={(e) => { if (e.target === e.currentTarget) { onClose(); } }}
+            onKeyDown={(e) => { if (e.key === 'Escape') { onClose(); e.stopPropagation(); } }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="earthquake-detail-title"
+            tabIndex="-1"
         >
             <ErrorBoundary> {/* ErrorBoundary goes here, around the main content box */}
                 <div
                     ref={modalContentRef}
                     className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800 overflow-y-auto max-h-[calc(100svh-5rem)]"
-                onClick={(e) => e.stopPropagation()}
+                // onClick={(e) => e.stopPropagation()} // Removed to fix jsx-a11y errors
                 tabIndex="-1" // Make the modal container focusable for the trap if no inner elements are
             >
                 <button

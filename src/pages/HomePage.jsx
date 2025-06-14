@@ -631,15 +631,15 @@ function App() {
                     } else if (clusterDurationMillis < 60 * 60 * 1000) { // less than an hour
                          timeRangeStr = `Active over ${Math.round(clusterDurationMillis / (60 * 1000))}m`;
                     } else {
-                         timeRangeStr = `Active over ${formatTimeDuration(clusterDurationMillis)}`;
+                         timeRangeStr = `Active over ${formatTimeDuration(clusterDurationMillis)}`; // formatTimeDuration is stable
                     }
                 } else { // Older clusters or single quake "clusters" (if minQuakes was 1)
-                    timeRangeStr = `Started ${formatTimeAgo(durationMillis)}`;
+                    timeRangeStr = `Started ${formatTimeAgo(durationMillis)}`; // formatTimeAgo is stable
                 }
             }
             // A simpler alternative for timeRangeStr:
             // if (earliestTime !== Infinity && latestTime !== Infinity) {
-            //    timeRangeStr = `Active: ${formatDate(earliestTime)} - ${formatDate(latestTime)}`;
+            //    timeRangeStr = `Active: ${formatDate(earliestTime)} - ${formatDate(latestTime)}`; // formatDate is stable
             // }
 
 
@@ -699,7 +699,7 @@ function App() {
 
         return significantClusters;
 
-    }, [activeClusters, formatDate, formatTimeAgo, formatTimeDuration]); // Include formatDate, formatTimeAgo, formatTimeDuration if they are from useCallback/component scope
+    }, [activeClusters, formatTimeAgo, formatTimeDuration]);
 
     // Effect to register cluster definitions
     useEffect(() => {
@@ -748,7 +748,7 @@ function App() {
     const navigate = useNavigate();
 
     // Slugify helper function
-    const slugify = (text) => {
+    const slugify = useCallback((text) => {
         if (!text) return 'unknown-location';
         return text
             .toString()
@@ -758,7 +758,7 @@ function App() {
             .replace(/--+/g, '-') // Replace multiple - with single -
             .replace(/^-+/, '') // Trim - from start of text
             .replace(/-+$/, ''); // Trim - from end of text
-    };
+    }, []);
 
     const handleQuakeClick = useCallback((quake) => {
         if (quake?.isCluster && quake?.clusterDetails) {

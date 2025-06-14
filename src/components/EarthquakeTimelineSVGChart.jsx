@@ -27,7 +27,7 @@ import EarthquakeTimelineSVGChartSkeleton from './skeletons/EarthquakeTimelineSV
  * @returns {JSX.Element} The EarthquakeTimelineSVGChart component.
  */
 const EarthquakeTimelineSVGChart = React.memo(({earthquakes = null, days = 7, titleSuffix = "(Last 7 Days)", isLoading}) => {
-    const { dailyCounts7Days, dailyCounts14Days, dailyCounts30Days, earthquakesLast7Days } = useEarthquakeDataState();
+    const { dailyCounts7Days, dailyCounts14Days, dailyCounts30Days } = useEarthquakeDataState(); // earthquakesLast7Days removed
     const cardBg = "bg-slate-700";
     const titleColor = "text-indigo-400";
     const axisLabelColor = "text-slate-400";
@@ -64,14 +64,14 @@ const EarthquakeTimelineSVGChart = React.memo(({earthquakes = null, days = 7, ti
             }
         });
         return Object.entries(countsByDay).map(([date, count]) => ({date, count}));
-    }, [earthquakes, days, dailyCounts7Days, dailyCounts14Days, dailyCounts30Days, earthquakesLast7Days]);
+    }, [earthquakes, days, dailyCounts7Days, dailyCounts14Days, dailyCounts30Days]); // earthquakesLast7Days removed
 
     const noDataAvailable = useMemo(() => {
         if (days === 7) return !dailyCounts7Days || dailyCounts7Days.length === 0 || dailyCounts7Days.every(d => d.count === 0);
         if (days === 30) return !dailyCounts30Days || dailyCounts30Days.length === 0 || dailyCounts30Days.every(d => d.count === 0);
         if (days === 14) return !dailyCounts14Days || dailyCounts14Days.length === 0 || dailyCounts14Days.every(d => d.count === 0);
         return !data || data.length === 0 || data.every(d => d.count === 0);
-    }, [days, dailyCounts7Days, dailyCounts14Days, dailyCounts30Days, earthquakes, data]);
+    }, [days, dailyCounts7Days, dailyCounts14Days, dailyCounts30Days, data]); // earthquakes removed
 
     // Use the new skeleton component when isLoading is true
     if (isLoading) return <EarthquakeTimelineSVGChartSkeleton days={days} titleSuffix={titleSuffix} />;

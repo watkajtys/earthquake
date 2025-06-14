@@ -92,7 +92,7 @@ const NotableQuakeFeature = ({
             }, 15000); // Rotate historical every 15 seconds
         }
         return () => clearInterval(timer);
-    }, [isCyclingHistorical, historicalNotableQuakes.length]);
+    }, [isCyclingHistorical]); // Removed historicalNotableQuakes as it's a module-level constant
 
 
     if (isLoadingDynamicQuake && !dynamicFeaturedQuake) { // Show loading state only if dynamic quake is loading and not yet available
