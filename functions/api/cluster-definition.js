@@ -15,7 +15,8 @@
  *   Returns a 201 status on successful creation/update, 400 for invalid input, or 500 for server errors.
  * - **GET**: Retrieves a specific cluster definition from the D1 database.
  *   Expects a `id` URL query parameter specifying the `clusterId`.
- *   Returns JSON data of the cluster definition with a 200 status if found,
+ *   Returns JSON data of the cluster definition (including `clusterId`, `earthquakeIds` as an array,
+ *   `strongestQuakeId`, `createdAt`, `updatedAt`) with a 200 status if found,
  *   404 if not found, 400 for missing `id` parameter, or 500 for server errors.
  * - Other HTTP methods will result in a 405 Method Not Allowed response.
  *
