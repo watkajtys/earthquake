@@ -88,12 +88,11 @@ function EarthquakeLocationPanel({
 
             <div className="w-full flex justify-center items-center my-4 px-2">
                 <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full max-w-md mx-auto bg-slate-50 rounded shadow">
-                    {/* Defs for markers if needed later */}
                     <defs>
                         <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
                             <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
                         </marker>
-                    defs>
+                    </defs>
 
                     {/* Plot Background Grid (optional decorative) */}
                     <circle cx={centerX} cy={centerY} r={plotRadius} fill="none" stroke="#e2e8f0" strokeWidth="1" />
