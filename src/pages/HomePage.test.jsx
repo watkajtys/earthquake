@@ -13,6 +13,11 @@ import { expect, describe, it, vi, beforeEach } from 'vitest'; // Removed unused
 // Mock services
 // import { fetchActiveClusters, registerClusterDefinition } from '../services/clusterApiService.js'; // Removed unused imports (using hoisted mocks)
 
+// Mock services first, then components
+vi.mock('../services/usgsApiService', () => ({
+  fetchUsgsData: vi.fn().mockResolvedValue({ features: [], metadata: { generated: Date.now() } }),
+}));
+
 // Mock child components
 vi.mock('../components/InteractiveGlobeView', () => ({
   default: vi.fn(({ activeClusters, areClustersLoading }) => (
@@ -53,12 +58,12 @@ vi.mock('../components/ClusterDetailModalWrapper', () => ({
 import App from './HomePage';
 import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants.js';
 
-const { mockUseEarthquakeDataState } = vi.hoisted(() => {
-  return { mockUseEarthquakeDataState: vi.fn() };
-});
-const { mockUseUIState } = vi.hoisted(() => {
-  return { mockUseUIState: vi.fn() };
-});
+const { mockUseEarthquakeDataState } = vi.hoisted(() => ({
+  mockUseEarthquakeDataState: vi.fn(),
+}));
+const { mockUseUIState } = vi.hoisted(() => ({
+  mockUseUIState: vi.fn(),
+}));
 const { mockFetchActiveClusters, mockRegisterClusterDefinition } = vi.hoisted(() => {
   return {
     mockFetchActiveClusters: vi.fn(),
@@ -66,14 +71,21 @@ const { mockFetchActiveClusters, mockRegisterClusterDefinition } = vi.hoisted(()
   };
 });
 
-vi.mock('../contexts/EarthquakeDataContext.jsx', () => ({
-  useEarthquakeDataState: mockUseEarthquakeDataState,
-  EarthquakeDataProvider: ({ children }) => <div>{children}</div>,
-}));
-vi.mock('../contexts/UIStateContext.jsx', () => ({
-  useUIState: mockUseUIState, // Now correctly refers to the hoisted mock
-  UIStateProvider: ({ children }) => <div>{children}</div>,
-}));
+vi.mock('../contexts/EarthquakeDataContext.jsx', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useEarthquakeDataState: mockUseEarthquakeDataState, // Mock the hook
+    // Actual EarthquakeDataProvider will be imported and used in test render
+  };
+});
+vi.mock('../contexts/UIStateContext.jsx', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual, // Ensure actual UIStateContext (object) and UIStateProvider are available if not mocking Provider
+    useUIState: mockUseUIState, // Mock the hook
+  };
+});
 vi.mock('../services/clusterApiService.js', () => ({
   fetchActiveClusters: mockFetchActiveClusters, // Now correctly refers to the hoisted mock
   registerClusterDefinition: mockRegisterClusterDefinition, // Now correctly refers to the hoisted mock
@@ -179,9 +191,17 @@ describe('HomePage (App Component)', () => {
         earthquakesLast7Days: [createMockQuake('dummy', T_NOW, MAG_HIGH)]
       });
 
+      // Import actual providers for wrapping
+      const { EarthquakeDataProvider } = await vi.importActual('../contexts/EarthquakeDataContext.jsx');
+      const { UIStateProvider } = await vi.importActual('../contexts/UIStateContext.jsx');
+
       render(
         <MemoryRouter initialEntries={['/']}>
-          <App />
+          <EarthquakeDataProvider>
+            <UIStateProvider>
+              <App />
+            </UIStateProvider>
+          </EarthquakeDataProvider>
         </MemoryRouter>
       );
 
@@ -319,7 +339,8 @@ describe('handleClusterSummaryClick URL Generation', () => {
       for (let i = 0; i < clusterDataInput.quakeCount; i++) {
         mockRawQuakesForCluster.push(
           createMockQuakeInternal(
-            i === 0 ? clusterDataInput.strongestQuakeId : `dummy${i}_${clusterDataInput.strongestQuakeId}`,
+            // Use a consistent prefix for dummy IDs if strongestQuakeId is complex
+            i === 0 ? clusterDataInput.strongestQuakeId : `dummy${i}_${clusterDataInput.strongestQuakeId.replace(/[^a-zA-Z0-9]/g, '')}`,
             Date.now() - i * 1000, // Ensure slightly different times for realism
             i === 0 ? clusterDataInput.maxMagnitude : clusterDataInput.maxMagnitude - 0.1,
             clusterDataInput.locationName
@@ -327,22 +348,31 @@ describe('handleClusterSummaryClick URL Generation', () => {
         );
       }
 
-      mockFetchActiveClusters.mockResolvedValue([mockRawQuakesForCluster]);
-      // Provide some earthquakesLast7Days to ensure the effect in App runs
+      // Provide necessary context values
       mockUseEarthquakeDataState.mockReturnValue({
         ...originalDefaultEarthquakeData,
-        earthquakesLast7Days: [createMockQuakeInternal('somequake', Date.now(), 4.0)],
-        // ensure these are not loading so cluster processing proceeds
-        isLoadingDaily: false,
+        earthquakesLast7Days: [createMockQuakeInternal('somequake', Date.now(), 4.0)], // Needed to trigger cluster processing
+        isLoadingDaily: false, // Ensure not in loading states that might prevent cluster processing
         isLoadingWeekly: false,
         isInitialAppLoad: false,
       });
       mockUseUIState.mockReturnValue(originalDefaultUIState);
 
+      // Setup mock for fetchActiveClusters to return the cluster for this specific test case
+      // This needs to be inside the test case to ensure it's fresh for each iteration.
+      mockFetchActiveClusters.mockResolvedValue([mockRawQuakesForCluster]);
+
+      // Import actual providers for wrapping
+      const { EarthquakeDataProvider } = await vi.importActual('../contexts/EarthquakeDataContext.jsx');
+      const { UIStateProvider } = await vi.importActual('../contexts/UIStateContext.jsx');
 
       render(
         <MemoryRouter initialEntries={['/']}>
-          <App />
+          <EarthquakeDataProvider>
+            <UIStateProvider>
+              <App />
+            </UIStateProvider>
+          </EarthquakeDataProvider>
         </MemoryRouter>
       );
 

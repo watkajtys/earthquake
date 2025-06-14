@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import InteractiveGlobeView from './InteractiveGlobeView'; // Assuming path is correct
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext';
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils';
 
 // Mock react-globe.gl
 const mockGlobeRefActions = {

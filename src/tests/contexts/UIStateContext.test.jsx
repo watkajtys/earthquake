@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderHook, act } from '@testing-library/react';
-import { UIStateProvider, useUIState } from '../../contexts/UIStateContext';
+import { UIStateProvider, useUIState } from '../../contexts/UIStateContext.jsx'; // Corrected import path
 // import { useSearchParams } from 'react-router-dom'; // Unused import removed
 import { vi } from 'vitest'; // Import vi for Vitest specific functions
 

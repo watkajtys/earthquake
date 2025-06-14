@@ -1,18 +1,25 @@
 import React from 'react';
 import { render, act, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom'; // Re-add this line
-import { EarthquakeDataContext, useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context and hook
+import { EarthquakeDataProvider, useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Correctly import Provider and hook
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils'; // Keep for the mock if needed, or remove if useEarthquakeDataState mock is sufficient
 
 // MOCKS MUST BE AT THE TOP
 const mockUseParamsGlobal = vi.fn();
 const mockNavigateGlobal = vi.fn();
 
-// Mock the context hook
-vi.mock('../contexts/EarthquakeDataContext', async () => {
-  const actual = await vi.importActual('../contexts/EarthquakeDataContext');
+// Mock usgsApiService to prevent actual network calls from EarthquakeDataProvider
+vi.mock('../services/usgsApiService', () => ({
+  fetchUsgsData: vi.fn().mockResolvedValue({ features: [], metadata: { generated: Date.now() } }), // Default mock for successful empty response
+}));
+
+// Mock the context hook for useEarthquakeDataState specifically
+// The actual EarthquakeDataProvider will be used in renderComponent
+vi.mock('../contexts/EarthquakeDataContext.jsx', async (importOriginal) => {
+  const actual = await importOriginal();
   return {
-    ...actual, // Preserve actual exports like EarthquakeDataContext
-    useEarthquakeDataState: vi.fn(), // Mock the hook
+    ...actual,
+    useEarthquakeDataState: vi.fn(), // Mock only the hook
   };
 });
 
@@ -128,11 +135,13 @@ describe('EarthquakeDetailModalComponent', () => {
 
   const renderComponent = (props = {}) => { // props can override defaults if ever needed
     return render(
-      <MemoryRouter initialEntries={['/quake/test-detail-url']}>
-        <Routes>
-          <Route path="/quake/*" element={<EarthquakeDetailModalComponent {...defaultMockProps} {...props} />} />
-        </Routes>
-      </MemoryRouter>
+      <EarthquakeDataProvider>
+        <MemoryRouter initialEntries={['/quake/test-detail-url']}>
+          <Routes>
+            <Route path="/quake/*" element={<EarthquakeDetailModalComponent {...defaultMockProps} {...props} />} />
+          </Routes>
+        </MemoryRouter>
+      </EarthquakeDataProvider>
     );
   };
 
@@ -297,11 +306,13 @@ describe('EarthquakeDetailModalComponent', () => {
     mockUseParamsGlobal.mockReturnValueOnce({ '*': encodedUrl });
 
     render(
-      <MemoryRouter initialEntries={[`/quake/${encodedUrl}`]}>
-        <Routes>
-          <Route path="/quake/*" element={<EarthquakeDetailModalComponent />} />
-        </Routes>
-      </MemoryRouter>
+      <EarthquakeDataProvider>
+        <MemoryRouter initialEntries={[`/quake/${encodedUrl}`]}>
+          <Routes>
+            <Route path="/quake/*" element={<EarthquakeDetailModalComponent />} />
+          </Routes>
+        </MemoryRouter>
+      </EarthquakeDataProvider>
     );
 
     expect(EarthquakeDetailView).toHaveBeenCalled();
@@ -324,7 +335,7 @@ describe('EarthquakeDetailModalComponent', () => {
         isLoadingMonthly: false,
       });
 
-      renderComponent();
+      renderComponent(); // This already includes EarthquakeDataProvider
 
       const passedProps = EarthquakeDetailView.mock.calls[0][0];
       expect(passedProps.dataSourceTimespanDays).toBe(30);
@@ -344,7 +355,7 @@ describe('EarthquakeDetailModalComponent', () => {
         isLoadingMonthly: false,
       });
 
-      renderComponent();
+      renderComponent(); // This already includes EarthquakeDataProvider
 
       const passedProps = EarthquakeDetailView.mock.calls[0][0];
       expect(passedProps.dataSourceTimespanDays).toBe(7);
@@ -360,11 +371,13 @@ describe('EarthquakeDetailModalComponent', () => {
       mockUseParamsGlobal.mockReturnValueOnce({ '*': undefined });
 
       render( // Render directly without initialEntries for this specific useParams case or provide matching route
-        <MemoryRouter initialEntries={['/quake/']}> {/* Or a route that results in no param */}
-            <Routes>
-                <Route path="/quake/*" element={<EarthquakeDetailModalComponent />} />
-            </Routes>
-        </MemoryRouter>
+        <EarthquakeDataProvider>
+          <MemoryRouter initialEntries={['/quake/']}> {/* Or a route that results in no param */}
+              <Routes>
+                  <Route path="/quake/*" element={<EarthquakeDetailModalComponent />} />
+              </Routes>
+          </MemoryRouter>
+        </EarthquakeDataProvider>
       );
       expect(EarthquakeDetailView).not.toHaveBeenCalled();
 
