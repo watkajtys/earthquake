@@ -119,14 +119,44 @@ describe('EarthquakeSequenceChart', () => {
     });
 
 
-    test('renders basic chart with title', () => {
+    test('renders basic chart with title for single quake (full place name)', () => {
         render(<EarthquakeSequenceChart cluster={mockClusterSingleQuake} />);
-        expect(screen.getByText('Earthquake Sequence (UTC)')).toBeInTheDocument();
+        // mockClusterSingleQuake mainshock place is "Lone Mountain"
+        expect(screen.getByRole('heading', { name: "Lone Mountain: Earthquake Sequence (UTC)" })).toBeInTheDocument();
     });
 
-    test('renders "No data available" message when originalQuakes is empty', () => {
-        render(<EarthquakeSequenceChart cluster={mockEmptyClusterData} />);
-        expect(screen.getByText('No data available for chart.')).toBeInTheDocument();
+    test('renders chart title with extracted location for multi-quake data', () => {
+        render(<EarthquakeSequenceChart cluster={mockClusterData} />);
+        // mockClusterData mainshock place is "5km E of Testville", extracts to "Testville"
+        expect(screen.getByRole('heading', { name: "Testville: Earthquake Sequence (UTC)" })).toBeInTheDocument();
+    });
+
+    test('renders "Unknown Location" in title when place is not available', () => {
+        const mockClusterNoPlace = {
+            originalQuakes: [
+                // Ensure this is the mainshock by making it the largest magnitude
+                mockQuake("np1", mainshockTime, 5.0, null),
+                mockQuake("np2", aftershockTime1, 2.0, "Some other place")
+            ]
+        };
+        render(<EarthquakeSequenceChart cluster={mockClusterNoPlace} />);
+        expect(screen.getByRole('heading', { name: "Unknown Location: Earthquake Sequence (UTC)" })).toBeInTheDocument();
+    });
+
+    test('renders full place name in title when " of " is not present', () => {
+        const mockClusterDirectPlace = {
+            originalQuakes: [
+                mockQuake("dp1", mainshockTime, 4.0, "Metro Manila")
+            ]
+        };
+        render(<EarthquakeSequenceChart cluster={mockClusterDirectPlace} />);
+        expect(screen.getByRole('heading', { name: "Metro Manila: Earthquake Sequence (UTC)" })).toBeInTheDocument();
+    });
+
+    test('renders "No data available" message with static title when originalQuakes is empty', () => {
+        const { container } = render(<EarthquakeSequenceChart cluster={mockEmptyClusterData} />);
+        const noDataView = screen.getByText('No data available for chart.').closest('div');
+        expect(within(noDataView).getByRole('heading', { name: 'Earthquake Sequence (UTC)' })).toBeInTheDocument();
     });
 
     test('renders "No data available" message when cluster is null', () => {
