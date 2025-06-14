@@ -26,6 +26,8 @@ export const CLUSTER_TIME_WINDOW_HOURS = 48;
 export const MAJOR_QUAKE_THRESHOLD = 4.5;
 /** @description Minimum magnitude for an earthquake to be generally considered 'feelable' by people nearby. */
 export const FEELABLE_QUAKE_THRESHOLD = 2.5;
+/** @description Minimum magnitude for an earthquake to be considered a 'microquake' for display purposes in sequence charts. */
+export const MICROQUAKE_THRESHOLD = 2.5;
 /** @description Minimum number of felt reports (DYFI) for an earthquake to be highlighted or considered significant in some UI contexts. */
 export const FELT_REPORTS_THRESHOLD = 0; // Currently, any number of reports is considered.
 /** @description Minimum USGS 'significance' score for an earthquake to be highlighted or considered in some UI contexts. */
