@@ -1,6 +1,5 @@
 import {
   formatTimeAgo,
-  calculateDistance,
   getMagnitudeColor,
   isValidNumber,
   formatDate,
@@ -194,49 +193,6 @@ describe('formatTimeAgo', () => {
       const timestamp = MOCKED_NOW + 100 * 1000; // 100 seconds in the future
       expect(formatTimeAgo(timestamp)).toBe("just now");
     });
-  });
-});
-
-describe('calculateDistance', () => {
-  // Test with coordinates resulting in a known distance
-  // Example: San Francisco to Los Angeles (approx. 559 km)
-  it('should return the known distance between two coordinates', () => {
-    const lat1 = 37.7749; // San Francisco latitude
-    const lon1 = -122.4194; // San Francisco longitude
-    const lat2 = 34.0522; // Los Angeles latitude
-    const lon2 = -118.2437; // Los Angeles longitude
-    const expectedDistance = 559; // Approximate distance in km
-    expect(calculateDistance(lat1, lon1, lat2, lon2)).toBeCloseTo(expectedDistance, 0);
-  });
-
-  // Test with the same coordinates (zero distance)
-  it('should return 0 for the same coordinates', () => {
-    const lat = 37.7749;
-    const lon = -122.4194;
-    expect(calculateDistance(lat, lon, lat, lon)).toBe(0);
-  });
-
-  // Test with coordinates on opposite sides of the Earth
-  // Example: North Pole to South Pole (approx. 20015 km, half Earth's circumference)
-  it('should return the correct distance for opposite sides of the Earth', () => {
-    const lat1 = 90.0; // North Pole
-    const lon1 = 0.0;
-    const lat2 = -90.0; // South Pole
-    const lon2 = 0.0;
-    const expectedDistance = 20015; // Approximate distance in km
-    expect(calculateDistance(lat1, lon1, lat2, lon2)).toBeCloseTo(expectedDistance, 0);
-  });
-
-  // Test with invalid inputs (e.g., non-numeric)
-  // The current implementation of calculateDistance does not explicitly handle non-numeric inputs.
-  // It will likely result in NaN due to arithmetic operations on non-numbers.
-  // Testing for NaN is a way to acknowledge this behavior.
-  it('should return NaN for non-numeric latitude input', () => {
-    expect(calculateDistance("not-a-number", 0, 0, 0)).toBeNaN();
-  });
-
-  it('should return NaN for non-numeric longitude input', () => {
-    expect(calculateDistance(0, "not-a-number", 0, 0)).toBeNaN();
   });
 });
 

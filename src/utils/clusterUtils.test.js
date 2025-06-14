@@ -1,11 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { findActiveClusters } from './clusterUtils';
-import { calculateDistance } from './utils'; // Path to the actual utils
 
-// Mock the calculateDistance function
-vi.mock('./utils', () => ({
+// Mock the calculateDistance function from its new common location
+vi.mock('../../common/mathUtils.js', () => ({
   calculateDistance: vi.fn(),
 }));
+
+// We need to be able to access the mock for .mockReset() and .mockImplementation()
+// Vitest auto-hoists vi.mock, so we can import after mocking.
+import { calculateDistance } from '../../common/mathUtils.js';
 
 // Helper function to create mock earthquake objects
 const createMockQuake = (id, mag, lat, lon, time = Date.now()) => ({
