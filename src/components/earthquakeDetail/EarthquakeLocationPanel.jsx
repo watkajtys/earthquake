@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { isValidNumber, formatNumber } from '../../utils/utils.js';
-import InfoSnippet from '../../InfoSnippet.jsx'; // Updated import path
+import InfoSnippet from '../InfoSnippet.jsx'; // Corrected import path
 
 // SVG Icons (simple placeholders for now)
 const NstIcon = () => (
