@@ -2,6 +2,8 @@
  * @file Proxies requests to the USGS Earthquake API, with caching and optional D1 database interaction.
  */
 
+import { upsertEarthquakeFeaturesToD1 } from '../../../src/utils/d1Utils.js';
+
 /**
  * Handles requests to the `/api/usgs-proxy` endpoint.
  * It fetches data from a specified USGS API URL, caches the response,
@@ -55,19 +57,28 @@ export async function handleUsgsProxy(context) {
         });
       }
 
-      const responseToCache = upstreamResponse.clone();
-      const responseDataForLogic = await upstreamResponse.json();
+      const responseDataForLogic = await upstreamResponse.clone().json(); // Get data for logic
 
-      response = new Response(JSON.stringify(responseDataForLogic), responseToCache);
+      // Create the response to be returned to the client AND to be cached.
+      // Start with the original response's body and status.
+      let finalResponseHeaders = new Headers(upstreamResponse.headers);
 
-      let cacheDuration = 600;
+      let cacheDuration = 600; // default
       const configDuration = parseInt(env.WORKER_CACHE_DURATION_SECONDS, 10);
       if (env.WORKER_CACHE_DURATION_SECONDS && (!isNaN(configDuration) && configDuration > 0)) {
           cacheDuration = configDuration;
       } else if (env.WORKER_CACHE_DURATION_SECONDS) {
           console.warn(`Invalid WORKER_CACHE_DURATION_SECONDS value: "${env.WORKER_CACHE_DURATION_SECONDS}". Using default ${cacheDuration}s.`);
       }
-      response.headers.set("Cache-Control", `s-maxage=${cacheDuration}`);
+      finalResponseHeaders.set("Cache-Control", `s-maxage=${cacheDuration}`);
+      finalResponseHeaders.set("Content-Type", "application/json"); // Ensure correct content type
+
+      // Use the already read responseDataForLogic to avoid re-parsing
+      response = new Response(JSON.stringify(responseDataForLogic), {
+        status: upstreamResponse.status,
+        statusText: upstreamResponse.statusText,
+        headers: finalResponseHeaders
+      });
 
       const cachePromise = cache.put(request.url, response.clone())
         .catch(cachePutError => {
@@ -75,20 +86,22 @@ export async function handleUsgsProxy(context) {
         });
       waitUntil(cachePromise);
 
-      // Placeholder for potential D1 upsert logic based on fetched data
+      // D1 logic
       if (env.DB && responseDataForLogic.features && responseDataForLogic.features.length > 0) {
         try {
-           console.log("Simulating upsertEarthquakeFeaturesToD1 call from handleUsgsProxy");
-           // Example: await upsertEarthquakeFeaturesToD1(env.DB, responseDataForLogic.features);
+           await upsertEarthquakeFeaturesToD1(env.DB, responseDataForLogic.features);
         } catch (e) {
-          console.error("Error during simulated DB upsert (from handleUsgsProxy):", e);
+          console.error("Error during D1 upsert in handleUsgsProxy:", e);
         }
       }
+      // Return the 'response' which has the correct body and headers
+      return response;
 
-    } else {
+    } else { // Cache hit
       console.log("Cache hit for (from handleUsgsProxy):", request.url);
+      // Ensure the cached response is returned
+      return response;
     }
-    return response;
 
   } catch (error) {
     console.error(`[usgs-proxy-handler] Fetch or JSON parse error for ${apiUrl}:`, error.message, error.name);

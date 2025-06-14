@@ -128,7 +128,7 @@ describe('onRequest (Main Router)', () => {
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(json).toEqual(mockApiResponseData);
-      expect(fetch).toHaveBeenCalledWith(targetApiUrl);
+      expect(fetch).toHaveBeenCalledWith(targetApiUrl, { headers: { "User-Agent": "EarthquakesLive/1.0 (+https://earthquakeslive.com)" } });
       expect(mockCache.match).toHaveBeenCalled();
       expect(mockCache.put).toHaveBeenCalled();
       const cachedResponse = mockCache.put.mock.calls[0][1];
@@ -169,7 +169,7 @@ describe('onRequest (Main Router)', () => {
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(json).toEqual(mockApiResponseData);
-      expect(fetch).toHaveBeenCalledWith(targetApiUrl);
+      expect(fetch).toHaveBeenCalledWith(targetApiUrl, { headers: { "User-Agent": "EarthquakesLive/1.0 (+https://earthquakeslive.com)" } });
       expect(mockCache.put).toHaveBeenCalled();
       expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(context.env.DB, mockApiResponseData.features);
     });
@@ -527,21 +527,26 @@ describe('onRequest (Main Router)', () => {
     });
 
     it('/quake/some-quake-id should trigger prerender for crawler', async () => {
-        const quakeId = "usgs_event_abc123";
-        const quakeDetailUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=${quakeId}&format=geojson`;
-        const mockQuakeData = { properties: { mag: 5, place: "Test Place", time: Date.now(), detail: quakeDetailUrl }, geometry: { coordinates: [0,0,10] }, id: quakeId };
+        const quakeId = "usgs_event_abc123"; // This is the actual ID
+        const expectedFetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`;
+        const mockQuakeData = {
+            properties: { mag: 5, place: "Test Place", time: Date.now(), detail: expectedFetchUrl, title: `M 5.0 - Test Place` }, // Added title to mock
+            geometry: { coordinates: [0,0,10] },
+            id: quakeId
+        };
 
         fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockQuakeData)));
 
-        const request = new Request(`http://localhost/quake/${encodeURIComponent(quakeDetailUrl)}`, { headers: { 'User-Agent': 'Googlebot' }});
+        // Request path should use the simple quakeId
+        const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
 
         const response = await onRequest(context);
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('text/html');
         const text = await response.text();
-        expect(text).toContain(`<title>M 5 Earthquake - Test Place`);
-        expect(fetch).toHaveBeenCalledWith(quakeDetailUrl);
+        expect(text).toContain(`<title>M 5.0 - Test Place`); // Adjusted to match mockQuakeData.properties.title
+        expect(fetch).toHaveBeenCalledWith(expectedFetchUrl);
     });
 
     // Original test for /cluster/some-cluster-id (old format) - may be less relevant or removed if old URLs are not supported
@@ -677,44 +682,52 @@ describe('onRequest (Main Router)', () => {
 
 
     it('/quake/some-quake-id should handle fetch error during prerender', async () => {
-        const quakeDetailUrl = "http://example.com/details/q_error";
+        const quakeId = "q_error";
+        const expectedFetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`;
         fetch.mockRejectedValueOnce(new Error("Fetch Quake Detail Error"));
-        const request = new Request(`http://localhost/quake/${encodeURIComponent(quakeDetailUrl)}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
+        // This will be fixed in the next step by modifying quake-detail.js
         expect(response.status).toBe(500);
         const text = await response.text();
         expect(text).toContain("Error prerendering earthquake page");
     });
 
     it('/quake/some-quake-id should handle non-JSON response during prerender', async () => {
-        const quakeDetailUrl = "http://example.com/details/q_non_json";
-        fetch.mockResolvedValueOnce(new Response("Not JSON", { status: 200 }));
-        const request = new Request(`http://localhost/quake/${encodeURIComponent(quakeDetailUrl)}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const quakeId = "q_non_json";
+        const expectedFetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`;
+        fetch.mockResolvedValueOnce(new Response("Not JSON", { status: 200 })); // This fetch is for the USGS API call
+        const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
+        // This will be fixed in the next step by modifying quake-detail.js
         expect(response.status).toBe(500);
         const text = await response.text();
         expect(text).toContain("Error prerendering earthquake page");
     });
 
     it('/quake/some-quake-id should handle invalid quake data structure during prerender', async () => {
-        const quakeDetailUrl = "http://example.com/details/q_invalid_struct";
+        const quakeId = "q_invalid_struct";
+        const expectedFetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`;
         fetch.mockResolvedValueOnce(new Response(JSON.stringify({ properties: null }), { status: 200 })); // Missing geometry
-        const request = new Request(`http://localhost/quake/${encodeURIComponent(quakeDetailUrl)}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
+        // This will be fixed in the next step by modifying quake-detail.js
         expect(response.status).toBe(500);
         const text = await response.text();
         expect(text).toContain("Invalid earthquake data");
     });
 
     it('/quake/some-quake-id should handle non-ok fetch response during prerender', async () => {
-        const quakeDetailUrl = "http://example.com/details/q_404";
+        const quakeId = "q_404";
+        const expectedFetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`;
         fetch.mockResolvedValueOnce(new Response("Not Found", { status: 404 }));
-        const request = new Request(`http://localhost/quake/${encodeURIComponent(quakeDetailUrl)}`, { headers: { 'User-Agent': 'Googlebot' }});
+        const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
+        // This will be fixed in the next step by modifying quake-detail.js
         expect(response.status).toBe(404);
         const text = await response.text();
         expect(text).toContain("Earthquake data not found");
@@ -831,7 +844,7 @@ describe('onRequest (Main Router)', () => {
         await context._awaitWaitUntilPromises();
 
         expect(response.status).toBe(200);
-        expect(fetch).toHaveBeenCalledWith(targetApiUrl);
+        expect(fetch).toHaveBeenCalledWith(targetApiUrl, { headers: { "User-Agent": "EarthquakesLive/1.0 (+https://earthquakeslive.com)" } });
         expect(mockCache.put).toHaveBeenCalled();
     });
 
