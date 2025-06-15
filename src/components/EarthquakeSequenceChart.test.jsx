@@ -490,11 +490,10 @@ describe('EarthquakeSequenceChart', () => {
             expect(pathElement).toHaveAttribute('stroke-width', '1');
             expect(pathElement).toHaveAttribute('fill', 'none');
             // Check for Tailwind classes for styling
-            // The component uses: className={`stroke-current ${tickLabelColor} opacity-75`}
-            // tickLabelColor is "text-slate-500"
+            // The component uses: className={"stroke-current text-slate-300 opacity-100"}
             expect(pathElement).toHaveClass('stroke-current');
-            expect(pathElement).toHaveClass('text-slate-500');
-            expect(pathElement).toHaveClass('opacity-75');
+            expect(pathElement).toHaveClass('text-slate-300');
+            expect(pathElement).toHaveClass('opacity-100');
         });
 
         test('correctly renders line for mixed magnitudes (continuous line for filtered points)', () => {
