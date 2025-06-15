@@ -30,7 +30,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   }, []);
 
   const chartHeight = 350;
-  const margin = { top: 40, right: 20, bottom: 80, left: 20 }; // Adjusted margin.bottom to 80
+  const margin = { top: 40, right: 20, bottom: 90, left: 20 };
 
   const width = chartRenderWidth - margin.left - margin.right;
   const height = chartHeight - margin.top - margin.bottom;
@@ -136,7 +136,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     }
 
     const potentialTicks = tempScale.ticks(tickInterval);
-    const timeTickFormat = timeFormat("%b %d, %-I%p");
+    const timeTickFormat = timeFormat("%-I%p");
 
     return potentialTicks.map(value => ({
         value,
@@ -145,34 +145,40 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     })).filter(tick => tick.offset >= -5 && tick.offset <= width + 5);
   }, [xScale, width, timeDomain]);
 
-  // const dateAxisTicks = useMemo(() => { // Unused variable
-  //   if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
-  //   const dates = [];
-  //   const [domainStart, domainEnd] = timeDomain;
-  //   let current = new Date(domainStart);
-  //   current.setHours(0, 0, 0, 0);
+  const dateAxisTicks = useMemo(() => {
+    if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
+    const dates = [];
+    const [domainStart, domainEnd] = timeDomain;
+    let current = new Date(domainStart);
+    current.setHours(0, 0, 0, 0); // Start from the beginning of the day
 
-  //   while (current <= domainEnd) {
-  //       const dayStartOffset = xScale(current);
-  //       const nextDay = new Date(current);
-  //       nextDay.setDate(current.getDate() + 1);
-  //       const endOfDayInDomain = nextDay > domainEnd ? domainEnd : nextDay;
-  //       const dayEndOffset = xScale(endOfDayInDomain);
-  //       const visibleStart = Math.max(0, dayStartOffset);
-  //       const visibleEnd = Math.min(width, dayEndOffset);
+    while (current <= domainEnd) {
+        const dayStartOffset = xScale(current);
+        const nextDay = new Date(current);
+        nextDay.setDate(current.getDate() + 1);
 
-  //       if (visibleEnd > visibleStart && (visibleEnd - visibleStart > 1)) {
-  //           dates.push({
-  //               label: timeFormat("%b %d")(current),
-  //               x: visibleStart + (visibleEnd - visibleStart) / 2,
-  //               dayStartDate: new Date(current)
-  //           });
-  //       }
-  //       if (current.getTime() === nextDay.getTime() || nextDay > new Date(domainEnd.getTime() + 24*60*60*1000)) break;
-  //       current = nextDay;
-  //   }
-  //   return dates;
-  // }, [timeDomain, xScale, width]);
+        // Determine the actual end of the day for xScale, capped by domainEnd
+        const endOfDayForScale = nextDay > domainEnd ? domainEnd : nextDay;
+        const dayEndOffset = xScale(endOfDayForScale);
+
+        const visibleStart = Math.max(0, dayStartOffset);
+        const visibleEnd = Math.min(width, dayEndOffset);
+
+        // Add tick if the visible part of the day is wider than 20 pixels
+        if (visibleEnd > visibleStart && (visibleEnd - visibleStart > 20)) {
+            dates.push({
+                label: timeFormat("%b %d")(current),
+                x: visibleStart + (visibleEnd - visibleStart) / 2,
+                dayStartDate: new Date(current) // For unique key
+            });
+        }
+
+        // Break if nextDay is invalid or beyond a reasonable limit to prevent infinite loops
+        if (nextDay.getTime() <= current.getTime() || nextDay > new Date(domainEnd.getTime() + 24*60*60*1000 * 2)) break;
+        current = nextDay;
+    }
+    return dates;
+  }, [timeDomain, xScale, width]);
 
   const yAxisTicks = useMemo(() => {
       if (height <= 0 || !yScale.ticks) return [];
@@ -294,27 +300,24 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
             </text>
           ))}
 
-          {/* Date Tier Labels (Lower Tier) - Potentially remove or adjust */}
-          {/* With the new timeFormat in timeAxisTicks, this separate date tier might be redundant. */}
-          {/* For now, let's comment it out to see the effect of the changes above. */}
-          {/* {dateAxisTicks.map(({ label: dateLabel, x, dayStartDate }) => (
+          {/* Date Tier Labels (Lower Tier) */}
+          {dateAxisTicks.map(({ label: dateLabel, x, dayStartDate }) => (
             <text
               key={`date-label-${dayStartDate.toISOString()}`}
               x={x}
-              y={height + 40}
+              y={height + 40} // Position for date labels
               textAnchor="middle"
               className={`text-xs fill-current ${tickLabelColor}`}
             >
               {dateLabel}
             </text>
-          ))} */}
+          ))}
 
           {/* X-Axis Label */}
           <text
             x={width / 2}
-            // Adjusted y position since dateAxisTicks is commented out.
-            // If dateAxisTicks is kept, this y value might need to be height + 65.
-            y={height + 45} // Tentative new position
+            // Adjust y position to account for the date tier labels
+            y={height + 60} // Adjusted y position
             textAnchor="middle"
             className={`text-sm fill-current ${axisLabelColor}`}
           >
