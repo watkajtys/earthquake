@@ -16,17 +16,17 @@ const mockCluster = {
   ],
 };
 
-// Updated mock for getMagnitudeColorStyle to match the actual implementation
+// Updated mock for getMagnitudeColorStyle to match the actual implementation from utils.js
 const mockGetMagnitudeColorStyleFn = vi.fn(magnitude => {
-  if (magnitude === null || magnitude === undefined) return 'bg-slate-600 text-slate-100';
-  if (magnitude < 1.0) return 'bg-cyan-800 text-slate-100';
-  if (magnitude < 2.5) return 'bg-cyan-700 text-slate-100';
-  if (magnitude < 4.0) return 'bg-emerald-700 text-slate-100';
-  if (magnitude < 5.0) return 'bg-yellow-700 text-slate-100';
-  if (magnitude < 6.0) return 'bg-orange-700 text-slate-100';
-  if (magnitude < 7.0) return 'bg-orange-800 text-white';
-  if (magnitude < 8.0) return 'bg-red-800 text-white';
-  return 'bg-red-900 text-white';
+    if (magnitude === null || magnitude === undefined) return 'bg-slate-400 text-slate-900';
+    if (magnitude < 1.0) return 'bg-cyan-300 text-cyan-900';
+    if (magnitude < 2.5) return 'bg-cyan-400 text-cyan-900';
+    if (magnitude < 4.0) return 'bg-emerald-400 text-emerald-900';
+    if (magnitude < 5.0) return 'bg-yellow-400 text-yellow-900';
+    if (magnitude < 6.0) return 'bg-orange-400 text-orange-900';
+    if (magnitude < 7.0) return 'bg-orange-500 text-white';
+    if (magnitude < 8.0) return 'bg-red-500 text-white';
+    return 'bg-red-700 text-white';
 });
 
 const mockProps = {
