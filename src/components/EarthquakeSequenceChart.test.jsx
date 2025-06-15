@@ -46,6 +46,17 @@ const longSpanQuake1Time = new Date('2023-01-01T22:00:00Z').getTime(); // Jan 01
 const longSpanQuake2Time = new Date('2023-01-02T00:00:00Z').getTime(); // Jan 02, 12 AM (Midnight)
 const longSpanQuake3Time = new Date('2023-01-02T04:00:00Z').getTime(); // Jan 02, 4 AM
 
+// Mock times for ~70 hours span (just under 3 days)
+const approx70HrsStart = new Date('2023-01-01T00:00:00Z').getTime();
+const approx70HrsMid = new Date('2023-01-02T12:00:00Z').getTime();
+const approx70HrsEnd = new Date('2023-01-03T22:00:00Z').getTime(); // 2 days + 22 hours = 70 hours
+
+// Mock times for ~74 hours span (just over 3 days)
+const approx74HrsStart = new Date('2023-01-01T00:00:00Z').getTime();
+const approx74HrsMid = new Date('2023-01-02T12:00:00Z').getTime();
+const approx74HrsEnd = new Date('2023-01-04T02:00:00Z').getTime(); // 3 days + 2 hours = 74 hours
+
+
 // Restructured mock data to align with component expecting cluster.originalQuakes directly
 const mockClusterData = {
     // type: "Feature", // Not strictly needed by chart, but good for context
@@ -63,6 +74,22 @@ const mockClusterDataLongSpan = {
         mockQuake("ls_eq1", longSpanQuake1Time, 3.0, "West End"),
         mockQuake("ls_eq2", longSpanQuake2Time, 4.0, "Midnight Point"), // Mainshock for this set
         mockQuake("ls_eq3", longSpanQuake3Time, 3.5, "East Bay"),
+    ]
+};
+
+const mockClusterDataApprox70Hours = {
+    originalQuakes: [
+        mockQuake("h70_1", approx70HrsStart, 3.0, "70hr Start"),
+        mockQuake("h70_2", approx70HrsMid, 4.0, "70hr Mid"),
+        mockQuake("h70_3", approx70HrsEnd, 3.5, "70hr End"),
+    ]
+};
+
+const mockClusterDataApprox74Hours = {
+    originalQuakes: [
+        mockQuake("h74_1", approx74HrsStart, 3.0, "74hr Start"),
+        mockQuake("h74_2", approx74HrsMid, 4.0, "74hr Mid"),
+        mockQuake("h74_3", approx74HrsEnd, 3.5, "74hr End"),
     ]
 };
 
@@ -324,8 +351,56 @@ describe('EarthquakeSequenceChart', () => {
                 expect(dateLabelsJan01.getAttribute('text-anchor')).toBe('middle');
 
                 expect(dateLabelsJan02).toBeInTheDocument();
-                expect(dateLabelsJan02.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
+                expect(dateLabelsJan02.getAttribute('y')).toBe(String(plotHeight + 40));
                 expect(dateLabelsJan02.getAttribute('text-anchor')).toBe('middle');
+            });
+
+            test('renders time labels with 6-hour interval for ~70 hour duration', () => {
+                const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataApprox70Hours} />);
+                const svgElement = getSvgContainer(currentContainer);
+                if (!svgElement) throw new Error("SVG container not found for ~70hr time labels test");
+
+                // Duration is 70 hours. Expected interval: timeHour.every(6)
+                // Check for presence of labels like "12AM", "6AM", "12PM", "6PM"
+                const timeLabels = within(svgElement).getAllByText(/\d{1,2}(AM|PM)/i);
+                expect(timeLabels.length).toBeGreaterThanOrEqual(Math.floor(70 / 6) - 2); // Approximate, D3 might add/remove some edge ticks
+
+                // Check for specific labels that should appear with 6-hour intervals
+                const expectedLabels = ["12AM", "6AM", "12PM", "6PM"];
+                expectedLabels.forEach(expectedLabel => {
+                    expect(timeLabels.some(l => l.textContent === expectedLabel)).toBe(true);
+                });
+
+                timeLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20));
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
+            });
+
+            test('renders time labels with 24-hour interval for ~74 hour duration', () => {
+                const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataApprox74Hours} />);
+                const svgElement = getSvgContainer(currentContainer);
+                if (!svgElement) throw new Error("SVG container not found for ~74hr time labels test");
+
+                // Duration is 74 hours. Expected interval: timeHour.every(24)
+                // Time labels should primarily be "12AM" if data spans across midnight
+                const timeLabels = within(svgElement).getAllByText(/\d{1,2}(AM|PM)/i);
+                 // Expect approx 74/24 ~ 3-4 labels. D3 might be clever.
+                expect(timeLabels.length).toBeGreaterThanOrEqual(Math.floor(74 / 24) -1 );
+                expect(timeLabels.length).toBeLessThanOrEqual(Math.ceil(74 / 24) + 2 );
+
+
+                // Check that most (if not all) labels are "12AM"
+                const twelveAmLabels = timeLabels.filter(l => l.textContent === "12AM");
+                // For a 74hr span (3 days + 2hrs), we expect "12AM" for Day1, Day2, Day3, Day4 start.
+                // So at least 3, possibly 4 depending on D3's rounding for the domain.
+                expect(twelveAmLabels.length).toBeGreaterThanOrEqual(3);
+
+                // Verify all rendered time labels are correctly positioned
+                timeLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20));
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
             });
         });
 

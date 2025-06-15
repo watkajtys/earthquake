@@ -123,15 +123,13 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     const durationHours = durationMs / (1000 * 60 * 60);
 
     let tickInterval;
-    if (durationHours < 12) {
+    if (durationHours < 12) { // Less than 12 hours
       tickInterval = timeHour.every(durationHours < 6 ? 1 : 2);
-    } else if (durationHours < 24) {
+    } else if (durationHours < 24) { // 12 to 24 hours
       tickInterval = timeHour.every(3);
-    } else if (durationHours < 48) {
+    } else if (durationHours < 72) { // 24 to 72 hours (1 to 3 days)
       tickInterval = timeHour.every(6);
-    } else if (durationHours < 7 * 24) {
-      tickInterval = timeHour.every(12);
-    } else {
+    } else { // 72 hours (3 days) or more
       tickInterval = timeHour.every(24);
     }
 
