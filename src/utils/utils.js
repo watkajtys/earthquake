@@ -30,18 +30,16 @@ export const getMagnitudeColor = (magnitude) => {
  * @returns {string} Tailwind CSS class strings.
  */
 export const getMagnitudeColorStyle = (magnitude) => {
-    // Default style for null or undefined magnitudes
-    if (magnitude === null || magnitude === undefined) return 'bg-slate-600 text-slate-100'; // Dark slate background, light text
-
-    // Styles for defined magnitudes, opacity removed, text colors adjusted for contrast
-    if (magnitude < 1.0) return 'bg-cyan-800 text-slate-100';     // Dark cyan background, light text
-    if (magnitude < 2.5) return 'bg-cyan-700 text-slate-100';     // Medium-dark cyan, light text
-    if (magnitude < 4.0) return 'bg-emerald-700 text-slate-100';  // Medium-dark emerald, light text
-    if (magnitude < 5.0) return 'bg-yellow-700 text-slate-100';   // Dark yellow, light text (could also be dark text if yellow was lighter)
-    if (magnitude < 6.0) return 'bg-orange-700 text-slate-100';   // Dark orange, light text
-    if (magnitude < 7.0) return 'bg-orange-800 text-white';     // Darker orange, white text for strong contrast
-    if (magnitude < 8.0) return 'bg-red-800 text-white';         // Dark red, white text for strong contrast
-    return 'bg-red-900 text-white';                             // Very dark red, white text for strong contrast
+    // Background colors now align with getMagnitudeColor, text colors adjusted for contrast.
+    if (magnitude === null || magnitude === undefined) return 'bg-slate-400 text-slate-900'; // slate-400 from getMagnitudeColor
+    if (magnitude < 1.0) return 'bg-cyan-300 text-cyan-900';         // cyan-300 from getMagnitudeColor, dark cyan text
+    if (magnitude < 2.5) return 'bg-cyan-400 text-cyan-900';         // cyan-400 from getMagnitudeColor, dark cyan text
+    if (magnitude < 4.0) return 'bg-emerald-400 text-emerald-900';   // emerald-400 from getMagnitudeColor, dark emerald text
+    if (magnitude < 5.0) return 'bg-yellow-400 text-yellow-900';     // yellow-400 from getMagnitudeColor, dark yellow text
+    if (magnitude < 6.0) return 'bg-orange-400 text-orange-900';     // orange-400 from getMagnitudeColor, dark orange text
+    if (magnitude < 7.0) return 'bg-orange-500 text-white';        // orange-500 from getMagnitudeColor, white text
+    if (magnitude < 8.0) return 'bg-red-500 text-white';           // red-500 from getMagnitudeColor, white text
+    return 'bg-red-700 text-white';                               // red-700 from getMagnitudeColor, white text
 };
 
 // Add other utility functions here as the app grows
