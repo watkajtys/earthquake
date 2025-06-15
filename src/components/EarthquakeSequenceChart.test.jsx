@@ -46,6 +46,17 @@ const longSpanQuake1Time = new Date('2023-01-01T22:00:00Z').getTime(); // Jan 01
 const longSpanQuake2Time = new Date('2023-01-02T00:00:00Z').getTime(); // Jan 02, 12 AM (Midnight)
 const longSpanQuake3Time = new Date('2023-01-02T04:00:00Z').getTime(); // Jan 02, 4 AM
 
+// Mock times for ~70 hours span (just under 3 days)
+const approx70HrsStart = new Date('2023-01-01T00:00:00Z').getTime();
+const approx70HrsMid = new Date('2023-01-02T12:00:00Z').getTime();
+const approx70HrsEnd = new Date('2023-01-03T22:00:00Z').getTime(); // 2 days + 22 hours = 70 hours
+
+// Mock times for ~74 hours span (just over 3 days)
+const approx74HrsStart = new Date('2023-01-01T00:00:00Z').getTime();
+const approx74HrsMid = new Date('2023-01-02T12:00:00Z').getTime();
+const approx74HrsEnd = new Date('2023-01-04T02:00:00Z').getTime(); // 3 days + 2 hours = 74 hours
+
+
 // Restructured mock data to align with component expecting cluster.originalQuakes directly
 const mockClusterData = {
     // type: "Feature", // Not strictly needed by chart, but good for context
@@ -63,6 +74,22 @@ const mockClusterDataLongSpan = {
         mockQuake("ls_eq1", longSpanQuake1Time, 3.0, "West End"),
         mockQuake("ls_eq2", longSpanQuake2Time, 4.0, "Midnight Point"), // Mainshock for this set
         mockQuake("ls_eq3", longSpanQuake3Time, 3.5, "East Bay"),
+    ]
+};
+
+const mockClusterDataApprox70Hours = {
+    originalQuakes: [
+        mockQuake("h70_1", approx70HrsStart, 3.0, "70hr Start"),
+        mockQuake("h70_2", approx70HrsMid, 4.0, "70hr Mid"),
+        mockQuake("h70_3", approx70HrsEnd, 3.5, "70hr End"),
+    ]
+};
+
+const mockClusterDataApprox74Hours = {
+    originalQuakes: [
+        mockQuake("h74_1", approx74HrsStart, 3.0, "74hr Start"),
+        mockQuake("h74_2", approx74HrsMid, 4.0, "74hr Mid"),
+        mockQuake("h74_3", approx74HrsEnd, 3.5, "74hr End"),
     ]
 };
 
@@ -87,8 +114,49 @@ const mockClusterWithoutOriginalQuakes = {
     // no originalQuakes key
 };
 
+// Times for new mock data
+const t1 = new Date('2023-02-01T00:00:00Z').getTime();
+const t2 = new Date('2023-02-01T01:00:00Z').getTime();
+const t3 = new Date('2023-02-01T02:00:00Z').getTime();
+const t4 = new Date('2023-02-01T03:00:00Z').getTime();
+const t5 = new Date('2023-02-01T04:00:00Z').getTime();
+
+const mockClusterDataMixedMagnitudes = {
+    originalQuakes: [
+        mockQuake("mix1", t1, 2.0), // Defined
+        mockQuake("mix2", t2, 1.0), // Undefined
+        mockQuake("mix3", t3, 2.5), // Defined
+        mockQuake("mix4", t4, 0.5), // Undefined
+        mockQuake("mix5", t5, 3.0), // Defined
+    ]
+};
+
+const mockClusterDataAllBelowThreshold = {
+    originalQuakes: [
+        mockQuake("b1", t1, 1.0),
+        mockQuake("b2", t2, 1.2),
+        mockQuake("b3", t3, 0.9),
+    ]
+};
+
+const mockClusterDataAllAboveThreshold = {
+    originalQuakes: [
+        mockQuake("a1", t1, 2.0),
+        mockQuake("a2", t2, 1.8),
+        mockQuake("a3", t3, 2.5),
+    ]
+};
+
+
 // To make tests less verbose and more resilient to minor parentElement changes
 const getSvgContainer = (container) => container.querySelector('svg')?.parentElement;
+
+// Helper to count 'M' commands in a path d attribute
+const countMovetoCommands = (pathD) => {
+    if (!pathD) return 0;
+    const matches = pathD.match(/M/g);
+    return matches ? matches.length : 0;
+};
 
 
 describe('EarthquakeSequenceChart', () => {
@@ -175,10 +243,18 @@ describe('EarthquakeSequenceChart', () => {
             // Once the mainshock group is identified, query for the label *within* that group.
             const mainshockLabelElement = within(mainshockGroup).getByText(expectedLabelText);
             expect(mainshockLabelElement).toBeInTheDocument();
+            // Check mainshock text label color
+            expect(mainshockLabelElement).toHaveClass('text-slate-300');
+            expect(mainshockLabelElement).not.toHaveClass('text-slate-500');
+
 
             expect(parseFloat(mainshockCircle.getAttribute('r'))).toBeCloseTo(expectedRadiusMainshockCalc, 1);
             expect(mainshockCircle).toHaveAttribute('fill', 'none');
+            // Check mainshock circle stroke color (reverted)
             expect(mainshockCircle).toHaveAttribute('stroke', getMagnitudeColor(mainshockData.properties.mag));
+            // Check mainshock circle class (reverted - no specific color class, just transition/hover)
+            expect(mainshockCircle).not.toHaveClass('text-slate-300');
+            expect(mainshockCircle).toHaveClass('transition-opacity'); // Ensure it still has base classes
             expect(mainshockCircle).toHaveAttribute('stroke-width', '2');
             expect(mainshockCircle).toHaveAttribute('fill-opacity', '1');
             expect(mainshockCircle).toHaveAttribute('stroke-opacity', '1');
@@ -219,31 +295,32 @@ describe('EarthquakeSequenceChart', () => {
         test('renders some Y-axis tick labels (e.g., 0, 1, 2, 3, 4)', () => {
             // Check for presence of a few expected integer tick labels
             // The exact ticks depend on the magDomain, which is [0, Math.ceil(maxMag)]
-            // For mockClusterData, magDomain is [2,5]. plotHeight is 230 (350 - 40 - 80).
-            // yScale is scaleLinear().domain([2, 5]).range([230, 0])
+            // For mockClusterData, magDomain is [2,5]. plotHeight is 220 (350 - 40 - 90).
+            // yScale is scaleLinear().domain([2, 5]).range([220, 0])
             // Expected ticks and their Y positions:
-            // '2': 230
-            // '2.5': 230 - ((2.5-2)/(5-2) * 230) = 230 - (0.5/3 * 230) = 191.67
-            // '3':   230 - ((3-2)/(5-2) * 230) = 230 - (1/3 * 230) = 153.33
-            // '3.5': 230 - ((3.5-2)/(5-2) * 230) = 230 - (1.5/3 * 230) = 115
-            // '4':   230 - ((4-2)/(5-2) * 230) = 230 - (2/3 * 230) = 76.67
-            // '4.5': 230 - ((4.5-2)/(5-2) * 230) = 230 - (2.5/3 * 230) = 38.33
+            // '2': 220
+            // '2.5': 220 - ((2.5-2)/(5-2) * 220) = 220 - (0.5/3 * 220) = 220 - 36.66 = 183.33
+            // '3':   220 - ((3-2)/(5-2) * 220) = 220 - (1/3 * 220) = 220 - 73.33 = 146.67
+            // '3.5': 220 - ((3.5-2)/(5-2) * 220) = 220 - (1.5/3 * 220) = 220 - 110 = 110
+            // '4':   220 - ((4-2)/(5-2) * 220) = 220 - (2/3 * 220) = 220 - 146.66 = 73.33
+            // '4.5': 220 - ((4.5-2)/(5-2) * 220) = 220 - (2.5/3 * 220) = 220 - 183.33 = 36.67
             // '5':   0
             const svgElement = getSvgContainer(container);
             if (!svgElement) throw new Error("SVG container not found for Y-axis ticks test");
 
             const expectedTicksWithY = {
-                '2': 230,
-                '2.5': 191.67,
-                '3': 153.33,
-                '3.5': 115,
-                '4': 76.67,
-                '4.5': 38.33,
+                '2': 220,
+                '2.5': 183.33,
+                '3': 146.67,
+                '3.5': 110,
+                '4': 73.33,
+                '4.5': 36.67,
                 '5': 0,
             };
 
             Object.entries(expectedTicksWithY).forEach(([text, expectedY]) => {
-                const tickElement = within(svgElement).queryByText(String(text));
+                const tickElements = within(svgElement).getAllByText(String(text));
+                const tickElement = tickElements.find(el => el.getAttribute('x') === '-8' && el.getAttribute('text-anchor') === 'end');
                 // D3 might not render all ticks, especially if space is limited or they are at the very edges.
                 // So, only check the 'y' attribute if the tickElement is found.
                 if (tickElement) {
@@ -253,10 +330,14 @@ describe('EarthquakeSequenceChart', () => {
             });
 
             // Ensure at least the min and max of the domain are rendered as ticks, as these are usually preserved by D3.
-            const minTick = within(svgElement).queryByText('2');
-            const maxTick = within(svgElement).queryByText('5');
+            const minTickCandidates = within(svgElement).getAllByText('2');
+            const minTick = minTickCandidates.find(el => el.getAttribute('x') === '-8' && el.getAttribute('text-anchor') === 'end');
+
+            const maxTickCandidates = within(svgElement).getAllByText('5');
+            const maxTick = maxTickCandidates.find(el => el.getAttribute('x') === '-8' && el.getAttribute('text-anchor') === 'end');
+
             expect(minTick).toBeInTheDocument();
-            expect(parseFloat(minTick.getAttribute('y'))).toBeCloseTo(230, 1);
+            expect(parseFloat(minTick.getAttribute('y'))).toBeCloseTo(220, 1);
             expect(maxTick).toBeInTheDocument();
             expect(parseFloat(maxTick.getAttribute('y'))).toBeCloseTo(0, 1);
         });
@@ -264,15 +345,15 @@ describe('EarthquakeSequenceChart', () => {
         test('renders X-axis label "Time (UTC)" correctly positioned', () => {
             const titleElement = screen.getByText('Time (UTC)');
             expect(titleElement).toBeInTheDocument();
-            // margin.bottom = 80; plotHeight = 350 - 40 - 80 = 230.
-            // X-axis title y is plotHeight + 65 for two-tiered X-axis. Expected y = 230 + 65 = 295.
-            expect(titleElement.getAttribute('y')).toBe(String(230 + 65));
+            // margin.bottom = 90; plotHeight = 350 - 40 - 90 = 220.
+            // X-axis title y is plotHeight + 60. Expected y = 220 + 60 = 280.
+            expect(titleElement.getAttribute('y')).toBe(String(220 + 60));
         });
 
         describe('Two-Tiered X-Axis Labels', () => { // Name reverted to reflect two tiers
             const chartHeight = 350;
-            const newMargin = { top: 40, right: 20, bottom: 80, left: 20 }; // Correct margin
-            const plotHeight = chartHeight - newMargin.top - newMargin.bottom; // 230
+            const newMargin = { top: 40, right: 20, bottom: 90, left: 20 }; // Updated margin.bottom
+            const plotHeight = chartHeight - newMargin.top - newMargin.bottom; // 220
 
             test('renders time labels (upper tier) correctly positioned', () => { // Title updated
                 const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
@@ -319,8 +400,56 @@ describe('EarthquakeSequenceChart', () => {
                 expect(dateLabelsJan01.getAttribute('text-anchor')).toBe('middle');
 
                 expect(dateLabelsJan02).toBeInTheDocument();
-                expect(dateLabelsJan02.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
+                expect(dateLabelsJan02.getAttribute('y')).toBe(String(plotHeight + 40));
                 expect(dateLabelsJan02.getAttribute('text-anchor')).toBe('middle');
+            });
+
+            test('renders time labels with 6-hour interval for ~70 hour duration', () => {
+                const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataApprox70Hours} />);
+                const svgElement = getSvgContainer(currentContainer);
+                if (!svgElement) throw new Error("SVG container not found for ~70hr time labels test");
+
+                // Duration is 70 hours. Expected interval: timeHour.every(6)
+                // Check for presence of labels like "12AM", "6AM", "12PM", "6PM"
+                const timeLabels = within(svgElement).getAllByText(/\d{1,2}(AM|PM)/i);
+                expect(timeLabels.length).toBeGreaterThanOrEqual(Math.floor(70 / 6) - 2); // Approximate, D3 might add/remove some edge ticks
+
+                // Check for specific labels that should appear with 6-hour intervals
+                const expectedLabels = ["12AM", "6AM", "12PM", "6PM"];
+                expectedLabels.forEach(expectedLabel => {
+                    expect(timeLabels.some(l => l.textContent === expectedLabel)).toBe(true);
+                });
+
+                timeLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20));
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
+            });
+
+            test('renders time labels with 24-hour interval for ~74 hour duration', () => {
+                const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataApprox74Hours} />);
+                const svgElement = getSvgContainer(currentContainer);
+                if (!svgElement) throw new Error("SVG container not found for ~74hr time labels test");
+
+                // Duration is 74 hours. Expected interval: timeHour.every(24)
+                // Time labels should primarily be "12AM" if data spans across midnight
+                const timeLabels = within(svgElement).getAllByText(/\d{1,2}(AM|PM)/i);
+                 // Expect approx 74/24 ~ 3-4 labels. D3 might be clever.
+                expect(timeLabels.length).toBeGreaterThanOrEqual(Math.floor(74 / 24) -1 );
+                expect(timeLabels.length).toBeLessThanOrEqual(Math.ceil(74 / 24) + 2 );
+
+
+                // Check that most (if not all) labels are "12AM"
+                const twelveAmLabels = timeLabels.filter(l => l.textContent === "12AM");
+                // For a 74hr span (3 days + 2hrs), we expect "12AM" for Day1, Day2, Day3, Day4 start.
+                // So at least 3, possibly 4 depending on D3's rounding for the domain.
+                expect(twelveAmLabels.length).toBeGreaterThanOrEqual(3);
+
+                // Verify all rendered time labels are correctly positioned
+                timeLabels.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20));
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
             });
         });
 
@@ -356,22 +485,60 @@ describe('EarthquakeSequenceChart', () => {
     describe('Connecting Line', () => {
         const linePathSelector = 'svg g path[fill="none"][stroke-dasharray="3,3"]';
 
-        test('renders a connecting line when there are multiple quakes', () => {
+        test('renders a connecting line when there are multiple quakes (all above threshold)', () => {
             const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
             const pathElement = container.querySelector(linePathSelector);
 
             expect(pathElement).toBeInTheDocument();
             expect(pathElement).toHaveAttribute('d');
-            expect(pathElement.getAttribute('d')).not.toBe('');
+            const dAttribute = pathElement.getAttribute('d');
+            expect(dAttribute).not.toBe('');
+            expect(countMovetoCommands(dAttribute)).toBe(1); // All points in mockClusterData are >= 1.5
             expect(pathElement).toHaveAttribute('stroke-dasharray', '3,3');
             expect(pathElement).toHaveAttribute('stroke-width', '1');
             expect(pathElement).toHaveAttribute('fill', 'none');
             // Check for Tailwind classes for styling
-            // The component uses: className={`stroke-current ${tickLabelColor} opacity-75`}
-            // tickLabelColor is "text-slate-500"
+            // The component uses: className={"stroke-current text-slate-300 opacity-100"}
             expect(pathElement).toHaveClass('stroke-current');
-            expect(pathElement).toHaveClass('text-slate-500');
-            expect(pathElement).toHaveClass('opacity-75');
+            expect(pathElement).toHaveClass('text-slate-300');
+            expect(pathElement).toHaveClass('opacity-100');
+        });
+
+        test('correctly renders line for mixed magnitudes (continuous line for filtered points)', () => {
+            // For original: [2.0(d), 1.0(u), 2.5(d), 0.5(u), 3.0(d)]
+            // Filtered for line: [2.0, 2.5, 3.0]
+            // A single continuous line should connect these three points.
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterDataMixedMagnitudes} />);
+            const pathElement = container.querySelector(linePathSelector);
+
+            expect(pathElement).toBeInTheDocument();
+            const dAttribute = pathElement.getAttribute('d');
+            expect(dAttribute).not.toBe('');
+            expect(dAttribute).toContain('L'); // Should have lineto commands
+            expect(countMovetoCommands(dAttribute)).toBe(1); // Single continuous segment
+        });
+
+        test('does not render connecting line if all magnitudes are below 1.5', () => {
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterDataAllBelowThreshold} />);
+            const pathElement = container.querySelector(linePathSelector);
+             // Similar to the mixed test, the path should not contain 'L' commands, or not exist.
+            if (pathElement) {
+                const dAttribute = pathElement.getAttribute('d');
+                expect(dAttribute).not.toContain('L');
+            } else {
+                expect(pathElement).not.toBeInTheDocument();
+            }
+        });
+
+        test('renders a continuous connecting line if all magnitudes are >= 1.5', () => {
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterDataAllAboveThreshold} />);
+            const pathElement = container.querySelector(linePathSelector);
+
+            expect(pathElement).toBeInTheDocument();
+            const dAttribute = pathElement.getAttribute('d');
+            expect(dAttribute).not.toBe('');
+            expect(dAttribute).toContain('L'); // Should have lineto commands
+            expect(countMovetoCommands(dAttribute)).toBe(1); // Single continuous segment
         });
 
         test('does not render a connecting line when there is only one quake', () => {
