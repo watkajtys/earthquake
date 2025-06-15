@@ -101,7 +101,7 @@ const PaginatedEarthquakeTable = React.memo(({
     const getSortIndicator = (key) => (sortConfig.key === key ? (sortConfig.direction === 'ascending' ? ' ▲' : ' ▼') : <span className="text-slate-500"> ◇</span>);
 
     const columns = [
-        {label: 'Mag.', key: 'mag', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm font-medium`},
+        {label: 'Mag.', key: 'mag', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm font-bold`},
         {label: 'Location', key: 'place', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`},
         {label: 'Time / Ago', key: 'time', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`},
         {label: 'Depth', key: 'depth', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`}
@@ -172,7 +172,7 @@ const PaginatedEarthquakeTable = React.memo(({
                         >
                             <td className={columns[0].className}>{quake.properties.mag?.toFixed(1) || "N/A"}</td>
                             <td className={columns[1].className}>
-                                <a href={quake.properties.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-current hover:text-indigo-300 hover:underline">
+                                <a href={quake.properties.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-current hover:text-indigo-300 hover:underline font-medium">
                                     {quake.properties.place || "N/A"}
                                 </a>
                             </td>
