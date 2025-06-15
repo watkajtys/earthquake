@@ -30,7 +30,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   }, []);
 
   const chartHeight = 350;
-  const margin = { top: 40, right: 20, bottom: 80, left: 20 }; // Adjusted margin.bottom to 80
+  const margin = { top: 40, right: 35, bottom: 90, left: 35 };
 
   const width = chartRenderWidth - margin.left - margin.right;
   const height = chartHeight - margin.top - margin.bottom;
@@ -123,20 +123,18 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     const durationHours = durationMs / (1000 * 60 * 60);
 
     let tickInterval;
-    if (durationHours < 12) {
+    if (durationHours < 12) { // Less than 12 hours
       tickInterval = timeHour.every(durationHours < 6 ? 1 : 2);
-    } else if (durationHours < 24) {
+    } else if (durationHours < 24) { // 12 to 24 hours
       tickInterval = timeHour.every(3);
-    } else if (durationHours < 48) {
+    } else if (durationHours < 72) { // 24 to 72 hours (1 to 3 days)
       tickInterval = timeHour.every(6);
-    } else if (durationHours < 7 * 24) {
-      tickInterval = timeHour.every(12);
-    } else {
+    } else { // 72 hours (3 days) or more
       tickInterval = timeHour.every(24);
     }
 
     const potentialTicks = tempScale.ticks(tickInterval);
-    const timeTickFormat = timeFormat("%b %d, %-I%p");
+    const timeTickFormat = timeFormat("%-I%p");
 
     return potentialTicks.map(value => ({
         value,
@@ -145,34 +143,40 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     })).filter(tick => tick.offset >= -5 && tick.offset <= width + 5);
   }, [xScale, width, timeDomain]);
 
-  // const dateAxisTicks = useMemo(() => { // Unused variable
-  //   if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
-  //   const dates = [];
-  //   const [domainStart, domainEnd] = timeDomain;
-  //   let current = new Date(domainStart);
-  //   current.setHours(0, 0, 0, 0);
+  const dateAxisTicks = useMemo(() => {
+    if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
+    const dates = [];
+    const [domainStart, domainEnd] = timeDomain;
+    let current = new Date(domainStart);
+    current.setHours(0, 0, 0, 0); // Start from the beginning of the day
 
-  //   while (current <= domainEnd) {
-  //       const dayStartOffset = xScale(current);
-  //       const nextDay = new Date(current);
-  //       nextDay.setDate(current.getDate() + 1);
-  //       const endOfDayInDomain = nextDay > domainEnd ? domainEnd : nextDay;
-  //       const dayEndOffset = xScale(endOfDayInDomain);
-  //       const visibleStart = Math.max(0, dayStartOffset);
-  //       const visibleEnd = Math.min(width, dayEndOffset);
+    while (current <= domainEnd) {
+        const dayStartOffset = xScale(current);
+        const nextDay = new Date(current);
+        nextDay.setDate(current.getDate() + 1);
 
-  //       if (visibleEnd > visibleStart && (visibleEnd - visibleStart > 1)) {
-  //           dates.push({
-  //               label: timeFormat("%b %d")(current),
-  //               x: visibleStart + (visibleEnd - visibleStart) / 2,
-  //               dayStartDate: new Date(current)
-  //           });
-  //       }
-  //       if (current.getTime() === nextDay.getTime() || nextDay > new Date(domainEnd.getTime() + 24*60*60*1000)) break;
-  //       current = nextDay;
-  //   }
-  //   return dates;
-  // }, [timeDomain, xScale, width]);
+        // Determine the actual end of the day for xScale, capped by domainEnd
+        const endOfDayForScale = nextDay > domainEnd ? domainEnd : nextDay;
+        const dayEndOffset = xScale(endOfDayForScale);
+
+        const visibleStart = Math.max(0, dayStartOffset);
+        const visibleEnd = Math.min(width, dayEndOffset);
+
+        // Add tick if the visible part of the day is wider than 20 pixels
+        if (visibleEnd > visibleStart && (visibleEnd - visibleStart > 20)) {
+            dates.push({
+                label: timeFormat("%b %d")(current),
+                x: visibleStart + (visibleEnd - visibleStart) / 2,
+                dayStartDate: new Date(current) // For unique key
+            });
+        }
+
+        // Break if nextDay is invalid or beyond a reasonable limit to prevent infinite loops
+        if (nextDay.getTime() <= current.getTime() || nextDay > new Date(domainEnd.getTime() + 24*60*60*1000 * 2)) break;
+        current = nextDay;
+    }
+    return dates;
+  }, [timeDomain, xScale, width]);
 
   const yAxisTicks = useMemo(() => {
       if (height <= 0 || !yScale.ticks) return [];
@@ -197,21 +201,32 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
       })).filter(tick => tick.offset >= -1 && tick.offset <= height + 1);
   }, [yScale, height, magDomain]);
 
-  const { linePath } = useMemo(() => { // sortedQuakes removed as it's not used directly
-    if (!originalQuakes || originalQuakes.length < 2) {
-        // Return an object that includes sortedQuakes if it's expected by callers,
-        // otherwise, just return { linePath: null }
+  const { linePath } = useMemo(() => {
+    if (!originalQuakes || originalQuakes.length === 0) { // Check originalQuakes for emptiness first
         return { linePath: null };
     }
-    // Sort quakes by time specifically for the line generator
-    const sortedForLine = [...originalQuakes].sort((a, b) =>
+
+    // Filter quakes for the line (magnitude >= 1.5 and valid properties)
+    const quakesForLine = originalQuakes.filter(q =>
+        q.properties &&
+        typeof q.properties.mag === 'number' &&
+        q.properties.mag >= 1.5
+    );
+
+    // If no quakes meet the criteria for the line, or only one does, no line can be drawn.
+    if (quakesForLine.length < 2) {
+        return { linePath: null };
+    }
+
+    // Sort the filtered quakes by time for the line generator
+    const sortedForLine = [...quakesForLine].sort((a, b) =>
         new Date(a.properties.time) - new Date(b.properties.time)
     );
+
     const lineGenerator = d3Line()
         .x(d => xScale(new Date(d.properties.time)))
-        .y(d => yScale(d.properties.mag));
-    // If sortedQuakes is needed by other parts of the component (it's not, currently), return it as well.
-    // For now, it was only used to generate linePath.
+        .y(d => yScale(d.properties.mag)); // No .defined() here anymore
+
     return { linePath: lineGenerator(sortedForLine) };
   }, [originalQuakes, xScale, yScale]);
 
@@ -294,27 +309,24 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
             </text>
           ))}
 
-          {/* Date Tier Labels (Lower Tier) - Potentially remove or adjust */}
-          {/* With the new timeFormat in timeAxisTicks, this separate date tier might be redundant. */}
-          {/* For now, let's comment it out to see the effect of the changes above. */}
-          {/* {dateAxisTicks.map(({ label: dateLabel, x, dayStartDate }) => (
+          {/* Date Tier Labels (Lower Tier) */}
+          {dateAxisTicks.map(({ label: dateLabel, x, dayStartDate }) => (
             <text
               key={`date-label-${dayStartDate.toISOString()}`}
               x={x}
-              y={height + 40}
+              y={height + 40} // Position for date labels
               textAnchor="middle"
               className={`text-xs fill-current ${tickLabelColor}`}
             >
               {dateLabel}
             </text>
-          ))} */}
+          ))}
 
           {/* X-Axis Label */}
           <text
             x={width / 2}
-            // Adjusted y position since dateAxisTicks is commented out.
-            // If dateAxisTicks is kept, this y value might need to be height + 65.
-            y={height + 45} // Tentative new position
+            // Adjust y position to account for the date tier labels
+            y={height + 60} // Adjusted y position
             textAnchor="middle"
             className={`text-sm fill-current ${axisLabelColor}`}
           >
@@ -326,7 +338,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
             <path
                 d={linePath}
                 strokeDasharray="3,3" // Dashed line
-                className={`stroke-current ${tickLabelColor} opacity-75`} // Use existing tickLabelColor for theme consistency, add opacity
+                className={"stroke-current text-slate-300 opacity-100"} // MODIFIED LINE
                 strokeWidth={1}
                 fill="none"
             />
@@ -359,11 +371,11 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
                   cy={cy}
                   r={circleRadius}
                   fill={isMain ? 'none' : color}
-                  stroke={isMain ? color : 'none'}
+                  stroke={isMain ? color : 'none'} // REVERTED: uses 'color' from getMagnitudeColor(mag)
                   strokeWidth={isMain ? mainshockStrokeWidth : 0}
                   fillOpacity={isMain ? 1.0 : 0.7}
-                  strokeOpacity={isMain ? 1.0 : 0.7} // Mainshock stroke is its color, others usually no stroke
-                  className="transition-opacity duration-200 hover:opacity-100" // Hover to full opacity
+                  strokeOpacity={isMain ? 1.0 : 0.7}
+                  className="transition-opacity duration-200 hover:opacity-100" // REVERTED: removed conditional text-slate-300
                 >
                   <title>{`Mag ${formatNumber(mag,1)} ${place || 'Unknown location'} - ${formatDate(time)}`}</title>
                 </circle>
@@ -372,7 +384,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
                     x={cx + circleRadius + 5} // Adjust label position based on new radius
                     y={cy}
                     alignmentBaseline="middle"
-                    className={`text-xs fill-current ${tickLabelColor}`}
+                    className="text-xs fill-current text-slate-300" // MODIFIED: now uses text-slate-300
                   >
                     {formatNumber(mag,1)}
                   </text>
