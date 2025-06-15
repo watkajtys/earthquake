@@ -243,10 +243,18 @@ describe('EarthquakeSequenceChart', () => {
             // Once the mainshock group is identified, query for the label *within* that group.
             const mainshockLabelElement = within(mainshockGroup).getByText(expectedLabelText);
             expect(mainshockLabelElement).toBeInTheDocument();
+            // Check mainshock text label color
+            expect(mainshockLabelElement).toHaveClass('text-slate-300');
+            expect(mainshockLabelElement).not.toHaveClass('text-slate-500');
+
 
             expect(parseFloat(mainshockCircle.getAttribute('r'))).toBeCloseTo(expectedRadiusMainshockCalc, 1);
             expect(mainshockCircle).toHaveAttribute('fill', 'none');
+            // Check mainshock circle stroke color (reverted)
             expect(mainshockCircle).toHaveAttribute('stroke', getMagnitudeColor(mainshockData.properties.mag));
+            // Check mainshock circle class (reverted - no specific color class, just transition/hover)
+            expect(mainshockCircle).not.toHaveClass('text-slate-300');
+            expect(mainshockCircle).toHaveClass('transition-opacity'); // Ensure it still has base classes
             expect(mainshockCircle).toHaveAttribute('stroke-width', '2');
             expect(mainshockCircle).toHaveAttribute('fill-opacity', '1');
             expect(mainshockCircle).toHaveAttribute('stroke-opacity', '1');
