@@ -197,16 +197,15 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                                 // tabIndex="0" and role="button" are implicit for <button>
                                 title={quakeTitle}
                             >
-                                <div className="flex justify-between items-start mb-0.5">
-                                    <p className="text-sm font-semibold">
+    <div className="flex justify-between items-center mb-0.5"> {/* Changed items-start to items-center for vertical alignment */}
+        <p className={`text-sm font-semibold ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : ''}`}>
                                         M {quake.properties?.mag?.toFixed(1) || 'N/A'}
                                     </p>
-                                    {/* Optionally, keep a more subtle indicator if a USGS link exists, or remove entirely */}
-                                    {/* For now, removing the explicit "USGS Detail ->" link from this spot */}
+        <p className="text-xs text-slate-200 truncate ml-2" title={quake.properties?.place}> {/* Added ml-2 for spacing */}
+            {quake.properties?.place || 'Unknown place'}
+        </p>
                                 </div>
-                                <p className="text-xs text-slate-200 truncate" title={quake.properties?.place}>
-                                    {quake.properties?.place || 'Unknown place'}
-                                </p>
+    {/* The original location <p> element is now removed as it's combined above. */}
                                 <div className="text-xxs text-slate-400 mt-1 flex justify-between">
                                     <span>
                                         {formatDate ? formatDate(quake.properties?.time) : new Date(quake.properties?.time).toLocaleString() || 'N/A'}
