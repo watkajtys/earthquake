@@ -45,7 +45,7 @@ function EarthquakeSnapshotPanel({
                 <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Location</td><td className="py-1.5">{formatNumber(geometry.coordinates[1], 3)}°, {formatNumber(geometry.coordinates[0], 3)}°</td></tr>
             )}
             {isValidNumber(properties.mag) && (
-                <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Magnitude ({isValidString(properties.magType) ? properties.magType : 'Mww'})</td><td className="py-1.5 text-lg md:text-xl font-bold text-blue-700">{formatNumber(properties.mag, 1)}</td></tr>
+                <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Magnitude ({isValidString(properties.magType) ? properties.magType : 'Mww'})</td><td className="py-1.5">{formatNumber(properties.mag, 1)}</td></tr>
             )}
             {geometry?.coordinates && isValidNumber(geometry.coordinates[2]) && ( // Depth can be 0
                 <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Depth</td><td className="py-1.5">{formatNumber(geometry.coordinates[2], 1)} km</td></tr>
