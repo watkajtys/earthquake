@@ -338,7 +338,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
             <path
                 d={linePath}
                 strokeDasharray="3,3" // Dashed line
-                className={`stroke-current ${tickLabelColor} opacity-75`} // Use existing tickLabelColor for theme consistency, add opacity
+                className={"stroke-current text-slate-300 opacity-100"} // MODIFIED LINE
                 strokeWidth={1}
                 fill="none"
             />
