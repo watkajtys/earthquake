@@ -4,6 +4,40 @@
 import { escapeXml } from '../../utils/xml-utils.js';
 
 /**
+ * Generates a JSON-LD object for an EventSeries.
+ *
+ * @param {string} pageTitleText - The title of the page.
+ * @param {string} pageDescriptionText - The description of the page.
+ * @param {string} canonicalUrl - The canonical URL of the page.
+ * @param {string} effectiveLocationName - The name of the location.
+ * @param {string} [startDate] - Optional start date in ISO 8601 format.
+ * @param {string} [endDate] - Optional end date in ISO 8601 format.
+ * @returns {object} The JSON-LD object.
+ */
+function generateClusterJsonLd(pageTitleText, pageDescriptionText, canonicalUrl, effectiveLocationName, startDate, endDate) {
+  const ldJson = {
+    "@context": "http://schema.org",
+    "@type": "EventSeries",
+    "name": pageTitleText,
+    "description": pageDescriptionText,
+    "url": canonicalUrl,
+    "location": {
+      "@type": "Place",
+      "name": effectiveLocationName,
+    },
+  };
+
+  if (startDate) {
+    ldJson.startDate = startDate;
+  }
+  if (endDate) {
+    ldJson.endDate = endDate;
+  }
+
+  return ldJson;
+}
+
+/**
  * Generates an HTML page for a specific earthquake cluster, intended for web crawlers.
  * It parses a cluster slug, queries a D1 database for cluster details,
  * and fetches information about the strongest quake in the cluster from USGS.
@@ -104,6 +138,36 @@ export async function handlePrerenderCluster(context, clusterSlug) {
   const effectiveMaxMagnitude = d1Response.maxMagnitude || (strongestQuakeDetailsProperties ? strongestQuakeDetailsProperties.mag : null) || maxMagnitudeFromSlug;
   const magForDisplay = typeof effectiveMaxMagnitude === 'number' ? parseFloat(effectiveMaxMagnitude).toFixed(1) : parseFloat(maxMagnitudeFromSlug).toFixed(1);
 
+  let startDateIso = null;
+  let endDateIso = null;
+
+  if (d1Response.earthquakeIds && typeof d1Response.earthquakeIds === 'string' && d1Response.earthquakeIds.length > 2) { // Check for non-empty array string
+    try {
+      const quakeIdsArray = JSON.parse(d1Response.earthquakeIds);
+      if (Array.isArray(quakeIdsArray) && quakeIdsArray.length > 0) {
+        const placeholders = quakeIdsArray.map(() => '?').join(',');
+        const query = `SELECT event_time FROM EarthquakeEvents WHERE id IN (${placeholders}) ORDER BY event_time ASC`;
+        const eventTimesStmt = env.DB.prepare(query);
+        const eventTimesResult = await eventTimesStmt.bind(...quakeIdsArray).all();
+
+        if (eventTimesResult && eventTimesResult.results && eventTimesResult.results.length > 0) {
+          const eventTimes = eventTimesResult.results.map(row => row.event_time);
+          const minTime = eventTimes[0];
+          const maxTime = eventTimes[eventTimes.length - 1];
+
+          if (minTime) {
+            startDateIso = new Date(minTime).toISOString();
+          }
+          if (maxTime) {
+            endDateIso = new Date(maxTime).toISOString();
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`[prerender-cluster] Error processing earthquakeIds for date range: ${e.message} for clusterId ${d1Response.clusterId || `overview_cluster_${strongestQuakeIdFromSlug}_${count}`}`);
+      // startDateIso and endDateIso remain null
+    }
+  }
 
   const pageTitleText = d1Response.title || `${count} Earthquakes Near ${effectiveLocationName} (up to M${magForDisplay})`;
   const pageDescriptionText = d1Response.description || `An overview of ${count} recent seismic activities near ${effectiveLocationName}, with the strongest reaching M${magForDisplay}.`;
@@ -138,5 +202,13 @@ export async function handlePrerenderCluster(context, clusterSlug) {
 </body>
 </html>`;
 
-  return new Response(html, { headers: { "Content-Type": "text/html" } });
+  // Generate JSON-LD
+  const jsonLdObject = generateClusterJsonLd(pageTitleText, pageDescriptionText, canonicalUrl, effectiveLocationName, startDateIso, endDateIso);
+  const jsonLdString = JSON.stringify(jsonLdObject);
+  const jsonLdScript = `<script type="application/ld+json">${jsonLdString}</script>`;
+
+  // Inject JSON-LD into the head
+  const finalHtml = html.replace("</head>", `${jsonLdScript}\n</head>`);
+
+  return new Response(finalHtml, { headers: { "Content-Type": "text/html" } });
 }
