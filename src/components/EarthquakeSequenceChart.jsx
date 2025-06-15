@@ -213,7 +213,8 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
     );
     const lineGenerator = d3Line()
         .x(d => xScale(new Date(d.properties.time)))
-        .y(d => yScale(d.properties.mag));
+        .y(d => yScale(d.properties.mag))
+        .defined(d => d.properties.mag >= 1.5);
     // If sortedQuakes is needed by other parts of the component (it's not, currently), return it as well.
     // For now, it was only used to generate linePath.
     return { linePath: lineGenerator(sortedForLine) };
