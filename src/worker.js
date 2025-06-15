@@ -1,6 +1,10 @@
 // Import D1 utility functions
 // Note: Adjusted path assuming worker.js is in src/ and d1Utils.js is in src/utils/
 import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js';
+import { geoOrthographic, geoPath } from 'd3-geo';
+import { feature } from 'topojson-client';
+import { createCanvas } from 'canvas';
+import worldMapData from '../assets/world-110m.json';
 
 // === Helper Functions (originally from [[catchall]].js) ===
 const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefined) => {
@@ -486,6 +490,196 @@ export default {
         }
       } else {
         return jsonErrorResponse("Invalid earthquake event ID path", 400, "worker-router-earthquake-format");
+      }
+    }
+
+    if (pathname === "/api/social-image/earthquake") {
+      const eventID = url.searchParams.get("event");
+      const sourceName = "social-image-earthquake-handler";
+
+      if (!eventID) {
+        return jsonErrorResponse("Missing eventID query parameter", 400, sourceName);
+      }
+
+      const usgsApiUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${eventID}`;
+      let eventData; // To store fetched earthquake data
+
+      try {
+        const usgsResponse = await fetch(usgsApiUrl, {
+          headers: { 'User-Agent': 'EarthquakesLiveSocialImageWorker/1.0 (+https://earthquakeslive.com)' }
+        });
+
+        if (!usgsResponse.ok) {
+          console.error(`[${sourceName}] USGS API request failed for eventID ${eventID}: ${usgsResponse.status} ${usgsResponse.statusText}`);
+          return jsonErrorResponse(
+            `Error fetching data from USGS API: ${usgsResponse.status} ${usgsResponse.statusText}`,
+            usgsResponse.status === 404 ? 404 : 502,
+            sourceName,
+            usgsResponse.status
+          );
+        }
+
+        const data = await usgsResponse.json();
+
+        if (!data || !data.properties || !data.geometry || !data.geometry.coordinates || data.geometry.coordinates.length < 3) {
+          console.error(`[${sourceName}] Invalid or incomplete data structure from USGS for eventID ${eventID}:`, data);
+          return jsonErrorResponse("Invalid or incomplete data from USGS", 500, sourceName);
+        }
+
+        eventData = {
+          eventID,
+          magnitude: data.properties.mag,
+          place: data.properties.place,
+          time: data.properties.time,
+          longitude: data.geometry.coordinates[0],
+          latitude: data.geometry.coordinates[1],
+          depth: data.geometry.coordinates[2],
+          tsunami: data.properties.tsunami
+        };
+
+        if (Object.values(eventData).some(val => val === null || val === undefined)) {
+          console.error(`[${sourceName}] Missing one or more required data points from USGS for eventID ${eventID}. Data:`, data.properties, data.geometry);
+          return jsonErrorResponse("Missing required data points from USGS response", 500, sourceName);
+        }
+
+      } catch (error) {
+        console.error(`[${sourceName}] Error fetching or parsing USGS data for eventID ${eventID}: ${error.message}`, error);
+        return jsonErrorResponse(`Error fetching or parsing USGS data: ${error.message}`, 500, sourceName);
+      }
+
+      // Globe Generation
+      try {
+        const globeWidth = 300;
+        const globeHeight = 300;
+        const globeCanvas = createCanvas(globeWidth, globeHeight);
+        const globeCtx = globeCanvas.getContext('2d');
+
+        const projection = geoOrthographic()
+          .scale(140) // Adjust scale as needed for a 300px canvas
+          .translate([globeWidth / 2, globeHeight / 2])
+          .center([0, 0])
+          .rotate([-eventData.longitude, -eventData.latitude]);
+
+        const pathGenerator = geoPath(projection, globeCtx);
+
+        // Ocean
+        globeCtx.fillStyle = '#add8e6'; // Light blue for ocean
+        globeCtx.beginPath();
+        pathGenerator({ type: 'Sphere' });
+        globeCtx.fill();
+
+        // Land
+        // Ensure worldMapData is correctly imported and available
+        if (!worldMapData || !worldMapData.objects || !worldMapData.objects.countries) {
+            console.error(`[${sourceName}] worldMapData is not loaded or structured correctly.`);
+            return jsonErrorResponse("Error loading map data for globe generation.", 500, sourceName);
+        }
+        const landFeatures = feature(worldMapData, worldMapData.objects.countries);
+        globeCtx.fillStyle = '#A1C9A0'; // Green for land
+        globeCtx.beginPath();
+        pathGenerator(landFeatures);
+        globeCtx.fill();
+
+        // Borders
+        globeCtx.strokeStyle = '#777';
+        globeCtx.lineWidth = 0.5;
+        globeCtx.beginPath();
+        pathGenerator(landFeatures);
+        globeCtx.stroke();
+
+        // Epicenter Marker
+        const [x, y] = projection([eventData.longitude, eventData.latitude]);
+        if (x !== undefined && y !== undefined && !isNaN(x) && !isNaN(y)) {
+          // Check if the point is on the visible side of the globe
+          // This can be done by checking if the projected point is within the sphere's path
+          // A simpler check is if pathGenerator for a small circle at the point returns a non-empty path,
+          // or more accurately, if the point is not clipped by the projection.
+          // For geoOrthographic, points on the back-hemisphere project to null or [NaN, NaN].
+          // We also need to ensure it's within the canvas bounds for safety, though projection should handle it.
+          const [projLon, projLat] = projection.invert(x,y); // Check if point is on visible side
+          if (Math.abs(projLon - eventData.longitude) < 1e-2 && Math.abs(projLat - eventData.latitude) < 1e-2) { // Check if point is on visible side
+            globeCtx.beginPath();
+            globeCtx.arc(x, y, 5, 0, 2 * Math.PI); // 5px radius red circle
+            globeCtx.fillStyle = 'red';
+            globeCtx.fill();
+          }
+        }
+
+        // Main Canvas Setup
+        const mainWidth = 1200;
+        const mainHeight = 675;
+        const mainCanvas = createCanvas(mainWidth, mainHeight);
+        const mainCtx = mainCanvas.getContext('2d');
+
+        // Background
+        mainCtx.fillStyle = '#f0f0f0'; // Light gray
+        mainCtx.fillRect(0, 0, mainWidth, mainHeight);
+
+        // Draw Globe Image
+        mainCtx.drawImage(globeCanvas, 50, (mainHeight - globeCanvas.height) / 2);
+
+        // Text Overlay
+        mainCtx.fillStyle = '#333'; // Dark text color
+
+        // Magnitude
+        mainCtx.font = 'bold 72px Arial, sans-serif';
+        mainCtx.fillText(`M ${eventData.magnitude.toFixed(1)}`, globeCanvas.width + 70, 150);
+
+        // Location
+        mainCtx.font = '48px Arial, sans-serif';
+        const placeText = eventData.place.toUpperCase();
+        // Basic text wrapping (simple example, might need more sophisticated wrapping)
+        const maxTextWidth = mainWidth - (globeCanvas.width + 70) - 50; // Max width for text
+
+        // Function to wrap text (simple version)
+        function wrapText(context, text, x, y, maxWidth, lineHeight) {
+            const words = text.split(' ');
+            let line = '';
+            for(let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = context.measureText(testLine);
+                const testWidth = metrics.width;
+                if (testWidth > maxWidth && n > 0) {
+                    context.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            context.fillText(line, x, y);
+        }
+        wrapText(mainCtx, placeText, globeCanvas.width + 70, 250, maxTextWidth, 50);
+
+
+        // Time
+        mainCtx.font = '36px Arial, sans-serif';
+        const date = new Date(eventData.time);
+        const formattedTime = date.toUTCString();
+        mainCtx.fillText(formattedTime, globeCanvas.width + 70, 350); // Adjusted y for location text wrapping
+
+        // Tsunami Banner
+        if (eventData.tsunami === 1) {
+          mainCtx.fillStyle = 'red';
+          mainCtx.fillRect(0, mainHeight - 80, mainWidth, 80); // Banner at the bottom
+          mainCtx.fillStyle = 'white';
+          mainCtx.font = 'bold 42px Arial, sans-serif';
+          mainCtx.textAlign = 'center';
+          mainCtx.fillText('Tsunami Warning', mainWidth / 2, mainHeight - 25);
+          mainCtx.textAlign = 'left'; // Reset alignment
+        }
+
+        // Encode to PNG Buffer
+        const pngBuffer = mainCanvas.toBuffer('image/png');
+
+        // Return Image Response
+        return new Response(pngBuffer, {
+          headers: { 'Content-Type': 'image/png' },
+        });
+
+      } catch (imageCompositionError) { // Catching errors from globe generation or main canvas composition
+        console.error(`[${sourceName}] Error during image composition for eventID ${eventID}: ${imageCompositionError.message}`, imageCompositionError);
+        return jsonErrorResponse(`Error composing image: ${imageCompositionError.message}`, 500, sourceName);
       }
     }
 
