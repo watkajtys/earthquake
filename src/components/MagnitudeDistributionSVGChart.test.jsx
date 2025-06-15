@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import MagnitudeDistributionSVGChart from './MagnitudeDistributionSVGChart';
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext';
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils';
 import * as Utils from '../utils/utils'; // To mock getMagnitudeColor
 
 // Mock the EarthquakeDataContext

@@ -2,8 +2,8 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import FeedsPageLayout from './FeedsPageLayout';
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext';
-import { UIStateContext } from '../contexts/UIStateContext';
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils';
+import { UIStateContext } from '../contexts/uiStateContextUtils';
 
 // Import actual components to be mocked for use with vi.mocked
 import FeedSelector from './FeedSelector';

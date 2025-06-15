@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom'; // Import MemoryRouter
 import AlertDisplay from './AlertDisplay';
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext'; // Import the context
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils'; // Import the context
 
 // Mock ALERT_LEVELS constant as it's used by the component
 const ALERT_LEVELS = {

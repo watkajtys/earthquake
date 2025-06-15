@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import EarthquakeTimelineSVGChart from './EarthquakeTimelineSVGChart';
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext';
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils';
 
 // Mock the EarthquakeDataContext
 const mockUseEarthquakeDataState = vi.fn();

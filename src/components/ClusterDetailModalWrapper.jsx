@@ -168,10 +168,8 @@ function ClusterDetailModalWrapper({
 
         const findAndSetCluster = async () => {
             if (!isMounted) return;
-            setInternalIsLoading(true);
-            if (!isWaitingForMonthlyData) {
-                setErrorMessage('');
-            }
+            // Initial loading set and error clear MOVED DOWN
+            // to after slug validation.
 
             if (!fullSlugFromParams) {
                 if (isMounted) {
@@ -201,6 +199,12 @@ function ClusterDetailModalWrapper({
                 return;
             }
 
+            // If we've passed all slug/ID validations, then proceed to set loading state
+            // and clear any previous non-validation errors.
+            setInternalIsLoading(true);
+            if (!isWaitingForMonthlyData) {
+                setErrorMessage('');
+            }
 
             const initialUpstreamLoad = areParentClustersLoading ||
                                        (!hasAttemptedMonthlyLoad && (isLoadingWeekly || isInitialAppLoad) && !earthquakesLast72Hours?.length) ||
@@ -208,6 +212,9 @@ function ClusterDetailModalWrapper({
 
             if (initialUpstreamLoad && !dynamicCluster) {
                 if (isMounted) setSeoProps(generateSeo(null, fullSlugFromParams, 'Loading cluster details...'));
+                // If upstream is loading, and we don't have a cluster yet, it's appropriate to show loading.
+                // The function will be re-called when upstream loading finishes.
+                // We must ensure internalIsLoading is true here. It was set above.
                 return;
             }
 
@@ -391,16 +398,16 @@ function ClusterDetailModalWrapper({
             setDynamicCluster(null);
         }
 
-        if (extractedStrongestQuakeId || !fullSlugFromParams) { // Proceed if ID extracted or if slug is null (for initial error)
-            findAndSetCluster();
-        } else if (fullSlugFromParams && !extractedStrongestQuakeId && !internalIsLoading && !errorMessage) {
-            // This case handles if slug exists, parsing failed (extractedStrongestQuakeId is null),
-            // and no error/loading is currently set. This ensures error for bad slug is shown.
-            const errMsg = "Invalid cluster URL format. Could not extract quake ID.";
-            setErrorMessage(errMsg);
-            setInternalIsLoading(false);
-            setSeoProps(generateSeo(null, fullSlugFromParams, errMsg));
-        }
+        // Simplified condition: always call findAndSetCluster if essential params change.
+        // The internal logic of findAndSetCluster should handle all states including errors.
+        findAndSetCluster();
+        // else if (fullSlugFromParams && !extractedStrongestQuakeId && !internalIsLoading && !errorMessage) {
+            // This block is removed as its conditions should be handled by the initial checks within findAndSetCluster.
+            // const errMsg = "Invalid cluster URL format. Could not extract quake ID.";
+            // setErrorMessage(errMsg);
+            // setInternalIsLoading(false);
+            // setSeoProps(generateSeo(null, fullSlugFromParams, errMsg));
+        // }
 
 
         return () => { isMounted = false; };

@@ -1,6 +1,6 @@
 import React from 'react';
-import { EarthquakeDataProvider, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext';
-import { earthquakeReducer, initialState, actionTypes, initialState as contextInitialState, EarthquakeDataContext } from '../../contexts/earthquakeDataContextUtils.js'; // Corrected path and consolidated initialState, added EarthquakeDataContext
+import { EarthquakeDataProvider, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext.jsx'; // Corrected: Import from the main context file
+import { earthquakeReducer, initialState, actionTypes, initialState as contextInitialState, EarthquakeDataContext } from '../../contexts/earthquakeDataContextUtils.js'; // Utils remain from utils file
 
 // --- React specific testing imports ---
 import { renderHook, act, waitFor } from '@testing-library/react';

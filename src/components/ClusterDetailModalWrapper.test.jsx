@@ -1,17 +1,22 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
+import { EarthquakeDataProvider } from '../contexts/EarthquakeDataContext.jsx';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import ClusterDetailModalWrapper from './ClusterDetailModalWrapper.jsx';
 // Assuming these are the contexts and services it uses or that need mocking for it to render
-// import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Removed, using hoisted mock
+// import { useEarthquakeDataState } from '../contexts/earthquakeDataContextUtils.js'; // Removed, using hoisted mock
 // import { fetchClusterDefinition } from '../services/clusterApiService.js'; // Removed, using hoisted mock
 
 // --- Mocks ---
 const mockNavigate = vi.fn();
-const mockFetchClusterDefinition = vi.fn();
+// const mockFetchClusterDefinition = vi.fn(); // Will be hoisted
 const mockUseParams = vi.fn();
+
+const { mockFetchClusterDefinition } = vi.hoisted(() => {
+  return { mockFetchClusterDefinition: vi.fn() };
+});
 
 vi.mock('react-router-dom', async (importOriginal) => {
   const original = await importOriginal();
@@ -23,7 +28,7 @@ vi.mock('react-router-dom', async (importOriginal) => {
 });
 
 vi.mock('../services/clusterApiService.js', () => ({
-  fetchClusterDefinition: mockFetchClusterDefinition,
+  fetchClusterDefinition: mockFetchClusterDefinition, // Now refers to the hoisted mock
 }));
 
 // Mock the actual modal content to simplify testing the wrapper
@@ -35,13 +40,15 @@ vi.mock('./SeoMetadata', () => ({
   default: vi.fn(() => null), // Mock SeoMetadata to do nothing
 }));
 
-// Mock context hooks
-const { mockUseEarthquakeDataState } = vi.hoisted(() => ({
-  mockUseEarthquakeDataState: vi.fn(),
-}));
-vi.mock('../contexts/EarthquakeDataContext.jsx', () => ({
-  useEarthquakeDataState: mockUseEarthquakeDataState,
-}));
+// No longer mocking earthquakeDataContextUtils.js or useEarthquakeDataState directly here,
+// as EarthquakeDataProvider will be used in renders.
+// const { mockUseEarthquakeDataState } = vi.hoisted(() => ({
+//   mockUseEarthquakeDataState: vi.fn(),
+// }));
+// vi.mock('../contexts/earthquakeDataContextUtils.js', () => ({
+//   useEarthquakeDataState: mockUseEarthquakeDataState,
+//   EarthquakeDataContext: React.createContext(null),
+// }));
 
 // Default props needed by ClusterDetailModalWrapper
 const defaultProps = {
@@ -69,7 +76,7 @@ const defaultEarthquakeData = {
 describe('ClusterDetailModalWrapper URL Slug Parsing and Data Fetching', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mockUseEarthquakeDataState.mockReturnValue(defaultEarthquakeData);
+    // mockUseEarthquakeDataState.mockReturnValue(defaultEarthquakeData); // No longer needed
     mockFetchClusterDefinition.mockResolvedValue(null); // Default to not finding a definition
   });
 
@@ -145,18 +152,25 @@ describe('ClusterDetailModalWrapper URL Slug Parsing and Data Fetching', () => {
       const propsWithEmptyOverview = { ...defaultProps, overviewClusters: [] };
 
       render(
-        <MemoryRouter initialEntries={slug !== null ? [`/cluster/${slug}`] : ['/cluster/']}>
-          <Routes>
-            <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper {...propsWithEmptyOverview} />} />
-             {/* Added a fallback route for null/empty slug to avoid router errors in test setup */}
-            <Route path="/cluster/" element={<ClusterDetailModalWrapper {...propsWithEmptyOverview} />} />
-          </Routes>
-        </MemoryRouter>
+        <EarthquakeDataProvider>
+          <MemoryRouter initialEntries={slug !== null ? [`/cluster/${slug}`] : ['/cluster/']}>
+            <Routes>
+              <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper {...propsWithEmptyOverview} />} />
+               {/* Added a fallback route for null/empty slug to avoid router errors in test setup */}
+              <Route path="/cluster/" element={<ClusterDetailModalWrapper {...propsWithEmptyOverview} />} />
+            </Routes>
+          </MemoryRouter>
+        </EarthquakeDataProvider>
       );
 
       if (expectError) {
-        // Wait for error message to appear
-        const errorElement = await screen.findByText(errorMessageContent);
+        // Wait for loading message to disappear
+        await waitFor(() => {
+          expect(screen.queryByText(/Loading Cluster Details.../i)).not.toBeInTheDocument();
+        }, { timeout: 5000 }); // Generous timeout
+
+        // Then find the error message
+        const errorElement = await screen.findByText(errorMessageContent, {}, { timeout: 3000 });
         expect(errorElement).toBeInTheDocument();
         expect(mockFetchClusterDefinition).not.toHaveBeenCalled();
       } else {
@@ -191,11 +205,13 @@ describe('ClusterDetailModalWrapper URL Slug Parsing and Data Fetching', () => {
     };
 
     render(
-      <MemoryRouter initialEntries={[`/cluster/${slug}`]}>
-        <Routes>
-          <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper {...defaultProps} overviewClusters={[mockClusterFromProps]} />} />
-        </Routes>
-      </MemoryRouter>
+      <EarthquakeDataProvider>
+        <MemoryRouter initialEntries={[`/cluster/${slug}`]}>
+          <Routes>
+            <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper {...defaultProps} overviewClusters={[mockClusterFromProps]} />} />
+          </Routes>
+        </MemoryRouter>
+      </EarthquakeDataProvider>
     );
 
     // Check if the modal is rendered with data from the prop

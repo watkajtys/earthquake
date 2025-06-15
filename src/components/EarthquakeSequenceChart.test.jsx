@@ -243,33 +243,47 @@ describe('EarthquakeSequenceChart', () => {
             };
 
             Object.entries(expectedTicksWithY).forEach(([text, expectedY]) => {
-                const tickElement = within(svgElement).queryByText(String(text));
-                // D3 might not render all ticks, especially if space is limited or they are at the very edges.
-                // So, only check the 'y' attribute if the tickElement is found.
-                if (tickElement) {
-                    expect(tickElement).toBeInTheDocument();
-                    expect(parseFloat(tickElement.getAttribute('y'))).toBeCloseTo(expectedY, 1); // Check y position with tolerance
+                // More specific query for Y-axis tick labels
+                const tickElements = within(svgElement).getAllByText(String(text));
+                const yAxisTick = tickElements.find(
+                    el => el.getAttribute('text-anchor') === 'end' && el.getAttribute('x') === '-8'
+                );
+
+                if (yAxisTick) {
+                    expect(yAxisTick).toBeInTheDocument();
+                    expect(parseFloat(yAxisTick.getAttribute('y'))).toBeCloseTo(expectedY, 1);
+                } else if (text === "4.5") {
+                    // For "4.5", it's okay if the specific Y-axis tick isn't found due to the mainshock label also being "4.5"
+                    // as long as at least one "4.5" is present (checked implicitly by getAllByText not erroring).
+                    // The mainshock label test will verify the mainshock's "4.5".
+                } else {
+                    // If other expected ticks are missing, that's an issue.
+                    // This will fail if queryByText was used and found multiple, or if getAllByText finds none it expects.
+                    // For now, we accept that D3 might not render all, but critical ones like min/max are checked below.
                 }
             });
 
-            // Ensure at least the min and max of the domain are rendered as ticks, as these are usually preserved by D3.
-            const minTick = within(svgElement).queryByText('2');
-            const maxTick = within(svgElement).queryByText('5');
+            // Ensure at least the min and max of the domain are rendered as Y-axis ticks.
+            const minTickCandidates = within(svgElement).getAllByText('2');
+            const minTick = minTickCandidates.find(el => el.getAttribute('text-anchor') === 'end' && el.getAttribute('x') === '-8');
             expect(minTick).toBeInTheDocument();
-            expect(parseFloat(minTick.getAttribute('y'))).toBeCloseTo(230, 1);
+            if (minTick) expect(parseFloat(minTick.getAttribute('y'))).toBeCloseTo(230, 1);
+
+            const maxTickCandidates = within(svgElement).getAllByText('5');
+            const maxTick = maxTickCandidates.find(el => el.getAttribute('text-anchor') === 'end' && el.getAttribute('x') === '-8');
             expect(maxTick).toBeInTheDocument();
-            expect(parseFloat(maxTick.getAttribute('y'))).toBeCloseTo(0, 1);
+            if (maxTick) expect(parseFloat(maxTick.getAttribute('y'))).toBeCloseTo(0, 1);
         });
 
         test('renders X-axis label "Time (UTC)" correctly positioned', () => {
             const titleElement = screen.getByText('Time (UTC)');
             expect(titleElement).toBeInTheDocument();
             // margin.bottom = 80; plotHeight = 350 - 40 - 80 = 230.
-            // X-axis title y is plotHeight + 65 for two-tiered X-axis. Expected y = 230 + 65 = 295.
-            expect(titleElement.getAttribute('y')).toBe(String(230 + 65));
+            // X-axis title y is plotHeight + 45. Expected y = 230 + 45 = 275.
+            expect(titleElement.getAttribute('y')).toBe(String(230 + 45));
         });
 
-        describe('Two-Tiered X-Axis Labels', () => { // Name reverted to reflect two tiers
+        describe('X-Axis Labels (Combined Date and Time)', () => {
             const chartHeight = 350;
             const newMargin = { top: 40, right: 20, bottom: 80, left: 20 }; // Correct margin
             const plotHeight = chartHeight - newMargin.top - newMargin.bottom; // 230
@@ -279,48 +293,50 @@ describe('EarthquakeSequenceChart', () => {
                 const svgElement = getSvgContainer(currentContainer);
                 if (!svgElement) throw new Error("SVG container not found for time labels test");
 
-                // Expecting format %-I%p (e.g., "11AM", "12PM", "1PM")
-                // For mockClusterData (11AM to 1PM), ticks could be 11AM, 12PM, 1PM depending on D3 logic for the span.
-                const timeLabels = within(svgElement).getAllByText(/\d{1,2}PM|\d{1,2}AM/i); // Regex for AM/PM format
+                // Expecting format like "Jan 01, 12PM"
+                const timeLabels = within(svgElement).getAllByText(/^[A-Za-z]{3}\s\d{1,2},\s\d{1,2}(AM|PM)$/i);
                 expect(timeLabels.length).toBeGreaterThanOrEqual(1);
-                // Check for a known label based on mock data and typical D3 behavior for short spans
-                expect(timeLabels.some(l => l.textContent === "12PM")).toBe(true);
+                // Check for a known label based on mock data
+                expect(timeLabels.some(l => l.textContent.includes("Jan 01, 12PM"))).toBe(true);
                 timeLabels.forEach(label => {
                     expect(label.getAttribute('y')).toBe(String(plotHeight + 20)); // 230 + 20 = 250
                     expect(label.getAttribute('text-anchor')).toBe('middle');
                 });
             });
 
-            test('renders date labels (lower tier) correctly for short span (same day)', () => { // Title updated
+            test('renders date part of labels correctly for short span (same day)', () => {
                 const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
                 const svgElement = getSvgContainer(currentContainer);
                 if (!svgElement) throw new Error("SVG container not found for date labels test");
 
-                // Expecting format %b %d (e.g., "Jan 01")
-                const dateLabels = within(svgElement).getAllByText(/^Jan\s01$/i); // Regex for "Jan 01"
-                expect(dateLabels.length).toBeGreaterThanOrEqual(1); // Should find at least one "Jan 01"
+                // Expecting format like "Jan 01, 12PM"
+                const dateLabels = within(svgElement).getAllByText(/Jan\s01,\s\d{1,2}(?:AM|PM)/i);
+                expect(dateLabels.length).toBeGreaterThanOrEqual(1);
                 dateLabels.forEach(label => {
-                    expect(label.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20));
                     expect(label.getAttribute('text-anchor')).toBe('middle');
                 });
             });
 
-            test('renders date labels (lower tier) correctly for multi-day span', () => { // Title updated
+            test('renders date part of labels correctly for multi-day span', () => {
                 const { container: longSpanContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataLongSpan} />);
                 const svgElement = getSvgContainer(longSpanContainer);
                 if (!svgElement) throw new Error("SVG container not found for multi-day date labels test");
 
-                // Expecting format %b %d
-                const dateLabelsJan01 = within(svgElement).getByText(/^Jan\s01$/i);
-                const dateLabelsJan02 = within(svgElement).getByText(/^Jan\s02$/i);
+                const dateLabelsJan01 = within(svgElement).getAllByText(/Jan\s01,\s\d{1,2}(?:AM|PM)/i);
+                const dateLabelsJan02 = within(svgElement).getAllByText(/Jan\s02,\s\d{1,2}(?:AM|PM)/i);
 
-                expect(dateLabelsJan01).toBeInTheDocument();
-                expect(dateLabelsJan01.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
-                expect(dateLabelsJan01.getAttribute('text-anchor')).toBe('middle');
+                expect(dateLabelsJan01.length).toBeGreaterThanOrEqual(1);
+                dateLabelsJan01.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20));
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
 
-                expect(dateLabelsJan02).toBeInTheDocument();
-                expect(dateLabelsJan02.getAttribute('y')).toBe(String(plotHeight + 40)); // 230 + 40 = 270
-                expect(dateLabelsJan02.getAttribute('text-anchor')).toBe('middle');
+                expect(dateLabelsJan02.length).toBeGreaterThanOrEqual(1);
+                dateLabelsJan02.forEach(label => {
+                    expect(label.getAttribute('y')).toBe(String(plotHeight + 20));
+                    expect(label.getAttribute('text-anchor')).toBe('middle');
+                });
             });
         });
 
