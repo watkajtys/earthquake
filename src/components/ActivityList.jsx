@@ -33,14 +33,14 @@ const ActivityList = ({ latestFeelableQuakesSnippet, getMagnitudeColorStyle, for
               className={`w-full text-left p-2 hover:bg-slate-600 focus:bg-slate-500 transition-colors rounded focus:outline-none focus:ring-1 focus:ring-indigo-400 ${getMagnitudeColorStyle(quake.properties.mag)}`}
             >
               <div className="flex justify-between items-center">
-                <span className="font-semibold">
+                <span className="font-bold text-sm">
                   M {quake.properties.mag?.toFixed(1)}
                 </span>
                 <span>
                   {formatTimeAgo(Date.now() - quake.properties.time)}
                 </span>
               </div>
-              <p className="truncate text-[11px]" title={quake.properties.place}>
+              <p className="truncate text-[11px] font-medium" title={quake.properties.place}>
                 {quake.properties.place || "Location details pending..."}
               </p>
             </button>
