@@ -144,8 +144,13 @@ describe('ClusterDetailModal Quake Item Rendering', () => {
       // eslint-disable-next-line testing-library/no-node-access
       const dateDepthDiv = quakeButtonElement.children[1];
       expect(dateDepthDiv).not.toBeNull();
-      expect(dateDepthDiv.className).toContain('text-slate-300');
-      expect(dateDepthDiv.className).toContain('text-xxs'); // Keep other classes
+      // Ensure it does NOT have text-slate-300 or other explicit color classes like text-red-500, text-cyan-900 etc.
+      // It should only have text-xxs for sizing.
+      // This regex checks that 'text-' is not followed by a color name (common patterns)
+      // It allows 'text-xxs' but would fail 'text-red-500' or 'text-slate-300'.
+      const colorClassPattern = /text-(?!xxs)/; // Adjust if other non-color 'text-' classes are used
+      expect(dateDepthDiv.className).not.toMatch(colorClassPattern);
+      expect(dateDepthDiv.className).toContain('text-xxs'); // Keep other classes like size
 
       expect(mockProps.getMagnitudeColorStyle).toHaveBeenCalledWith(quake.properties.mag);
     });

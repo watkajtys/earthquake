@@ -210,8 +210,8 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
             {quake.properties?.place || 'Unknown place'}
         </p>
     </div>
-    {/* Date and Depth text colors adjusted for better contrast on various backgrounds */}
-                                <div className="text-xxs text-slate-300 mt-1 flex justify-between"> {/* Changed text-slate-400 to text-slate-300 */}
+    {/* Date and Depth text colors will now be inherited from the button */}
+                                <div className="text-xxs mt-1 flex justify-between"> {/* Removed text-slate-300 */}
                                     <span>
                                         {formatDate ? formatDate(quake.properties?.time) : new Date(quake.properties?.time).toLocaleString() || 'N/A'}
                                     </span>
