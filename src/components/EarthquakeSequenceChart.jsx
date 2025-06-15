@@ -371,11 +371,11 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
                   cy={cy}
                   r={circleRadius}
                   fill={isMain ? 'none' : color}
-                  stroke={isMain ? color : 'none'}
+                  stroke={isMain ? color : 'none'} // REVERTED: uses 'color' from getMagnitudeColor(mag)
                   strokeWidth={isMain ? mainshockStrokeWidth : 0}
                   fillOpacity={isMain ? 1.0 : 0.7}
-                  strokeOpacity={isMain ? 1.0 : 0.7} // Mainshock stroke is its color, others usually no stroke
-                  className="transition-opacity duration-200 hover:opacity-100" // Hover to full opacity
+                  strokeOpacity={isMain ? 1.0 : 0.7}
+                  className="transition-opacity duration-200 hover:opacity-100" // REVERTED: removed conditional text-slate-300
                 >
                   <title>{`Mag ${formatNumber(mag,1)} ${place || 'Unknown location'} - ${formatDate(time)}`}</title>
                 </circle>
@@ -384,7 +384,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
                     x={cx + circleRadius + 5} // Adjust label position based on new radius
                     y={cy}
                     alignmentBaseline="middle"
-                    className={`text-xs fill-current ${tickLabelColor}`}
+                    className="text-xs fill-current text-slate-300" // MODIFIED: now uses text-slate-300
                   >
                     {formatNumber(mag,1)}
                   </text>
