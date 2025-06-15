@@ -183,30 +183,35 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                                 }
                             };
                             const quakeTitle = `Click to view details for M ${quake.properties?.mag?.toFixed(1) || 'N/A'} - ${quake.properties?.place || 'Unknown Place'}`;
-                            // Applied to button: text-left to mimic div's default block behavior for text alignment
-                            const originalClassName = `w-full text-left p-2.5 rounded-md border ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : 'bg-slate-700 border-slate-600'} hover:border-slate-500 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400`;
+
+                            const baseClasses = "w-full text-left p-2.5 rounded-md border hover:border-slate-500 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400";
+                            const magnitudeClasses = getMagnitudeColorStyle && quake.properties?.mag !== null && quake.properties?.mag !== undefined
+                                ? getMagnitudeColorStyle(quake.properties.mag) + ' border-transparent' // Use transparent border when style is applied
+                                : 'bg-slate-700 border-slate-600 text-slate-100'; // Fallback with specific border and text color
+
+                            const finalButtonClassName = `${baseClasses} ${magnitudeClasses}`;
 
                             return (
-                            // The eslint-disable-next-line previously here was removed as it was unused.
                             <button
                                 key={quake.id}
                                 type="button" // Explicit type for button
-                                className={originalClassName}
+                                className={finalButtonClassName}
                                 onClick={() => onIndividualQuakeSelect && onIndividualQuakeSelect(quake)}
                                 onKeyDown={(e) => handleQuakeKeyDown(e, quake)}
-                                // tabIndex="0" and role="button" are implicit for <button>
                                 title={quakeTitle}
                             >
-    <div className="flex justify-between items-center mb-0.5"> {/* Changed items-start to items-center for vertical alignment */}
-        <p className={`text-sm font-semibold ${getMagnitudeColorStyle ? getMagnitudeColorStyle(quake.properties?.mag) : ''}`}>
-                                        M {quake.properties?.mag?.toFixed(1) || 'N/A'}
-                                    </p>
-        <p className="text-xs text-slate-200 truncate ml-2" title={quake.properties?.place}> {/* Added ml-2 for spacing */}
+    <div className="flex justify-between items-center mb-0.5">
+        {/* Magnitude text color will be inherited from the button's text color (set by getMagnitudeColorStyle) */}
+        <p className="text-sm font-semibold">
+            M {quake.properties?.mag?.toFixed(1) || 'N/A'}
+        </p>
+        {/* Location text color will also be inherited from the button */}
+        <p className="text-xs truncate ml-2" title={quake.properties?.place}> {/* Removed text-slate-200 */}
             {quake.properties?.place || 'Unknown place'}
         </p>
-                                </div>
-    {/* The original location <p> element is now removed as it's combined above. */}
-                                <div className="text-xxs text-slate-400 mt-1 flex justify-between">
+    </div>
+    {/* Date and Depth text colors adjusted for better contrast on various backgrounds */}
+                                <div className="text-xxs text-slate-300 mt-1 flex justify-between"> {/* Changed text-slate-400 to text-slate-300 */}
                                     <span>
                                         {formatDate ? formatDate(quake.properties?.time) : new Date(quake.properties?.time).toLocaleString() || 'N/A'}
                                     </span>

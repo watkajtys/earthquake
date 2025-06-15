@@ -30,15 +30,18 @@ export const getMagnitudeColor = (magnitude) => {
  * @returns {string} Tailwind CSS class strings.
  */
 export const getMagnitudeColorStyle = (magnitude) => {
-    if (magnitude === null || magnitude === undefined) return 'bg-slate-600 text-slate-100';
-    if (magnitude < 1.0) return 'bg-cyan-800 bg-opacity-50 text-cyan-100';
-    if (magnitude < 2.5) return 'bg-cyan-700 bg-opacity-50 text-cyan-100';
-    if (magnitude < 4.0) return 'bg-emerald-700 bg-opacity-50 text-emerald-100';
-    if (magnitude < 5.0) return 'bg-yellow-700 bg-opacity-50 text-yellow-100';
-    if (magnitude < 6.0) return 'bg-orange-700 bg-opacity-50 text-orange-100';
-    if (magnitude < 7.0) return 'bg-orange-800 bg-opacity-60 text-orange-50';
-    if (magnitude < 8.0) return 'bg-red-800 bg-opacity-60 text-red-50';
-    return 'bg-red-900 bg-opacity-70 text-red-50';
+    // Default style for null or undefined magnitudes
+    if (magnitude === null || magnitude === undefined) return 'bg-slate-600 text-slate-100'; // Dark slate background, light text
+
+    // Styles for defined magnitudes, opacity removed, text colors adjusted for contrast
+    if (magnitude < 1.0) return 'bg-cyan-800 text-slate-100';     // Dark cyan background, light text
+    if (magnitude < 2.5) return 'bg-cyan-700 text-slate-100';     // Medium-dark cyan, light text
+    if (magnitude < 4.0) return 'bg-emerald-700 text-slate-100';  // Medium-dark emerald, light text
+    if (magnitude < 5.0) return 'bg-yellow-700 text-slate-100';   // Dark yellow, light text (could also be dark text if yellow was lighter)
+    if (magnitude < 6.0) return 'bg-orange-700 text-slate-100';   // Dark orange, light text
+    if (magnitude < 7.0) return 'bg-orange-800 text-white';     // Darker orange, white text for strong contrast
+    if (magnitude < 8.0) return 'bg-red-800 text-white';         // Dark red, white text for strong contrast
+    return 'bg-red-900 text-white';                             // Very dark red, white text for strong contrast
 };
 
 // Add other utility functions here as the app grows

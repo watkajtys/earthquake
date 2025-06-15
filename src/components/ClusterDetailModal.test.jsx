@@ -16,11 +16,24 @@ const mockCluster = {
   ],
 };
 
+// Updated mock for getMagnitudeColorStyle to match the actual implementation
+const mockGetMagnitudeColorStyleFn = vi.fn(magnitude => {
+  if (magnitude === null || magnitude === undefined) return 'bg-slate-600 text-slate-100';
+  if (magnitude < 1.0) return 'bg-cyan-800 text-slate-100';
+  if (magnitude < 2.5) return 'bg-cyan-700 text-slate-100';
+  if (magnitude < 4.0) return 'bg-emerald-700 text-slate-100';
+  if (magnitude < 5.0) return 'bg-yellow-700 text-slate-100';
+  if (magnitude < 6.0) return 'bg-orange-700 text-slate-100';
+  if (magnitude < 7.0) return 'bg-orange-800 text-white';
+  if (magnitude < 8.0) return 'bg-red-800 text-white';
+  return 'bg-red-900 text-white';
+});
+
 const mockProps = {
   cluster: mockCluster,
   onClose: vi.fn(),
   formatDate: vi.fn(time => new Date(time).toLocaleDateString()),
-  getMagnitudeColorStyle: vi.fn(mag => (mag > 5 ? 'bg-red-500 text-white' : 'bg-yellow-500 text-black')),
+  getMagnitudeColorStyle: mockGetMagnitudeColorStyleFn,
   onIndividualQuakeSelect: vi.fn(),
 };
 
@@ -102,19 +115,38 @@ describe('ClusterDetailModal Quake Item Rendering', () => {
       // eslint-disable-next-line testing-library/no-node-access
       const sharedParent = magnitudeEl.parentElement;
       // eslint-disable-next-line testing-library/no-node-access
-      expect(sharedParent).toBe(locationEl.parentElement);
-      expect(sharedParent.className).toContain('flex');
-      expect(sharedParent.className).toContain('justify-between');
-      expect(sharedParent.className).toContain('items-center');
+      expect(sharedParent).toBe(locationEl.parentElement); // Magnitude and Location are in the same div
+      expect(sharedParent.className).toMatch(/flex justify-between items-center/);
 
 
-      // 2. Check if magnitude is colored correctly
-      const expectedColorClass = mockProps.getMagnitudeColorStyle(quake.properties.mag);
-      // The magnitude text is inside a <p> tag which should have the color class
-      expect(magnitudeEl.className).toContain(expectedColorClass.split(' ')[0]); // Check first class if multiple (e.g. bg-red-500)
-      if (expectedColorClass.split(' ').length > 1) {
-        expect(magnitudeEl.className).toContain(expectedColorClass.split(' ')[1]); // Check second class if multiple (e.g. text-white)
+      // 2. Check if button has the correct background and text color classes from getMagnitudeColorStyle
+      const expectedStyle = mockProps.getMagnitudeColorStyle(quake.properties.mag);
+      const [expectedBgClass, expectedTextColorClass] = expectedStyle.split(' ');
+
+      expect(quakeButtonElement.className).toContain(expectedBgClass);
+      expect(quakeButtonElement.className).toContain(expectedTextColorClass);
+
+      // Check for border class based on whether magnitude style was applied or it's a fallback
+      if (quake.properties.mag !== null && quake.properties.mag !== undefined) {
+        expect(quakeButtonElement.className).toContain('border-transparent');
+      } else {
+        expect(quakeButtonElement.className).toContain('border-slate-600'); // Fallback border
       }
+
+      // 3. Verify Magnitude and Location text elements do NOT have their own color classes (they inherit)
+      // Magnitude element's class is "text-sm font-semibold"
+      // Location element's class is "text-xs truncate ml-2"
+      expect(magnitudeEl.className).not.toMatch(/text-(?!sm)/); // Ensure no other text color like text-slate-XXX
+      expect(locationEl.className).not.toMatch(/text-(?!xs)/);   // Ensure no other text color
+
+      // 4. Check Date/Depth div for correct text color
+      // The date/depth div is the second child div of the button
+      // eslint-disable-next-line testing-library/no-node-access
+      const dateDepthDiv = quakeButtonElement.children[1];
+      expect(dateDepthDiv).not.toBeNull();
+      expect(dateDepthDiv.className).toContain('text-slate-300');
+      expect(dateDepthDiv.className).toContain('text-xxs'); // Keep other classes
+
       expect(mockProps.getMagnitudeColorStyle).toHaveBeenCalledWith(quake.properties.mag);
     });
   });
