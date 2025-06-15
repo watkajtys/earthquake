@@ -37,7 +37,7 @@ export const getMagnitudeColorStyle = (magnitude) => {
     if (magnitude < 4.0) return 'bg-emerald-400 text-emerald-900';   // emerald-400 from getMagnitudeColor, dark emerald text
     if (magnitude < 5.0) return 'bg-yellow-400 text-yellow-900';     // yellow-400 from getMagnitudeColor, dark yellow text
     if (magnitude < 6.0) return 'bg-orange-400 text-orange-900';     // orange-400 from getMagnitudeColor, dark orange text
-    if (magnitude < 7.0) return 'bg-orange-500 text-white';        // orange-500 from getMagnitudeColor, white text
+    if (magnitude < 7.0) return 'bg-orange-500 text-orange-950';        // orange-500 from getMagnitudeColor, white text
     if (magnitude < 8.0) return 'bg-red-500 text-white';           // red-500 from getMagnitudeColor, white text
     return 'bg-red-700 text-white';                               // red-700 from getMagnitudeColor, white text
 };
