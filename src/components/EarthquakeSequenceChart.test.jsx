@@ -114,8 +114,49 @@ const mockClusterWithoutOriginalQuakes = {
     // no originalQuakes key
 };
 
+// Times for new mock data
+const t1 = new Date('2023-02-01T00:00:00Z').getTime();
+const t2 = new Date('2023-02-01T01:00:00Z').getTime();
+const t3 = new Date('2023-02-01T02:00:00Z').getTime();
+const t4 = new Date('2023-02-01T03:00:00Z').getTime();
+const t5 = new Date('2023-02-01T04:00:00Z').getTime();
+
+const mockClusterDataMixedMagnitudes = {
+    originalQuakes: [
+        mockQuake("mix1", t1, 2.0), // Defined
+        mockQuake("mix2", t2, 1.0), // Undefined
+        mockQuake("mix3", t3, 2.5), // Defined
+        mockQuake("mix4", t4, 0.5), // Undefined
+        mockQuake("mix5", t5, 3.0), // Defined
+    ]
+};
+
+const mockClusterDataAllBelowThreshold = {
+    originalQuakes: [
+        mockQuake("b1", t1, 1.0),
+        mockQuake("b2", t2, 1.2),
+        mockQuake("b3", t3, 0.9),
+    ]
+};
+
+const mockClusterDataAllAboveThreshold = {
+    originalQuakes: [
+        mockQuake("a1", t1, 2.0),
+        mockQuake("a2", t2, 1.8),
+        mockQuake("a3", t3, 2.5),
+    ]
+};
+
+
 // To make tests less verbose and more resilient to minor parentElement changes
 const getSvgContainer = (container) => container.querySelector('svg')?.parentElement;
+
+// Helper to count 'M' commands in a path d attribute
+const countMovetoCommands = (pathD) => {
+    if (!pathD) return 0;
+    const matches = pathD.match(/M/g);
+    return matches ? matches.length : 0;
+};
 
 
 describe('EarthquakeSequenceChart', () => {
@@ -436,13 +477,15 @@ describe('EarthquakeSequenceChart', () => {
     describe('Connecting Line', () => {
         const linePathSelector = 'svg g path[fill="none"][stroke-dasharray="3,3"]';
 
-        test('renders a connecting line when there are multiple quakes', () => {
+        test('renders a connecting line when there are multiple quakes (all above threshold)', () => {
             const { container } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
             const pathElement = container.querySelector(linePathSelector);
 
             expect(pathElement).toBeInTheDocument();
             expect(pathElement).toHaveAttribute('d');
-            expect(pathElement.getAttribute('d')).not.toBe('');
+            const dAttribute = pathElement.getAttribute('d');
+            expect(dAttribute).not.toBe('');
+            expect(countMovetoCommands(dAttribute)).toBe(1); // All points in mockClusterData are >= 1.5
             expect(pathElement).toHaveAttribute('stroke-dasharray', '3,3');
             expect(pathElement).toHaveAttribute('stroke-width', '1');
             expect(pathElement).toHaveAttribute('fill', 'none');
@@ -452,6 +495,46 @@ describe('EarthquakeSequenceChart', () => {
             expect(pathElement).toHaveClass('stroke-current');
             expect(pathElement).toHaveClass('text-slate-500');
             expect(pathElement).toHaveClass('opacity-75');
+        });
+
+        test('correctly breaks the line for mixed magnitudes (no line segments expected)', () => {
+            // For [2.0(d), 1.0(u), 2.5(d), 0.5(u), 3.0(d)]
+            // No two *consecutive* points are both defined. So, no line segments should be drawn.
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterDataMixedMagnitudes} />);
+            const pathElement = container.querySelector(linePathSelector);
+
+            // The path might exist but be empty or minimal (e.g. just one M command if d3 outputs that for the first point)
+            // It definitely should not contain 'L' (lineto) commands.
+            if (pathElement) {
+                 const dAttribute = pathElement.getAttribute('d');
+                 expect(dAttribute).not.toContain('L');
+            } else {
+                // If no path element is rendered at all, that's also acceptable.
+                expect(pathElement).not.toBeInTheDocument();
+            }
+        });
+
+        test('does not render connecting line if all magnitudes are below 1.5', () => {
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterDataAllBelowThreshold} />);
+            const pathElement = container.querySelector(linePathSelector);
+             // Similar to the mixed test, the path should not contain 'L' commands, or not exist.
+            if (pathElement) {
+                const dAttribute = pathElement.getAttribute('d');
+                expect(dAttribute).not.toContain('L');
+            } else {
+                expect(pathElement).not.toBeInTheDocument();
+            }
+        });
+
+        test('renders a continuous connecting line if all magnitudes are >= 1.5', () => {
+            const { container } = render(<EarthquakeSequenceChart cluster={mockClusterDataAllAboveThreshold} />);
+            const pathElement = container.querySelector(linePathSelector);
+
+            expect(pathElement).toBeInTheDocument();
+            const dAttribute = pathElement.getAttribute('d');
+            expect(dAttribute).not.toBe('');
+            expect(dAttribute).toContain('L'); // Should have lineto commands
+            expect(countMovetoCommands(dAttribute)).toBe(1); // Single continuous segment
         });
 
         test('does not render a connecting line when there is only one quake', () => {
