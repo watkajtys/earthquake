@@ -219,31 +219,32 @@ describe('EarthquakeSequenceChart', () => {
         test('renders some Y-axis tick labels (e.g., 0, 1, 2, 3, 4)', () => {
             // Check for presence of a few expected integer tick labels
             // The exact ticks depend on the magDomain, which is [0, Math.ceil(maxMag)]
-            // For mockClusterData, magDomain is [2,5]. plotHeight is 230 (350 - 40 - 80).
-            // yScale is scaleLinear().domain([2, 5]).range([230, 0])
+            // For mockClusterData, magDomain is [2,5]. plotHeight is 220 (350 - 40 - 90).
+            // yScale is scaleLinear().domain([2, 5]).range([220, 0])
             // Expected ticks and their Y positions:
-            // '2': 230
-            // '2.5': 230 - ((2.5-2)/(5-2) * 230) = 230 - (0.5/3 * 230) = 191.67
-            // '3':   230 - ((3-2)/(5-2) * 230) = 230 - (1/3 * 230) = 153.33
-            // '3.5': 230 - ((3.5-2)/(5-2) * 230) = 230 - (1.5/3 * 230) = 115
-            // '4':   230 - ((4-2)/(5-2) * 230) = 230 - (2/3 * 230) = 76.67
-            // '4.5': 230 - ((4.5-2)/(5-2) * 230) = 230 - (2.5/3 * 230) = 38.33
+            // '2': 220
+            // '2.5': 220 - ((2.5-2)/(5-2) * 220) = 220 - (0.5/3 * 220) = 220 - 36.66 = 183.33
+            // '3':   220 - ((3-2)/(5-2) * 220) = 220 - (1/3 * 220) = 220 - 73.33 = 146.67
+            // '3.5': 220 - ((3.5-2)/(5-2) * 220) = 220 - (1.5/3 * 220) = 220 - 110 = 110
+            // '4':   220 - ((4-2)/(5-2) * 220) = 220 - (2/3 * 220) = 220 - 146.66 = 73.33
+            // '4.5': 220 - ((4.5-2)/(5-2) * 220) = 220 - (2.5/3 * 220) = 220 - 183.33 = 36.67
             // '5':   0
             const svgElement = getSvgContainer(container);
             if (!svgElement) throw new Error("SVG container not found for Y-axis ticks test");
 
             const expectedTicksWithY = {
-                '2': 230,
-                '2.5': 191.67,
-                '3': 153.33,
-                '3.5': 115,
-                '4': 76.67,
-                '4.5': 38.33,
+                '2': 220,
+                '2.5': 183.33,
+                '3': 146.67,
+                '3.5': 110,
+                '4': 73.33,
+                '4.5': 36.67,
                 '5': 0,
             };
 
             Object.entries(expectedTicksWithY).forEach(([text, expectedY]) => {
-                const tickElement = within(svgElement).queryByText(String(text));
+                const tickElements = within(svgElement).getAllByText(String(text));
+                const tickElement = tickElements.find(el => el.getAttribute('x') === '-8' && el.getAttribute('text-anchor') === 'end');
                 // D3 might not render all ticks, especially if space is limited or they are at the very edges.
                 // So, only check the 'y' attribute if the tickElement is found.
                 if (tickElement) {
@@ -253,10 +254,14 @@ describe('EarthquakeSequenceChart', () => {
             });
 
             // Ensure at least the min and max of the domain are rendered as ticks, as these are usually preserved by D3.
-            const minTick = within(svgElement).queryByText('2');
-            const maxTick = within(svgElement).queryByText('5');
+            const minTickCandidates = within(svgElement).getAllByText('2');
+            const minTick = minTickCandidates.find(el => el.getAttribute('x') === '-8' && el.getAttribute('text-anchor') === 'end');
+
+            const maxTickCandidates = within(svgElement).getAllByText('5');
+            const maxTick = maxTickCandidates.find(el => el.getAttribute('x') === '-8' && el.getAttribute('text-anchor') === 'end');
+
             expect(minTick).toBeInTheDocument();
-            expect(parseFloat(minTick.getAttribute('y'))).toBeCloseTo(230, 1);
+            expect(parseFloat(minTick.getAttribute('y'))).toBeCloseTo(220, 1);
             expect(maxTick).toBeInTheDocument();
             expect(parseFloat(maxTick.getAttribute('y'))).toBeCloseTo(0, 1);
         });
@@ -264,15 +269,15 @@ describe('EarthquakeSequenceChart', () => {
         test('renders X-axis label "Time (UTC)" correctly positioned', () => {
             const titleElement = screen.getByText('Time (UTC)');
             expect(titleElement).toBeInTheDocument();
-            // margin.bottom = 80; plotHeight = 350 - 40 - 80 = 230.
-            // X-axis title y is plotHeight + 65 for two-tiered X-axis. Expected y = 230 + 65 = 295.
-            expect(titleElement.getAttribute('y')).toBe(String(230 + 65));
+            // margin.bottom = 90; plotHeight = 350 - 40 - 90 = 220.
+            // X-axis title y is plotHeight + 60. Expected y = 220 + 60 = 280.
+            expect(titleElement.getAttribute('y')).toBe(String(220 + 60));
         });
 
         describe('Two-Tiered X-Axis Labels', () => { // Name reverted to reflect two tiers
             const chartHeight = 350;
-            const newMargin = { top: 40, right: 20, bottom: 80, left: 20 }; // Correct margin
-            const plotHeight = chartHeight - newMargin.top - newMargin.bottom; // 230
+            const newMargin = { top: 40, right: 20, bottom: 90, left: 20 }; // Updated margin.bottom
+            const plotHeight = chartHeight - newMargin.top - newMargin.bottom; // 220
 
             test('renders time labels (upper tier) correctly positioned', () => { // Title updated
                 const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterData} />);
