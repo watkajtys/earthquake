@@ -202,11 +202,11 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                             >
     <div className="flex justify-between items-center mb-0.5">
         {/* Magnitude text color will be inherited from the button's text color (set by getMagnitudeColorStyle) */}
-        <p className="text-sm font-semibold">
+                <p className="text-sm font-bold">
             M {quake.properties?.mag?.toFixed(1) || 'N/A'}
         </p>
         {/* Location text color will also be inherited from the button */}
-        <p className="text-xs truncate ml-2" title={quake.properties?.place}> {/* Removed text-slate-200 */}
+              <p className="text-xs truncate ml-2 font-medium" title={quake.properties?.place}>
             {quake.properties?.place || 'Unknown place'}
         </p>
     </div>
