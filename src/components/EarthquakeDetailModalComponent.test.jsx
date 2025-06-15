@@ -181,6 +181,17 @@ describe('EarthquakeDetailModalComponent', () => {
     const expectedDescription = `Detailed report of the M ${props.mag} earthquake that struck near ${props.place} on ${titleDate} at ${descriptionTime} (UTC). Magnitude: ${props.mag}, Depth: ${geom.coordinates[2]} km. Location: ${geom.coordinates[1]?.toFixed(2)}, ${geom.coordinates[0]?.toFixed(2)}. Stay updated with Earthquakes Live.`;
     const expectedKeywords = `earthquake, seismic event, M ${props.mag}, ${props.place.split(', ').join(', ')}, earthquake details, usgs event, ${usgsEventId}`;
     const expectedCanonicalUrl = `https://earthquakeslive.com/quake/${encodeURIComponent('test-detail-url')}`; // from useParams mock
+    const expectedLocation = {
+      '@type': 'Place',
+      name: props.place,
+      address: props.place, // Expect address to be present
+      geo: {
+        '@type': 'GeoCoordinates',
+        latitude: geom.coordinates[1],
+        longitude: geom.coordinates[0],
+        "elevation": -geom.coordinates[2] * 1000
+      },
+    };
 
     expect(lastSeoCall.eventJsonLd).toEqual({
         '@context': 'https://schema.org',
@@ -188,21 +199,23 @@ describe('EarthquakeDetailModalComponent', () => {
         name: `M ${props.mag} - ${props.place}`,
         description: expectedDescription,
         startDate: new Date(props.time).toISOString(),
-        location: {
-          '@type': 'Place',
-          name: props.place,
-          geo: {
-            '@type': 'GeoCoordinates',
-            latitude: geom.coordinates[1],
-            longitude: geom.coordinates[0],
-            "elevation": -geom.coordinates[2] * 1000
-          },
-        },
-        image: shakemapIntensityImageUrl,
+        endDate: new Date(props.time).toISOString(), // Expect endDate
+        eventAttendanceMode: 'https://schema.org/OnlineEvent', // Expect eventAttendanceMode
+        eventStatus: 'https://schema.org/EventScheduled', // Expect eventStatus
+        location: expectedLocation,
+        image: shakemapIntensityImageUrl, // This should be correctly passed if available in mock
         keywords: expectedKeywords.toLowerCase(),
         url: expectedCanonicalUrl,
         identifier: usgsEventId,
-        sameAs: props.detail
+        sameAs: props.detail,
+        performer: { // Expect performer
+            '@type': 'Organization',
+            name: 'USGS'
+        },
+        organizer: { // Expect organizer
+            '@type': 'Organization',
+            name: 'USGS'
+        }
     });
     // Also check other direct props of SeoMetadata
     expect(lastSeoCall.title).toBe(expectedPageTitle);
@@ -250,7 +263,8 @@ describe('EarthquakeDetailModalComponent', () => {
         identifier: usgsEventIdMinimal,
       })
     );
-    expect(lastSeoCall.eventJsonLd.image).toBeUndefined();
+    // Expect the default placeholder image when shakemapIntensityImageUrl is not in mockDetailViewPayloadMinimal
+    expect(lastSeoCall.eventJsonLd.image).toBe('https://earthquakeslive.com/placeholder-image.jpg');
     expect(lastSeoCall.eventJsonLd.sameAs).toBeUndefined();
     expect(lastSeoCall.modifiedTime).toBe(new Date(propsMinimal.time).toISOString());
   });
@@ -389,10 +403,24 @@ describe('EarthquakeDetailModalComponent', () => {
 
     test('renders EarthquakeDetailView when detailUrlParam is present', () => {
       // useParams is mocked globally to return 'test-detail-url'
-      renderComponent();
+      // Let's adjust the mock for this specific test to have a clear ID part
+      const mockParamWithId = "m5.0-someplace-testId123";
+      mockUseParamsGlobal.mockReturnValueOnce({ '*': mockParamWithId });
+
+      render( // Re-render with the new param mock for this test case
+        <EarthquakeDataProvider>
+          <MemoryRouter initialEntries={[`/quake/${mockParamWithId}`]}>
+            <Routes>
+              <Route path="/quake/*" element={<EarthquakeDetailModalComponent />} />
+            </Routes>
+          </MemoryRouter>
+        </EarthquakeDataProvider>
+      );
+
       expect(EarthquakeDetailView).toHaveBeenCalled();
-      const passedProps = EarthquakeDetailView.mock.calls[0][0];
-      expect(passedProps.detailUrl).toBe('test-detail-url'); // Decoded version
+      const passedProps = EarthquakeDetailView.mock.calls[EarthquakeDetailView.mock.calls.length - 1][0];
+      // The component should construct the full GeoJSON URL
+      expect(passedProps.detailUrl).toBe('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/testId123.geojson');
     });
   });
 });
