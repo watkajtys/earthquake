@@ -201,22 +201,32 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
       })).filter(tick => tick.offset >= -1 && tick.offset <= height + 1);
   }, [yScale, height, magDomain]);
 
-  const { linePath } = useMemo(() => { // sortedQuakes removed as it's not used directly
-    if (!originalQuakes || originalQuakes.length < 2) {
-        // Return an object that includes sortedQuakes if it's expected by callers,
-        // otherwise, just return { linePath: null }
+  const { linePath } = useMemo(() => {
+    if (!originalQuakes || originalQuakes.length === 0) { // Check originalQuakes for emptiness first
         return { linePath: null };
     }
-    // Sort quakes by time specifically for the line generator
-    const sortedForLine = [...originalQuakes].sort((a, b) =>
+
+    // Filter quakes for the line (magnitude >= 1.5 and valid properties)
+    const quakesForLine = originalQuakes.filter(q =>
+        q.properties &&
+        typeof q.properties.mag === 'number' &&
+        q.properties.mag >= 1.5
+    );
+
+    // If no quakes meet the criteria for the line, or only one does, no line can be drawn.
+    if (quakesForLine.length < 2) {
+        return { linePath: null };
+    }
+
+    // Sort the filtered quakes by time for the line generator
+    const sortedForLine = [...quakesForLine].sort((a, b) =>
         new Date(a.properties.time) - new Date(b.properties.time)
     );
+
     const lineGenerator = d3Line()
         .x(d => xScale(new Date(d.properties.time)))
-        .y(d => yScale(d.properties.mag))
-        .defined(d => d.properties.mag >= 1.5);
-    // If sortedQuakes is needed by other parts of the component (it's not, currently), return it as well.
-    // For now, it was only used to generate linePath.
+        .y(d => yScale(d.properties.mag)); // No .defined() here anymore
+
     return { linePath: lineGenerator(sortedForLine) };
   }, [originalQuakes, xScale, yScale]);
 

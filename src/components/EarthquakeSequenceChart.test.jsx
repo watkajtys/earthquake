@@ -497,21 +497,18 @@ describe('EarthquakeSequenceChart', () => {
             expect(pathElement).toHaveClass('opacity-75');
         });
 
-        test('correctly breaks the line for mixed magnitudes (no line segments expected)', () => {
-            // For [2.0(d), 1.0(u), 2.5(d), 0.5(u), 3.0(d)]
-            // No two *consecutive* points are both defined. So, no line segments should be drawn.
+        test('correctly renders line for mixed magnitudes (continuous line for filtered points)', () => {
+            // For original: [2.0(d), 1.0(u), 2.5(d), 0.5(u), 3.0(d)]
+            // Filtered for line: [2.0, 2.5, 3.0]
+            // A single continuous line should connect these three points.
             const { container } = render(<EarthquakeSequenceChart cluster={mockClusterDataMixedMagnitudes} />);
             const pathElement = container.querySelector(linePathSelector);
 
-            // The path might exist but be empty or minimal (e.g. just one M command if d3 outputs that for the first point)
-            // It definitely should not contain 'L' (lineto) commands.
-            if (pathElement) {
-                 const dAttribute = pathElement.getAttribute('d');
-                 expect(dAttribute).not.toContain('L');
-            } else {
-                // If no path element is rendered at all, that's also acceptable.
-                expect(pathElement).not.toBeInTheDocument();
-            }
+            expect(pathElement).toBeInTheDocument();
+            const dAttribute = pathElement.getAttribute('d');
+            expect(dAttribute).not.toBe('');
+            expect(dAttribute).toContain('L'); // Should have lineto commands
+            expect(countMovetoCommands(dAttribute)).toBe(1); // Single continuous segment
         });
 
         test('does not render connecting line if all magnitudes are below 1.5', () => {
