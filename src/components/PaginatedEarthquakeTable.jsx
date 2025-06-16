@@ -45,13 +45,9 @@ const PaginatedEarthquakeTable = React.memo(({
         if (sortConfig.key !== null) {
             items = [...items].sort((a, b) => {
                 let valA, valB;
-                if (sortConfig.key === 'depth') {
-                    valA = a.geometry?.coordinates?.[2];
-                    valB = b.geometry?.coordinates?.[2];
-                } else {
-                    valA = a.properties?.[sortConfig.key];
-                    valB = b.properties?.[sortConfig.key];
-                }
+                // Removed depth specific logic as the column is being removed
+                valA = a.properties?.[sortConfig.key];
+                valB = b.properties?.[sortConfig.key];
                 if (valA === null || valA === undefined) return 1;
                 if (valB === null || valB === undefined) return -1;
                 if (typeof valA === 'string' && typeof valB === 'string') {
@@ -102,9 +98,8 @@ const PaginatedEarthquakeTable = React.memo(({
 
     const columns = [
         {label: 'Mag.', key: 'mag', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm font-bold`},
-        {label: 'Location', key: 'place', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`},
-        {label: 'Time / Ago', key: 'time', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`},
-        {label: 'Depth', key: 'depth', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`}
+        {label: 'Location', key: 'place', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm truncate`},
+        {label: 'Time / Ago', key: 'time', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`}
     ];
 
     if (isLoading || earthquakes === null) {
@@ -172,14 +167,13 @@ const PaginatedEarthquakeTable = React.memo(({
                         >
                             <td className={columns[0].className}>{quake.properties.mag?.toFixed(1) || "N/A"}</td>
                             <td className={columns[1].className}>
-                                <a href={quake.properties.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-current hover:text-indigo-300 hover:underline font-medium">
+                                <a href={quake.properties.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-current hover:text-indigo-300 hover:underline font-medium" title={quake.properties.place}>
                                     {quake.properties.place || "N/A"}
                                 </a>
                             </td>
                             <td className={columns[2].className}>
                                 {Date.now() - quake.properties.time < 2 * 24 * 60 * 60 * 1000 ? formatTimeAgo(Date.now() - quake.properties.time) : formatDate(quake.properties.time)}
                             </td>
-                            <td className={columns[3].className}>{quake.geometry?.coordinates?.[2] !== undefined ? `${quake.geometry.coordinates[2].toFixed(1)} km` : "N/A"}</td>
                         </tr>
                     ))}
                     </tbody>
