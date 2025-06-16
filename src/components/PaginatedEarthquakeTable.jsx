@@ -136,7 +136,7 @@ const PaginatedEarthquakeTable = React.memo(({
                             <div
                                 key={quake.id}
                                 onClick={() => onQuakeClick(quake)}
-                                className={`p-2 cursor-pointer ${getMagnitudeColorStyle(quake.properties.mag)} border-b border-slate-600 last:border-b-0 ${tableRowHover} transition-colors`}
+                                className={`p-2 cursor-pointer ${getMagnitudeColorStyle(quake.properties.mag)} border-b border-slate-600 last:border-b-0 ${tableRowHover} hover:text-slate-100 transition-colors`}
                             >
                                 <div className="flex justify-between items-center text-xs sm:text-sm">
                                     <span className="font-bold">M {quake.properties.mag?.toFixed(1) || "N/A"}</span>
