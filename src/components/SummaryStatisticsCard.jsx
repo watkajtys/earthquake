@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import PropTypes from 'prop-types';
 import SkeletonText from './skeletons/SkeletonText';
 import SkeletonBlock from './skeletons/SkeletonBlock';
@@ -14,7 +14,7 @@ import { FEELABLE_QUAKE_THRESHOLD } from '../constants/appConstants';
  * @param {function} props.calculateStats - Function to calculate statistics.
  * @returns {JSX.Element} The rendered SummaryStatisticsCard component.
  */
-const SummaryStatisticsCard = React.memo(({title, currentPeriodData, previousPeriodData = null, isLoading, calculateStats}) => {
+const SummaryStatisticsCard = memo(({title, currentPeriodData, previousPeriodData = null, isLoading, calculateStats}) => {
     const cardBg = "bg-slate-700"; const textColor = "text-slate-300"; const titleColor = "text-indigo-400"; const statBoxBg = "bg-slate-800"; const statValueColor = "text-sky-400"; const statLabelColor = "text-slate-400"; const borderColor = "border-slate-600";
     if (isLoading || currentPeriodData === null) {
         return (<div className={`${cardBg} p-4 rounded-lg border ${borderColor} shadow-md`}> <h3 className={`text-lg font-semibold mb-3 ${titleColor}`}>{title}</h3> <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">{[...Array(8)].map((_, i) => ( <div key={i} className={`${statBoxBg} p-2 rounded-lg text-center animate-pulse`}> <SkeletonText width="w-1/2 mx-auto" height="h-6 mb-1" className="bg-slate-600" /> <SkeletonText width="w-3/4 mx-auto" height="h-3" className="bg-slate-600" /> </div>))}</div> </div>);

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { memo, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext';
 // Remove old SkeletonBlock import if no longer used, or keep if other skeletons are used from it.
@@ -26,7 +26,7 @@ import EarthquakeTimelineSVGChartSkeleton from './skeletons/EarthquakeTimelineSV
  *   If true, a skeleton loader is displayed.
  * @returns {JSX.Element} The EarthquakeTimelineSVGChart component.
  */
-const EarthquakeTimelineSVGChart = React.memo(({earthquakes = null, days = 7, titleSuffix = "(Last 7 Days)", isLoading}) => {
+const EarthquakeTimelineSVGChart = memo(({earthquakes = null, days = 7, titleSuffix = "(Last 7 Days)", isLoading}) => {
     const { dailyCounts7Days, dailyCounts14Days, dailyCounts30Days } = useEarthquakeDataState(); // earthquakesLast7Days removed
     const cardBg = "bg-slate-700";
     const titleColor = "text-indigo-400";

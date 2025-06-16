@@ -32,13 +32,22 @@ export const UIStateProvider = ({ children }) => {
     const [globeFocusLng, setGlobeFocusLng_internal] = useState(0);
     const [focusedNotableQuake, setFocusedNotableQuake_internal] = useState(null);
 
+    // PERFORMANCE & SYNC NOTE:
+    // This effect synchronizes the 'activeSidebarView' state FROM the URL search parameters.
+    // It intentionally only depends on 'searchParams'. This ensures that changes triggered
+    // by browser navigation (back/forward buttons) or direct URL manipulation update the state.
+    // Programmatic changes to sidebar view initiated by the app (e.g., button clicks)
+    // are handled by 'changeSidebarView', which updates both the internal state
+    // and the URL search parameters. Keeping 'activeSidebarView' out of the dependency array
+    // here prevents potential redundant state updates if 'searchParams' and 'activeSidebarView'
+    // were to update in a way that re-triggers this effect unnecessarily.
     // Effect to update activeSidebarView from URL search parameter.
     useEffect(() => {
         const currentQueryParam = searchParams.get('sidebarActiveView');
         if (currentQueryParam && currentQueryParam !== activeSidebarView) {
             setActiveSidebarView_internal(currentQueryParam);
         }
-    }, [searchParams, activeSidebarView]); // activeSidebarView added back as it's used in comparison
+    }, [searchParams]);
 
     /**
      * Changes the active sidebar view and updates the URL search parameter.
@@ -56,13 +65,21 @@ export const UIStateProvider = ({ children }) => {
         }
     }, [setSearchParams, searchParams]);
 
+    // PERFORMANCE & SYNC NOTE:
+    // This effect synchronizes the 'activeFeedPeriod' state FROM the URL search parameters.
+    // It intentionally only depends on 'searchParams'. This ensures that changes triggered
+    // by browser navigation or direct URL manipulation update the state.
+    // Programmatic changes to the feed period initiated by the app
+    // are handled by 'changeActiveFeedPeriod', which updates both the internal state
+    // and the URL search parameters. Keeping 'activeFeedPeriod' out of the dependency array
+    // here prevents potential redundant state updates.
     // Effect to update activeFeedPeriod from URL search parameter.
     useEffect(() => {
         const currentQueryParam = searchParams.get('activeFeedPeriod');
         if (currentQueryParam && currentQueryParam !== activeFeedPeriod) {
             setActiveFeedPeriod_internal(currentQueryParam);
         }
-    }, [searchParams, activeFeedPeriod]); // activeFeedPeriod added back
+    }, [searchParams]);
 
     /**
      * Changes the active earthquake feed period and updates the URL search parameter.
