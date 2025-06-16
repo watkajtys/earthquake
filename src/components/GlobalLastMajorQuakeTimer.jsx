@@ -71,7 +71,7 @@ const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, formatTimeDuration, handleT
             style={{ cursor: isClickable ? 'pointer' : 'default' }}
         >
             <p className="text-sm uppercase text-slate-400">Time Since Last Major (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) Quake Globally:</p>
-            <div className="text-lg font-bold my-0.5" style={{ color: magnitudeColorValue }}>{timeSinceFormatted}</div>
+            <div className="text-xl sm:text-2xl font-bold my-0.5" style={{ color: magnitudeColorValue }}>{timeSinceFormatted}</div>
             {lastMajorQuake && lastMajorQuake.properties && (
                 <p className="text-sm text-slate-300 truncate">
                     M<span className="font-bold">{lastMajorQuake.properties.mag?.toFixed(1)}</span>
