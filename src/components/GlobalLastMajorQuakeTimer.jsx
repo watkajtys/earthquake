@@ -70,11 +70,25 @@ const GlobalLastMajorQuakeTimer = ({ lastMajorQuake, formatTimeDuration, handleT
             tabIndex={isClickable ? 0 : undefined}
             style={{ cursor: isClickable ? 'pointer' : 'default' }}
         >
-            <p className="text-[10px] sm:text-xs uppercase text-slate-400">Time Since Last Major (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) Quake Globally:</p>
-            <div className="text-xl sm:text-2xl font-bold my-0.5" style={{ color: magnitudeColorValue }}>{timeSinceFormatted}</div>
+            <p className="text-sm uppercase text-slate-400">Time Since Last Major (M{MAJOR_QUAKE_THRESHOLD.toFixed(1)}+) Quake Globally:</p>
+            <div className="text-lg font-bold my-0.5" style={{ color: magnitudeColorValue }}>{timeSinceFormatted}</div>
             {lastMajorQuake && lastMajorQuake.properties && (
-                <p className="text-[10px] sm:text-xs text-slate-300 truncate">
-                    M{lastMajorQuake.properties.mag?.toFixed(1)} - {lastMajorQuake.properties.place}
+                <p className="text-sm text-slate-300 truncate">
+                    M<span className="font-bold">{lastMajorQuake.properties.mag?.toFixed(1)}</span>
+                    {' - '}
+                    {lastMajorQuake.properties.place}
+                    {isClickable && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleTimerClick(lastMajorQuake);
+                            }}
+                            className="ml-1 text-indigo-400 hover:text-indigo-300 underline focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded"
+                            aria-label={`View details for M${lastMajorQuake.properties.mag?.toFixed(1)} at ${lastMajorQuake.properties.place}`}
+                        >
+                            (details)
+                        </button>
+                    )}
                 </p>
             )}
         </div>
