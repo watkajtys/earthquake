@@ -19,19 +19,25 @@ import { CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES } from '../constants/appCon
  * @param {function} formatTimeAgo - Function to format a duration as "X time ago".
  * @param {function} formatTimeDuration - Function to format a duration into a compact string (e.g., "2h 30m").
  * @param {number} [clusterLength=0] - The number of earthquakes in the cluster.
- * @returns {string} A string describing the cluster's active time range.
+ * @returns {Object} An object with {prefix, value, suffix} describing the cluster's active time range.
  */
 function calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, clusterLength = 0) {
-    if (earliestTime === Infinity || latestTime === -Infinity || !earliestTime || !latestTime) return 'Time N/A';
+    if (earliestTime === Infinity || latestTime === -Infinity || !earliestTime || !latestTime) {
+        return { prefix: "", value: "Time N/A", suffix: "" };
+    }
     const now = Date.now();
     const durationSinceEarliest = now - earliestTime;
     if (now - latestTime < 24 * 60 * 60 * 1000 && clusterLength > 1) {
         const clusterDurationMillis = latestTime - earliestTime;
-        if (clusterDurationMillis < 60 * 1000) return `Active just now`;
-        if (clusterDurationMillis < 60 * 60 * 1000) return `Active over ${Math.round(clusterDurationMillis / (60 * 1000))}m`;
-        return `Active over ${formatTimeDuration(clusterDurationMillis)}`;
+        if (clusterDurationMillis < 60 * 1000) { // less than a minute
+            return { prefix: "Active ", value: "just now", suffix: "" };
+        }
+        if (clusterDurationMillis < 60 * 60 * 1000) { // less than an hour
+            return { prefix: "Active over ", value: `${Math.round(clusterDurationMillis / (60 * 1000))}m`, suffix: "" };
+        }
+        return { prefix: "Active over ", value: formatTimeDuration(clusterDurationMillis), suffix: "" };
     }
-    return `Started ${formatTimeAgo(durationSinceEarliest)}`;
+    return { prefix: "Started ", value: formatTimeAgo(durationSinceEarliest), suffix: "" };
 }
 
 /**
