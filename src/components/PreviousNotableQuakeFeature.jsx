@@ -72,13 +72,13 @@ const PreviousNotableQuakeFeature = ({
 
     return (
         <div className="p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-[220px] backdrop-blur-sm border border-slate-600"> {/* Slightly different border for distinction if desired */}
-            <h2 className="text-xs font-bold mb-0.5 text-sky-300 uppercase tracking-wide"> {/* Different title color */}
+            <h2 className="text-sm font-bold mb-0.5 text-sky-300 uppercase tracking-wide"> {/* Different title color */}
                 Previous Significant Quake
             </h2>
             <p className="text-sm font-semibold leading-tight truncate" title={displayQuake.name}>
                 {displayQuake.name} {displayQuake.year ? `(${displayQuake.year})` : ''}
             </p>
-            <p className="text-md font-bold" style={{ color: quakeColor }}>
+            <p className="text-lg font-bold" style={{ color: quakeColor }}>
                 M {displayQuake.mag?.toFixed(1)}
             </p>
             <p className="text-[10px] mb-1 line-clamp-2 h-7 overflow-hidden" title={displayQuake.description}>
@@ -86,7 +86,7 @@ const PreviousNotableQuakeFeature = ({
             </p>
             <button
                 onClick={() => onNotableQuakeSelect(displayQuake.originalQuake)}
-                className="text-xs bg-slate-600 hover:bg-slate-500 focus:bg-slate-700 text-white font-medium py-1.5 px-3 rounded-md w-full transition-colors mt-0.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" // Slightly different button color
+                className="text-sm bg-slate-600 hover:bg-slate-500 focus:bg-slate-700 text-white font-medium py-1.5 px-3 rounded-md w-full transition-colors mt-0.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" // Slightly different button color
             >
                 {(displayQuake.url) ? 'View Details' : 'More Info'}
             </button>

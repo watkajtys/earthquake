@@ -61,7 +61,15 @@ describe('GlobalLastMajorQuakeTimer', () => {
         });
         
         expect(screen.getByText('1h 0m 0s ago')).toBeInTheDocument();
-        expect(screen.getByText(/M5.2 - 10km N of Testville/)).toBeInTheDocument();
+        // Verify magnitude and place separately due to the new span structure
+        expect(screen.getByText((content, element) => {
+            // Check for the "M" prefix, the bolded magnitude, and the place text
+            const hasM = content.startsWith('M');
+            const magnitudeElement = element.querySelector('span.font-bold');
+            const hasMagnitude = magnitudeElement && magnitudeElement.textContent === mockQuake.properties.mag.toFixed(1);
+            const hasPlace = content.includes(`- ${mockQuake.properties.place}`);
+            return hasM && hasMagnitude && hasPlace;
+        })).toBeInTheDocument();
         
         // Use a more robust selector for the main container based on its content
         const container = screen.getByText(/Time Since Last Major/i).closest('div[class*="absolute bottom-2"]');
