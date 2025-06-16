@@ -12,11 +12,10 @@ import { getMagnitudeColorStyle, formatTimeAgo } from '../utils/utils'; // Added
  * @param {Object} props - The component props.
  * @param {Object} props.currentAlertConfig - Configuration object for the current USGS alert. Contains text and description.
  * @param {boolean} props.hasRecentTsunamiWarning - Flag indicating if there's a recent tsunami warning.
- * @param {Object} props.ALERT_LEVELS - Object mapping alert levels (e.g., "RED", "ORANGE") to their corresponding color classes.
+ * @param {Object} props.ALERT_LEVELS - ALERT_LEVELS is still used for text and description, but not for PAGER colors.
  * @returns {JSX.Element|null} The AlertDisplay component or null if there are no alerts to display.
  */
 const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning, ALERT_LEVELS }) => {
-  // Consume data from EarthquakeDataContext (tsunamiTriggeringQuake will be used later)
   const { tsunamiTriggeringQuake, activeAlertTriggeringQuakes } = useEarthquakeDataState();
   const navigate = useNavigate();
 
@@ -44,14 +43,38 @@ const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning, ALERT_LEVEL
     return null;
   }
 
-  // Style for tsunami alerts, using the lightest magnitude color and updated rounding
-  const tsunamiAlertClasses = `${getMagnitudeColorStyle(0.5)} p-2.5 rounded-lg shadow-md text-xs cursor-pointer`; // Changed to rounded-lg
+  const getPagerMagnitudeForStyling = (alertLevelText) => {
+    switch (alertLevelText?.toUpperCase()) {
+      case 'GREEN':
+        return 3.0; // Yields emerald-400
+      case 'YELLOW':
+        return 4.5; // Yields yellow-400
+      case 'ORANGE':
+        return 6.5; // Yields orange-500
+      case 'RED':
+        return 7.5; // Yields red-500
+      default:
+        // Fallback to a neutral style if somehow an unknown alert level text is received
+        return null;
+    }
+  };
+
+  // Style for tsunami alerts, using Magnitude 1.5 blue (cyan-400)
+  const tsunamiAlertClasses = `${getMagnitudeColorStyle(1.5)} p-2.5 rounded-lg shadow-md text-xs cursor-pointer`;
+
+  // Determine PAGER alert classes
+  let pagerAlertClasses = 'p-2.5 rounded-lg shadow-md text-xs cursor-pointer'; // Base classes
+  if (currentAlertConfig) {
+    const pagerMag = getPagerMagnitudeForStyling(currentAlertConfig.text);
+    pagerAlertClasses = `${getMagnitudeColorStyle(pagerMag)} p-2.5 rounded-lg shadow-md text-xs cursor-pointer`;
+  }
+
 
   return (
     <>
       {currentAlertConfig && (
         <div
-            className={`p-2.5 rounded-lg shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} cursor-pointer`} // Removed border-l-4, changed rounded-r-md to rounded-lg
+            className={pagerAlertClasses} // Use the new pagerAlertClasses
             onClick={() => activeAlertTriggeringQuakes && activeAlertTriggeringQuakes.length > 0 && handleAlertClick(activeAlertTriggeringQuakes[0])}
             role="button"
             tabIndex={0}
