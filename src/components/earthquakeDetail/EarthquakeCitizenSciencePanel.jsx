@@ -1,5 +1,5 @@
 import React from 'react';
-import { isValuePresent, isValidNumber, isValidString } from '../../utils/utils.js';
+import { isValuePresent, isValidNumber, isValidString, getMagnitudeColorStyle } from '../../utils/utils.js'; // Added getMagnitudeColorStyle
 
 function EarthquakeCitizenSciencePanel({
     properties,
@@ -13,9 +13,27 @@ function EarthquakeCitizenSciencePanel({
     highlightClass
 }) {
     // Conditional rendering based on the original logic
-    if (!(isValuePresent(properties?.felt) || isValidString(properties?.alert) || losspagerProductProps)) { // Functions are now imported
+    if (!(isValuePresent(properties?.felt) || isValidString(properties?.alert) || losspagerProductProps)) {
         return null;
     }
+
+    const getPagerMagnitudeForStyling = (alertLevelText) => {
+      switch (alertLevelText?.toLowerCase()) { // Use toLowerCase to match observed pagerAlertValue
+        case 'green':
+          return 3.0; // For bg-emerald-400
+        case 'yellow':
+          return 4.5; // For bg-yellow-400
+        case 'orange':
+          return 6.5; // For bg-orange-500
+        case 'red':
+          return 7.5; // For bg-red-500
+        default:
+          // Fallback style if needed, or rely on getMagnitudeColorStyle's own fallback
+          return null;
+      }
+    };
+
+    const pagerStyleClasses = pagerAlertValue ? getMagnitudeColorStyle(getPagerMagnitudeForStyling(pagerAlertValue)) : 'bg-gray-100 text-slate-700'; // Fallback for safety
 
     return (
         <div className={`${exhibitPanelClass} border-sky-500`}>
@@ -40,7 +58,7 @@ function EarthquakeCitizenSciencePanel({
                         </svg>
                         <div>
                             <strong className="text-green-700">PAGER System:</strong>
-                            <span className="text-xs text-slate-600"> Rapid impact assessment. Alert for this event: <strong className={`capitalize font-semibold ${pagerAlertValue === 'green' ? 'text-green-700' : 'text-gray-700'}`}>{pagerAlertValue}</strong>.</span>
+                            <span className="text-xs text-slate-600"> Rapid impact assessment. Alert for this event: <strong className={`capitalize font-semibold px-1.5 py-0.5 rounded-sm text-xs ${pagerStyleClasses}`}>{pagerAlertValue}</strong>.</span>
                         </div>
                     </div>
                 )}
