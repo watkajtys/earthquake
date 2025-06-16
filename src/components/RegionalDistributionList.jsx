@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { memo, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import SkeletonListItem from './skeletons/SkeletonListItem';
 import { REGIONS } from '../constants/appConstants';
@@ -21,7 +21,7 @@ import { REGIONS } from '../constants/appConstants';
  * @returns {JSX.Element|null} The RegionalDistributionList component. Returns null if `titleSuffix` includes '(Last Hour)'
  *   and there's no data, or a "no data" message for other periods.
  */
-const RegionalDistributionList = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading, getRegionForEarthquake}) => {
+const RegionalDistributionList = memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading, getRegionForEarthquake}) => {
     const cardBg = "bg-slate-700"; const textColor = "text-slate-300"; const titleColor = "text-indigo-400"; const itemBg = "bg-slate-800"; const itemHoverBg = "hover:bg-slate-600"; const countColor = "text-sky-400"; const borderColor = "border-slate-600";
 
     // Calculate regional distribution counts using useMemo for efficiency.
