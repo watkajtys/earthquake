@@ -124,7 +124,24 @@ if (!lastMajorQuake && !isLoadingInitialData && !isEffectivelyLoadingMonthly) {
                         ) : (
                             <>
                                     <p className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-1">PREVIOUSLY IT HAD BEEN:</p>
-                                    <p className="text-xl md:text-2xl font-bold text-slate-400 tracking-tight mb-1 min-h-[30px] md:min-h-[36px] flex items-center justify-center">
+                                    <p
+                                        className={`text-xl md:text-2xl font-bold text-slate-400 tracking-tight mb-1 min-h-[30px] md:min-h-[36px] flex items-center justify-center ${previousMajorQuake ? 'cursor-pointer hover:underline' : ''}`}
+                                        onClick={() => {
+                                            if (previousMajorQuake && handleQuakeClick) {
+                                                handleQuakeClick(previousMajorQuake);
+                                            }
+                                        }}
+                                        role={previousMajorQuake ? "button" : undefined}
+                                        tabIndex={previousMajorQuake ? 0 : undefined}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                if (previousMajorQuake && handleQuakeClick) {
+                                                    handleQuakeClick(previousMajorQuake);
+                                                }
+                                            }
+                                        }}
+                                        aria-label={previousMajorQuake ? "View details for the previously cited earthquake" : undefined}
+                                    >
                                         {prevIntervalFmt ?? (lastMajorQuake ? 'N/A (Only one M4.5+ found or data pending)' : 'N/A')}
                                     </p>
                                     <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">Between significant earthquakes.</p>
