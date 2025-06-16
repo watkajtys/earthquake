@@ -97,9 +97,9 @@ const PaginatedEarthquakeTable = React.memo(({
     const getSortIndicator = (key) => (sortConfig.key === key ? (sortConfig.direction === 'ascending' ? ' ▲' : ' ▼') : <span className="text-slate-500"> ◇</span>);
 
     const columns = [
-        {label: 'Mag.', key: 'mag', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm font-bold`},
-        {label: 'Location', key: 'place', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm truncate`},
-        {label: 'Time / Ago', key: 'time', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`}
+        {label: 'Mag.', key: 'mag', className: `px-1 py-1.5 sm:px-2 whitespace-nowrap text-xs sm:text-sm font-bold`},
+        {label: 'Location', key: 'place', className: `px-1 py-1.5 sm:px-2 whitespace-nowrap text-xs sm:text-sm truncate`},
+        {label: 'Time / Ago', key: 'time', className: `px-1 py-1.5 sm:px-2 whitespace-nowrap text-xs sm:text-sm`}
     ];
 
     if (isLoading || earthquakes === null) {
@@ -109,7 +109,7 @@ const PaginatedEarthquakeTable = React.memo(({
                 <table className="min-w-full divide-y divide-slate-600">
                     <thead className={tableHeaderBg}>
                     <tr>{columns.map(col => (
-                        <th key={col.key} scope="col" aria-label={col.label} className={`px-2 py-1.5 sm:px-3 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider`}>
+                        <th key={col.key} scope="col" aria-label={col.label} className={`px-1 py-1.5 sm:px-2 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider`}>
                             <span className="sr-only">{col.label}</span>
                             <SkeletonText width="w-12" className="bg-slate-600"/>
                         </th>
@@ -146,7 +146,7 @@ const PaginatedEarthquakeTable = React.memo(({
                                 onClick={() => requestSort(col.key)}
                                 onKeyDown={(e) => handleSortKeyDown(e, col.key)}
                                 tabIndex="0"
-                                className={`px-2 py-1.5 sm:px-3 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider cursor-pointer hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                                className={`px-1 py-1.5 sm:px-2 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider cursor-pointer hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500`}
                                 role="columnheader" // Already a th, but explicit for clarity with interaction
                                 aria-sort={sortConfig.key === col.key ? sortConfig.direction : 'none'}
                             >
