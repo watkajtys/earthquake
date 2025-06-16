@@ -83,7 +83,7 @@ if (!lastMajorQuake && !isLoadingInitialData && !isEffectivelyLoadingMonthly) {
     return (<div className="bg-slate-700 p-4 rounded-lg border border-slate-600 text-center text-slate-200">
         <p className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-1">IT HAS BEEN:</p>
 <div
-    className="text-lg font-bold tracking-tight mb-2 min-h-[36px] md:min-h-[44px] flex items-center justify-center cursor-pointer hover:underline"
+    className="text-2xl md:text-3xl font-bold tracking-tight mb-2 min-h-[36px] md:min-h-[44px] flex items-center justify-center cursor-pointer hover:underline"
     style={{ color: magColor }}
     onClick={() => {
         if (lastMajorQuake && handleQuakeClick) {
@@ -124,7 +124,7 @@ if (!lastMajorQuake && !isLoadingInitialData && !isEffectivelyLoadingMonthly) {
                         ) : (
                             <>
                                     <p className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-1">PREVIOUSLY IT HAD BEEN:</p>
-                                    <p className="text-lg font-bold text-slate-400 tracking-tight mb-1 min-h-[30px] md:min-h-[36px] flex items-center justify-center">
+                                    <p className="text-xl md:text-2xl font-bold text-slate-400 tracking-tight mb-1 min-h-[30px] md:min-h-[36px] flex items-center justify-center">
                                         {prevIntervalFmt ?? (lastMajorQuake ? 'N/A (Only one M4.5+ found or data pending)' : 'N/A')}
                                     </p>
                                     <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">Between significant earthquakes.</p>
