@@ -1,5 +1,6 @@
 // src/ClusterSummaryItem.jsx
 import React, { memo } from 'react';
+import { getMagnitudeColorStyle } from '../utils/utils.js';
 
 /**
  * Renders a summary card for a single earthquake cluster, typically for display in a list.
@@ -37,23 +38,33 @@ function ClusterSummaryItem({ clusterData, onClusterSelect }) {
     // No custom handleKeyDown needed if using a native button,
     // as it handles Enter/Space presses by default for onClick.
 
+    const magnitudeColorStyle = getMagnitudeColorStyle(maxMagnitude);
+
     return (
         <li className="border border-slate-600 rounded-md shadow-sm"> {/* Basic li styling, no interaction here */}
             <button
                 type="button" // Explicitly type as button
-                className="w-full text-left py-2 px-3 bg-slate-700 hover:bg-slate-600 transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md"
+                className={`w-full text-left py-2 px-3 ${magnitudeColorStyle} transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md`}
                 onClick={() => onClusterSelect && onClusterSelect(clusterData)}
                 // title attribute can remain on the button or be moved to a specific element if more appropriate
             >
-                <h4 className="text-sm font-semibold text-sky-300 truncate" title={locationName}>
+                <h4 className="text-sm font-semibold truncate" title={locationName}>
                     {locationName || 'Unknown Cluster Location'}
                 </h4>
-                <p className="text-xs text-slate-300 mt-0.5">
-                    Quakes: <span className="font-medium text-slate-100">{quakeCount}</span> |
-                    Max Mag: <span className="font-medium text-slate-100">M {maxMagnitude?.toFixed(1) || 'N/A'}</span>
+                <p className="text-xs mt-0.5">
+                    Quakes: <span className="font-medium">{quakeCount}</span> |
+                    Max Mag: <span className="font-medium">M {maxMagnitude?.toFixed(1) || 'N/A'}</span>
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                    {timeRange || 'Time information unavailable'}
+                <p className="text-xs mt-0.5">
+                    {typeof timeRange === 'object' && timeRange !== null ? (
+                        <>
+                            {timeRange.prefix}
+                            <span className="font-medium">{timeRange.value}</span>
+                            {timeRange.suffix}
+                        </>
+                    ) : (
+                        'Time information unavailable'
+                    )}
                 </p>
             </button>
         </li>

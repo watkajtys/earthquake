@@ -617,38 +617,37 @@ function App() {
 
             const locationName = strongestQuakeInCluster.properties.place || 'Unknown Location';
 
-            // Determine time range string
-            let timeRangeStr = 'Time N/A';
+            // Determine time range object
+            let timeRange = { prefix: "", value: "Time N/A", suffix: "" };
             const now = Date.now();
             const durationMillis = now - earliestTime; // Duration since the earliest quake in cluster started
 
             if (earliestTime !== Infinity) {
-                 // If the cluster's quakes are all very recent (e.g., within last 24 hours from now)
+                // If the cluster's quakes are all very recent (e.g., within last 24 hours from now)
                 if (now - latestTime < 24 * 60 * 60 * 1000 && cluster.length > 1) {
                     const clusterDurationMillis = latestTime - earliestTime;
                     if (clusterDurationMillis < 60 * 1000) { // less than a minute
-                        timeRangeStr = `Active just now`;
+                        timeRange = { prefix: "Active ", value: "just now", suffix: "" };
                     } else if (clusterDurationMillis < 60 * 60 * 1000) { // less than an hour
-                         timeRangeStr = `Active over ${Math.round(clusterDurationMillis / (60 * 1000))}m`;
+                        timeRange = { prefix: "Active over ", value: `${Math.round(clusterDurationMillis / (60 * 1000))}m`, suffix: "" };
                     } else {
-                         timeRangeStr = `Active over ${formatTimeDuration(clusterDurationMillis)}`; // formatTimeDuration is stable
+                        timeRange = { prefix: "Active over ", value: formatTimeDuration(clusterDurationMillis), suffix: "" };
                     }
                 } else { // Older clusters or single quake "clusters" (if minQuakes was 1)
-                    timeRangeStr = `Started ${formatTimeAgo(durationMillis)}`; // formatTimeAgo is stable
+                    timeRange = { prefix: "Started ", value: formatTimeAgo(durationMillis), suffix: "" };
                 }
             }
-            // A simpler alternative for timeRangeStr:
+            // A simpler alternative for timeRange (if chosen):
             // if (earliestTime !== Infinity && latestTime !== Infinity) {
-            //    timeRangeStr = `Active: ${formatDate(earliestTime)} - ${formatDate(latestTime)}`; // formatDate is stable
+            //    timeRange = { prefix: "Active: ", value: `${formatDate(earliestTime)} - ${formatDate(latestTime)}`, suffix: "" };
             // }
-
 
             return {
                 id: `overview_cluster_${strongestQuakeInCluster.id}_${cluster.length}`, // Create a somewhat unique ID
                 locationName,
                 quakeCount: cluster.length,
                 maxMagnitude: maxMag,
-                timeRange: timeRangeStr, // Using the more dynamic one for now
+                timeRange: timeRange, // Assign the object here
                 // For sorting and potential future use:
                 _maxMagInternal: maxMag,
                 _quakeCountInternal: cluster.length,
