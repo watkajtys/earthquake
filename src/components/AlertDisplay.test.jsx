@@ -2,15 +2,9 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom'; // Import MemoryRouter
 import AlertDisplay from './AlertDisplay';
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext'; // Import the context
-
-// Mock ALERT_LEVELS constant as it's used by the component
-const ALERT_LEVELS = {
-  GREEN: { text: 'GREEN', colorClass: 'bg-green-500', detailsColorClass: 'border-green-700' },
-  YELLOW: { text: 'YELLOW', colorClass: 'bg-yellow-500', detailsColorClass: 'border-yellow-700' },
-  ORANGE: { text: 'ORANGE', colorClass: 'bg-orange-500', detailsColorClass: 'border-orange-700' },
-  RED: { text: 'RED', colorClass: 'bg-red-500', detailsColorClass: 'border-red-700' },
-};
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils'; // Import the context
+import { getMagnitudeColorStyle } from '../utils/utils'; // Import the actual utility
+import { ALERT_LEVELS as 실제ALERT_LEVELS } from '../constants/appConstants'; // Import actual constants
 
 // Helper function to render with providers
 const renderWithProviders = (ui, { providerProps, ...renderOptions } = {}) => {
@@ -33,7 +27,7 @@ describe('AlertDisplay', () => {
 
   it('renders null when no alert config and no tsunami warning', () => {
     const { container } = renderWithProviders(
-      <AlertDisplay currentAlertConfig={null} hasRecentTsunamiWarning={false} ALERT_LEVELS={ALERT_LEVELS} />,
+      <AlertDisplay currentAlertConfig={null} hasRecentTsunamiWarning={false} ALERT_LEVELS={실제ALERT_LEVELS} />,
       { providerProps: mockProviderProps }
     );
     expect(container.firstChild).toBeNull();
@@ -49,13 +43,20 @@ describe('AlertDisplay', () => {
       activeAlertTriggeringQuakes: [{ id: 'testquake1', properties: { detail: 'some/url/testquake1.geojson' } }],
     };
     renderWithProviders(
-      <AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={false} ALERT_LEVELS={ALERT_LEVELS} />,
+      <AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={false} ALERT_LEVELS={실제ALERT_LEVELS} />,
       { providerProps: providerPropsWithAlertQuake }
     );
     expect(screen.getByText('Active USGS Alert: RED')).toBeInTheDocument();
     expect(screen.getByText('Significant event ongoing.')).toBeInTheDocument();
     const alertDiv = screen.getByText('Active USGS Alert: RED').parentElement;
-    expect(alertDiv).toHaveClass(ALERT_LEVELS.RED.detailsColorClass);
+
+    // Replicate component's logic for expected classes
+    const expectedPagerMag = 7.5; // Based on getPagerMagnitudeForStyling('RED')
+    const expectedBaseClasses = getMagnitudeColorStyle(expectedPagerMag);
+    // The component adds "p-2.5 rounded-lg shadow-md text-xs cursor-pointer"
+    // We need to check for each part if necessary, or for a key class like bg-red-500
+    expect(alertDiv).toHaveClass(expectedBaseClasses.split(' ')[0]); // Check for bg-red-500 (the first class)
+    expect(alertDiv).toHaveClass('p-2.5', 'rounded-lg', 'shadow-md', 'text-xs', 'cursor-pointer');
   });
 
   it('renders tsunami warning message when hasRecentTsunamiWarning is true and no currentAlertConfig', () => {
@@ -64,13 +65,17 @@ describe('AlertDisplay', () => {
       tsunamiTriggeringQuake: { id: 'tsunamiquake1', properties: { detail: 'some/url/tsunamiquake1.geojson' } },
     };
     renderWithProviders(
-      <AlertDisplay currentAlertConfig={null} hasRecentTsunamiWarning={true} ALERT_LEVELS={ALERT_LEVELS} />,
+      <AlertDisplay currentAlertConfig={null} hasRecentTsunamiWarning={true} ALERT_LEVELS={실제ALERT_LEVELS} />,
       { providerProps: providerPropsWithTsunamiQuake }
     );
     expect(screen.getByText('Tsunami Information')).toBeInTheDocument();
     expect(screen.getByText('Recent quakes may indicate tsunami activity. Please check official channels for alerts.')).toBeInTheDocument();
     const warningDiv = screen.getByText('Tsunami Information').parentElement;
-    expect(warningDiv).toHaveClass('bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200');
+
+    // Replicate component's logic for expected classes
+    const expectedTsunamiBaseClasses = getMagnitudeColorStyle(1.5); // Component uses M1.5 for tsunami
+    expect(warningDiv).toHaveClass(expectedTsunamiBaseClasses.split(' ')[0]); // Check for bg-cyan-400
+    expect(warningDiv).toHaveClass('p-2.5', 'rounded-lg', 'shadow-md', 'text-xs', 'cursor-pointer');
   });
 
   it('renders only alert message if both alertConfig and tsunami warning are present', () => {
@@ -84,7 +89,7 @@ describe('AlertDisplay', () => {
       tsunamiTriggeringQuake: { id: 'tsunamiquake2', properties: { detail: 'some/url/tsunamiquake2.geojson' } },
     };
     renderWithProviders(
-      <AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={true} ALERT_LEVELS={ALERT_LEVELS} />,
+      <AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={true} ALERT_LEVELS={실제ALERT_LEVELS} />,
       { providerProps: providerPropsWithBoth }
     );
     expect(screen.getByText('Active USGS Alert: YELLOW')).toBeInTheDocument();
@@ -98,12 +103,14 @@ describe('AlertDisplay', () => {
     };
     // No specific quake needed for this color test, but provider is still needed
     renderWithProviders(
-      <AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={false} ALERT_LEVELS={ALERT_LEVELS} />,
+      <AlertDisplay currentAlertConfig={alertConfig} hasRecentTsunamiWarning={false} ALERT_LEVELS={실제ALERT_LEVELS} />,
       { providerProps: mockProviderProps }
     );
     expect(screen.getByText('Active USGS Alert: PURPLE')).toBeInTheDocument();
     const alertDiv = screen.getByText('Active USGS Alert: PURPLE').parentElement;
-    expect(alertDiv).not.toHaveClass(ALERT_LEVELS.RED.detailsColorClass);
-    expect(alertDiv).not.toHaveClass(ALERT_LEVELS.YELLOW.colorClass);
+    // For an unknown alert, getMagnitudeColorStyle(null) is called by component
+    const expectedUnknownBaseClasses = getMagnitudeColorStyle(null);
+    expect(alertDiv).toHaveClass(expectedUnknownBaseClasses.split(' ')[0]);
+    expect(alertDiv).toHaveClass('p-2.5', 'rounded-lg', 'shadow-md', 'text-xs', 'cursor-pointer');
   });
 });
