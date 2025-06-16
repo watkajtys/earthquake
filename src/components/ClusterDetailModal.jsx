@@ -152,7 +152,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 <div className="mb-4 text-xs sm:text-sm space-y-1 text-slate-300">
                     <p><strong>Total Earthquakes:</strong> <span className="text-slate-100">{quakeCount}</span></p>
                     <p><strong>Maximum Magnitude:</strong> <span className="text-slate-100">M {maxMagnitude?.toFixed(1)}</span></p>
-                    <p><strong>Active Period:</strong> <span className="text-slate-100">{timeRange}</span></p>
+                    <p><strong>Active Period:</strong> <span className="text-slate-100">{typeof cluster.timeRange === 'object' && cluster.timeRange !== null ? <>{cluster.timeRange.prefix}<span className="font-medium">{cluster.timeRange.value}</span>{cluster.timeRange.suffix}</> : cluster.timeRange}</span></p>
                     <p><strong>Depth Range:</strong> <span className="text-slate-100">{depthRangeStr}</span></p>
                 </div>
 
