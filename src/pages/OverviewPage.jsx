@@ -12,7 +12,7 @@ import RegionalDistributionList from '../components/RegionalDistributionList';
 // InfoSnippet is now imported in QuickFact.jsx
 import ClusterSummaryItem from '../components/ClusterSummaryItem'; // Assuming this is used here
 // Import any other components specific to the previous inline overview content if needed
-
+import { getMagnitudeColorStyle } from '../utils/utils.js'; // Added import
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 
 /**
@@ -129,7 +129,7 @@ const OverviewPage = ({
                 {/* Render the ActivityList component */}
                 <ActivityList
                     latestFeelableQuakesSnippet={latestFeelableQuakesSnippet}
-                    getMagnitudeColor={getMagnitudeColor}
+                    getMagnitudeColorStyle={getMagnitudeColorStyle}
                     formatTimeAgo={formatTimeAgo}
                     handleQuakeClick={handleQuakeClick}
                     navigate={navigate}

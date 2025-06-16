@@ -7,13 +7,13 @@ import React from 'react';
  * @component
  * @param {Object} props - The component props.
  * @param {Array<Object>} props.latestFeelableQuakesSnippet - An array of earthquake objects to display in the list.
- * @param {function} props.getMagnitudeColor - A function that returns a color based on the earthquake's magnitude.
+ * @param {function} props.getMagnitudeColorStyle - A function that returns Tailwind CSS classes based on the earthquake's magnitude.
  * @param {function} props.formatTimeAgo - A function that formats a timestamp into a human-readable "time ago" string.
  * @param {function} props.handleQuakeClick - A function to handle clicks on individual earthquake items, likely to show more details.
  * @param {function} props.navigate - A function used for programmatic navigation, typically from a routing library.
  * @returns {JSX.Element|null} The ActivityList component or null if there are no quakes to display.
  */
-const ActivityList = ({ latestFeelableQuakesSnippet, getMagnitudeColor, formatTimeAgo, handleQuakeClick, navigate }) => {
+const ActivityList = ({ latestFeelableQuakesSnippet, getMagnitudeColorStyle, formatTimeAgo, handleQuakeClick, navigate }) => {
   if (!latestFeelableQuakesSnippet || latestFeelableQuakesSnippet.length === 0) {
     return null; // Or some placeholder if no activity
   }
@@ -30,17 +30,17 @@ const ActivityList = ({ latestFeelableQuakesSnippet, getMagnitudeColor, formatTi
             <button
               type="button"
               onClick={() => handleQuakeClick(quake)}
-              className="w-full text-left p-2 hover:bg-slate-600 focus:bg-slate-500 transition-colors rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              className={`w-full text-left p-2 hover:bg-slate-600 focus:bg-slate-500 transition-colors rounded focus:outline-none focus:ring-1 focus:ring-indigo-400 ${getMagnitudeColorStyle(quake.properties.mag)}`}
             >
               <div className="flex justify-between items-center">
-                <span className="font-semibold" style={{ color: getMagnitudeColor(quake.properties.mag) }}>
+                <span className="font-bold text-sm">
                   M {quake.properties.mag?.toFixed(1)}
                 </span>
-                <span className="text-slate-300">
+                <span>
                   {formatTimeAgo(Date.now() - quake.properties.time)}
                 </span>
               </div>
-              <p className="text-slate-300 truncate text-[11px]" title={quake.properties.place}>
+              <p className="truncate text-[11px] font-medium" title={quake.properties.place}>
                 {quake.properties.place || "Location details pending..."}
               </p>
             </button>
