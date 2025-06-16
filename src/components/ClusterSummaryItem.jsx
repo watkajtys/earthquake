@@ -55,7 +55,7 @@ function ClusterSummaryItem({ clusterData, onClusterSelect }) {
                     Quakes: <span className="font-medium">{quakeCount}</span> |
                     Max Mag: <span className="font-medium">M {maxMagnitude?.toFixed(1) || 'N/A'}</span>
                 </p>
-                <p className="text-xs mt-0.5">
+                <p className="text-xs mt-0.5 font-medium">
                     {timeRange || 'Time information unavailable'}
                 </p>
             </button>
