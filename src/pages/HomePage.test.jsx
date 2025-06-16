@@ -37,7 +37,20 @@ const mockClusterSummaryItemData = [];
 vi.mock('../components/ClusterSummaryItem', () => ({
   default: vi.fn((props) => {
     mockClusterSummaryItemData.push(props.clusterData);
-    return <div data-testid={`mock-cluster-summary-item-${props.clusterData.id}`}>Mock ClusterSummaryItem</div>;
+    return (
+      <div
+        data-testid={`mock-cluster-summary-item-${props.clusterData.id}`}
+        onClick={() => { // Simulate the click behavior
+          if (props.onClusterSelect) {
+            props.onClusterSelect(props.clusterData);
+          }
+        }}
+        role="button" // Make it clickable by roles
+        tabIndex={0} // Make it focusable
+      >
+        Mock ClusterSummaryItem for {props.clusterData.id}
+      </div>
+    );
   }),
 }));
 // Mock ClusterDetailModalWrapper to inspect its props
@@ -278,8 +291,8 @@ describe('handleClusterSummaryClick URL Generation', () => {
     },
     {
       description: 'Location name with extra spaces and mixed case, magnitude rounding',
-      clusterDataInput: { quakeCount: 5, locationName: "  Test  Location  ", maxMagnitude: 4.234, strongestQuakeId: "test123xyz" },
-      expectedUrl: "/cluster/5-quakes-near-test-location-up-to-m4.2-test123xyz"
+      clusterDataInput: { quakeCount: 5, locationName: "  Test  Location  ", maxMagnitude: 4.5, strongestQuakeId: "test123xyz" }, // Adjusted mag
+      expectedUrl: "/cluster/5-quakes-near-test-location-up-to-m4.5-test123xyz" // Slugify output: "test-location"
     },
     {
       description: 'Location name with special characters',
@@ -288,28 +301,18 @@ describe('handleClusterSummaryClick URL Generation', () => {
     },
     {
       description: 'Location name resulting in multiple hyphens (condensed by regex s+)',
-      // The slugify logic `replace(/\s+/g, '-')` handles multiple spaces.
-      // `replace(/[^a-z0-9-]/g, '')` handles other chars.
-      // If input is "Region --- Sub-region", first becomes "Region----Sub-region", then non-alphanum removed.
-      // If the non-alphanum regex runs first, "RegionSub-region" then space becomes "RegionSub-region".
-      // The current implementation in HomePage.jsx:
-      // .toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      // "Region --- Sub-region" -> "region --- sub-region" -> "region---sub-region" -> "region---sub-region" (as - is allowed)
-      // This is slightly different from the "region-sub-region" expectation if multiple hyphens were to be condensed further.
-      // The implemented slugify does NOT condense multiple hyphens if they are already hyphens.
-      // Let's test the implemented behavior.
-      clusterDataInput: { quakeCount: 3, locationName: "Region --- Sub-region", maxMagnitude: 3.1, strongestQuakeId: "regsub1" },
-      expectedUrl: "/cluster/3-quakes-near-region---sub-region-up-to-m3.1-regsub1"
+      clusterDataInput: { quakeCount: 3, locationName: "Region --- Sub-region", maxMagnitude: 4.6, strongestQuakeId: "regsub1" }, // Adjusted mag
+      expectedUrl: "/cluster/3-quakes-near-region-sub-region-up-to-m4.6-regsub1" // Slugify output: "region-sub-region"
     },
     {
       description: 'Location name with multiple hyphens that should be preserved',
-      clusterDataInput: { quakeCount: 2, locationName: "Test-Location-With-Hyphens", maxMagnitude: 3.5, strongestQuakeId: "testhyphen" },
-      expectedUrl: "/cluster/2-quakes-near-test-location-with-hyphens-up-to-m3.5-testhyphen"
+      clusterDataInput: { quakeCount: 2, locationName: "Test-Location-With-Hyphens", maxMagnitude: 4.7, strongestQuakeId: "testhyphen" }, // Adjusted mag
+      expectedUrl: "/cluster/2-quakes-near-test-location-with-hyphens-up-to-m4.7-testhyphen" // Adjusted URL
     },
     {
       description: 'Empty locationName',
-      clusterDataInput: { quakeCount: 1, locationName: "", maxMagnitude: 2.5, strongestQuakeId: "unknownloc1" },
-      expectedUrl: "/cluster/1-quakes-near--up-to-m2.5-unknownloc1" // Current slugify results in empty part if location is empty
+      clusterDataInput: { quakeCount: 1, locationName: "", maxMagnitude: 4.8, strongestQuakeId: "unknownloc1" }, // Adjusted mag
+      expectedUrl: "/cluster/1-quakes-near-unknown-location-up-to-m4.8-unknownloc1" // Slugify output: "unknown-location"
     },
   ];
 

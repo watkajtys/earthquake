@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import TimeSinceLastMajorQuakeBanner from './TimeSinceLastMajorQuakeBanner';
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext'; // Import context
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils'; // Import context
 import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 
 // --- Mocks & Constants ---

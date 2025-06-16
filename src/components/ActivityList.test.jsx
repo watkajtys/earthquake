@@ -53,7 +53,7 @@ describe('ActivityList', () => {
     render(
       <ActivityList
         latestFeelableQuakesSnippet={quakes}
-        getMagnitudeColor={getMagnitudeColor}
+        getMagnitudeColorStyle={getMagnitudeColor}
         formatTimeAgo={formatTimeAgo}
         handleQuakeClick={vi.fn()}
         navigate={vi.fn()}
@@ -74,7 +74,7 @@ describe('ActivityList', () => {
     render(
       <ActivityList
         latestFeelableQuakesSnippet={quakes}
-        getMagnitudeColor={getMagnitudeColor}
+        getMagnitudeColorStyle={getMagnitudeColor}
         formatTimeAgo={formatTimeAgo}
         handleQuakeClick={handleQuakeClickMock}
         navigate={vi.fn()}
@@ -90,7 +90,7 @@ describe('ActivityList', () => {
     render(
       <ActivityList
         latestFeelableQuakesSnippet={quakes}
-        getMagnitudeColor={getMagnitudeColor}
+        getMagnitudeColorStyle={getMagnitudeColor}
         formatTimeAgo={formatTimeAgo}
         handleQuakeClick={vi.fn()}
         navigate={navigateMock}
@@ -108,7 +108,7 @@ describe('ActivityList', () => {
     render(
       <ActivityList
         latestFeelableQuakesSnippet={[quakeWithoutPlace]}
-        getMagnitudeColor={getMagnitudeColor}
+        getMagnitudeColorStyle={getMagnitudeColor}
         formatTimeAgo={formatTimeAgo}
         handleQuakeClick={vi.fn()}
         navigate={vi.fn()}
