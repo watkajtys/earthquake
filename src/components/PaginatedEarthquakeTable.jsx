@@ -101,10 +101,10 @@ const PaginatedEarthquakeTable = React.memo(({
     const getSortIndicator = (key) => (sortConfig.key === key ? (sortConfig.direction === 'ascending' ? ' ▲' : ' ▼') : <span className="text-slate-500"> ◇</span>);
 
     const columns = [
-        {label: 'Mag.', key: 'mag', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm font-medium`},
+        {label: 'Mag.', key: 'mag', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm font-bold`},
         {label: 'Location', key: 'place', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`},
-        {label: 'Time / Ago', key: 'time', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm text-slate-400`},
-        {label: 'Depth', key: 'depth', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm text-slate-400`}
+        {label: 'Time / Ago', key: 'time', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`},
+        {label: 'Depth', key: 'depth', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`}
     ];
 
     if (isLoading || earthquakes === null) {
@@ -171,8 +171,8 @@ const PaginatedEarthquakeTable = React.memo(({
                             className={`${getMagnitudeColorStyle(quake.properties.mag)} ${tableRowHover} cursor-pointer transition-colors`} // Removed focus styles here as row itself is not primary focus target
                         >
                             <td className={columns[0].className}>{quake.properties.mag?.toFixed(1) || "N/A"}</td>
-                            <td className={`${columns[1].className} text-slate-200`}>
-                                <a href={quake.properties.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-current hover:text-indigo-300 hover:underline">
+                            <td className={columns[1].className}>
+                                <a href={quake.properties.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-current hover:text-indigo-300 hover:underline font-medium">
                                     {quake.properties.place || "N/A"}
                                 </a>
                             </td>
