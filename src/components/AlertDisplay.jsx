@@ -1,6 +1,7 @@
-import React, { memo, useCallback } from 'react'; // Add useCallback
+import React, { memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Add this
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext';
+import { getMagnitudeColorStyle, formatTimeAgo } from '../utils/utils'; // Added formatTimeAgo
 
 /**
  * Displays alerts related to seismic activity, including USGS alerts and tsunami warnings.
@@ -43,30 +44,44 @@ const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning, ALERT_LEVEL
     return null;
   }
 
+  // Style for tsunami alerts, using the lightest magnitude color and updated rounding
+  const tsunamiAlertClasses = `${getMagnitudeColorStyle(0.5)} p-2.5 rounded-lg shadow-md text-xs cursor-pointer`; // Changed to rounded-lg
+
   return (
     <>
       {currentAlertConfig && (
         <div
-            className={`border-l-4 p-2.5 rounded-r-md shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} cursor-pointer`} // Add cursor-pointer
-            onClick={() => activeAlertTriggeringQuakes && activeAlertTriggeringQuakes.length > 0 && handleAlertClick(activeAlertTriggeringQuakes[0])} // Add onClick
-            role="button" // Add role
-            tabIndex={0} // Add tabIndex for accessibility
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { activeAlertTriggeringQuakes && activeAlertTriggeringQuakes.length > 0 && handleAlertClick(activeAlertTriggeringQuakes[0]); } }} // Add keyboard accessibility
+            className={`p-2.5 rounded-lg shadow-md text-xs ${ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.detailsColorClass || ALERT_LEVELS[currentAlertConfig.text.toUpperCase()]?.colorClass} cursor-pointer`} // Removed border-l-4, changed rounded-r-md to rounded-lg
+            onClick={() => activeAlertTriggeringQuakes && activeAlertTriggeringQuakes.length > 0 && handleAlertClick(activeAlertTriggeringQuakes[0])}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { activeAlertTriggeringQuakes && activeAlertTriggeringQuakes.length > 0 && handleAlertClick(activeAlertTriggeringQuakes[0]); } }}
         >
           <p className="font-bold text-sm mb-1">Active USGS Alert: {currentAlertConfig.text}</p>
           <p className="text-xs">{currentAlertConfig.description}</p>
         </div>
       )}
 
-      {hasRecentTsunamiWarning && !currentAlertConfig && ( // This condition might need to be re-evaluated if a tsunami alert can also be the currentAlertConfig
+      {hasRecentTsunamiWarning && !currentAlertConfig && tsunamiTriggeringQuake && ( // Added null check for tsunamiTriggeringQuake
         <div
-            className="bg-sky-700 bg-opacity-40 border-l-4 border-sky-500 text-sky-200 p-2.5 rounded-md shadow-md text-xs cursor-pointer" // Add cursor-pointer
-            onClick={() => tsunamiTriggeringQuake && handleAlertClick(tsunamiTriggeringQuake)} // Add onClick
-            role="button" // Add role
-            tabIndex={0} // Add tabIndex for accessibility
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { tsunamiTriggeringQuake && handleAlertClick(tsunamiTriggeringQuake); } }} // Add keyboard accessibility
+            className={tsunamiAlertClasses}
+            onClick={() => handleAlertClick(tsunamiTriggeringQuake)} // Simplified onClick
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { handleAlertClick(tsunamiTriggeringQuake); } }} // Simplified onKeyDown
         >
-          <p className="font-bold mb-1">Tsunami Information</p>
+          <p className="font-bold text-sm mb-1">Tsunami Information</p>
+          <div className="flex justify-between items-center text-xs mb-1">
+            <span className="font-bold">
+              M {tsunamiTriggeringQuake.properties?.mag?.toFixed(1) || 'N/A'}
+            </span>
+            <span>
+              {tsunamiTriggeringQuake.properties?.time ? formatTimeAgo(Date.now() - tsunamiTriggeringQuake.properties.time) : 'Time N/A'}
+            </span>
+          </div>
+          <p className="truncate text-[11px] font-medium mb-1" title={tsunamiTriggeringQuake.properties?.place || undefined}>
+            {tsunamiTriggeringQuake.properties?.place || "Location details pending..."}
+          </p>
           <p className="text-xs">Recent quakes may indicate tsunami activity. Please check official channels for alerts.</p>
         </div>
       )}
