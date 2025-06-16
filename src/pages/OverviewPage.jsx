@@ -166,6 +166,7 @@ const OverviewPage = ({
                                     clusterData={cluster}
                                     key={cluster.id}
                                     onClusterSelect={handleClusterSummaryClick}
+                                    getMagnitudeColorStyle={getMagnitudeColorStyle}
                                 />
                             ))}
                         </ul>

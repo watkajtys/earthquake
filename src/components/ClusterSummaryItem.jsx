@@ -16,9 +16,10 @@ import React, { memo } from 'react';
  *   - `timeRange` (string): A human-readable string describing the cluster's active period.
  * @param {function} [props.onClusterSelect] - Optional callback function that is triggered when the cluster item is clicked.
  *   Receives the `clusterData` object as an argument.
+ * @param {function} props.getMagnitudeColorStyle - Function to get the color style based on magnitude.
  * @returns {JSX.Element|null} The ClusterSummaryItem component, or null if `clusterData` is not provided.
  */
-function ClusterSummaryItem({ clusterData, onClusterSelect }) {
+function ClusterSummaryItem({ clusterData, onClusterSelect, getMagnitudeColorStyle }) {
     if (!clusterData) {
         return null; // Or some fallback UI for empty data
     }
@@ -38,10 +39,10 @@ function ClusterSummaryItem({ clusterData, onClusterSelect }) {
     // as it handles Enter/Space presses by default for onClick.
 
     return (
-        <li className="border border-slate-600 rounded-md shadow-sm"> {/* Basic li styling, no interaction here */}
+        <li className="text-xs border-b border-slate-600 last:border-b-0 rounded">
             <button
                 type="button" // Explicitly type as button
-                className="w-full text-left py-2 px-3 bg-slate-700 hover:bg-slate-600 transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md"
+                className={`w-full text-left p-2 hover:bg-slate-600 focus:bg-slate-500 transition-colors rounded focus:outline-none focus:ring-1 focus:ring-indigo-400 ${getMagnitudeColorStyle(maxMagnitude)}`}
                 onClick={() => onClusterSelect && onClusterSelect(clusterData)}
                 // title attribute can remain on the button or be moved to a specific element if more appropriate
             >
