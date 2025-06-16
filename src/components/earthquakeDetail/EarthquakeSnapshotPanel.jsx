@@ -5,7 +5,8 @@ import {
     isValidNumber,
     formatDate,
     formatNumber,
-    formatLargeNumber
+    formatLargeNumber,
+    getMagnitudeColorStyle // Added
 } from '../../utils/utils.js';
 
 function EarthquakeSnapshotPanel({
@@ -26,10 +27,30 @@ function EarthquakeSnapshotPanel({
     exhibitPanelClass,
     exhibitTitleClass
 }) {
-    // Basic safety check
     if (!properties) {
-        return null; // Or a loading/error state appropriate for this panel
+        return null;
     }
+
+    const getPagerMagnitudeForStyling = (alertLevelText) => {
+      switch (alertLevelText?.toLowerCase()) {
+        case 'green':
+          return 3.0;
+        case 'yellow':
+          return 4.5;
+        case 'orange':
+          return 6.5;
+        case 'red':
+          return 7.5;
+        default:
+          return null;
+      }
+    };
+
+    // Define pagerStyleClasses for clarity, handling potential null from getPagerMagnitudeForStyling
+    // getMagnitudeColorStyle itself has a fallback for null magnitude, so this might be redundant but safe.
+    const pagerStyleClasses = pagerAlertValue
+                              ? getMagnitudeColorStyle(getPagerMagnitudeForStyling(pagerAlertValue))
+                              : 'bg-gray-200 text-gray-700'; // A default fallback if pagerAlertValue is null/undefined
 
     return (
         <div className={`${exhibitPanelClass} border-blue-500`}>
@@ -69,7 +90,14 @@ function EarthquakeSnapshotPanel({
                 <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">MMI (ShakeMap)</td><td className="py-1.5">{formatNumber(mmiValue,1)}</td></tr>
             )}
             {isValidString(pagerAlertValue) && (
-                <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">PAGER Alert</td><td className={`py-1.5 capitalize font-semibold ${pagerAlertValue === 'green' ? 'text-green-600' : pagerAlertValue === 'yellow' ? 'text-yellow-600' : pagerAlertValue === 'orange' ? 'text-orange-600' : pagerAlertValue === 'red' ? 'text-red-600' : 'text-slate-600'}`}>{pagerAlertValue}</td></tr>
+                <tr className="border-b border-gray-200">
+                    <td className="py-1.5 pr-2 font-semibold text-slate-600">PAGER Alert</td>
+                    <td className="py-1.5"> {/* Removed styling from td */}
+                        <span className={`capitalize font-semibold px-1.5 py-0.5 rounded-sm text-xs ${pagerStyleClasses}`}> {/* Added span with badge styling */}
+                            {pagerAlertValue}
+                        </span>
+                    </td>
+                </tr>
             )}
             {(isValidNumber(originProductProps?.['num-stations-used']) || isValidNumber(properties?.nst)) && (
                 <tr className="border-t border-gray-300 mt-2 pt-2"><td className="pt-2 pr-2 font-semibold text-slate-600">Stations Used:</td><td className="pt-2">{isValidNumber(originProductProps?.['num-stations-used']) ? originProductProps['num-stations-used'] : properties.nst}</td></tr>

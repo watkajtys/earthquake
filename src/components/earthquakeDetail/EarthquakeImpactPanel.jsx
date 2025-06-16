@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { isValidNumber, isValidString, formatNumber } from '../../utils/utils.js';
+import { isValidNumber, isValidString, formatNumber, getMagnitudeColorStyle } from '../../utils/utils.js'; // Added getMagnitudeColorStyle
 
 function EarthquakeImpactPanel({
     properties,
@@ -17,9 +17,27 @@ function EarthquakeImpactPanel({
     captionClass
 }) {
     // Conditional rendering based on the original logic
-    if (!(shakemapProductProps || losspagerProductProps || isValidNumber(properties?.mmi) || isValidString(properties?.alert))) { // isValidNumber & isValidString are now imported
+    if (!(shakemapProductProps || losspagerProductProps || isValidNumber(properties?.mmi) || isValidString(properties?.alert))) {
         return null;
     }
+
+    const getPagerMagnitudeForStyling = (alertLevelText) => {
+      switch (alertLevelText?.toLowerCase()) { // Use toLowerCase to match observed pagerAlertValue
+        case 'green':
+          return 3.0; // For bg-emerald-400
+        case 'yellow':
+          return 4.5; // For bg-yellow-400
+        case 'orange':
+          return 6.5; // For bg-orange-500
+        case 'red':
+          return 7.5; // For bg-red-500
+        default:
+          // Fallback style if needed, or rely on getMagnitudeColorStyle's own fallback
+          return null;
+      }
+    };
+
+    const pagerStyleClasses = pagerAlertValue ? getMagnitudeColorStyle(getPagerMagnitudeForStyling(pagerAlertValue)) : 'bg-gray-100 text-slate-700';
 
     return (
         <div className={`${exhibitPanelClass} border-gray-500`}>
@@ -28,7 +46,7 @@ function EarthquakeImpactPanel({
                 <p>Est. Max Shaking Intensity (MMI): <strong className={highlightClass}>{formatNumber(mmiValue, 1)}</strong></p>
             )}
             {isValidString(pagerAlertValue) && (
-                <p>USGS PAGER Alert Level: <span className={`font-bold capitalize px-1.5 py-0.5 rounded-sm text-xs ${pagerAlertValue === 'green' ? 'bg-green-100 text-green-700' : pagerAlertValue === 'yellow' ? 'bg-yellow-100 text-yellow-700' : pagerAlertValue === 'orange' ? 'bg-orange-100 text-orange-700' : pagerAlertValue === 'red' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-slate-700'}`}>{pagerAlertValue}</span></p>
+                <p>USGS PAGER Alert Level: <span className={`font-bold capitalize px-1.5 py-0.5 rounded-sm text-xs ${pagerStyleClasses}`}>{pagerAlertValue}</span></p>
             )}
             {isValidString(shakemapIntensityImageUrl) ? (
                 <div className="my-3">
