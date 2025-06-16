@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import SkeletonText from './skeletons/SkeletonText';
 import SkeletonTableRow from './skeletons/SkeletonTableRow';
@@ -30,7 +30,7 @@ import SkeletonTableRow from './skeletons/SkeletonTableRow';
  * @param {function(number):string} props.formatDate - Function to format a timestamp into a full date string.
  * @returns {JSX.Element} The PaginatedEarthquakeTable component.
  */
-const PaginatedEarthquakeTable = React.memo(({
+const PaginatedEarthquakeTable = memo(({
     title, earthquakes, isLoading, onQuakeClick, itemsPerPage = 10,
     defaultSortKey = 'time', initialSortDirection = 'descending',
     periodName, filterPredicate,

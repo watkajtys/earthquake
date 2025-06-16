@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import SkeletonText from './skeletons/SkeletonText';
 import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
@@ -13,7 +13,7 @@ import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // I
  * @param {function} props.getMagnitudeColor - Function to get magnitude color.
  * @returns {JSX.Element} The rendered TimeSinceLastMajorQuakeBanner component.
  */
-const TimeSinceLastMajorQuakeBanner = React.memo(({
+const TimeSinceLastMajorQuakeBanner = memo(({
     // Props from context are removed:
     // lastMajorQuake,
     // previousMajorQuake,

@@ -38,7 +38,7 @@ export const UIStateProvider = ({ children }) => {
         if (currentQueryParam && currentQueryParam !== activeSidebarView) {
             setActiveSidebarView_internal(currentQueryParam);
         }
-    }, [searchParams, activeSidebarView]); // activeSidebarView added back as it's used in comparison
+    }, [searchParams]);
 
     /**
      * Changes the active sidebar view and updates the URL search parameter.
@@ -62,7 +62,7 @@ export const UIStateProvider = ({ children }) => {
         if (currentQueryParam && currentQueryParam !== activeFeedPeriod) {
             setActiveFeedPeriod_internal(currentQueryParam);
         }
-    }, [searchParams, activeFeedPeriod]); // activeFeedPeriod added back
+    }, [searchParams]);
 
     /**
      * Changes the active earthquake feed period and updates the URL search parameter.

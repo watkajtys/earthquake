@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { memo, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext';
 // import SkeletonBlock from './skeletons/SkeletonBlock'; // Comment out or remove
@@ -24,7 +24,7 @@ import { getMagnitudeColor } from '../utils/utils.js';
  * @param {boolean} props.isLoading - Flag indicating whether data is currently loading. If true, a skeleton loader is displayed.
  * @returns {JSX.Element} The MagnitudeDistributionSVGChart component.
  */
-const MagnitudeDistributionSVGChart = React.memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
+const MagnitudeDistributionSVGChart = memo(({earthquakes, titleSuffix = "(Last 30 Days)", isLoading}) => {
     const { magnitudeDistribution7Days, magnitudeDistribution14Days, magnitudeDistribution30Days } = useEarthquakeDataState();
     const cardBg = "bg-slate-700";
     const titleColor = "text-indigo-400";
