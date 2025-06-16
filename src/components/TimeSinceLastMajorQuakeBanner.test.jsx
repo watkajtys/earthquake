@@ -129,11 +129,13 @@ describe('TimeSinceLastMajorQuakeBanner', () => {
 
         // Test timer update for "IT HAS BEEN"
         const expectedTimeAfterOneSecond = initialTimeSinceLast + 1000;
-        await act(async () => {
+        await act(async () => { // Wrapping timer advancement in act
             vi.advanceTimersByTime(1000);
-            await Promise.resolve(); // Flush microtasks
         });
-        await waitFor(() => expect(screen.getByText(`formatted:${expectedTimeAfterOneSecond}`)).toBeInTheDocument());
+        // Wait for the DOM to update with the new time
+        await waitFor(() => {
+          expect(screen.getByText(`formatted:${expectedTimeAfterOneSecond}`)).toBeInTheDocument();
+        }, { timeout: 3000 }); // Specific timeout for this waitFor
         
         // Calls: initial useEffect, one tick for interval, initial render of timeBetween
         // The number of calls to mockFormatTimeDuration might be tricky due to strict mode double effects in dev,
