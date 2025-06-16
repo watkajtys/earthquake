@@ -870,16 +870,14 @@ function App() {
 
     const handleClusterSummaryClick = useCallback((clusterData) => {
         const count = clusterData.quakeCount;
-        const locationSlug = clusterData.locationName
-            .toLowerCase()
-            .replace(/\s+/g, '-') // Replace spaces with hyphens
-            .replace(/[^a-z0-9-]/g, ''); // Remove non-alphanumeric characters except hyphens
+        // Use the component's slugify utility for consistency
+        const locationSlug = slugify(clusterData.locationName);
         const maxMagnitude = parseFloat(clusterData.maxMagnitude).toFixed(1);
         const strongestQuakeId = clusterData.strongestQuakeId;
 
         const newUrl = `/cluster/${count}-quakes-near-${locationSlug}-up-to-m${maxMagnitude}-${strongestQuakeId}`;
         navigate(newUrl);
-    }, [navigate]);
+    }, [navigate, slugify]); // Added slugify to dependencies
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 

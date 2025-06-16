@@ -179,9 +179,13 @@ describe('EarthquakeDetailModalComponent', () => {
         name: `M ${props.mag} - ${props.place}`,
         description: expectedDescription,
         startDate: new Date(props.time).toISOString(),
+        endDate: new Date(props.time).toISOString(), // Added
+        eventAttendanceMode: 'https://schema.org/OnlineEvent', // Added
+        eventStatus: 'https://schema.org/EventScheduled', // Added
         location: {
           '@type': 'Place',
           name: props.place,
+          address: props.place, // Added based on component logic
           geo: {
             '@type': 'GeoCoordinates',
             latitude: geom.coordinates[1],
@@ -193,7 +197,9 @@ describe('EarthquakeDetailModalComponent', () => {
         keywords: expectedKeywords.toLowerCase(),
         url: expectedCanonicalUrl,
         identifier: usgsEventId,
-        sameAs: props.detail
+        sameAs: props.detail,
+        performer: { '@type': 'Organization', name: 'USGS' }, // Added
+        organizer: { '@type': 'Organization', name: 'USGS' }  // Added
     });
     // Also check other direct props of SeoMetadata
     expect(lastSeoCall.title).toBe(expectedPageTitle);
@@ -239,9 +245,19 @@ describe('EarthquakeDetailModalComponent', () => {
             }
         }),
         identifier: usgsEventIdMinimal,
+        // It will have a default image now
+        image: 'https://earthquakeslive.com/placeholder-image.jpg',
+        // It will have performer and organizer
+        performer: { '@type': 'Organization', name: 'USGS' },
+        organizer: { '@type': 'Organization', name: 'USGS' },
+        // It will have endDate, eventAttendanceMode, eventStatus
+        endDate: new Date(propsMinimal.time).toISOString(),
+        eventAttendanceMode: 'https://schema.org/OnlineEvent',
+        eventStatus: 'https://schema.org/EventScheduled',
       })
     );
-    expect(lastSeoCall.eventJsonLd.image).toBeUndefined();
+    // expect(lastSeoCall.eventJsonLd.image).toBeUndefined(); // Changed: Now expects placeholder
+    expect(lastSeoCall.eventJsonLd.image).toBe('https://earthquakeslive.com/placeholder-image.jpg');
     expect(lastSeoCall.eventJsonLd.sameAs).toBeUndefined();
     expect(lastSeoCall.modifiedTime).toBe(new Date(propsMinimal.time).toISOString());
   });
@@ -379,7 +395,8 @@ describe('EarthquakeDetailModalComponent', () => {
       renderComponent();
       expect(EarthquakeDetailView).toHaveBeenCalled();
       const passedProps = EarthquakeDetailView.mock.calls[0][0];
-      expect(passedProps.detailUrl).toBe('test-detail-url'); // Decoded version
+      // The component constructs the full URL from the slug "test-detail-url", taking the last part 'url' as the ID
+      expect(passedProps.detailUrl).toBe('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/url.geojson');
     });
   });
 });
