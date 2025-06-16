@@ -36,8 +36,14 @@ const PaginatedEarthquakeTable = memo(({
     periodName, filterPredicate,
     getMagnitudeColorStyle, formatTimeAgo, formatDate
 }) => {
-    const cardBg = "bg-slate-700"; const titleColor = "text-indigo-300"; const tableHeaderBg = "bg-slate-800"; const tableHeaderTextColor = "text-slate-400"; const tableRowHover = "hover:bg-slate-600"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"; const paginationText = "text-slate-300";
+    const cardBg = "bg-slate-700"; const titleColor = "text-indigo-300"; const tableHeaderBg = "bg-slate-800"; const tableHeaderTextColor = "text-slate-400"; const tableRowHover = "hover:bg-slate-500"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"; const paginationText = "text-slate-300";
     const [sortConfig, setSortConfig] = useState({key: defaultSortKey, direction: initialSortDirection}); const [currentPage, setCurrentPage] = useState(1);
+
+    const sortableFields = [
+        { value: 'time', label: 'Time' },
+        { value: 'mag', label: 'Magnitude' },
+        { value: 'place', label: 'Location' },
+    ];
 
     const processedEarthquakes = useMemo(() => {
         if (!earthquakes) return [];
@@ -45,13 +51,9 @@ const PaginatedEarthquakeTable = memo(({
         if (sortConfig.key !== null) {
             items = [...items].sort((a, b) => {
                 let valA, valB;
-                if (sortConfig.key === 'depth') {
-                    valA = a.geometry?.coordinates?.[2];
-                    valB = b.geometry?.coordinates?.[2];
-                } else {
-                    valA = a.properties?.[sortConfig.key];
-                    valB = b.properties?.[sortConfig.key];
-                }
+                // Removed depth specific logic as the column is being removed
+                valA = a.properties?.[sortConfig.key];
+                valB = b.properties?.[sortConfig.key];
                 if (valA === null || valA === undefined) return 1;
                 if (valB === null || valB === undefined) return -1;
                 if (typeof valA === 'string' && typeof valB === 'string') {
@@ -73,22 +75,21 @@ const PaginatedEarthquakeTable = memo(({
 
     const totalPages = Math.ceil(processedEarthquakes.length / itemsPerPage);
 
-    const requestSort = (key) => {
-        let direction = 'ascending';
-        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-            direction = 'descending';
-        } else if (sortConfig.key === key && sortConfig.direction === 'descending') {
-            direction = 'ascending';
+    const handleSortKeyChange = (newKey) => {
+        let newDirection = 'descending'; // Default for time and magnitude
+        if (newKey === 'place') {
+            newDirection = 'ascending'; // Default for place
         }
-        setSortConfig({key, direction});
+        setSortConfig({ key: newKey, direction: newDirection });
         setCurrentPage(1);
     };
 
-    const handleSortKeyDown = (event, key) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-            requestSort(key);
-            event.preventDefault(); // Prevent scrolling if space is pressed
-        }
+    const toggleSortDirection = () => {
+        setSortConfig(currentConfig => ({
+            ...currentConfig,
+            direction: currentConfig.direction === 'ascending' ? 'descending' : 'ascending'
+        }));
+        setCurrentPage(1);
     };
 
     // const handleRowKeyDown = (event, quake) => { // Unused function removed
@@ -98,100 +99,94 @@ const PaginatedEarthquakeTable = memo(({
     //     }
     // };
 
-    const getSortIndicator = (key) => (sortConfig.key === key ? (sortConfig.direction === 'ascending' ? ' ▲' : ' ▼') : <span className="text-slate-500"> ◇</span>);
+    // const getSortIndicator = (key) => (sortConfig.key === key ? (sortConfig.direction === 'ascending' ? ' ▲' : ' ▼') : <span className="text-slate-500"> ◇</span>);
+    // columns array definition removed as it's no longer needed for list layout
 
-    const columns = [
-        {label: 'Mag.', key: 'mag', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm font-bold`},
-        {label: 'Location', key: 'place', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`},
-        {label: 'Time / Ago', key: 'time', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`},
-        {label: 'Depth', key: 'depth', className: `px-2 py-1.5 sm:px-3 whitespace-nowrap text-xs sm:text-sm`}
-    ];
+    const renderContent = () => {
+        if (isLoading || earthquakes === null) {
+            return (
+                <div className="overflow-x-auto"> {/* Wrapper for skeletons */}
+                    {[...Array(Math.min(itemsPerPage, 3))].map((_, i) => (
+                        <div key={`skeleton-${i}`} className={`p-2 border-b border-slate-600 last:border-b-0`}>
+                            <div className="flex justify-between items-center text-xs sm:text-sm">
+                                <SkeletonText width="w-1/4" className="bg-slate-600" />
+                                <SkeletonText width="w-1/3" className="bg-slate-600" />
+                            </div>
+                            <SkeletonText width="w-full" className="mt-1 bg-slate-600" />
+                        </div>
+                    ))}
+                </div>
+            );
+        }
 
-    if (isLoading || earthquakes === null) {
+        if (processedEarthquakes.length === 0) {
+            return (
+                <p className={`text-xs text-slate-400 py-4 text-center`}> {/* Added py-4 and text-center for better spacing */}
+                    No earthquakes recorded {periodName ? `in the ${periodName}` : 'for this period'}.
+                </p>
+            );
+        }
+
         return (
-            <div className={`${cardBg} p-3 rounded-lg mt-4 overflow-x-auto border ${borderColor} shadow-md`}>
-                <h3 className={`text-md font-semibold mb-2 ${titleColor}`}>{title}</h3>
-                <table className="min-w-full divide-y divide-slate-600">
-                    <thead className={tableHeaderBg}>
-                    <tr>{columns.map(col => (
-                        <th key={col.key} scope="col" aria-label={col.label} className={`px-2 py-1.5 sm:px-3 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider`}>
-                            <span className="sr-only">{col.label}</span>
-                            <SkeletonText width="w-12" className="bg-slate-600"/>
-                        </th>
-                    ))}</tr>
-                    </thead>
-                    <tbody className="bg-slate-700 divide-y divide-slate-600">
-                    {[...Array(Math.min(itemsPerPage, 3))].map((_, i) => <SkeletonTableRow key={i} cols={columns.length}/>)}
-                    </tbody>
-                </table>
-            </div>
+            <>
+                <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+                    {/* List container */}
+                    <div>
+                        {paginatedEarthquakes.map((quake) => (
+                            <div
+                                key={quake.id}
+                                onClick={() => onQuakeClick(quake)}
+                                className={`p-2 cursor-pointer ${getMagnitudeColorStyle(quake.properties.mag)} border-b border-slate-600 last:border-b-0 ${tableRowHover} hover:text-slate-100 transition-colors`}
+                            >
+                                <div className="flex justify-between items-center text-xs sm:text-sm">
+                                    <span className="font-bold">M {quake.properties.mag?.toFixed(1) || "N/A"}</span>
+                                    <span>
+                                        {Date.now() - quake.properties.time < 2 * 24 * 60 * 60 * 1000 ? formatTimeAgo(Date.now() - quake.properties.time) : formatDate(quake.properties.time)}
+                                    </span>
+                                </div>
+                                <p className="text-xs sm:text-sm truncate font-medium mt-0.5" title={quake.properties.place}>
+                                    {quake.properties.place || "N/A"}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                {totalPages > 1 && (
+                    <div className="mt-3 flex justify-between items-center">
+                        <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}>Prev</button>
+                        <span className={`text-xs ${paginationText}`}>Page {currentPage} of {totalPages} ({processedEarthquakes.length})</span>
+                        <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}>Next</button>
+                    </div>
+                )}
+            </>
         );
-    }
-
-    if (processedEarthquakes.length === 0) {
-        return (
-            <div className={`${cardBg} p-3 rounded-lg mt-4 border ${borderColor} shadow-md`}>
-                <h3 className={`text-md font-semibold mb-2 ${titleColor}`}>{title}</h3>
-                <p className={`text-xs text-slate-400`}>No earthquakes recorded {periodName ? `in the ${periodName}` : 'for this period'}.</p>
-            </div>
-        );
-    }
+    };
 
     return (
         <div className={`${cardBg} p-3 rounded-lg mt-4 border ${borderColor} shadow-md`}>
             <h3 className={`text-md font-semibold mb-2 ${titleColor}`}>{title}</h3>
-            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
-                <table className="min-w-full divide-y divide-slate-600">
-                    <thead className={`${tableHeaderBg} sticky top-0 z-10`}>
-                    <tr>
-                        {columns.map(col => (
-                            <th
-                                key={col.key}
-                                scope="col"
-                                onClick={() => requestSort(col.key)}
-                                onKeyDown={(e) => handleSortKeyDown(e, col.key)}
-                                tabIndex="0"
-                                className={`px-2 py-1.5 sm:px-3 text-left text-xs font-medium ${tableHeaderTextColor} uppercase tracking-wider cursor-pointer hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                                role="columnheader" // Already a th, but explicit for clarity with interaction
-                                aria-sort={sortConfig.key === col.key ? sortConfig.direction : 'none'}
-                            >
-                                {col.label}<span aria-hidden="true">{getSortIndicator(col.key)}</span>
-                            </th>
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-2 space-y-2 sm:space-y-0">
+                <div className="flex items-center space-x-2">
+                    <label htmlFor="sort-key-select" className="text-xs text-slate-300">Sort by:</label>
+                    <select
+                        id="sort-key-select"
+                        value={sortConfig.key}
+                        onChange={(e) => handleSortKeyChange(e.target.value)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md bg-slate-600 text-white border border-slate-500 focus:ring-indigo-500 focus:border-indigo-500`}
+                    >
+                        {sortableFields.map(field => (
+                            <option key={field.value} value={field.value}>{field.label}</option>
                         ))}
-                    </tr>
-                    </thead>
-                    <tbody className="bg-slate-700 bg-opacity-50 divide-y divide-slate-600">
-                    {paginatedEarthquakes.map((quake) => (
-                        <tr
-                            key={`pgtbl-${quake.id}`}
-                            onClick={() => onQuakeClick(quake)}
-                            // onKeyDown removed
-                            // tabIndex removed
-                            // role removed
-                            className={`${getMagnitudeColorStyle(quake.properties.mag)} ${tableRowHover} cursor-pointer transition-colors`} // Removed focus styles here as row itself is not primary focus target
-                        >
-                            <td className={columns[0].className}>{quake.properties.mag?.toFixed(1) || "N/A"}</td>
-                            <td className={columns[1].className}>
-                                <a href={quake.properties.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-current hover:text-indigo-300 hover:underline font-medium">
-                                    {quake.properties.place || "N/A"}
-                                </a>
-                            </td>
-                            <td className={columns[2].className}>
-                                {Date.now() - quake.properties.time < 2 * 24 * 60 * 60 * 1000 ? formatTimeAgo(Date.now() - quake.properties.time) : formatDate(quake.properties.time)}
-                            </td>
-                            <td className={columns[3].className}>{quake.geometry?.coordinates?.[2] !== undefined ? `${quake.geometry.coordinates[2].toFixed(1)} km` : "N/A"}</td>
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
-            </div>
-            {totalPages > 1 && (
-                <div className="mt-3 flex justify-between items-center">
-                    <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}>Prev</button>
-                    <span className={`text-xs ${paginationText}`}>Page {currentPage} of {totalPages} ({processedEarthquakes.length})</span>
-                    <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}>Next</button>
+                    </select>
                 </div>
-            )}
+                <button
+                    onClick={toggleSortDirection}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}
+                >
+                    {sortConfig.direction === 'ascending' ? 'Ascending ▲' : 'Descending ▼'}
+                </button>
+            </div>
+            {renderContent()}
         </div>
     );
 });
