@@ -1,0 +1,2 @@
+src/components/InteractiveGlobeView.test.jsx
+src/components/NotableQuakeFeature.test.jsx
