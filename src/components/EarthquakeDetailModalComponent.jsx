@@ -53,22 +53,21 @@ const EarthquakeDetailModalComponent = () => {
     // New logic to construct detailUrl from usgs-id
     let detailUrl;
     if (detailUrlParam) {
-        const parts = detailUrlParam.split('-');
-        if (parts.length > 1) {
-            const usgsId = parts[parts.length - 1];
-            if (usgsId) {
+        const decodedParam = decodeURIComponent(detailUrlParam);
+        if (decodedParam.startsWith('http://') || decodedParam.startsWith('https://')) {
+            detailUrl = decodedParam;
+        } else {
+            const parts = decodedParam.split('-');
+            const commonSlugPattern = /^m\d[^\s-]*-[^-]+-[a-zA-Z0-9_.-]+$/; // Pattern: m<digit(s)>...-location-id
+                                                                         // Updated to be more specific: starts with m + digit, then anything not a space/hyphen,
+                                                                         // then a hyphen, then location part (at least one char not a hyphen), then a hyphen, then ID.
+            if (parts.length > 2 && commonSlugPattern.test(decodedParam)) { // Ensure at least 3 parts for typical slug m-loc-id
+                const usgsId = parts[parts.length - 1];
                 detailUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${usgsId}.geojson`;
             } else {
-                // This case should ideally not happen if format is correct, but good to be aware
-                console.warn(`EarthquakeDetailModalComponent: Extracted usgsId is empty from param: ${detailUrlParam}`);
-                // Fallback to trying to decode the whole thing, though this is less likely to be a valid GeoJSON URL
-                detailUrl = typeof detailUrlParam === 'string' ? decodeURIComponent(detailUrlParam) : undefined;
+                // Not a recognized multi-part descriptive slug, or no hyphens (e.g. plain ID). Use the whole decoded param.
+                detailUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${decodedParam}.geojson`;
             }
-        } else {
-            console.warn(`EarthquakeDetailModalComponent: Unexpected format for detailUrlParam: ${detailUrlParam}. Expected format like 'm[magnitude]-[location-slug]-[usgs-id]'.`);
-            // Fallback: try to use the decoded param directly if it doesn't match the new format.
-            // This might be an old full URL or some other format.
-            detailUrl = typeof detailUrlParam === 'string' ? decodeURIComponent(detailUrlParam) : undefined;
         }
     } else {
         console.warn("EarthquakeDetailModalComponent: detailUrlParam is undefined.");

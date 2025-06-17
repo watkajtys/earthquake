@@ -163,6 +163,7 @@ export const EarthquakeDataProvider = ({ children }) => {
             const monthlyResult = await fetchUsgsData(USGS_API_URL_MONTH);
             if (!monthlyResult.error && monthlyResult.features && monthlyResult.features.length > 0) {
                 dispatch({ type: actionTypes.MONTHLY_DATA_PROCESSED, payload: { features: monthlyResult.features, fetchTime: nowForFiltering } });
+                dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false }});
             } else {
                 const errorMsg = monthlyResult?.error?.message || "Monthly data is unavailable or incomplete.";
                 dispatch({type: actionTypes.SET_ERROR, payload: { monthlyError: errorMsg }});

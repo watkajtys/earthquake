@@ -132,7 +132,7 @@ describe('onRequest (Main Router Remaining Tests)', () => {
 
       const response = await onRequest(context);
 
-      expect(consoleWarnSpy).toHaveBeenCalledWith(`No route matched for "${requestPath}" and no next() function available. env.ASSETS.fetch also failed or not configured. Returning 404.`);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(`No route matched for "${requestPath}" and no next() function available. Returning 404.`);
       expect(response).toBeInstanceOf(Response);
       expect(response.status).toBe(404);
       expect(await response.text()).toBe('Not Found');

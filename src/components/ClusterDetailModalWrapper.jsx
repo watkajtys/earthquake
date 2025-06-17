@@ -73,16 +73,32 @@ function ClusterDetailModalWrapper({
     const { clusterId: fullSlugFromParams } = useParams(); // Renamed to avoid confusion
     const navigate = useNavigate();
 
+    let initialExtractedId = null;
+    let initialErrorMessage = '';
+    let initialLoadingState = true;
+
+    if (fullSlugFromParams) {
+        const match = fullSlugFromParams.match(/-([a-zA-Z0-9]+)$/);
+        initialExtractedId = match ? match[1] : null;
+        if (!initialExtractedId) {
+            initialErrorMessage = "Invalid cluster URL format. Could not extract quake ID.";
+            initialLoadingState = false;
+        }
+    } else {
+        initialErrorMessage = 'No cluster slug specified.';
+        initialLoadingState = false;
+    }
+
     // State for managing loading status specific to this wrapper
-    const [internalIsLoading, setInternalIsLoading] = useState(true);
+    const [internalIsLoading, setInternalIsLoading] = useState(initialLoadingState);
     // Extracted strongest quake ID from the new URL format
-    const [extractedStrongestQuakeId, setExtractedStrongestQuakeId] = useState(null);
+    const [extractedStrongestQuakeId, setExtractedStrongestQuakeId] = useState(initialExtractedId);
     // State for the dynamically found or fetched cluster data
     const [dynamicCluster, setDynamicCluster] = useState(null);
     // State for displaying any error messages during data fetching or processing
-    const [errorMessage, setErrorMessage] = useState('');
+    const [errorMessage, setErrorMessage] = useState(initialErrorMessage);
     // State for SEO properties, generated based on cluster data or error state
-    const [seoProps, setSeoProps] = useState({});
+    // const [seoProps, setSeoProps] = useState({}); // Will be initialized based on initialErrorMessage
     // State to track if the component is waiting for monthly data to be loaded by EarthquakeDataContext
     const [isWaitingForMonthlyData, setIsWaitingForMonthlyData] = useState(false);
 
@@ -148,65 +164,41 @@ function ClusterDetailModalWrapper({
      * It also generates SEO properties using `generateSeo` based on the outcome.
      */
     useEffect(() => {
-        // let isMounted = true; // Unused variable
-        // let d1FetchAttempted = false; // Unused variable
-
-        // Parse the clusterId from URL to extract strongest quake ID
+        let currentExtractedId = null;
         if (fullSlugFromParams) {
             const match = fullSlugFromParams.match(/-([a-zA-Z0-9]+)$/);
-            const newExtractedId = match ? match[1] : null;
-            if (newExtractedId !== extractedStrongestQuakeId) { // Avoid infinite loop if parsing logic is complex
-                 setExtractedStrongestQuakeId(newExtractedId);
-            }
-        } else {
-            if (extractedStrongestQuakeId !== null) { // Avoid infinite loop
-                setExtractedStrongestQuakeId(null);
-            }
+            currentExtractedId = match ? match[1] : null;
         }
-        // This effect should re-run if fullSlugFromParams changes, then extractedStrongestQuakeId is set,
-        // then the main findAndSetCluster logic runs.
-    }, [fullSlugFromParams, extractedStrongestQuakeId]);
+        setExtractedStrongestQuakeId(currentExtractedId);
+    }, [fullSlugFromParams]); // Now only depends on fullSlugFromParams
 
+
+    const [seoProps, setSeoProps] = useState(() => {
+        if (initialErrorMessage) {
+            return generateSeo(null, fullSlugFromParams, initialErrorMessage);
+        }
+        return {};
+    });
 
     useEffect(() => {
-        let isMounted = true; // This one IS used in the return of useEffect
-        // let d1FetchAttempted = false; // Unused variable
-
+        let isMounted = true;
         const findAndSetCluster = async () => {
-            if (!isMounted) return;
-            setInternalIsLoading(true);
-            if (!isWaitingForMonthlyData) {
-                setErrorMessage('');
-            }
-
-            if (!fullSlugFromParams) {
-                if (isMounted) {
-                    setErrorMessage('No cluster slug specified.');
+            // No longer needs initial slug/ID validation here if handled by initial state
+            if (!isMounted || !extractedStrongestQuakeId) { // If ID somehow became null later or unmounted
+                if (isMounted && !errorMessage) { // Set error if not already set by initial state
+                    const msg = 'Could not determine cluster quake ID.';
+                    setErrorMessage(msg);
                     setInternalIsLoading(false);
-                    setSeoProps(generateSeo(null, null, 'No cluster slug specified.'));
+                    setSeoProps(generateSeo(null, fullSlugFromParams, msg));
                 }
                 return;
             }
 
-            if (!extractedStrongestQuakeId && fullSlugFromParams) { // Check if parsing failed for a non-empty slug
-                if (isMounted) {
-                    const errMsg = "Invalid cluster URL format. Could not extract quake ID.";
-                    setErrorMessage(errMsg);
-                    setInternalIsLoading(false);
-                    setSeoProps(generateSeo(null, fullSlugFromParams, errMsg));
-                }
-                return;
+            // Proceed with setting loading true and fetching data
+            if(isMounted) {
+                setInternalIsLoading(true);
+                // setErrorMessage(''); // Only reset if truly starting fresh load - handled by initial state now
             }
-
-            if (!extractedStrongestQuakeId) { // Should be caught by above, but as a safeguard
-                 if (isMounted) {
-                    setErrorMessage('Could not determine cluster quake ID.');
-                    setInternalIsLoading(false);
-                    setSeoProps(generateSeo(null, fullSlugFromParams, 'Could not determine cluster quake ID.'));
-                }
-                return;
-            }
-
 
             const initialUpstreamLoad = areParentClustersLoading ||
                                        (!hasAttemptedMonthlyLoad && (isLoadingWeekly || isInitialAppLoad) && !earthquakesLast72Hours?.length) ||
@@ -393,34 +385,39 @@ function ClusterDetailModalWrapper({
         };
 
         // Reset dynamicCluster if the main identifier (fullSlugFromParams or extractedStrongestQuakeId) changes and we had old data
-        if (dynamicCluster && (dynamicCluster.id !== fullSlugFromParams)) {
+        if (dynamicCluster && (dynamicCluster.id !== fullSlugFromParams)) { // Reset if slug changes
             setDynamicCluster(null);
         }
 
-        if (extractedStrongestQuakeId || !fullSlugFromParams) { // Proceed if ID extracted or if slug is null (for initial error)
+        if (!errorMessage) { // Only attempt to find/set cluster if no initial error
             findAndSetCluster();
-        } else if (fullSlugFromParams && !extractedStrongestQuakeId && !internalIsLoading && !errorMessage) {
-            // This case handles if slug exists, parsing failed (extractedStrongestQuakeId is null),
-            // and no error/loading is currently set. This ensures error for bad slug is shown.
-            const errMsg = "Invalid cluster URL format. Could not extract quake ID.";
-            setErrorMessage(errMsg);
-            setInternalIsLoading(false);
-            setSeoProps(generateSeo(null, fullSlugFromParams, errMsg));
+        } else if (internalIsLoading) { // If there was an initial error, ensure loading is false.
+             if(isMounted) setInternalIsLoading(false);
         }
-
 
         return () => { isMounted = false; };
 
     }, [
-        fullSlugFromParams, extractedStrongestQuakeId, // Main identifiers
-        overviewClusters, areParentClustersLoading,
-        allEarthquakes, earthquakesLast72Hours,
-        isLoadingWeekly, isLoadingMonthly, isInitialAppLoad, hasAttemptedMonthlyLoad, loadMonthlyData, monthlyError,
+        fullSlugFromParams, // This is the primary trigger from routing
+        extractedStrongestQuakeId, // Derived from fullSlugFromParams
+        overviewClusters,
+        areParentClustersLoading,
+        allEarthquakes,
+        earthquakesLast72Hours,
+        isLoadingWeekly,
+        isLoadingMonthly,
+        isInitialAppLoad,
+        hasAttemptedMonthlyLoad,
+        loadMonthlyData,
+        monthlyError,
         isWaitingForMonthlyData,
-        formatDate, formatTimeAgo, formatTimeDuration, generateSeo,
+        formatDate,
+        formatTimeAgo,
+        formatTimeDuration,
+        generateSeo,
         dynamicCluster,
-        errorMessage, // Added
-        internalIsLoading // Added
+        errorMessage,
+        internalIsLoading
     ]);
 
     const handleClose = () => navigate(-1);
