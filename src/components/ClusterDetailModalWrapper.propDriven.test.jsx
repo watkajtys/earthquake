@@ -1,18 +1,11 @@
 import React from 'react';
-// render, screen, waitFor, describe, it, expect, vi, beforeEach might be needed if other tests are added to this file.
-// For now, they are not strictly necessary as all tests have been moved.
-// However, standard practice is to keep them for future test additions.
-import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom'; // Used by component, mocks need it
+import { render, screen, waitFor } from '@testing-library/react'; // waitFor is used in the original test
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import ClusterDetailModalWrapper from './ClusterDetailModalWrapper.jsx';
 
 // --- Mocks ---
-// These global mocks and hoisted mocks are part of the test environment setup for this component.
-// They should remain if any tests for ClusterDetailModalWrapper are ever added back to this file,
-// or if another top-level describe block is added here.
-
 const mockNavigate = vi.fn();
 const mockUseParams = vi.fn();
 
@@ -20,6 +13,10 @@ const mockUseParams = vi.fn();
 const { mockFetchClusterDefinition } = vi.hoisted(() => {
   return { mockFetchClusterDefinition: vi.fn() };
 });
+
+const { mockUseEarthquakeDataState } = vi.hoisted(() => ({
+  mockUseEarthquakeDataState: vi.fn(),
+}));
 
 vi.mock('react-router-dom', async (importOriginal) => {
   const original = await importOriginal();
@@ -42,16 +39,11 @@ vi.mock('./SeoMetadata', () => ({
   default: vi.fn(() => null),
 }));
 
-// Mock context hooks
-const { mockUseEarthquakeDataState } = vi.hoisted(() => ({
-  mockUseEarthquakeDataState: vi.fn(),
-}));
 vi.mock('../contexts/EarthquakeDataContext.jsx', () => ({
   useEarthquakeDataState: mockUseEarthquakeDataState,
 }));
 
-// Default props and data could be useful if new, simple tests are added to this file.
-// They are duplicated in the new files, which is acceptable for test file independence.
+// Default props needed by ClusterDetailModalWrapper
 const defaultProps = {
   overviewClusters: [],
   formatDate: vi.fn(timestamp => new Date(timestamp).toISOString()),
@@ -62,6 +54,7 @@ const defaultProps = {
   areParentClustersLoading: false,
 };
 
+// Default state for EarthquakeDataContext
 const defaultEarthquakeData = {
   allEarthquakes: [],
   earthquakesLast72Hours: [],
@@ -73,26 +66,38 @@ const defaultEarthquakeData = {
   monthlyError: null,
 };
 
-// All specific test cases and the describe block that contained them have been moved to:
-// - ClusterDetailModalWrapper.urlParsing.test.jsx
-// - ClusterDetailModalWrapper.propDriven.test.jsx
-
-// This file can be used for future tests that don't fit into the above categories,
-// or it can be removed if all tests are expected to remain in the specialized files.
-// For now, it serves as a central place for common mock definitions if needed, though
-// the specialized files are currently self-contained.
-
-// Example of how a new test suite could be added here:
-/*
-describe('ClusterDetailModalWrapper - New Generic Tests', () => {
+describe('ClusterDetailModalWrapper Prop-Driven Behavior', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockUseEarthquakeDataState.mockReturnValue(defaultEarthquakeData);
     mockFetchClusterDefinition.mockResolvedValue(null);
   });
 
-  it('should do something generic', () => {
-    // Test logic here
+  it('should use cluster data from overviewClusters if found, matching by strongestQuakeId', async () => {
+    const slug = '10-quakes-near-test-area-up-to-m5.0-testquake1'; // slug is used to find the modal by ID
+    const strongestQuakeId = 'testquake1';
+    mockUseParams.mockReturnValue({ clusterId: slug }); // useParams is still called by the component
+
+    const mockClusterFromProps = {
+      id: `overview_cluster_${strongestQuakeId}_10`,
+      strongestQuakeId: strongestQuakeId,
+      locationName: 'Test Area from Prop',
+      quakeCount: 10,
+      maxMagnitude: 5.0,
+      originalQuakes: [{ id: strongestQuakeId, properties: { place: 'Test Area from Prop', mag: 5.0 }, geometry: { coordinates: [0,0,0] }}],
+      _latestTimeInternal: Date.now(),
+      _earliestTimeInternal: Date.now() - 100000
+    };
+
+    render(
+      <MemoryRouter initialEntries={[`/cluster/${slug}`]}>
+        <Routes>
+          <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper {...defaultProps} overviewClusters={[mockClusterFromProps]} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByText(`Cluster: ${slug}`);
+    expect(mockFetchClusterDefinition).not.toHaveBeenCalled();
   });
 });
-*/
