@@ -49,6 +49,14 @@ const createMockContext = (request, env = {}, cf = {}) => {
   };
 };
 
+// TODO: REVIEW_REDUNDANCY - This integration test suite for quake prerendering
+// overlaps significantly with the direct handler tests in
+// `functions/routes/prerender/quake-detail.test.js` (for `handleQuakeDetailPrerender`).
+// Consider slimming down this suite to focus on verifying the routing via
+// `[[catchall]].js` (including event ID parsing by the router) and basic
+// success/error propagation, rather than re-testing all detailed handler logic
+// (USGS fetch details, specific data validation, error cases for the handler)
+// covered in the direct handler tests.
 // --- Tests for Prerendering Quake Details ---
 describe('Prerendering Handler: /quake/:id', () => {
     beforeEach(() => {
