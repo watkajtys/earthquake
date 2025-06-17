@@ -71,6 +71,7 @@ const defaultEarthquakeData = {
   monthlyError: null,
 };
 
+// TODO: INVESTIGATE OOM - This test suite was skipped due to previous Out Of Memory errors when running all test cases together. Needs investigation and potential refactoring to run reliably (e.g., breaking into smaller suites or individual tests if the issue is cumulative).
 describe.skip('ClusterDetailModalWrapper URL Slug Parsing and Data Fetching', () => {
   beforeEach(() => {
     vi.resetAllMocks();

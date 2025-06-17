@@ -8,6 +8,15 @@ const createMockQuake = (id, mag, lat, lon, time = Date.now()) => ({
   geometry: { coordinates: [lon, lat, 0] }, // Assuming depth is 0 or not used by findActiveClusters distance calc
 });
 
+// PERFORMANCE REVIEW NEEDED:
+// The findActiveClusters function tested below has a potential O(n^2) complexity
+// in its core loop where earthquakes are compared against each other for proximity.
+// While this might be acceptable for small datasets, it could lead to significant
+// performance degradation (slow execution, high memory usage) if the input array
+// of 'earthquakes' is very large (e.g., tens of thousands of events).
+// Consider profiling this function with large datasets and exploring optimizations
+// if necessary (e.g., spatial indexing if applicable, or more optimized clustering algorithms
+// if the current greedy approach becomes a bottleneck).
 describe('findActiveClusters (internal)', () => {
   let localConsoleWarnSpy;
 
