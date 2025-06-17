@@ -182,21 +182,40 @@ describe('findActiveClusters (internal)', () => {
     expect(clusters[0].some(q => q.id === 'qB_iso')).toBe(false); // qB_iso is too far or alone
 
     // Outer loop warnings (for baseQuake):
+    // These are generated when an invalid quake is first encountered as a potential `baseQuake`.
+    // - malformedQuakesSource[2] (missing id) -> 1 warning
+    // - malformedQuakesSource[3] (m_no_geom) -> 1 warning
+    // - malformedQuakesSource[4] (m_bad_coords1) -> 1 warning
+    // - malformedQuakesSource[5] (m_bad_coords2) -> 1 warning
+    // Total outer loop warnings = 4.
     expect(localConsoleWarnSpy).toHaveBeenCalledWith("Skipping quake with missing ID or invalid object in findActiveClusters."); // For malformedQuakesSource[2]
     expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping quake ${malformedQuakesSource[3].id} due to invalid coordinates in findActiveClusters.`);
     expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping quake ${malformedQuakesSource[4].id} due to invalid coordinates in findActiveClusters.`);
     expect(localConsoleWarnSpy).toHaveBeenCalledWith(`Skipping quake ${malformedQuakesSource[5].id} due to invalid coordinates in findActiveClusters.`);
 
-    // Inner loop warnings (for otherQuake, when a valid quake is baseQuake):
-    // These warnings will be generated when qA1, qA2, or qB_iso are baseQuake.
-    // Example: When qA1 is baseQuake, it iterates through all others.
-    // It will try to compare with malformedQuakesSource[2], [3], [4], [5].
-    // Each valid baseQuake will trigger these inner loop warnings for each invalid otherQuake.
-    // Since there are 3 valid quakes (qA1, qA2, qB_iso) that can act as baseQuake,
-    // and 4 malformed quakes that will cause warnings when they are otherQuake:
-    // Total inner loop warnings = 3 * (1 for missing ID + 3 for invalid coords) = 3 * 4 = 12
-    // Total warnings = 4 (outer) + 12 (inner) = 16
-    expect(localConsoleWarnSpy).toHaveBeenCalledTimes(16);
+    // Inner loop warnings (for otherQuake):
+    // These occur when a *valid* `baseQuake` is being processed, and it encounters an invalid `otherQuake`.
+    // Valid baseQuakes in order of processing (due to magnitude sort then original order for ties): qA1, qB_valid_isolated.
+    // qA2 is processed with qA1 and added to processedQuakeIds, so it won't be a baseQuake for inner loop warning generation against malformed items.
+    //
+    // 1. When `qA1` is baseQuake:
+    //    - Compares with malformedQuakesSource[2] (missing id) -> 1 "Skipping potential cluster member with missing ID..."
+    //    - Compares with malformedQuakesSource[3] (m_no_geom) -> 1 "Skipping potential cluster member m_no_geom due to invalid coordinates."
+    //    - Compares with malformedQuakesSource[4] (m_bad_coords1) -> 1 "Skipping potential cluster member m_bad_coords1 due to invalid coordinates."
+    //    - Compares with malformedQuakesSource[5] (m_bad_coords2) -> 1 "Skipping potential cluster member m_bad_coords2 due to invalid coordinates."
+    //    Total for qA1 as base = 4 warnings.
+    //
+    // 2. When `qB_valid_isolated` is baseQuake (it's processed after qA1/qA2 cluster is formed):
+    //    - It will also iterate through the malformed quakes that were not part of any cluster yet.
+    //    - Compares with malformedQuakesSource[2] -> 1 warning
+    //    - Compares with malformedQuakesSource[3] -> 1 warning
+    //    - Compares with malformedQuakesSource[4] -> 1 warning
+    //    - Compares with malformedQuakesSource[5] -> 1 warning
+    //    Total for qB_valid_isolated as base = 4 warnings.
+    //
+    // Total inner loop warnings = 4 (from qA1) + 4 (from qB_valid_isolated) = 8.
+    // Total warnings = 4 (outer) + 8 (inner) = 12.
+    expect(localConsoleWarnSpy).toHaveBeenCalledTimes(12);
     // More specific checks for inner loop if needed:
     expect(localConsoleWarnSpy).toHaveBeenCalledWith("Skipping potential cluster member with missing ID or invalid object.");
     expect(localConsoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Skipping potential cluster member m_no_geom due to invalid coordinates.`));
