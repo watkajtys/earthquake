@@ -1,9 +1,7 @@
-import { onRequest, handleClustersSitemapRequest } from './[[catchall]]'; // onRequest for routing, handleClustersSitemapRequest for specific new URL tests
+import { onRequest, handleClustersSitemapRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // --- Mocks for Cloudflare Environment ---
-
-// Mock 'caches' global (though less used by sitemap, good for consistency if onRequest is used)
 const mockCache = {
   match: vi.fn(),
   put: vi.fn().mockResolvedValue(undefined),
@@ -13,7 +11,6 @@ global.caches = {
   open: vi.fn().mockResolvedValue(mockCache)
 };
 
-// Mock 'fetch' global
 global.fetch = vi.fn();
 
 // --- Helper to create mock context ---
@@ -49,51 +46,12 @@ const createMockContext = (request, env = {}, cf = {}) => {
   };
 };
 
-// --- Tests for Sitemap Handlers ---
-describe('Sitemap Handlers', () => {
+describe('Cluster Sitemap Handler and URL Generation', () => {
     beforeEach(() => {
         vi.resetAllMocks();
         fetch.mockReset();
-        mockCache.match.mockReset(); // Reset cache if onRequest is used for routing to sitemap handlers
+        mockCache.match.mockReset();
         mockCache.put.mockReset();
-    });
-
-    it('/sitemap-index.xml should return XML sitemap index', async () => {
-      const request = new Request('http://localhost/sitemap-index.xml');
-      const context = createMockContext(request);
-      const response = await onRequest(context);
-      expect(response.status).toBe(200);
-      expect(response.headers.get('Content-Type')).toContain('application/xml');
-      const text = await response.text();
-      expect(text).toContain('<sitemapindex');
-      expect(text).toContain('sitemap-static-pages.xml');
-    });
-
-    it('/sitemap-static-pages.xml should return XML for static pages', async () => {
-        const request = new Request('http://localhost/sitemap-static-pages.xml');
-        const context = createMockContext(request);
-        const response = await onRequest(context);
-        expect(response.status).toBe(200);
-        expect(response.headers.get('Content-Type')).toContain('application/xml');
-        const text = await response.text();
-        expect(text).toContain('<urlset');
-        expect(text).toContain('https://earthquakeslive.com/overview');
-    });
-
-    it('/sitemap-earthquakes.xml should fetch data and return XML', async () => {
-        const mockGeoJson = { features: [
-            { properties: { mag: 3.0, place: "Test Place", time: Date.now(), updated: Date.now(), detail: "event_detail_url_1" }, id: "ev1" }
-        ]};
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockGeoJson), { status: 200 }));
-        const request = new Request('http://localhost/sitemap-earthquakes.xml');
-        const context = createMockContext(request);
-        const response = await onRequest(context);
-        expect(response.status).toBe(200);
-        expect(response.headers.get('Content-Type')).toContain('application/xml');
-        const text = await response.text();
-        expect(text).toContain('<urlset');
-        expect(text).toContain(encodeURIComponent("event_detail_url_1")); // Detail URL should be XML-escaped by handler
-        expect(fetch).toHaveBeenCalledWith(expect.stringContaining('2.5_week.geojson'));
     });
 
     it('/sitemap-clusters.xml should list clusters from D1 and return XML', async () => {
@@ -103,53 +61,24 @@ describe('Sitemap Handlers', () => {
         const request = new Request('http://localhost/sitemap-clusters.xml');
         const context = createMockContext(request);
         context.env.DB.all.mockResolvedValueOnce({ results: mockD1Results, success: true });
+        // This fetch is for the new URL generation logic inside handleClustersSitemapRequest
         fetch.mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Test Place", mag: 5.0 } }), { status: 200 }));
 
-        const response = await onRequest(context);
+        const response = await onRequest(context); // Uses handleClustersSitemapRequest internally
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('application/xml');
         const text = await response.text();
         expect(text).toContain('<urlset');
+        // Check for the new URL format
         expect(text).toContain('https://earthquakeslive.com/cluster/10-quakes-near-test-place-up-to-m5.0-cluster1');
         expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT clusterId, updatedAt FROM ClusterDefinitions"));
-    });
-
-    it('/sitemap-earthquakes.xml should handle fetch error', async () => {
-        fetch.mockRejectedValueOnce(new Error("USGS Feed Down"));
-        const request = new Request('http://localhost/sitemap-earthquakes.xml');
-        const context = createMockContext(request);
-        const response = await onRequest(context);
-        expect(response.status).toBe(200);
-        const text = await response.text();
-        expect(text).toContain("<!-- Exception processing earthquake data: USGS Feed Down -->");
-    });
-
-    it('/sitemap-earthquakes.xml should handle non-OK response from fetch', async () => {
-        fetch.mockResolvedValueOnce(new Response("Server Error", { status: 503 }));
-        const request = new Request('http://localhost/sitemap-earthquakes.xml');
-        const context = createMockContext(request);
-        const response = await onRequest(context);
-        expect(response.status).toBe(200);
-        const text = await response.text();
-        expect(text).toContain("<!-- Error fetching earthquake data -->");
-    });
-
-    it('/sitemap-earthquakes.xml should handle empty features array', async () => {
-        const mockGeoJson = { features: [] };
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockGeoJson), { status: 200 }));
-        const request = new Request('http://localhost/sitemap-earthquakes.xml');
-        const context = createMockContext(request);
-        const response = await onRequest(context);
-        expect(response.status).toBe(200);
-        const text = await response.text();
-        expect(text).not.toContain("<loc>");
     });
 
     it('/sitemap-clusters.xml should handle DB not configured', async () => {
       const request = new Request('http://localhost/sitemap-clusters.xml');
       const context = createMockContext(request, { DB: undefined });
-      const response = await onRequest(context);
-      expect(response.status).toBe(200);
+      const response = await onRequest(context); // Uses handleClustersSitemapRequest internally
+      expect(response.status).toBe(200); // The handler itself returns 200 with a comment
       const text = await response.text();
       expect(text).toContain("<!-- D1 Database not available -->");
     });
@@ -158,8 +87,8 @@ describe('Sitemap Handlers', () => {
       const request = new Request('http://localhost/sitemap-clusters.xml');
       const context = createMockContext(request);
       context.env.DB.all.mockRejectedValueOnce(new Error("D1 Query Error"));
-      const response = await onRequest(context);
-      expect(response.status).toBe(200);
+      const response = await onRequest(context); // Uses handleClustersSitemapRequest internally
+      expect(response.status).toBe(200); // The handler itself returns 200 with a comment
       const text = await response.text();
       expect(text).toContain("<!-- Exception processing cluster data from D1: D1 Query Error -->");
     });
@@ -169,71 +98,19 @@ describe('Sitemap Handlers', () => {
       const context = createMockContext(request);
       context.env.DB.all.mockResolvedValueOnce({ results: [], success: true });
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      const response = await onRequest(context);
+      const response = await onRequest(context); // Uses handleClustersSitemapRequest internally
       expect(response.status).toBe(200);
       const text = await response.text();
       expect(text).not.toContain("<loc>");
+      // This log comes from within handleClustersSitemapRequest
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("No cluster definitions found in D1 table ClusterDefinitions."));
       consoleLogSpy.mockRestore();
     });
 
-    it('/sitemap-earthquakes.xml should skip features missing properties.detail', async () => {
-      const mockGeoJson = {
-        features: [
-          { properties: { mag: 3.0, place: "Test Place Valid", time: Date.now(), updated: Date.now(), detail: "event_detail_url_valid" }, id: "ev_valid" },
-          { properties: { mag: 2.5, place: "Test Place Missing Detail", time: Date.now(), updated: Date.now(), detail: null }, id: "ev_missing_detail" },
-          { properties: { mag: 2.8, place: "Test Place Undefined Detail", time: Date.now(), updated: Date.now() }, id: "ev_undefined_detail" }
-        ]
-      };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockGeoJson), { status: 200 }));
-      const request = new Request('http://localhost/sitemap-earthquakes.xml');
-      const context = createMockContext(request);
-      const response = await onRequest(context);
-      const text = await response.text();
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get('Content-Type')).toContain('application/xml');
-      expect(text).toContain('<loc>event_detail_url_valid</loc>');
-      const locCount = (text.match(/<loc>/g) || []).length;
-      expect(locCount).toBe(1);
-    });
-
-    it('/sitemap-earthquakes.xml should skip features with missing or invalid properties.updated', async () => {
-      const mockGeoJson = {
-        features: [
-          { properties: { mag: 3.1, place: "Test Place Valid Update", time: Date.now(), updated: Date.now(), detail: "event_detail_url_valid_update" }, id: "ev_valid_upd" },
-          { properties: { mag: 2.6, place: "Test Place Missing Update", time: Date.now(), detail: "event_detail_url_missing_update" }, id: "ev_missing_upd" },
-          { properties: { mag: 2.7, place: "Test Place Invalid Update", time: Date.now(), updated: "not-a-number", detail: "event_detail_url_invalid_update" }, id: "ev_invalid_upd" }
-        ]
-      };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockGeoJson), { status: 200 }));
-      const request = new Request('http://localhost/sitemap-earthquakes.xml');
-      const context = createMockContext(request);
-      const response = await onRequest(context);
-      const text = await response.text();
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get('Content-Type')).toContain('application/xml');
-      expect(text).toContain('<loc>event_detail_url_valid_update</loc>');
-      expect(text).toContain('<lastmod>');
-      const urlCount = (text.match(/<url>/g) || []).length;
-      expect(urlCount).toBe(1);
-    });
-
-    it('/sitemap-earthquakes.xml should use env.USGS_API_URL if provided', async () => {
-      const customApiUrl = "https://example.com/custom/feed.geojson";
-      const mockGeoJson = { features: [] };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockGeoJson), { status: 200 }));
-      const request = new Request('http://localhost/sitemap-earthquakes.xml');
-      const context = createMockContext(request, { USGS_API_URL: customApiUrl });
-      await onRequest(context);
-      expect(fetch).toHaveBeenCalledWith(customApiUrl);
-    });
-
     describe('handleClustersSitemapRequest New URL Generation', () => {
         beforeEach(() => {
-            vi.resetAllMocks();
-            fetch.mockReset();
+            // vi.resetAllMocks(); // Already done in outer describe
+            // fetch.mockReset(); // Already done in outer describe
         });
 
         it('should generate correct new format URLs for valid D1 entries with successful USGS fetches', async () => {
@@ -312,8 +189,8 @@ describe('Sitemap Handlers', () => {
             mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
 
             fetch
-                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { mag: 5.0 } }), { status: 200 }))
-                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Some Place" } }), { status: 200 }))
+                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { mag: 5.0 } }), { status: 200 })) // Missing place
+                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Some Place" } }), { status: 200 })) // Missing mag
                 .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "California", mag: 4.2 } }), { status: 200 }));
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -383,4 +260,4 @@ describe('Sitemap Handlers', () => {
             consoleWarnSpy.mockRestore();
         });
     });
-  });
+});
