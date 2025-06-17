@@ -49,6 +49,14 @@ const createMockContext = (request, env = {}, cf = {}) => {
   };
 };
 
+// TODO: REVIEW_REDUNDANCY - This integration test suite for cluster prerendering
+// overlaps significantly with the direct handler tests in
+// `functions/routes/prerender/cluster-detail.test.js` (for `handlePrerenderCluster`).
+// Consider slimming down this suite to focus on verifying the routing via
+// `[[catchall]].js` (including slug parsing by the router) and basic
+// success/error propagation, rather than re-testing all detailed handler logic
+// (D1 interactions, USGS fetches for strongest quake, specific error cases)
+// covered in the direct handler tests.
 // --- Tests for Prerendering Cluster Details ---
 describe('Prerendering Handler: /cluster/:id', () => {
     beforeEach(() => {

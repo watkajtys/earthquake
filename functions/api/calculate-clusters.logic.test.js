@@ -8,6 +8,29 @@ const createMockQuake = (id, mag, lat, lon, time = Date.now()) => ({
   geometry: { coordinates: [lon, lat, 0] }, // Assuming depth is 0 or not used by findActiveClusters distance calc
 });
 
+// PERFORMANCE REVIEW NEEDED for findActiveClusters in './calculate-clusters.js':
+// The function's core clustering logic involves:
+// 1. Sorting earthquakes (typically by magnitude).
+// 2. An outer loop iterating through each earthquake as a potential 'baseQuake' for a new cluster.
+// 3. An inner loop that iterates through remaining earthquakes ('otherQuake') to compare with the 'baseQuake'.
+// 4. A distance calculation (e.g., Haversine) performed for many pairs within the inner loop.
+//
+// This structure can lead to O(n^2) complexity in the worst-case scenario with 'n'
+// being the number of earthquakes, particularly due to the nested iteration and
+// repeated distance calculations.
+//
+// Potential areas for performance degradation with large datasets (e.g., >10k events):
+// - Time taken by the nested loops and pairwise distance calculations.
+// - Memory usage if intermediate arrays or cluster structures become very large.
+//
+// Recommendations:
+// - Profile `findActiveClusters` with realistic large datasets to identify actual bottlenecks.
+// - Consider optimizations if performance is an issue:
+//   - Spatial indexing (e.g., k-d trees, quadtrees) to speed up finding nearby quakes,
+//     reducing the need for pairwise distance checks against all remaining points.
+//   - Exploring more optimized clustering algorithms if the current greedy approach proves too slow.
+//   - Optimizing the `calculateDistance` function itself, though the main concern is usually
+//     the number of times it's called.
 describe('findActiveClusters (internal)', () => {
   let localConsoleWarnSpy;
 
