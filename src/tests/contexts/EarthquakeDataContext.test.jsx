@@ -50,8 +50,5 @@ describe('Helper: calculateMagnitudeDistribution', () => { it.todo('tests need t
 // --- Tests for loadMonthlyData and Memoized Selectors ---
 // MOVED to src/tests/contexts/EarthquakeDataContext.provider.test.jsx and src/tests/contexts/EarthquakeDataContext.selectors.test.jsx
 
-// --- Tests for EarthquakeDataProvider async logic and initial load ---
-// MOVED to src/tests/contexts/EarthquakeDataContext.provider.test.jsx
-
 // --- Tests for Memoized Selectors --- (This was a duplicate describe block, main one moved)
 // MOVED to src/tests/contexts/EarthquakeDataContext.selectors.test.jsx
