@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react'; // Added waitFor
 import { MemoryRouter } from 'react-router-dom';
 import { expect, describe, it, vi, beforeEach } from 'vitest';
 
@@ -89,27 +89,31 @@ describe('HomePage Rendering and Basic UI', () => {
     vi.mock('../assets/TectonicPlateBoundaries.json', () => ({ default: { type: "FeatureCollection", features: [] }}));
   });
 
-  it('renders key child components when data is loaded', () => {
+  it('renders key child components when data is loaded', async () => { // Made async
     mockUseEarthquakeDataState.mockReturnValue({
       ...defaultEarthquakeData,
-      isLoadingInitialData: false, // Ensure not loading
-      isInitialAppLoad: false, // App has loaded
+      isLoadingInitialData: false,
+      isInitialAppLoad: false,
     });
-    mockFetchActiveClusters.mockResolvedValue([]); // Ensure active clusters fetch resolves
+    mockFetchActiveClusters.mockResolvedValue([]);
 
     render(
       <MemoryRouter initialEntries={['/']}>
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByTestId('mock-globe-view')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-notable-quake-feature')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-prev-notable-quake-feature')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-timer')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-bottom-nav')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-time-since-banner')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-summary-stats')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-alert-display')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-globe-view')).toBeInTheDocument();
+      // Check other components once globe is confirmed
+      expect(screen.getByTestId('mock-notable-quake-feature')).toBeInTheDocument();
+      expect(screen.getByTestId('mock-prev-notable-quake-feature')).toBeInTheDocument();
+      expect(screen.getByTestId('mock-timer')).toBeInTheDocument();
+      expect(screen.getByTestId('mock-bottom-nav')).toBeInTheDocument();
+      expect(screen.getByTestId('mock-time-since-banner')).toBeInTheDocument();
+      expect(screen.getByTestId('mock-summary-stats')).toBeInTheDocument();
+      expect(screen.getByTestId('mock-alert-display')).toBeInTheDocument();
+    }, { timeout: 5000 });
   });
 
   describe('Accessibility', () => {

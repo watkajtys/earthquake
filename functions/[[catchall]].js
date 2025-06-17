@@ -76,7 +76,7 @@ export async function onRequest(context) {
   } else {
     if (pathname === "/very/unknown/path") {
         console.log(`[worker-router] Path ${pathname} not handled by explicit routing in worker. Will attempt to serve from static assets (env.ASSETS) or SPA index.html.`);
-        return undefined;
+        return context.env.ASSETS.fetch(request);
     }
     console.warn(`No route matched for "${pathname}" and no next() function available. Returning 404.`);
     return new Response("Not Found", { status: 404 });
