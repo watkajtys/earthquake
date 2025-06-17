@@ -55,7 +55,13 @@ const createMockContext = (request, env = {}, cf = {}) => {
   };
 };
 
-
+// TODO: REVIEW_REDUNDANCY - This integration test suite for the USGS proxy
+// overlaps significantly with the direct handler tests in
+// `functions/api/usgs-proxy.test.js`. Consider slimming down this suite
+// to focus on verifying the routing via `[[catchall]].js` and basic
+// success/error propagation from the handler, rather than re-testing
+// all detailed proxy logic (caching, D1 interactions, specific error cases)
+// which are covered in the direct handler tests.
 describe('/api/usgs-proxy', () => {
     beforeEach(() => {
         vi.resetAllMocks();
