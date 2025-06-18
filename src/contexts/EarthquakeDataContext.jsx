@@ -34,6 +34,12 @@ import {
     // calculateMagnitudeDistribution // Used by reducer
 } from './earthquakeDataContextUtils.js';
 import { EarthquakeDataContext } from './earthquakeDataContextUtils.js'; // Import the context
+import { isValidGeoJson, isValidFeatureArray } from '../utils/geoJsonUtils.js'; // Added isValidFeatureArray
+
+/**
+ * @typedef {object} EarthquakeDataProviderProps
+ * @property {React.ReactNode} children - The child components that will have access to the earthquake data context.
+ */
 
 /**
  * @typedef {object} EarthquakeDataProviderProps
@@ -42,7 +48,11 @@ import { EarthquakeDataContext } from './earthquakeDataContextUtils.js'; // Impo
 
 /**
  * Provides earthquake data to its child components through context.
- * It fetches, processes, and manages earthquake data from the USGS API.
+ * It fetches, processes, and manages earthquake data, prioritizing a D1 database source
+ * via the `/api/get-earthquakes` endpoint, and falling back to the USGS API (via `usgsApiService`)
+ * if D1 is unavailable or fails.
+ * The context value also includes `dailyDataSource`, `weeklyDataSource`, and `monthlyDataSource`
+ * to indicate the origin of the respective data sets.
  *
  * @param {EarthquakeDataProviderProps} props - The props for the EarthquakeDataProvider.
  * @returns {JSX.Element} The EarthquakeDataProvider component.
@@ -50,6 +60,46 @@ import { EarthquakeDataContext } from './earthquakeDataContextUtils.js'; // Impo
 export const EarthquakeDataProvider = ({ children }) => {
     const [state, dispatch] = useReducer(earthquakeReducer, initialState);
 
+    /**
+     * Helper function to fetch earthquake data from the D1 database via the internal API.
+     * @async
+     * @param {('day'|'week'|'month')} timeWindow - The time window for which to fetch data.
+     * @returns {Promise<{data: Array<object>|null, source: ('D1'|'D1_failed'), error: string|null}>}
+     *          An object containing the fetched data (array of GeoJSON features), the source, and any error message.
+     */
+    const fetchFromD1 = async (timeWindow) => {
+        try {
+            const response = await fetch(`/api/get-earthquakes?timeWindow=${timeWindow}`);
+            if (response.ok && response.headers.get('X-Data-Source') === 'D1') {
+                const data = await response.json(); // Expecting an array of features
+                if (isValidFeatureArray(data)) {
+                    return { data, source: 'D1', error: null };
+                } else {
+                    console.warn(`D1 returned invalid feature array for ${timeWindow}:`, data);
+                    return { data: null, source: 'D1_failed', error: 'D1 returned invalid feature array.' };
+                }
+            }
+            const errorText = await response.text();
+            console.warn(`Failed to fetch from D1 for ${timeWindow} or invalid response: ${response.status} ${errorText}`);
+            return { data: null, source: 'D1_failed', error: `Failed to fetch from D1: ${response.status} ${errorText}` };
+        } catch (error) {
+            console.error(`Error fetching from D1 for ${timeWindow}:`, error);
+            return { data: null, source: 'D1_failed', error: error.message };
+        }
+    };
+
+    /**
+     * Fetches and processes daily and weekly earthquake data.
+     * It first attempts to fetch data from the D1 database via the `/api/get-earthquakes` endpoint.
+     * If the D1 fetch is successful, `dailyDataSource` and `weeklyDataSource` are set to 'D1'.
+     * If the D1 fetch fails or returns an invalid response, it falls back to fetching data
+     * from the USGS API via `fetchUsgsData`. In this case, `dailyDataSource` and `weeklyDataSource`
+     * are set to 'USGS'.
+     * Manages loading states and aggregates errors from both potential sources.
+     * This function is typically called on initial application load and on a set refresh interval.
+     * @async
+     * @param {boolean} [isInitialFetch=false] - Indicates if this is the first data fetch attempt.
+     */
     const performDataFetch = useCallback(async (isInitialFetch = false) => {
         dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingDaily: true, isLoadingWeekly: true } });
         if (!isInitialFetch) {
@@ -57,46 +107,82 @@ export const EarthquakeDataProvider = ({ children }) => {
         }
 
         const nowForFiltering = Date.now();
-        let dailyError = null, weeklyError = null;
-        let dailyFeatures = null, weeklyFeatures = null;
-        let dailyMetadata = null;
+        let dailyErrorMsg = null, weeklyErrorMsg = null;
+        let dailyDataSource = null, weeklyDataSource = null;
 
-        try {
-            const dailyRes = await fetchUsgsData(USGS_API_URL_DAY);
-            if (dailyRes.error || !dailyRes.features) {
-                dailyError = dailyRes?.error?.message || "Daily data features missing.";
-            } else {
-                dailyFeatures = dailyRes.features;
-                dailyMetadata = dailyRes.metadata;
+        // --- Daily Data Fetching ---
+        const d1DailyResponse = await fetchFromD1('day');
+        if (d1DailyResponse.source === 'D1') {
+            console.log("Successfully fetched daily data from D1");
+            dispatch({
+                type: actionTypes.DAILY_DATA_PROCESSED,
+                payload: { features: d1DailyResponse.data, metadata: null, fetchTime: nowForFiltering, dataSource: 'D1' }
+            });
+            dailyDataSource = 'D1';
+        } else {
+            console.warn("Failed to fetch daily data from D1, falling back to USGS.", d1DailyResponse.error);
+            dailyErrorMsg = `D1 Error (Daily): ${d1DailyResponse.error || 'Unknown D1 error'}. `;
+            try {
+                const usgsDailyRes = await fetchUsgsData(USGS_API_URL_DAY);
+                if (usgsDailyRes.error || !isValidGeoJson(usgsDailyRes)) { // Assuming fetchUsgsData returns GeoJSON structure
+                    dailyErrorMsg += `USGS Error (Daily): ${usgsDailyRes?.error?.message || 'Daily USGS data features missing or invalid.'}`;
+                } else {
+                    dispatch({
+                        type: actionTypes.DAILY_DATA_PROCESSED,
+                        payload: { features: usgsDailyRes.features, metadata: usgsDailyRes.metadata, fetchTime: nowForFiltering, dataSource: 'USGS' }
+                    });
+                    dailyDataSource = 'USGS';
+                    dailyErrorMsg = null; // Clear D1 error if USGS succeeds
+                }
+            } catch (e) {
+                dailyErrorMsg += `USGS Fetch Error (Daily): ${e.message || 'Error fetching daily USGS data.'}`;
             }
-        } catch (e) { dailyError = e.message || "Error fetching daily data."; }
-        finally { dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingDaily: false } }); }
+        }
+        dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingDaily: false } });
 
-        try {
-            const weeklyResult = await fetchUsgsData(USGS_API_URL_WEEK);
-            if (weeklyResult.error || !weeklyResult.features) {
-                weeklyError = weeklyResult?.error?.message || "Weekly data features missing.";
-            } else {
-                weeklyFeatures = weeklyResult.features;
+        // --- Weekly Data Fetching ---
+        const d1WeeklyResponse = await fetchFromD1('week');
+        if (d1WeeklyResponse.source === 'D1') {
+            console.log("Successfully fetched weekly data from D1");
+            dispatch({
+                type: actionTypes.WEEKLY_DATA_PROCESSED,
+                payload: { features: d1WeeklyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' }
+            });
+            weeklyDataSource = 'D1';
+        } else {
+            console.warn("Failed to fetch weekly data from D1, falling back to USGS.", d1WeeklyResponse.error);
+            weeklyErrorMsg = `D1 Error (Weekly): ${d1WeeklyResponse.error || 'Unknown D1 error'}. `;
+            try {
+                const usgsWeeklyRes = await fetchUsgsData(USGS_API_URL_WEEK);
+                if (usgsWeeklyRes.error || !isValidGeoJson(usgsWeeklyRes)) {
+                    weeklyErrorMsg += `USGS Error (Weekly): ${usgsWeeklyRes?.error?.message || 'Weekly USGS data features missing or invalid.'}`;
+                } else {
+                    dispatch({
+                        type: actionTypes.WEEKLY_DATA_PROCESSED,
+                        payload: { features: usgsWeeklyRes.features, fetchTime: nowForFiltering, dataSource: 'USGS' }
+                    });
+                    weeklyDataSource = 'USGS';
+                    weeklyErrorMsg = null; // Clear D1 error if USGS succeeds
+                }
+            } catch (e) {
+                weeklyErrorMsg += `USGS Fetch Error (Weekly): ${e.message || 'Error fetching weekly USGS data.'}`;
             }
-        } catch (e) { weeklyError = e.message || "Error fetching weekly data."; }
-        finally { dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingWeekly: false } });}
-
-        if (dailyFeatures) {
-            dispatch({ type: actionTypes.DAILY_DATA_PROCESSED, payload: { features: dailyFeatures, metadata: dailyMetadata, fetchTime: nowForFiltering } });
         }
-        if (weeklyFeatures) {
-            dispatch({ type: actionTypes.WEEKLY_DATA_PROCESSED, payload: { features: weeklyFeatures, fetchTime: nowForFiltering } });
-        }
+        dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingWeekly: false } });
 
+        // --- Error Aggregation ---
         let finalErrorMsg = null;
-        if (dailyError && weeklyError) finalErrorMsg = "Failed to fetch critical daily and weekly data.";
-        else if (dailyError) finalErrorMsg = `Daily data error: ${dailyError}.`;
-        else if (weeklyError) finalErrorMsg = `Weekly data error: ${weeklyError}.`;
+        if (dailyErrorMsg && weeklyErrorMsg) finalErrorMsg = `Daily & Weekly Data Errors: ${dailyErrorMsg} ${weeklyErrorMsg}`;
+        else if (dailyErrorMsg && !dailyDataSource) finalErrorMsg = `Daily Data Error: ${dailyErrorMsg}`; // Only show if no daily data was successfully processed
+        else if (weeklyErrorMsg && !weeklyDataSource) finalErrorMsg = `Weekly Data Error: ${weeklyErrorMsg}`; // Only show if no weekly data was successfully processed
 
         if (finalErrorMsg) {
-            dispatch({ type: actionTypes.SET_ERROR, payload: { error: finalErrorMsg } });
+            dispatch({ type: actionTypes.SET_ERROR, payload: { error: finalErrorMsg.trim() } });
+        } else if (!dailyDataSource && !weeklyDataSource) {
+             // Case where no errors were explicitly set, but no data was loaded either (e.g. invalid non-error responses)
+            dispatch({ type: actionTypes.SET_ERROR, payload: { error: "Failed to load any daily or weekly data." } });
         }
+
     }, [dispatch]); // dispatch is stable
 
     useEffect(() => {
@@ -150,30 +236,60 @@ export const EarthquakeDataProvider = ({ children }) => {
     }, [state.isInitialAppLoad, state.isLoadingDaily, state.isLoadingWeekly, dispatch]); // Added dispatch
 
     /**
-     * Fetches and processes monthly earthquake data from the USGS API.
-     * Updates the state with the fetched data or an error message if the fetch fails.
+     * Fetches and processes monthly earthquake data.
+     * It first attempts to fetch data from the D1 database via the `/api/get-earthquakes?timeWindow=month` endpoint.
+     * If the D1 fetch is successful, `monthlyDataSource` is set to 'D1'.
+     * If the D1 fetch fails or returns an invalid response, it falls back to fetching data
+     * from the USGS API (using `USGS_API_URL_MONTH`) via `fetchUsgsData`. In this case,
+     * `monthlyDataSource` is set to 'USGS'.
+     * Updates the state with the fetched data or an error message if fetches from both sources fail.
      * Sets loading flags during the fetch operation.
+     * This function is typically called on demand by user interaction.
+     * @async
      */
     const loadMonthlyData = useCallback(async () => {
-        dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: true, hasAttemptedMonthlyLoad: true }});
-        dispatch({type: actionTypes.SET_ERROR, payload: { monthlyError: null }});
+        dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: true, hasAttemptedMonthlyLoad: true } });
+        dispatch({ type: actionTypes.SET_ERROR, payload: { monthlyError: null } });
 
         const nowForFiltering = Date.now();
-        try {
-            const monthlyResult = await fetchUsgsData(USGS_API_URL_MONTH);
-            if (!monthlyResult.error && monthlyResult.features && monthlyResult.features.length > 0) {
-                dispatch({ type: actionTypes.MONTHLY_DATA_PROCESSED, payload: { features: monthlyResult.features, fetchTime: nowForFiltering } });
-                dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false }});
-            } else {
-                const errorMsg = monthlyResult?.error?.message || "Monthly data is unavailable or incomplete.";
-                dispatch({type: actionTypes.SET_ERROR, payload: { monthlyError: errorMsg }});
-                dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false }});
+        let monthlyFetchError = null;
+        let monthlyDataSource = null;
+
+        const d1MonthlyResponse = await fetchFromD1('month');
+        if (d1MonthlyResponse.source === 'D1') {
+            console.log("Successfully fetched monthly data from D1");
+            dispatch({
+                type: actionTypes.MONTHLY_DATA_PROCESSED,
+                payload: { features: d1MonthlyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' }
+            });
+            monthlyDataSource = 'D1';
+        } else {
+            console.warn("Failed to fetch monthly data from D1, falling back to USGS.", d1MonthlyResponse.error);
+            monthlyFetchError = `D1 Error (Monthly): ${d1MonthlyResponse.error || 'Unknown D1 error'}. `;
+            try {
+                const usgsMonthlyRes = await fetchUsgsData(USGS_API_URL_MONTH);
+                if (usgsMonthlyRes.error || !isValidGeoJson(usgsMonthlyRes)) {
+                    monthlyFetchError += `USGS Error (Monthly): ${usgsMonthlyRes?.error?.message || 'Monthly USGS data features missing or invalid.'}`;
+                } else {
+                    dispatch({
+                        type: actionTypes.MONTHLY_DATA_PROCESSED,
+                        payload: { features: usgsMonthlyRes.features, fetchTime: nowForFiltering, dataSource: 'USGS' }
+                    });
+                    monthlyDataSource = 'USGS';
+                    monthlyFetchError = null; // Clear D1 error if USGS succeeds
+                }
+            } catch (e) {
+                monthlyFetchError += `USGS Fetch Error (Monthly): ${e.message || 'Error fetching monthly USGS data.'}`;
             }
-        } catch (e) {
-            const errorMsg = `Monthly Data Processing Error: ${e.message || "An unexpected error occurred."}`;
-            dispatch({ type: actionTypes.SET_ERROR, payload: { monthlyError: errorMsg }});
-            dispatch({type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false }});
         }
+
+        if (monthlyFetchError && !monthlyDataSource) { // Only set error if no data was successfully processed
+            dispatch({ type: actionTypes.SET_ERROR, payload: { monthlyError: monthlyFetchError.trim() } });
+        } else if (!monthlyDataSource) {
+            dispatch({ type: actionTypes.SET_ERROR, payload: { monthlyError: "Failed to load any monthly data." } });
+        }
+
+        dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false } });
     }, [dispatch]); // Added dispatch
 
     const isLoadingInitialData = useMemo(() => (state.isLoadingDaily || state.isLoadingWeekly) && state.isInitialAppLoad, [state.isLoadingDaily, state.isLoadingWeekly, state.isInitialAppLoad]);
@@ -193,10 +309,14 @@ export const EarthquakeDataProvider = ({ children }) => {
         significantQuakes7Days_ctx,
         feelableQuakes30Days_ctx,
         significantQuakes30Days_ctx,
+        dailyDataSource: state.dailyDataSource,
+        weeklyDataSource: state.weeklyDataSource,
+        monthlyDataSource: state.monthlyDataSource,
     }), [
         state, isLoadingInitialData, currentLoadingMessage, loadMonthlyData,
         feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
-        feelableQuakes30Days_ctx, significantQuakes30Days_ctx
+        feelableQuakes30Days_ctx, significantQuakes30Days_ctx,
+        // state.dailyDataSource, state.weeklyDataSource, state.monthlyDataSource // These are part of 'state'
     ]);
 
     return (
@@ -207,10 +327,12 @@ export const EarthquakeDataProvider = ({ children }) => {
 };
 
 /**
- * Custom hook to access the earthquake data state.
+ * Custom hook to access the earthquake data state and action dispatchers.
  * This hook must be used within a component that is a descendant of `EarthquakeDataProvider`.
  *
- * @returns {object} The earthquake data context, including state and action dispatchers.
+ * @returns {object} The earthquake data context, including state (like `earthquakesLast24Hours`,
+ * `dailyDataSource`, `weeklyDataSource`, `monthlyDataSource`, loading flags, errors) and
+ * functions like `loadMonthlyData`.
  * @throws {Error} If used outside of an EarthquakeDataProvider.
  */
 export const useEarthquakeDataState = () => {

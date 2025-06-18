@@ -90,12 +90,16 @@ export async function fetchClusterDefinition(clusterId) {
 }
 
 /**
- * Attempts to fetch pre-calculated active earthquake clusters from the backend via a POST request to `/api/calculate-clusters`.
- * The request body includes the current list of earthquakes and clustering parameters.
- * If the server request fails, encounters a cache miss, or returns stale data (indicated by `X-Cache-Hit` header),
- * this function falls back to calculating clusters client-side using `localFindActiveClusters`.
+ * Fetches active earthquake clusters. It first attempts to retrieve them from a backend service
+ * at `/api/calculate-clusters`. This backend service is responsible for calculating and potentially
+ * caching the clusters (e.g., using data sourced from D1). The request body to the backend
+ * includes the current list of earthquakes and clustering parameters.
  *
- * @param {Array<Object>} earthquakes - Array of earthquake objects (USGS GeoJSON feature structure) to be clustered.
+ * If the server request fails, or if the server indicates a cache miss or stale data
+ * (e.g., via the `X-Cache-Hit` header), this function falls back to calculating clusters
+ * client-side using the `localFindActiveClusters` utility.
+ *
+ * @param {Array<Object>} earthquakes - Array of earthquake objects (typically GeoJSON features) to be clustered.
  * @param {number} maxDistanceKm - Maximum distance in kilometers for earthquakes to be considered in the same cluster.
  * @param {number} minQuakes - Minimum number of earthquakes required to form a valid cluster.
  * @returns {Promise<Array<Array<Object>>>} A promise that resolves to an array of clusters. Each cluster is an array of earthquake objects.

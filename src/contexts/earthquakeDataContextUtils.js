@@ -132,6 +132,53 @@ export const calculateMagnitudeDistribution = (earthquakes) => {
 };
 
 // --- State, Actions, Reducer (originally from EarthquakeDataContext.jsx) ---
+/**
+ * @typedef {object} EarthquakeDataState
+ * @property {boolean} isLoadingDaily - Flag indicating if daily data is currently being fetched.
+ * @property {boolean} isLoadingWeekly - Flag indicating if weekly data is currently being fetched.
+ * @property {boolean} isLoadingMonthly - Flag indicating if monthly data is currently being fetched.
+ * @property {boolean} isInitialAppLoad - Flag indicating if the application is performing its initial data load sequence.
+ * @property {string|null} error - General error message for daily/weekly data fetching issues.
+ * @property {string|null} monthlyError - Error message specific to monthly data fetching issues.
+ * @property {number|null} dataFetchTime - Timestamp of the last successful data fetch.
+ * @property {string|null} lastUpdated - Formatted string indicating when the data was last updated (from source metadata or fetch time).
+ * @property {Array<object>} earthquakesLastHour - Earthquakes from the last hour.
+ * @property {Array<object>} earthquakesPriorHour - Earthquakes from the hour before the last hour.
+ * @property {Array<object>} earthquakesLast24Hours - Earthquakes from the last 24 hours.
+ * @property {Array<object>} earthquakesLast72Hours - Earthquakes from the last 72 hours.
+ * @property {Array<object>} earthquakesLast7Days - Earthquakes from the last 7 days.
+ * @property {Array<object>} prev24HourData - Earthquakes from the 24 hours prior to the current 24-hour window (for comparison).
+ * @property {Array<object>} prev7DayData - Earthquakes from the 7 days prior to the current 7-day window.
+ * @property {Array<object>} prev14DayData - Earthquakes from the 14 days prior to the current 14-day window (used with 30-day view).
+ * @property {Array<object>} allEarthquakes - All earthquakes loaded, typically representing the monthly data feed.
+ * @property {Array<object>} earthquakesLast14Days - Earthquakes from the last 14 days.
+ * @property {Array<object>} earthquakesLast30Days - Earthquakes from the last 30 days.
+ * @property {Array<object>} globeEarthquakes - Sampled earthquakes for globe visualization.
+ * @property {boolean} hasRecentTsunamiWarning - Flag indicating if there's a tsunami warning in the last 24 hours.
+ * @property {string|null} highestRecentAlert - The highest alert level (e.g., "red", "orange") in the last 24 hours.
+ * @property {Array<object>} activeAlertTriggeringQuakes - Earthquakes that triggered the `highestRecentAlert`.
+ * @property {object|null} lastMajorQuake - The most recent major earthquake.
+ * @property {object|null} previousMajorQuake - The major earthquake before the `lastMajorQuake`.
+ * @property {number|null} timeBetweenPreviousMajorQuakes - Time difference in milliseconds between the last two major quakes.
+ * @property {number} loadingMessageIndex - Index for cycling through loading messages.
+ * @property {Array<string>} currentLoadingMessages - Array of loading messages displayed during initial load.
+ * @property {boolean} hasAttemptedMonthlyLoad - Flag indicating if an attempt has been made to load monthly data.
+ * @property {Array<{dateString: string, count: number}>} dailyCounts14Days - Daily earthquake counts for the last 14 days.
+ * @property {Array<{dateString: string, count: number}>} dailyCounts30Days - Daily earthquake counts for the last 30 days.
+ * @property {Array<object>} sampledEarthquakesLast14Days - Sampled earthquakes for the 14-day scatter plot.
+ * @property {Array<object>} sampledEarthquakesLast30Days - Sampled earthquakes for the 30-day scatter plot.
+ * @property {Array<{name: string, count: number, color: string}>} magnitudeDistribution14Days - Magnitude distribution for 14-day data.
+ * @property {Array<{name: string, count: number, color: string}>} magnitudeDistribution30Days - Magnitude distribution for 30-day data.
+ * @property {Array<{dateString: string, count: number}>} dailyCounts7Days - Daily earthquake counts for the last 7 days.
+ * @property {Array<object>} sampledEarthquakesLast7Days - Sampled earthquakes for the 7-day scatter plot.
+ * @property {Array<{name: string, count: number, color: string}>} magnitudeDistribution7Days - Magnitude distribution for 7-day data.
+ * @property {object|null} tsunamiTriggeringQuake - The most recent quake that triggered a tsunami warning in the last 24 hours.
+ * @property {('D1'|'USGS'|null)} dailyDataSource - Source of the daily earthquake data.
+ * @property {('D1'|'USGS'|null)} weeklyDataSource - Source of the weekly earthquake data.
+ * @property {('D1'|'USGS'|null)} monthlyDataSource - Source of the monthly earthquake data.
+ */
+
+/** @type {EarthquakeDataState} */
 export const initialState = {
     isLoadingDaily: true,
     isLoadingWeekly: true,
@@ -172,22 +219,69 @@ export const initialState = {
     sampledEarthquakesLast7Days: [],
     magnitudeDistribution7Days: [],
     tsunamiTriggeringQuake: null,
+    dailyDataSource: null,
+    weeklyDataSource: null,
+    monthlyDataSource: null,
 };
 
 // --- Context Object ---
+/**
+ * React Context for earthquake data.
+ * @type {React.Context<EarthquakeDataState|null>}
+ */
 export const EarthquakeDataContext = createContext(null);
 
+/**
+ * Action types for the earthquake data reducer.
+ * @enum {string}
+ */
 export const actionTypes = {
     SET_LOADING_FLAGS: 'SET_LOADING_FLAGS',
     SET_ERROR: 'SET_ERROR',
+    /** Action type for when daily data has been fetched and processed.
+     *  Payload should include `features`, `metadata`, `fetchTime`, and `dataSource`. */
     DAILY_DATA_PROCESSED: 'DAILY_DATA_PROCESSED',
+    /** Action type for when weekly data has been fetched and processed.
+     *  Payload should include `features`, `fetchTime`, and `dataSource`. */
     WEEKLY_DATA_PROCESSED: 'WEEKLY_DATA_PROCESSED',
+    /** Action type for when monthly data has been fetched and processed.
+     *  Payload should include `features`, `fetchTime`, and `dataSource`. */
     MONTHLY_DATA_PROCESSED: 'MONTHLY_DATA_PROCESSED',
     SET_INITIAL_LOAD_COMPLETE: 'SET_INITIAL_LOAD_COMPLETE',
     UPDATE_LOADING_MESSAGE_INDEX: 'UPDATE_LOADING_MESSAGE_INDEX',
     SET_LOADING_MESSAGES: 'SET_LOADING_MESSAGES',
 };
 
+/**
+ * @typedef {object} DailyDataProcessedPayload
+ * @property {Array<object>} features - Array of earthquake GeoJSON features.
+ * @property {object|null} metadata - Metadata from the data source (primarily for USGS).
+ * @property {number} fetchTime - Timestamp of when the data was fetched.
+ * @property {('D1'|'USGS')} dataSource - The source of the data ('D1' or 'USGS').
+ */
+
+/**
+ * @typedef {object} WeeklyDataProcessedPayload
+ * @property {Array<object>} features - Array of earthquake GeoJSON features.
+ * @property {number} fetchTime - Timestamp of when the data was fetched.
+ * @property {('D1'|'USGS')} dataSource - The source of the data ('D1' or 'USGS').
+ */
+
+/**
+ * @typedef {object} MonthlyDataProcessedPayload
+ * @property {Array<object>} features - Array of earthquake GeoJSON features.
+ * @property {number} fetchTime - Timestamp of when the data was fetched.
+ * @property {('D1'|'USGS')} dataSource - The source of the data ('D1' or 'USGS').
+ */
+
+/**
+ * Reducer function for managing earthquake data state.
+ * @param {EarthquakeDataState} state - The current state.
+ * @param {object} action - The dispatched action.
+ * @param {actionTypes} action.type - The type of the action.
+ * @param {object} action.payload - The payload of the action.
+ * @returns {EarthquakeDataState} The new state.
+ */
 export function earthquakeReducer(state = initialState, action) {
     switch (action.type) {
         case actionTypes.SET_LOADING_FLAGS:
@@ -195,7 +289,8 @@ export function earthquakeReducer(state = initialState, action) {
         case actionTypes.SET_ERROR:
             return { ...state, ...action.payload };
         case actionTypes.DAILY_DATA_PROCESSED: {
-            const { features, metadata, fetchTime } = action.payload;
+            /** @type {DailyDataProcessedPayload} */
+            const { features, metadata, fetchTime, dataSource } = action.payload;
             const l24 = filterByTime(features, 24, 0, fetchTime);
             const alertsIn24hr = l24.map(q => q.properties.alert).filter(a => a && a !== 'green' && ALERT_LEVELS[a.toUpperCase()]); // ALERT_LEVELS needs to be defined or imported
             const currentHighestAlert = alertsIn24hr.length > 0 ? alertsIn24hr.sort((a,b) => ({ 'red':0, 'orange':1, 'yellow':2 }[a] - { 'red':0, 'orange':1, 'yellow':2 }[b]))[0] : null;
@@ -223,10 +318,12 @@ export function earthquakeReducer(state = initialState, action) {
                 highestRecentAlert: currentHighestAlert,
                 activeAlertTriggeringQuakes: currentHighestAlert ? l24.filter(q => q.properties.alert === currentHighestAlert) : [],
                 ...majorQuakeUpdates,
+                dailyDataSource: dataSource,
             };
         }
         case actionTypes.WEEKLY_DATA_PROCESSED: {
-            const { features, fetchTime } = action.payload;
+            /** @type {WeeklyDataProcessedPayload} */
+            const { features, fetchTime, dataSource } = action.payload;
             const last72HoursData = filterByTime(features, 72, 0, fetchTime);
 
             const uniqueEarthquakeIds = new Set();
@@ -263,10 +360,12 @@ export function earthquakeReducer(state = initialState, action) {
                 sampledEarthquakesLast7Days,
                 magnitudeDistribution7Days,
                 ...majorQuakeUpdates,
+                weeklyDataSource: dataSource,
             };
         }
         case actionTypes.MONTHLY_DATA_PROCESSED: {
-            const { features, fetchTime } = action.payload;
+            /** @type {MonthlyDataProcessedPayload} */
+            const { features, fetchTime, dataSource } = action.payload;
             const monthlyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
             const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, monthlyMajors);
 
@@ -305,6 +404,7 @@ export function earthquakeReducer(state = initialState, action) {
                 prev7DayData: filterMonthlyByTime(features, 14, 7, fetchTime),
                 prev14DayData: filterMonthlyByTime(features, 28, 14, fetchTime),
                 ...majorQuakeUpdates,
+                monthlyDataSource: dataSource,
             };
         }
         case actionTypes.SET_INITIAL_LOAD_COMPLETE:
