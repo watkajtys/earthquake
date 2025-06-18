@@ -16,7 +16,7 @@ describe('fetchUsgsData', () => {
     const mockResponseData = { features: [{ id: 'test1', properties: { mag: 5 } }] };
     server.use(
       http.get('/api/usgs-proxy', ({ request }) => {
-        const url = new URL(request.url);
+        const url = new URL(request.url); // This URL will be absolute, e.g., http://localhost/api/usgs-proxy...
         expect(url.searchParams.get('apiUrl')).toBe(TEST_API_URL);
         return HttpResponse.json(mockResponseData);
       })

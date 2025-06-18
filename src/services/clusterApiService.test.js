@@ -157,7 +157,10 @@ describe('clusterApiService', () => {
     it('should return server data and not call local fallback if server responds OK and X-Cache-Hit is true', async () => {
       server.use(
         http.post('/api/calculate-clusters', async ({request}) => {
-          return HttpResponse.json(mockServerCalculatedData, { status: 200, headers: { 'X-Cache-Hit': 'true' } });
+          return HttpResponse.json(mockServerCalculatedData, { // Body is the array of clusters
+            status: 200,
+            headers: { 'X-Cache-Hit': 'true' } // X-Cache-Hit header indicates cache status
+          });
         })
       );
       const result = await fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
@@ -169,7 +172,10 @@ describe('clusterApiService', () => {
     it('should call local fallback if server responds OK but X-Cache-Hit is false', async () => {
       server.use(
         http.post('/api/calculate-clusters', () => {
-          return HttpResponse.json(mockServerCalculatedData, { status: 200, headers: { 'X-Cache-Hit': 'false' } });
+          return HttpResponse.json(mockServerCalculatedData, { // Body can be stale data
+            status: 200,
+            headers: { 'X-Cache-Hit': 'false' } // X-Cache-Hit header indicates cache status
+          });
         })
       );
       localFindActiveClusters.mockReturnValueOnce(mockLocalCalculatedData);
@@ -184,7 +190,10 @@ describe('clusterApiService', () => {
     it('should call local fallback if server responds OK but X-Cache-Hit is missing', async () => {
       server.use(
         http.post('/api/calculate-clusters', () => {
-          return HttpResponse.json(mockServerCalculatedData, { status: 200, headers: { } }); // No X-Cache-Hit
+          return HttpResponse.json(mockServerCalculatedData, { // Body can be anything
+            status: 200,
+            headers: { /* No X-Cache-Hit header */ }
+          });
         })
       );
       localFindActiveClusters.mockReturnValueOnce(mockLocalCalculatedData);
