@@ -2,6 +2,11 @@
 // Note: Adjusted path assuming worker.js is in src/ and d1Utils.js is in src/utils/
 import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js';
 
+// Import API Handlers
+import { onRequestGet as handleGetEarthquakes } from '../functions/api/get-earthquakes.js';
+import { onRequestPost as handleCalculateClusters } from '../functions/api/calculate-clusters.js';
+import { onRequest as handleClusterDefinition } from '../functions/api/cluster-definition.js';
+
 // === Helper Functions (originally from [[catchall]].js) ===
 const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefined) => {
   const errorBody = {
@@ -487,6 +492,19 @@ export default {
       } else {
         return jsonErrorResponse("Invalid earthquake event ID path", 400, "worker-router-earthquake-format");
       }
+    }
+
+    // New API Routes
+    if (pathname === "/api/get-earthquakes") {
+      return handleGetEarthquakes({ request, env, ctx });
+    } else if (pathname === "/api/calculate-clusters") {
+      if (request.method === 'POST') {
+        return handleCalculateClusters({ request, env, ctx });
+      } else {
+        return new Response('Method Not Allowed', { status: 405 });
+      }
+    } else if (pathname === "/api/cluster-definition") {
+      return handleClusterDefinition({ request, env, ctx });
     }
 
     // Serve static assets from ASSETS binding
