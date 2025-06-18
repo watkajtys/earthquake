@@ -283,11 +283,14 @@ export const actionTypes = {
  * @returns {EarthquakeDataState} The new state.
  */
 export function earthquakeReducer(state = initialState, action) {
+    let newState;
     switch (action.type) {
         case actionTypes.SET_LOADING_FLAGS:
-            return { ...state, ...action.payload };
+            newState = { ...state, ...action.payload };
+            break;
         case actionTypes.SET_ERROR:
-            return { ...state, ...action.payload };
+            newState = { ...state, ...action.payload };
+            break;
         case actionTypes.DAILY_DATA_PROCESSED: {
             /** @type {DailyDataProcessedPayload} */
             const { features, metadata, fetchTime, dataSource } = action.payload;
@@ -305,7 +308,7 @@ export function earthquakeReducer(state = initialState, action) {
                 if (tsunamiQuakes.length > 0) identifiedTsunamiQuake = tsunamiQuakes[0];
             }
 
-            return {
+            newState = {
                 ...state,
                 isLoadingDaily: false,
                 dataFetchTime: fetchTime,
@@ -320,6 +323,7 @@ export function earthquakeReducer(state = initialState, action) {
                 ...majorQuakeUpdates,
                 dailyDataSource: dataSource,
             };
+            break;
         }
         case actionTypes.WEEKLY_DATA_PROCESSED: {
             /** @type {WeeklyDataProcessedPayload} */
@@ -349,7 +353,7 @@ export function earthquakeReducer(state = initialState, action) {
             const sampledEarthquakesLast7Days = sampleArrayWithPriority(currentEarthquakesLast7Days, SCATTER_SAMPLING_THRESHOLD_7_DAYS, MAJOR_QUAKE_THRESHOLD);
             const magnitudeDistribution7Days = calculateMagnitudeDistribution(currentEarthquakesLast7Days);
 
-            return {
+            newState = {
                 ...state,
                 isLoadingWeekly: false,
                 earthquakesLast72Hours: deduplicatedLast72HoursData,
@@ -362,6 +366,7 @@ export function earthquakeReducer(state = initialState, action) {
                 ...majorQuakeUpdates,
                 weeklyDataSource: dataSource,
             };
+            break;
         }
         case actionTypes.MONTHLY_DATA_PROCESSED: {
             /** @type {MonthlyDataProcessedPayload} */
@@ -387,7 +392,7 @@ export function earthquakeReducer(state = initialState, action) {
                 if (dayEntry14) dayEntry14.count++;
             });
 
-            return {
+            newState = {
                 ...state,
                 isLoadingMonthly: false,
                 hasAttemptedMonthlyLoad: true,
@@ -406,14 +411,20 @@ export function earthquakeReducer(state = initialState, action) {
                 ...majorQuakeUpdates,
                 monthlyDataSource: dataSource,
             };
+            break;
         }
         case actionTypes.SET_INITIAL_LOAD_COMPLETE:
-            return { ...state, isInitialAppLoad: false };
+            newState = { ...state, isInitialAppLoad: false };
+            break;
         case actionTypes.UPDATE_LOADING_MESSAGE_INDEX:
-            return { ...state, loadingMessageIndex: (state.loadingMessageIndex + 1) % state.currentLoadingMessages.length };
+            newState = { ...state, loadingMessageIndex: (state.loadingMessageIndex + 1) % state.currentLoadingMessages.length };
+            break;
         case actionTypes.SET_LOADING_MESSAGES:
-            return { ...state, currentLoadingMessages: action.payload, loadingMessageIndex: 0 };
+            newState = { ...state, currentLoadingMessages: action.payload, loadingMessageIndex: 0 };
+            break;
         default:
-            return state;
+            newState = state; // No change for unknown actions
+            break;
     }
+    return newState;
 }

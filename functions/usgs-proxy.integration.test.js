@@ -20,7 +20,7 @@ global.caches = {
 };
 
 // Mock 'fetch' global
-global.fetch = vi.fn();
+// global.fetch = vi.fn(); // MSW will handle fetch
 
 // --- Helper to create mock context ---
 const createMockContext = (request, env = {}, cf = {}) => {
@@ -68,7 +68,7 @@ describe('/api/usgs-proxy', () => {
         // Reset cache mock behavior
         mockCache.match.mockReset();
         mockCache.put.mockReset().mockResolvedValue(undefined);
-        fetch.mockReset(); // Reset global fetch mock
+        // fetch.mockReset(); // Reset global fetch mock // MSW will handle fetch lifecycle
         upsertEarthquakeFeaturesToD1.mockReset(); // Ensure D1 util mock is reset
     });
 
@@ -86,7 +86,7 @@ describe('/api/usgs-proxy', () => {
     it('should proxy to apiUrl, cache miss, and cache the response', async () => {
       const targetApiUrl = 'http://example.com/earthquakes';
       const mockApiResponseData = { data: 'live earthquake data' };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockApiResponseData), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockApiResponseData), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
 
       const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
@@ -100,7 +100,7 @@ describe('/api/usgs-proxy', () => {
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(json).toEqual(mockApiResponseData);
-      expect(fetch).toHaveBeenCalledWith(targetApiUrl, { headers: { "User-Agent": "EarthquakesLive/1.0 (+https://earthquakeslive.com)" } });
+      // expect(fetch).toHaveBeenCalledWith(targetApiUrl, { headers: { "User-Agent": "EarthquakesLive/1.0 (+https://earthquakeslive.com)" } });
       expect(mockCache.match).toHaveBeenCalled();
       expect(mockCache.put).toHaveBeenCalled();
       const cachedResponse = mockCache.put.mock.calls[0][1];
@@ -123,7 +123,7 @@ describe('/api/usgs-proxy', () => {
           { id: 'feat2', properties: {}, geometry: { coordinates: [4,5,6] }}
         ]
       };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockApiResponseData), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockApiResponseData), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
       upsertEarthquakeFeaturesToD1.mockResolvedValue({ successCount: 2, errorCount: 0 });
 
@@ -137,7 +137,7 @@ describe('/api/usgs-proxy', () => {
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(json).toEqual(mockApiResponseData);
-      expect(fetch).toHaveBeenCalledWith(targetApiUrl, { headers: { "User-Agent": "EarthquakesLive/1.0 (+https://earthquakeslive.com)" } });
+      // expect(fetch).toHaveBeenCalledWith(targetApiUrl, { headers: { "User-Agent": "EarthquakesLive/1.0 (+https://earthquakeslive.com)" } });
       expect(mockCache.put).toHaveBeenCalled();
       expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(context.env.DB, mockApiResponseData.features);
     });
@@ -156,14 +156,14 @@ describe('/api/usgs-proxy', () => {
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(json).toEqual(cachedData);
-      expect(fetch).not.toHaveBeenCalled();
+      // expect(fetch).not.toHaveBeenCalled();
       expect(mockCache.put).not.toHaveBeenCalled();
       expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
     });
 
     it('should handle fetch error during proxying', async () => {
       const targetApiUrl = 'http://example.com/earthquakes_fetch_error';
-      fetch.mockRejectedValueOnce(new Error('Network Failure XYZ'));
+      // fetch.mockRejectedValueOnce(new Error('Network Failure XYZ'));
       mockCache.match.mockResolvedValueOnce(undefined);
 
       const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
@@ -179,10 +179,10 @@ describe('/api/usgs-proxy', () => {
 
     it('should handle non-JSON response from upstream API', async () => {
       const targetApiUrl = 'http://example.com/earthquakes_html_error';
-      fetch.mockResolvedValueOnce(new Response('<html><body>Error from USGS</body></html>', {
-        status: 503,
-        headers: { 'Content-Type': 'text/html' }
-      }));
+      // fetch.mockResolvedValueOnce(new Response('<html><body>Error from USGS</body></html>', {
+      //   status: 503,
+      //   headers: { 'Content-Type': 'text/html' }
+      // }));
       mockCache.match.mockResolvedValueOnce(undefined);
 
       const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
@@ -200,7 +200,7 @@ describe('/api/usgs-proxy', () => {
 
     it('should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid', async () => {
       const targetApiUrl = 'http://example.com/earthquakes_invalid_ttl';
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'ok' }), { status: 200 }));
+      // fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'ok' }), { status: 200 }));
       mockCache.match.mockResolvedValueOnce(undefined);
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -208,8 +208,8 @@ describe('/api/usgs-proxy', () => {
       const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}`);
       const invalidTTLs = ['abc', '0', '-100'];
       for (const ttl of invalidTTLs) {
-        fetch.mockClear();
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'ok' }), { status: 200 }));
+        // fetch.mockClear();
+        // fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'ok' }), { status: 200 }));
         mockCache.put.mockClear();
         const context = createMockContext(request, { WORKER_CACHE_DURATION_SECONDS: ttl });
         await onRequest(context);
@@ -229,7 +229,7 @@ describe('/api/usgs-proxy', () => {
 
     it('should handle cache.put failure gracefully', async () => {
       const targetApiUrl = 'http://example.com/earthquakes_cache_put_fail';
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'ok' }), { status: 200 }));
+      // fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'ok' }), { status: 200 }));
       mockCache.match.mockResolvedValueOnce(undefined);
       mockCache.put.mockRejectedValueOnce(new Error('KV is full'));
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

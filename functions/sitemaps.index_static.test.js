@@ -11,7 +11,7 @@ global.caches = {
   open: vi.fn().mockResolvedValue(mockCache)
 };
 
-global.fetch = vi.fn();
+// global.fetch = vi.fn(); // MSW will handle fetch
 
 // --- Helper to create mock context ---
 const createMockContext = (request, env = {}, cf = {}) => {
@@ -49,7 +49,7 @@ const createMockContext = (request, env = {}, cf = {}) => {
 describe('Sitemap Index and Static Pages Handlers', () => {
     beforeEach(() => {
         vi.resetAllMocks();
-        fetch.mockReset();
+        // fetch.mockReset(); // MSW will handle fetch lifecycle
         mockCache.match.mockReset();
         mockCache.put.mockReset();
     });
