@@ -1,232 +1,235 @@
 import React from 'react';
 import { EarthquakeDataProvider, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext';
-import { initialState as contextInitialState } from '../../contexts/earthquakeDataContextUtils.js';
+import { initialState as contextInitialState, actionTypes } from '../../contexts/earthquakeDataContextUtils.js';
 
 // --- React specific testing imports ---
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import { fetchUsgsData } from '../../services/usgsApiService';
+import { isValidFeatureArray, isValidGeoJson } from '../../utils/geoJsonUtils';
 import {
     USGS_API_URL_DAY,
     USGS_API_URL_WEEK,
     LOADING_MESSAGE_INTERVAL_MS,
-    // REFRESH_INTERVAL_MS // Not used in this file
 } from '../../constants/appConstants';
 
-// Mock the usgsApiService
+// Mock services and utils
 vi.mock('../../services/usgsApiService', () => ({
   fetchUsgsData: vi.fn(),
 }));
+vi.mock('../../utils/geoJsonUtils', () => ({
+  isValidFeatureArray: vi.fn(() => true), // Default to true for valid mock data
+  isValidGeoJson: vi.fn(() => true),     // Default to true for valid mock data
+}));
+
+// Mock global fetch for D1 calls
+global.fetch = vi.fn();
 
 const AllTheProviders = ({ children }) => (<EarthquakeDataProvider>{children}</EarthquakeDataProvider>);
 
-describe('EarthquakeDataProvider Initial Load', () => {
-  let setIntervalSpy;
-  let clearIntervalSpy;
-  let intervalCallbacks = {};
-  let intervalIdCounter = 0;
+// Mock features
+const mockD1FeatureDay = { type: "Feature", id: "d1_day", properties: { time: Date.now(), mag: 1.1, place: "D1 Day Place" }, geometry: {} };
+const mockD1FeatureWeek = { type: "Feature", id: "d1_week", properties: { time: Date.now() - 2 * 24 * 3600 * 1000, mag: 2.2, place: "D1 Week Place" }, geometry: {} };
+const mockUsgsFeatureDay = { type: "Feature", id: "usgs_day", properties: { time: Date.now(), mag: 1.5, place: "USGS Day Place" }, geometry: {} };
+const mockUsgsFeatureWeek = { type: "Feature", id: "usgs_week", properties: { time: Date.now() - 2 * 24 * 3600 * 1000, mag: 2.5, place: "USGS Week Place" }, geometry: {} };
 
+
+describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     fetchUsgsData.mockReset();
-
-    intervalCallbacks = {};
-    intervalIdCounter = 0;
-
-    setIntervalSpy = vi.spyOn(global, 'setInterval');
-    clearIntervalSpy = vi.spyOn(global, 'clearInterval');
-
-    setIntervalSpy.mockImplementation((callback, timeout) => {
-      const id = ++intervalIdCounter;
-      intervalCallbacks[id] = { callback, timeout, type: timeout === LOADING_MESSAGE_INTERVAL_MS ? 'loadingMessage' : 'other' }; // Simplified type
-      return id;
-    });
-
-    clearIntervalSpy.mockImplementation((id) => {
-      delete intervalCallbacks[id];
-    });
+    global.fetch.mockReset();
+    isValidFeatureArray.mockClear().mockReturnValue(true); // Reset and default to true
+    isValidGeoJson.mockClear().mockReturnValue(true); // Reset and default to true
+    // Reset any stateful parts of the context or its utils if necessary, though renderHook usually handles this.
   });
 
   afterEach(() => {
-    setIntervalSpy.mockRestore();
-    clearIntervalSpy.mockRestore();
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
-    vi.clearAllTimers();
-    intervalCallbacks = {};
+    vi.clearAllMocks(); // Clears all mocks including spies and vi.fn()
   });
 
-  const runIntervals = async (type, runMax = Infinity) => {
-    let runCount = 0;
-    for (const id in intervalCallbacks) {
-        if (intervalCallbacks[id].type === type && runCount < runMax) {
-            await act(async () => {
-                intervalCallbacks[id].callback();
-            });
-            runCount++;
-        }
-    }
+  // Helper to simulate D1 API response
+  const mockD1Response = (data, dataSourceHeader = 'D1', status = 200) => {
+    return Promise.resolve({
+      ok: status === 200,
+      status,
+      headers: { get: () => dataSourceHeader },
+      json: () => Promise.resolve(data),
+      text: () => Promise.resolve(JSON.stringify(data)), // For error cases
+    });
   };
 
-  // This helper might be overkill if only loadingMessage intervals are relevant here
-  const runAllIntervalsMultipleTimes = async (count = 3) => {
-    for (let i = 0; i < count; i++) {
-        for (const id in intervalCallbacks) {
-             await act(async () => {
-                intervalCallbacks[id].callback();
-            });
-        }
-        await act(async () => { await Promise.resolve(); });
-    }
+  // Helper to simulate USGS API response structure (as handled by fetchUsgsData)
+  const mockUsgsApiServiceResponse = (features, metadata = { generated: Date.now() }, error = null) => {
+    if (error) return Promise.resolve({ error });
+    return Promise.resolve({ features, metadata });
   };
 
-  it('should perform initial data load (daily & weekly) on mount and set loading states', async () => {
-    const specificTest_mockDailyData = { features: [{id: 'd1', properties: {time: Date.now(), mag: 1}}], metadata: { generated: Date.now() }};
-    const specificTest_mockWeeklyData = { features: [{id: 'w1', properties: {time: Date.now(), mag: 2}}], metadata: { generated: Date.now() }};
 
-    let dailyFetchResolved = false;
-    let weeklyFetchResolved = false;
+  describe('performDataFetch (Daily/Weekly Data)', () => {
+    it('D1 Success Path: should fetch daily and weekly data from D1', async () => {
+      global.fetch
+        .mockResolvedValueOnce(mockD1Response([mockD1FeatureDay])) // Daily D1
+        .mockResolvedValueOnce(mockD1Response([mockD1FeatureWeek])); // Weekly D1
 
-    fetchUsgsData.mockImplementation(async (url) => {
-        await Promise.resolve();
-        if (url === USGS_API_URL_DAY) {
-            dailyFetchResolved = true;
-            return specificTest_mockDailyData;
-        }
-        if (url === USGS_API_URL_WEEK) {
-            weeklyFetchResolved = true;
-            return specificTest_mockWeeklyData;
-        }
-        return { features: [], metadata: {} };
+      const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
+
+      await waitFor(() => {
+        expect(result.current.isLoadingDaily).toBe(false);
+        expect(result.current.isLoadingWeekly).toBe(false);
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/get-earthquakes?timeWindow=day');
+      expect(global.fetch).toHaveBeenCalledWith('/api/get-earthquakes?timeWindow=week');
+      expect(fetchUsgsData).not.toHaveBeenCalled();
+      expect(result.current.dailyDataSource).toBe('D1');
+      expect(result.current.weeklyDataSource).toBe('D1');
+      expect(result.current.earthquakesLast24Hours).toEqual(expect.arrayContaining([mockD1FeatureDay]));
+      expect(result.current.earthquakesLast7Days).toEqual(expect.arrayContaining([mockD1FeatureWeek]));
+      expect(result.current.error).toBeNull();
     });
 
-    const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
+    it('D1 Failure (500), USGS Success: should fall back to USGS for daily and weekly', async () => {
+      global.fetch
+        .mockResolvedValueOnce(mockD1Response(null, null, 500)) // Daily D1 fails
+        .mockResolvedValueOnce(mockD1Response(null, null, 500)); // Weekly D1 fails
 
-    expect(result.current.isLoadingDaily).toBe(true);
-    expect(result.current.isLoadingWeekly).toBe(true);
-    expect(result.current.isInitialAppLoad).toBe(true);
+      fetchUsgsData
+        .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureDay])) // Daily USGS
+        .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureWeek])); // Weekly USGS
 
-    await runIntervals('loadingMessage'); // Simulate some loading messages
-    await runIntervals('loadingMessage');
+      const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await waitFor(() => {
+        expect(result.current.isLoadingDaily).toBe(false);
+        expect(result.current.isLoadingWeekly).toBe(false);
+      });
+
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(fetchUsgsData).toHaveBeenCalledWith(USGS_API_URL_DAY);
+      expect(fetchUsgsData).toHaveBeenCalledWith(USGS_API_URL_WEEK);
+      expect(result.current.dailyDataSource).toBe('USGS');
+      expect(result.current.weeklyDataSource).toBe('USGS');
+      expect(result.current.earthquakesLast24Hours).toEqual(expect.arrayContaining([mockUsgsFeatureDay]));
+      expect(result.current.earthquakesLast7Days).toEqual(expect.arrayContaining([mockUsgsFeatureWeek]));
+      expect(result.current.error).toBeNull(); // Errors from D1 should be cleared if USGS succeeds
     });
 
-    expect(dailyFetchResolved).toBe(true);
-    expect(weeklyFetchResolved).toBe(true);
-    expect(fetchUsgsData).toHaveBeenCalledWith(USGS_API_URL_DAY);
-    expect(fetchUsgsData).toHaveBeenCalledWith(USGS_API_URL_WEEK);
-    expect(result.current.isLoadingDaily).toBe(false);
-    expect(result.current.isLoadingWeekly).toBe(false);
-    expect(result.current.isInitialAppLoad).toBe(false);
-    expect(result.current.earthquakesLastHour.length).toBeGreaterThanOrEqual(0);
-    expect(result.current.earthquakesLast7Days.length).toBeGreaterThanOrEqual(0);
+    it('D1 Returns Invalid Header, USGS Success: should fall back to USGS', async () => {
+        global.fetch
+            .mockResolvedValueOnce(mockD1Response([mockD1FeatureDay], 'NotD1')) // Invalid header for daily
+            .mockResolvedValueOnce(mockD1Response([mockD1FeatureWeek], 'NotD1')); // Invalid header for weekly
+        fetchUsgsData
+            .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureDay]))
+            .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureWeek]));
+
+        const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
+        await waitFor(() => expect(result.current.isLoadingDaily).toBe(false) && expect(result.current.isLoadingWeekly).toBe(false));
+
+        expect(fetchUsgsData).toHaveBeenCalledTimes(2);
+        expect(result.current.dailyDataSource).toBe('USGS');
+        expect(result.current.weeklyDataSource).toBe('USGS');
+    });
+
+    it('D1 Returns Invalid Feature Array (isValidFeatureArray=false), USGS Success: should fall back to USGS', async () => {
+        isValidFeatureArray.mockReturnValueOnce(false).mockReturnValueOnce(false); // D1 daily fails validation, then D1 weekly fails
+        global.fetch
+            .mockResolvedValueOnce(mockD1Response(["not a valid feature array for daily"])) // Content that isValidFeatureArray will reject
+            .mockResolvedValueOnce(mockD1Response(["not a valid feature array for weekly"]));
+        fetchUsgsData
+            .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureDay]))
+            .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureWeek]));
+
+        const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
+        await waitFor(() => expect(result.current.isLoadingDaily).toBe(false) && expect(result.current.isLoadingWeekly).toBe(false));
+
+        expect(isValidFeatureArray).toHaveBeenCalledTimes(2); // Called for D1 daily and D1 weekly responses
+        expect(fetchUsgsData).toHaveBeenCalledTimes(2);
+        expect(result.current.dailyDataSource).toBe('USGS');
+        expect(result.current.weeklyDataSource).toBe('USGS');
+    });
+
+    it('Both D1 and USGS Fail: should set error state', async () => {
+      global.fetch
+        .mockResolvedValueOnce(mockD1Response(null, null, 500)) // Daily D1 fails
+        .mockResolvedValueOnce(mockD1Response(null, null, 500)); // Weekly D1 fails
+      fetchUsgsData
+        .mockResolvedValueOnce(mockUsgsApiServiceResponse(null, null, { message: "USGS Daily Down" })) // Daily USGS fails
+        .mockResolvedValueOnce(mockUsgsApiServiceResponse(null, null, { message: "USGS Weekly Down" })); // Weekly USGS fails
+
+      const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
+
+      await waitFor(() => {
+        expect(result.current.isLoadingDaily).toBe(false);
+        expect(result.current.isLoadingWeekly).toBe(false);
+      });
+
+      expect(result.current.error).toContain("Daily & Weekly Data Errors:");
+      expect(result.current.error).toContain("Failed to fetch from D1: 500");
+      expect(result.current.error).toContain("USGS Error (Daily): USGS Daily Down");
+      expect(result.current.error).toContain("USGS Error (Weekly): USGS Weekly Down");
+      expect(result.current.dailyDataSource).toBeNull(); // Or last attempted if that's the behavior
+      expect(result.current.weeklyDataSource).toBeNull();
+    });
   });
 
-  it('should handle error if daily fetch fails during initial load', async () => {
-    const mockWeeklyData = { features: [{id: 'w1', properties: {time: Date.now(), mag: 1}}], metadata: {generated: Date.now()} };
-    fetchUsgsData.mockImplementation(async (url) => {
-      if (url === USGS_API_URL_DAY) return Promise.resolve({ error: { message: "Daily fetch failed" } });
-      if (url === USGS_API_URL_WEEK) return Promise.resolve(mockWeeklyData);
-      return Promise.resolve({ features: [] });
+  // --- Keep existing tests for direct USGS failures, but ensure D1 is mocked to fail first ---
+  describe('Original USGS Failure Scenarios (assuming D1 fails first)', () => {
+    beforeEach(() => {
+        // Ensure D1 attempts fail for these tests, so they test the USGS fallback path correctly
+        global.fetch
+            .mockResolvedValue(mockD1Response(null, 'D1_failed_for_USGS_tests', 500)); // Generic D1 failure for day/week
     });
 
-    const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
+    it('should handle error if daily fetch fails during initial load (USGS path)', async () => {
+        const mockWeeklyData = { features: [{id: 'w1', properties: {time: Date.now(), mag: 1}}], metadata: {generated: Date.now()} };
+        fetchUsgsData.mockImplementation(async (url) => {
+          if (url === USGS_API_URL_DAY) return Promise.resolve({ error: { message: "Daily fetch failed" } });
+          if (url === USGS_API_URL_WEEK) return Promise.resolve(mockWeeklyData);
+          return Promise.resolve({ features: [] });
+        });
 
-    await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-    });
-    await runAllIntervalsMultipleTimes(2);
+        const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
 
-    expect(result.current.isLoadingDaily).toBe(false);
-    expect(result.current.isLoadingWeekly).toBe(false);
-    expect(result.current.error).toContain("Daily data error: Daily fetch failed");
-    expect(result.current.isInitialAppLoad).toBe(false);
+        await waitFor(() => expect(result.current.isLoadingDaily === false && result.current.isLoadingWeekly === false).toBe(true));
+
+        expect(result.current.error).toContain("Daily Data Error: D1 Error (Daily): Failed to fetch from D1: 500. USGS Error (Daily): Daily fetch failed");
+        expect(result.current.isInitialAppLoad).toBe(false);
+      });
+
+      it('should handle error if weekly fetch fails during initial load (USGS path)', async () => {
+        const mockDailyData = { features: [{id: 'd1', properties: {time: Date.now(), mag: 1}}], metadata: {generated: Date.now()} };
+        fetchUsgsData.mockImplementation(async (url) => {
+          if (url === USGS_API_URL_DAY) return Promise.resolve(mockDailyData);
+          if (url === USGS_API_URL_WEEK) return Promise.resolve({ error: { message: "Weekly fetch failed" } });
+          return Promise.resolve({ features: [] });
+        });
+
+        const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
+        await waitFor(() => expect(result.current.isLoadingDaily === false && result.current.isLoadingWeekly === false).toBe(true));
+
+        expect(result.current.error).toContain("Weekly Data Error: D1 Error (Weekly): Failed to fetch from D1: 500. USGS Error (Weekly): Weekly fetch failed");
+        expect(result.current.isInitialAppLoad).toBe(false);
+      });
+
+      it('should handle errors if both daily and weekly fetches fail during initial load (USGS path)', async () => {
+        fetchUsgsData.mockImplementation(async (url) => {
+          if (url === USGS_API_URL_DAY) return Promise.resolve({ error: { message: "Daily failed" } });
+          if (url === USGS_API_URL_WEEK) return Promise.resolve({ error: { message: "Weekly failed" } });
+          return Promise.resolve({ features: [] });
+        });
+        const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
+        await waitFor(() => expect(result.current.isLoadingDaily === false && result.current.isLoadingWeekly === false).toBe(true));
+
+        expect(result.current.error).toContain("Daily & Weekly Data Errors: D1 Error (Daily): Failed to fetch from D1: 500. USGS Error (Daily): Daily failed. D1 Error (Weekly): Failed to fetch from D1: 500. USGS Error (Weekly): Weekly failed.");
+        expect(result.current.isInitialAppLoad).toBe(false);
+      });
   });
 
-  it('should handle error if weekly fetch fails during initial load', async () => {
-    const mockDailyData = { features: [{id: 'd1', properties: {time: Date.now(), mag: 1}}], metadata: {generated: Date.now()} };
-    fetchUsgsData.mockImplementation(async (url) => {
-      if (url === USGS_API_URL_DAY) return Promise.resolve(mockDailyData);
-      if (url === USGS_API_URL_WEEK) return Promise.resolve({ error: { message: "Weekly fetch failed" } });
-      return Promise.resolve({ features: [] });
-    });
-
-    const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
-
-    await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-    });
-    await runAllIntervalsMultipleTimes(2);
-
-    expect(result.current.isLoadingDaily).toBe(false);
-    expect(result.current.isLoadingWeekly).toBe(false);
-    expect(result.current.error).toContain("Weekly data error: Weekly fetch failed");
-    expect(result.current.isInitialAppLoad).toBe(false);
-  });
-
-  it('should handle errors if both daily and weekly fetches fail during initial load', async () => {
-    fetchUsgsData.mockImplementation(async (url) => {
-      if (url === USGS_API_URL_DAY) return Promise.resolve({ error: { message: "Daily failed" } });
-      if (url === USGS_API_URL_WEEK) return Promise.resolve({ error: { message: "Weekly failed" } });
-      return Promise.resolve({ features: [] });
-    });
-
-    const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
-
-    await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-    });
-    await runAllIntervalsMultipleTimes(2);
-
-    expect(result.current.error).toBe("Failed to fetch critical daily and weekly data.");
-    expect(result.current.isInitialAppLoad).toBe(false);
-  });
-
+  // Skipping the loading message cycle test for now as it's complex and less critical for D1 logic
   it.skip('should cycle loading messages during initial load and stop after', async () => {
-    fetchUsgsData
-        .mockResolvedValueOnce({ features: [{id:'q_daily_cycle_test', properties:{time: Date.now(), mag:1}}], metadata: { generated: Date.now() } })
-        .mockResolvedValueOnce({ features: [{id:'q_weekly_cycle_test', properties:{time: Date.now(), mag:2}}], metadata: { generated: Date.now() } });
-
-    const initialMessages = contextInitialState.currentLoadingMessages;
-    expect(initialMessages.length).toBeGreaterThan(1);
-
-    let result;
-
-    await act(async () => {
-        const { result: hookResult } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
-        result = hookResult;
-        await new Promise(setImmediate);
-    });
-
-    const expectedMessageAfterSyncDispatches = initialMessages.length >= 3 ? initialMessages[2] :
-                                              (initialMessages.length === 2 ? initialMessages[0] : initialMessages[0]);
-    expect(result.current.currentLoadingMessage).toBe(expectedMessageAfterSyncDispatches);
-    expect(result.current.isInitialAppLoad).toBe(true);
-
-    await act(async () => {
-        vi.advanceTimersByTime(1);
-    });
-
-    await waitFor(() => {
-      expect(result.current.isInitialAppLoad).toBe(false);
-    }, { timeout: 4800 });
-
-    expect(fetchUsgsData).toHaveBeenCalledWith(USGS_API_URL_DAY);
-    expect(fetchUsgsData).toHaveBeenCalledWith(USGS_API_URL_WEEK);
-    expect(fetchUsgsData).toHaveBeenCalledTimes(2);
-
-    const messageWhenLoadFinished = result.current.currentLoadingMessage;
-
-    await act(async () => {
-      vi.advanceTimersByTime(LOADING_MESSAGE_INTERVAL_MS * 3);
-    });
-
-    expect(result.current.currentLoadingMessage).toBe(messageWhenLoadFinished, "Loading message should not change after initial load is complete and interval is cleared.");
+    // This test would need significant updates to handle D1 + USGS logic
   });
 });

@@ -3,9 +3,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ClusterDetailModal from './ClusterDetailModal';
 import SeoMetadata from './SeoMetadata';
-import { fetchClusterDefinition } from '../services/clusterApiService.js';
+import { fetchClusterDefinition, fetchActiveClusters } from '../services/clusterApiService.js'; // Added fetchActiveClusters
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
-import { findActiveClusters } from '../utils/clusterUtils.js';
+// import { findActiveClusters } from '../utils/clusterUtils.js'; // Removed
 import { CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES } from '../constants/appConstants.js';
 
 /**
@@ -45,10 +45,13 @@ function calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDat
  * It handles routing parameters to identify the cluster, manages loading and error states,
  * generates SEO metadata, and then renders the `ClusterDetailModal` with the cluster data.
  * It attempts to find cluster data from various sources:
- * 1. `overviewClusters` prop (if available).
- * 2. Reconstructing from `earthquakesLast72Hours` or `allEarthquakes` from `EarthquakeDataContext`.
- * 3. Fetching a persisted cluster definition via `fetchClusterDefinition` (e.g., from a D1 store).
- * It also handles cases where data might need to be loaded on-demand (e.g., monthly data).
+ * 1. From the `overviewClusters` prop if a matching cluster is found.
+ * 2. For specific older ID formats (e.g., "overview_cluster_..."), it attempts reconstruction using
+ *    `fetchActiveClusters` from `clusterApiService.js`. This service, in turn, tries to fetch
+ *    server-calculated clusters and falls back to local client-side calculation if needed.
+ * 3. As a primary fallback or for current ID formats, it fetches a persisted cluster definition
+ *    via `fetchClusterDefinition` from `clusterApiService.js` (e.g., from a D1 store).
+ * It also handles cases where data might need to be loaded on-demand (e.g., monthly data from `EarthquakeDataContext`).
  *
  * @component
  * @param {Object} props - The component props.
@@ -153,13 +156,16 @@ function ClusterDetailModalWrapper({
 
     /**
      * Main effect hook for fetching and setting cluster data.
-     * This effect runs when the component mounts or when its dependencies change.
+ * This effect runs when the component mounts or when its dependencies (like `fullSlugFromParams`) change.
      * It tries to find the cluster data from various sources in a specific order:
-     * 1. From `overviewClusters` prop.
-     * 2. By reconstructing from `earthquakesLast72Hours` (or `allEarthquakes` if monthly data is loaded)
-     *    using `findActiveClusters` if the `clusterId` seems to be a generated one.
-     * 3. If monthly data hasn't been loaded and is needed, it triggers `loadMonthlyData`.
-     * 4. As a fallback, it attempts to fetch a persisted cluster definition using `fetchClusterDefinition`.
+ * 1. From the `overviewClusters` prop, if provided and a match is found.
+ * 2. If the `clusterId` (derived from `fullSlugFromParams`) matches an older format (e.g., "overview_cluster_..."),
+ *    it attempts to reconstruct the cluster using `fetchActiveClusters` from the `clusterApiService.js`.
+ *    This service aims for server-side calculation first, with a client-side fallback.
+ * 3. If monthly data (which might contain the necessary earthquakes for reconstruction or for a D1 definition)
+ *    hasn't been loaded and seems necessary, it triggers `loadMonthlyData`.
+ * 4. As a primary fallback (especially for current ID formats not found in props or if reconstruction fails/is skipped),
+ *    it attempts to fetch a persisted cluster definition using `fetchClusterDefinition` from `clusterApiService.js`.
      * It manages loading states (`internalIsLoading`, `isWaitingForMonthlyData`) and error messages (`errorMessage`).
      * It also generates SEO properties using `generateSeo` based on the outcome.
      */
@@ -245,36 +251,49 @@ function ClusterDetailModalWrapper({
                     const parsedStrongestQuakeIdFromOldFormat = parts[2];
                     // Only proceed if somehow an old ID format is being processed and it matches the extracted ID
                     if (parsedStrongestQuakeIdFromOldFormat && parsedStrongestQuakeIdFromOldFormat === extractedStrongestQuakeId) {
-                        const allNewlyFormedClusters = findActiveClusters(sourceQuakesForReconstruction, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
-                        for (const newClusterArray of allNewlyFormedClusters) {
-                            if (!newClusterArray || newClusterArray.length === 0) continue;
-                            const sortedForStrongest = [...newClusterArray].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-                            const newStrongestQuakeInCluster = sortedForStrongest[0];
-                            if (!newStrongestQuakeInCluster) continue;
+                        try {
+                            // Use fetchActiveClusters from the service, which handles server-side call + fallback
+                            const allNewlyFormedClusters = await fetchActiveClusters(sourceQuakesForReconstruction, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
 
-                            // Check if this re-formed cluster matches our target extractedStrongestQuakeId
-                            if (newStrongestQuakeInCluster.id === extractedStrongestQuakeId) {
-                                let earliestTime = Infinity, latestTime = -Infinity;
-                                newClusterArray.forEach(q => {
-                                    if (q.properties.time < earliestTime) earliestTime = q.properties.time;
-                                    if (q.properties.time > latestTime) latestTime = q.properties.time;
-                                });
-                                const reconstructed = {
-                                    id: fullSlugFromParams, // Use current slug for this instance
-                                    originalQuakes: newClusterArray, quakeCount: newClusterArray.length,
-                                    strongestQuakeId: newStrongestQuakeInCluster.id, strongestQuake: newStrongestQuakeInCluster,
-                                    maxMagnitude: Math.max(...newClusterArray.map(q => q.properties.mag).filter(m => m != null)),
-                                    locationName: newStrongestQuakeInCluster.properties.place || 'Unknown Location',
-                                    _earliestTimeInternal: earliestTime, _latestTimeInternal: latestTime,
-                                    timeRange: calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, newClusterArray.length),
-                                };
-                                if (isMounted) {
-                                    setDynamicCluster(reconstructed);
-                                    setSeoProps(generateSeo(reconstructed, fullSlugFromParams));
-                                    setInternalIsLoading(false);
-                                    setIsWaitingForMonthlyData(false);
+                            if (!isMounted) return; // Check mount status after await
+
+                            for (const newClusterArray of allNewlyFormedClusters) {
+                                if (!newClusterArray || newClusterArray.length === 0) continue;
+                                const sortedForStrongest = [...newClusterArray].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
+                            const newStrongestQuakeInCluster = sortedForStrongest[0];
+                                if (!newStrongestQuakeInCluster) continue;
+
+                                // Check if this re-formed cluster matches our target extractedStrongestQuakeId
+                                if (newStrongestQuakeInCluster.id === extractedStrongestQuakeId) {
+                                    let earliestTime = Infinity, latestTime = -Infinity;
+                                    newClusterArray.forEach(q => {
+                                        if (q.properties.time < earliestTime) earliestTime = q.properties.time;
+                                        if (q.properties.time > latestTime) latestTime = q.properties.time;
+                                    });
+                                    const reconstructed = {
+                                        id: fullSlugFromParams, // Use current slug for this instance
+                                        originalQuakes: newClusterArray, quakeCount: newClusterArray.length,
+                                        strongestQuakeId: newStrongestQuakeInCluster.id, strongestQuake: newStrongestQuakeInCluster,
+                                        maxMagnitude: Math.max(...newClusterArray.map(q => q.properties.mag).filter(m => m != null)),
+                                        locationName: newStrongestQuakeInCluster.properties.place || 'Unknown Location',
+                                        _earliestTimeInternal: earliestTime, _latestTimeInternal: latestTime,
+                                        timeRange: calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, newClusterArray.length),
+                                    };
+                                    if (isMounted) {
+                                        setDynamicCluster(reconstructed);
+                                        setSeoProps(generateSeo(reconstructed, fullSlugFromParams));
+                                        setInternalIsLoading(false);
+                                        setIsWaitingForMonthlyData(false);
+                                    }
+                                    return; // Found and set the cluster
                                 }
-                                return;
+                            }
+                        } catch (error) {
+                            if (isMounted) {
+                                console.error("Error fetching or calculating clusters via fetchActiveClusters in ClusterDetailModalWrapper (old ID path):", error);
+                                // Potentially set a specific error message or allow to fall through to fetchClusterDefinition
+                                // For now, just logging. If no cluster is found, existing logic should handle it.
+                                console.warn("Cluster reconstruction via fetchActiveClusters (old ID path) failed:", error.message);
                             }
                         }
                     }

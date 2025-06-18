@@ -9,8 +9,11 @@ import ClusterDetailModalWrapper from './ClusterDetailModalWrapper.jsx';
 const mockNavigate = vi.fn();
 const mockUseParams = vi.fn(); // This will be used by the remaining test
 
-const { mockFetchClusterDefinition } = vi.hoisted(() => {
-  return { mockFetchClusterDefinition: vi.fn() };
+const { mockFetchClusterDefinition, mockFetchActiveClusters } = vi.hoisted(() => { // Added mockFetchActiveClusters
+  return {
+    mockFetchClusterDefinition: vi.fn(),
+    mockFetchActiveClusters: vi.fn(), // Added
+  };
 });
 
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -24,10 +27,11 @@ vi.mock('react-router-dom', async (importOriginal) => {
 
 vi.mock('../services/clusterApiService.js', () => ({
   fetchClusterDefinition: mockFetchClusterDefinition,
+  fetchActiveClusters: mockFetchActiveClusters, // Added
 }));
 
 vi.mock('./ClusterDetailModal', () => ({
-  default: vi.fn(({ cluster }) => <div data-testid="mock-cluster-detail-modal">Cluster: {cluster.id}</div>),
+  default: vi.fn(({ cluster }) => <div data-testid="mock-cluster-detail-modal">Cluster: {cluster?.id || 'N/A'}</div>), // Added safeguard for cluster.id
 }));
 
 vi.mock('./SeoMetadata', () => ({
@@ -101,17 +105,18 @@ const defaultEarthquakeData = {
 };
 
 // Adjusted describe block title
-describe('ClusterDetailModalWrapper Prop Handling', () => {
+describe('ClusterDetailModalWrapper', () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.resetAllMocks(); // Ensures mocks are clean for each test
     mockUseEarthquakeDataState.mockReturnValue(defaultEarthquakeData);
-    // mockFetchClusterDefinition.mockResolvedValue(null); // Not strictly needed if the remaining test doesn't call it
+    mockFetchClusterDefinition.mockResolvedValue(null); // Default to not finding a D1 definition
+    mockFetchActiveClusters.mockResolvedValue([]); // Default to no clusters found/reconstructed
   });
 
-  // Removed parsingTestCases array and the forEach loop
-
-  it('should use cluster data from overviewClusters if found, matching by strongestQuakeId', async () => {
-    const slug = '10-quakes-near-test-area-up-to-m5.0-testquake1';
+  // Existing test for overviewClusters prop
+  describe('Prop Handling', () => {
+    it('should use cluster data from overviewClusters if found, matching by strongestQuakeId', async () => {
+      const slug = '10-quakes-near-test-area-up-to-m5.0-testquake1';
     const strongestQuakeId = 'testquake1';
     mockUseParams.mockReturnValue({ clusterId: slug });
     // No need to set mockFetchClusterDefinition here as it should not be called if data is from props
@@ -149,6 +154,117 @@ describe('ClusterDetailModalWrapper Prop Handling', () => {
 
     await screen.findByText(`Cluster: ${slug}`);
     expect(mockFetchClusterDefinition).not.toHaveBeenCalled();
+    expect(mockFetchActiveClusters).not.toHaveBeenCalled(); // Should not be called for this slug format
   });
+});
 
+  describe('Cluster Reconstruction with fetchActiveClusters (Old ID Format)', () => {
+    const oldFormatSlug = 'overview_cluster_reconTargetID_someLocation';
+    const strongestQuakeIdInOldFormat = 'reconTargetID';
+
+    const sourceQuakeStrongest = { id: strongestQuakeIdInOldFormat, properties: { mag: 4.5, time: Date.now(), place: 'Recon Place' }, geometry: { coordinates: [1,2,3] } };
+    const sourceQuakeOther = { id: 'otherInSource', properties: { mag: 3.0, time: Date.now() - 1000, place: 'Recon Place' }, geometry: { coordinates: [1.1,2.1,3.1] } };
+    const unrelatedQuake = { id: 'unrelated', properties: { mag: 2.0, time: Date.now() - 2000, place: 'Far away' }, geometry: { coordinates: [10,20,30] } };
+
+
+    it('Scenario 1: fetchActiveClusters returns data successfully', async () => {
+      mockUseParams.mockReturnValue({ clusterId: oldFormatSlug });
+      mockUseEarthquakeDataState.mockReturnValue({
+        ...defaultEarthquakeData,
+        earthquakesLast72Hours: [sourceQuakeStrongest, sourceQuakeOther, unrelatedQuake], // Provide source quakes
+      });
+
+      const reconstructedClusterArray = [sourceQuakeStrongest, sourceQuakeOther]; // This is what findActiveClusters/fetchActiveClusters would return as one of the clusters
+      mockFetchActiveClusters.mockResolvedValue([reconstructedClusterArray]); // Service returns array of arrays
+
+      render(
+        <MemoryRouter initialEntries={[`/cluster/${oldFormatSlug}`]}>
+          <Routes>
+            <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper {...defaultProps} />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await screen.findByText(`Cluster: ${oldFormatSlug}`);
+
+      expect(mockFetchActiveClusters).toHaveBeenCalledWith(
+        [sourceQuakeStrongest, sourceQuakeOther, unrelatedQuake], // sourceQuakesForReconstruction
+        expect.any(Number), // CLUSTER_MAX_DISTANCE_KM
+        expect.any(Number)  // CLUSTER_MIN_QUAKES
+      );
+      expect(mockFetchClusterDefinition).not.toHaveBeenCalled();
+      // Check if ClusterDetailModal received a cluster with expected properties
+      const modal = screen.getByTestId('mock-cluster-detail-modal');
+      expect(modal).toHaveTextContent(`Cluster: ${oldFormatSlug}`);
+      // Further assertions on the `cluster` prop passed to ClusterDetailModal would require capturing its props.
+      // For now, rendering with the ID is a good sign.
+    });
+
+    it('Scenario 2a: fetchActiveClusters fails, and fetchClusterDefinition also returns null', async () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockUseParams.mockReturnValue({ clusterId: oldFormatSlug });
+      mockUseEarthquakeDataState.mockReturnValue({
+        ...defaultEarthquakeData,
+        earthquakesLast72Hours: [sourceQuakeStrongest, sourceQuakeOther, unrelatedQuake],
+      });
+
+      mockFetchActiveClusters.mockRejectedValue(new Error('Clustering service failed'));
+      mockFetchClusterDefinition.mockResolvedValue(null); // D1 also doesn't find it
+
+      render(
+        <MemoryRouter initialEntries={[`/cluster/${oldFormatSlug}`]}>
+          <Routes>
+            <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper {...defaultProps} />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        // Expect an error message related to not finding the cluster
+        expect(screen.getByText('Cluster details could not be found or were incomplete.')).toBeInTheDocument();
+      });
+
+      expect(mockFetchActiveClusters).toHaveBeenCalled();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Cluster reconstruction via fetchActiveClusters (old ID path) failed: Clustering service failed"));
+      expect(mockFetchClusterDefinition).toHaveBeenCalledWith(strongestQuakeIdInOldFormat);
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('Scenario 2b: fetchActiveClusters fails, but fetchClusterDefinition succeeds', async () => {
+        const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        mockUseParams.mockReturnValue({ clusterId: oldFormatSlug });
+        mockUseEarthquakeDataState.mockReturnValue({
+          ...defaultEarthquakeData,
+          earthquakesLast72Hours: [sourceQuakeStrongest, sourceQuakeOther], // Provide quakes for D1 definition to use
+        });
+
+        mockFetchActiveClusters.mockRejectedValue(new Error('Clustering service failed'));
+
+        const d1ClusterDefinition = {
+          clusterId: strongestQuakeIdInOldFormat, // Matches the extracted ID
+          earthquakeIds: [sourceQuakeStrongest.id, sourceQuakeOther.id],
+          strongestQuakeId: sourceQuakeStrongest.id,
+          updatedAt: Date.now(),
+        };
+        mockFetchClusterDefinition.mockResolvedValue(d1ClusterDefinition);
+
+        render(
+          <MemoryRouter initialEntries={[`/cluster/${oldFormatSlug}`]}>
+            <Routes>
+              <Route path="/cluster/:clusterId" element={<ClusterDetailModalWrapper {...defaultProps} />} />
+            </Routes>
+          </MemoryRouter>
+        );
+
+        await screen.findByText(`Cluster: ${oldFormatSlug}`); // Modal should render with data from D1 definition
+
+        expect(mockFetchActiveClusters).toHaveBeenCalled();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Cluster reconstruction via fetchActiveClusters (old ID path) failed: Clustering service failed"));
+        expect(mockFetchClusterDefinition).toHaveBeenCalledWith(strongestQuakeIdInOldFormat);
+        // Verify ClusterDetailModal received data derived from d1ClusterDefinition
+        const modal = screen.getByTestId('mock-cluster-detail-modal');
+        expect(modal).toHaveTextContent(`Cluster: ${oldFormatSlug}`);
+        consoleWarnSpy.mockRestore();
+      });
+  });
 });
