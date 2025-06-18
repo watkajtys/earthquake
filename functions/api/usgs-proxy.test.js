@@ -297,7 +297,7 @@ describe('handleUsgsProxy', () => {
 
     expect(response.status).toBe(500);
     const jsonResponse = await response.json();
-    expect(jsonResponse.message).toBe("USGS API fetch failed: Unexpected token < in JSON at position 0");
+    expect(jsonResponse.message).toBe("USGS API fetch failed: Unexpected token '<', \"<html><bod\"... is not valid JSON");
     expect(jsonResponse.source).toBe('usgs-proxy-handler');
     // upstream_status is not set in this specific error path in the handler
     // expect(jsonResponse.upstream_status).toBe(200);
@@ -305,7 +305,7 @@ describe('handleUsgsProxy', () => {
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       `[usgs-proxy-handler] Fetch or JSON parse error for ${currentTestApiUrl}:`,
-      "Unexpected token < in JSON at position 0",
+      "Unexpected token '<', \"<html><bod\"... is not valid JSON",
       "SyntaxError"
     );
     expect(mockCache.put).not.toHaveBeenCalled();

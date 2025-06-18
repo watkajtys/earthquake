@@ -166,7 +166,7 @@ describe('handleQuakeDetailPrerender', () => {
     expect(response.status).toBe(500);
     expect(response.headers.get('Content-Type')).toBe('text/plain;charset=UTF-8');
     expect(await response.text()).toBe('Error prerendering earthquake page');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(`Failed to parse JSON for quake prerender ${eventId}: Unexpected token < in JSON at position 0`); // Adjusted
+    expect(consoleErrorSpy).toHaveBeenCalledWith(`Failed to parse JSON for quake prerender ${eventId}: Unexpected token '<', "<html></html>" is not valid JSON`);
   });
 
   describe('Invalid/Incomplete Data from USGS', () => {
