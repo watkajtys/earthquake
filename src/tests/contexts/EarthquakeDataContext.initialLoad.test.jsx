@@ -51,13 +51,61 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
   });
 
   // Helper to simulate D1 API response
-  const mockD1Response = (data, dataSourceHeader = 'D1', status = 200) => {
+  const mockD1Response = (jsonData, {
+    dataSourceHeader = 'D1',
+    status = 200,
+    ok = (status >= 200 && status < 300),
+    errorTextOverride = null, // Specific text for error response body
+    contentType = 'application/json'
+  } = {}) => {
+    let bodyText;
+
+    if (ok) {
+      bodyText = JSON.stringify(jsonData);
+    } else {
+      // For non-ok responses, fetchFromD1 uses response.text()
+      bodyText = errorTextOverride !== null ? errorTextOverride : JSON.stringify(jsonData || { error: `Simulated server error ${status}` });
+    }
+
     return Promise.resolve({
-      ok: status === 200,
+      ok,
       status,
-      headers: { get: () => dataSourceHeader },
-      json: () => Promise.resolve(data),
-      text: () => Promise.resolve(JSON.stringify(data)), // For error cases
+      headers: {
+        get: (headerName) => {
+          const lowerHeaderName = headerName.toLowerCase();
+          if (lowerHeaderName === 'x-data-source') {
+            return dataSourceHeader;
+          }
+          if (lowerHeaderName === 'content-type') {
+            return contentType;
+          }
+          return null;
+        }
+      },
+      json: () => {
+        // fetchFromD1 only calls .json() if ok and D1 source is confirmed.
+        // If !ok, it might try .text(), so .json() for errors should ideally throw
+        // if the body isn't valid JSON, or parse if it is.
+        // For simplicity here, assume if !ok, .json() might not be called or would fail if called on non-JSON text.
+        if (ok) {
+            try {
+                // Simulate parsing for the test, actual fetch would do this.
+                // If jsonData is already an object, this is fine.
+                // If jsonData is a string that's not valid JSON, JSON.parse would throw.
+                return Promise.resolve(typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData);
+            } catch (e) {
+                return Promise.reject(e); // Propagate parsing error
+            }
+        }
+        // Simulate Fetch API's behavior: .json() fails if body isn't valid JSON or if already read.
+        // If bodyText is not valid JSON, this will cause a SyntaxError.
+        try {
+            return Promise.resolve(JSON.parse(bodyText));
+        } catch (e) {
+            return Promise.reject(new SyntaxError(`Unexpected token in JSON at position 0: ${bodyText.charAt(0)}`));
+        }
+      },
+      text: () => Promise.resolve(bodyText),
     });
   };
 
@@ -93,8 +141,8 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
 
     it('D1 Failure (500), USGS Success: should fall back to USGS for daily and weekly', async () => {
       global.fetch
-        .mockResolvedValueOnce(mockD1Response(null, null, 500)) // Daily D1 fails
-        .mockResolvedValueOnce(mockD1Response(null, null, 500)); // Weekly D1 fails
+        .mockResolvedValueOnce(mockD1Response(null, { status: 500, ok: false, errorTextOverride: "D1 Daily Error Text" })) // Daily D1 fails
+        .mockResolvedValueOnce(mockD1Response(null, { status: 500, ok: false, errorTextOverride: "D1 Weekly Error Text" })); // Weekly D1 fails
 
       fetchUsgsData
         .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureDay])) // Daily USGS
@@ -119,8 +167,8 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
 
     it('D1 Returns Invalid Header, USGS Success: should fall back to USGS', async () => {
         global.fetch
-            .mockResolvedValueOnce(mockD1Response([mockD1FeatureDay], 'NotD1')) // Invalid header for daily
-            .mockResolvedValueOnce(mockD1Response([mockD1FeatureWeek], 'NotD1')); // Invalid header for weekly
+            .mockResolvedValueOnce(mockD1Response([mockD1FeatureDay], { dataSourceHeader: 'NotD1' })) // Invalid header for daily
+            .mockResolvedValueOnce(mockD1Response([mockD1FeatureWeek], { dataSourceHeader: 'NotD1' })); // Invalid header for weekly
         fetchUsgsData
             .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureDay]))
             .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureWeek]));
@@ -135,9 +183,11 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
 
     it('D1 Returns Invalid Feature Array (isValidFeatureArray=false), USGS Success: should fall back to USGS', async () => {
         isValidFeatureArray.mockReturnValueOnce(false).mockReturnValueOnce(false); // D1 daily fails validation, then D1 weekly fails
+        const invalidDailyD1Data = ["not a valid feature array for daily"];
+        const invalidWeeklyD1Data = ["not a valid feature array for weekly"];
         global.fetch
-            .mockResolvedValueOnce(mockD1Response(["not a valid feature array for daily"])) // Content that isValidFeatureArray will reject
-            .mockResolvedValueOnce(mockD1Response(["not a valid feature array for weekly"]));
+            .mockResolvedValueOnce(mockD1Response(invalidDailyD1Data)) // Content that isValidFeatureArray will reject
+            .mockResolvedValueOnce(mockD1Response(invalidWeeklyD1Data));
         fetchUsgsData
             .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureDay]))
             .mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureWeek]));
@@ -153,8 +203,8 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
 
     it('Both D1 and USGS Fail: should set error state', async () => {
       global.fetch
-        .mockResolvedValueOnce(mockD1Response(null, null, 500)) // Daily D1 fails
-        .mockResolvedValueOnce(mockD1Response(null, null, 500)); // Weekly D1 fails
+        .mockResolvedValueOnce(mockD1Response(null, { status: 500, ok: false, errorTextOverride: "D1 Daily Error" })) // Daily D1 fails
+        .mockResolvedValueOnce(mockD1Response(null, { status: 500, ok: false, errorTextOverride: "D1 Weekly Error" })); // Weekly D1 fails
       fetchUsgsData
         .mockResolvedValueOnce(mockUsgsApiServiceResponse(null, null, { message: "USGS Daily Down" })) // Daily USGS fails
         .mockResolvedValueOnce(mockUsgsApiServiceResponse(null, null, { message: "USGS Weekly Down" })); // Weekly USGS fails
@@ -167,9 +217,9 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
       });
 
       expect(result.current.error).toContain("Daily & Weekly Data Errors:");
-      expect(result.current.error).toContain("Failed to fetch from D1: 500");
-      expect(result.current.error).toContain("USGS Error (Daily): USGS Daily Down");
-      expect(result.current.error).toContain("USGS Error (Weekly): USGS Weekly Down");
+      // Check for specific D1 error text from errorTextOverride
+      expect(result.current.error).toContain("D1 Error (Daily): Failed to fetch from D1: 500 D1 Daily Error. USGS Error (Daily): USGS Daily Down");
+      expect(result.current.error).toContain("D1 Error (Weekly): Failed to fetch from D1: 500 D1 Weekly Error. USGS Error (Weekly): USGS Weekly Down");
       expect(result.current.dailyDataSource).toBeNull(); // Or last attempted if that's the behavior
       expect(result.current.weeklyDataSource).toBeNull();
     });
@@ -180,7 +230,12 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
     beforeEach(() => {
         // Ensure D1 attempts fail for these tests, so they test the USGS fallback path correctly
         global.fetch
-            .mockResolvedValue(mockD1Response(null, 'D1_failed_for_USGS_tests', 500)); // Generic D1 failure for day/week
+            .mockResolvedValue(mockD1Response(null, {
+                dataSourceHeader: 'D1_failed_for_USGS_tests',
+                status: 500,
+                ok: false,
+                errorTextOverride: "D1 generic fallback error"
+            })); // Generic D1 failure for day/week
     });
 
     it('should handle error if daily fetch fails during initial load (USGS path)', async () => {
@@ -195,7 +250,7 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
 
         await waitFor(() => expect(result.current.isLoadingDaily === false && result.current.isLoadingWeekly === false).toBe(true));
 
-        expect(result.current.error).toContain("Daily Data Error: D1 Error (Daily): Failed to fetch from D1: 500. USGS Error (Daily): Daily fetch failed");
+        expect(result.current.error).toContain("Daily Data Error: D1 Error (Daily): Failed to fetch from D1: 500 D1 generic fallback error. USGS Error (Daily): Daily fetch failed");
         expect(result.current.isInitialAppLoad).toBe(false);
       });
 
@@ -210,7 +265,7 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
         const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
         await waitFor(() => expect(result.current.isLoadingDaily === false && result.current.isLoadingWeekly === false).toBe(true));
 
-        expect(result.current.error).toContain("Weekly Data Error: D1 Error (Weekly): Failed to fetch from D1: 500. USGS Error (Weekly): Weekly fetch failed");
+        expect(result.current.error).toContain("Weekly Data Error: D1 Error (Weekly): Failed to fetch from D1: 500 D1 generic fallback error. USGS Error (Weekly): Weekly fetch failed");
         expect(result.current.isInitialAppLoad).toBe(false);
       });
 
@@ -223,7 +278,7 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
         const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
         await waitFor(() => expect(result.current.isLoadingDaily === false && result.current.isLoadingWeekly === false).toBe(true));
 
-        expect(result.current.error).toContain("Daily & Weekly Data Errors: D1 Error (Daily): Failed to fetch from D1: 500. USGS Error (Daily): Daily failed. D1 Error (Weekly): Failed to fetch from D1: 500. USGS Error (Weekly): Weekly failed.");
+        expect(result.current.error).toContain("Daily & Weekly Data Errors: D1 Error (Daily): Failed to fetch from D1: 500 D1 generic fallback error. USGS Error (Daily): Daily failed. D1 Error (Weekly): Failed to fetch from D1: 500 D1 generic fallback error. USGS Error (Weekly): Weekly failed.");
         expect(result.current.isInitialAppLoad).toBe(false);
       });
   });

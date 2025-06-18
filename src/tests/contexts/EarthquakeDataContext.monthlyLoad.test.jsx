@@ -60,13 +60,52 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
   });
 
   // Helper to simulate D1 API response
-  const mockD1Response = (data, dataSourceHeader = 'D1', status = 200) => {
+  const mockD1Response = (jsonData, {
+    dataSourceHeader = 'D1',
+    status = 200,
+    ok = (status >= 200 && status < 300),
+    errorTextOverride = null, // Specific text for error response body
+    contentType = 'application/json'
+  } = {}) => {
+    let bodyText;
+
+    if (ok) {
+      bodyText = JSON.stringify(jsonData);
+    } else {
+      // For non-ok responses, fetchFromD1 uses response.text()
+      bodyText = errorTextOverride !== null ? errorTextOverride : JSON.stringify(jsonData || { error: `Simulated server error ${status}` });
+    }
+
     return Promise.resolve({
-      ok: status === 200,
+      ok,
       status,
-      headers: { get: () => dataSourceHeader },
-      json: () => Promise.resolve(data),
-      text: () => Promise.resolve(JSON.stringify(data)),
+      headers: {
+        get: (headerName) => {
+          const lowerHeaderName = headerName.toLowerCase();
+          if (lowerHeaderName === 'x-data-source') {
+            return dataSourceHeader;
+          }
+          if (lowerHeaderName === 'content-type') {
+            return contentType;
+          }
+          return null;
+        }
+      },
+      json: () => {
+        if (ok) {
+            try {
+                return Promise.resolve(typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData);
+            } catch (e) {
+                return Promise.reject(e);
+            }
+        }
+        try {
+            return Promise.resolve(JSON.parse(bodyText));
+        } catch (e) {
+            return Promise.reject(new SyntaxError(`Unexpected token in JSON at position 0: ${bodyText.charAt(0)}`));
+        }
+      },
+      text: () => Promise.resolve(bodyText),
     });
   };
 
@@ -93,7 +132,7 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
     });
 
     it('D1 Failure (500), USGS Success: should fall back to USGS', async () => {
-      global.fetch.mockResolvedValueOnce(mockD1Response(null, null, 500)); // D1 fails
+      global.fetch.mockResolvedValueOnce(mockD1Response(null, { status: 500, ok: false, errorTextOverride: "D1 Monthly Error" })); // D1 fails
       fetchUsgsData.mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureMonth])); // USGS success
 
       const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
@@ -108,7 +147,7 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
     });
 
     it('D1 Returns Invalid Header, USGS Success: should fall back to USGS', async () => {
-        global.fetch.mockResolvedValueOnce(mockD1Response([mockD1FeatureMonth], 'NotD1'));
+        global.fetch.mockResolvedValueOnce(mockD1Response([mockD1FeatureMonth], { dataSourceHeader: 'NotD1' }));
         fetchUsgsData.mockResolvedValueOnce(mockUsgsApiServiceResponse([mockUsgsFeatureMonth]));
         const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
         await act(async () => { result.current.loadMonthlyData(); });
@@ -130,14 +169,14 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
     });
 
     it('Both D1 and USGS Fail: should set monthlyError', async () => {
-      global.fetch.mockResolvedValueOnce(mockD1Response(null, null, 500)); // D1 fails
+      global.fetch.mockResolvedValueOnce(mockD1Response(null, { status: 500, ok: false, errorTextOverride: "D1 Monthly Error Text" })); // D1 fails
       fetchUsgsData.mockResolvedValueOnce(mockUsgsApiServiceResponse(null, null, { message: "USGS Monthly Down" })); // USGS fails
 
       const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
       await act(async () => { result.current.loadMonthlyData(); });
       await waitFor(() => expect(result.current.isLoadingMonthly).toBe(false));
 
-      expect(result.current.monthlyError).toContain("D1 Error (Monthly): Failed to fetch from D1: 500. USGS Error (Monthly): USGS Monthly Down");
+      expect(result.current.monthlyError).toContain("D1 Error (Monthly): Failed to fetch from D1: 500 D1 Monthly Error Text. USGS Error (Monthly): USGS Monthly Down");
       expect(result.current.monthlyDataSource).toBeNull();
     });
   });
@@ -145,7 +184,12 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
   // Keep existing tests, ensuring D1 fails first for them to test USGS path correctly
   describe('Original USGS Path Tests (assuming D1 fails first for monthly load)', () => {
     beforeEach(() => {
-        global.fetch.mockResolvedValue(mockD1Response(null, 'D1_failed_for_USGS_monthly_tests', 500)); // Generic D1 failure
+        global.fetch.mockResolvedValue(mockD1Response(null, {
+            dataSourceHeader: 'D1_failed_for_USGS_monthly_tests',
+            status: 500,
+            ok: false,
+            errorTextOverride: "D1 generic monthly fallback error"
+        })); // Generic D1 failure
     });
 
     it('should fetch monthly data and dispatch MONTHLY_DATA_PROCESSED on success (USGS path)', async () => {
