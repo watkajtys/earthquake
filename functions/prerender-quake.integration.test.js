@@ -14,8 +14,6 @@ global.caches = {
 };
 
 // Mock 'fetch' global
-// global.fetch = vi.fn(); // MSW will handle fetch
-
 // --- Helper to create mock context ---
 const createMockContext = (request, env = {}, cf = {}) => {
   const waitUntilPromises = [];
@@ -61,7 +59,7 @@ const createMockContext = (request, env = {}, cf = {}) => {
 describe('Prerendering Handler: /quake/:id', () => {
     beforeEach(() => {
         vi.resetAllMocks();
-        // fetch.mockReset(); // MSW will handle fetch lifecycle
+        // MSW will handle fetch lifecycle, server.resetHandlers() is in setupTests.js
     });
 
     it('/quake/some-quake-id should trigger prerender for crawler', async () => {
@@ -73,8 +71,6 @@ describe('Prerendering Handler: /quake/:id', () => {
             id: quakeId
         };
 
-        // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockQuakeData)));
-
         const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
 
@@ -83,13 +79,10 @@ describe('Prerendering Handler: /quake/:id', () => {
         expect(response.headers.get('Content-Type')).toContain('text/html');
         const text = await response.text();
         expect(text).toContain(`<title>M 5.0 - Test Place`);
-        // expect(fetch).toHaveBeenCalledWith(expectedFetchUrl);
     });
 
     it('/quake/some-quake-id should handle fetch error during prerender', async () => {
         const quakeId = "q_error";
-        // const expectedFetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`;
-        // fetch.mockRejectedValueOnce(new Error("Fetch Quake Detail Error"));
         const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
@@ -100,8 +93,6 @@ describe('Prerendering Handler: /quake/:id', () => {
 
     it('/quake/some-quake-id should handle non-JSON response during prerender', async () => {
         const quakeId = "q_non_json";
-        // const expectedFetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`;
-        // fetch.mockResolvedValueOnce(new Response("Not JSON", { status: 200 }));
         const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
@@ -112,8 +103,6 @@ describe('Prerendering Handler: /quake/:id', () => {
 
     it('/quake/some-quake-id should handle invalid quake data structure during prerender', async () => {
         const quakeId = "q_invalid_struct";
-        // const expectedFetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`;
-        // fetch.mockResolvedValueOnce(new Response(JSON.stringify({ properties: null }), { status: 200 }));
         const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
@@ -124,8 +113,6 @@ describe('Prerendering Handler: /quake/:id', () => {
 
     it('/quake/some-quake-id should handle non-ok fetch response during prerender', async () => {
         const quakeId = "q_404";
-        // const expectedFetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`;
-        // fetch.mockResolvedValueOnce(new Response("Not Found", { status: 404 }));
         const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         const response = await onRequest(context);
