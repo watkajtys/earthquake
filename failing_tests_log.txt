@@ -1,0 +1,2998 @@
+
+----------------------------------------
+FAILED: functions/sitemaps.clusters.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest functions/sitemaps.clusters.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > /sitemap-clusters.xml should list clusters from D1 and return XML
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=cluster1
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > /sitemap-clusters.xml should list clusters from D1 and return XML
+Error fetching/processing details for eventId cluster1 (raw overview_cluster_cluster1_10) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > /sitemap-clusters.xml should handle DB not configured
+Database not configured in handleClustersSitemapRequest
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > /sitemap-clusters.xml should handle D1 query failure
+Error in handleClustersSitemapRequest (D1 query or general): D1 Query Error
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should generate correct new format URLs for valid D1 entries with successful USGS fetches
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=us7000mfp9
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should generate correct new format URLs for valid D1 entries with successful USGS fetches
+Error fetching/processing details for eventId us7000mfp9 (raw overview_cluster_us7000mfp9_15) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should generate correct new format URLs for valid D1 entries with successful USGS fetches
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=ci12345
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should generate correct new format URLs for valid D1 entries with successful USGS fetches
+Error fetching/processing details for eventId ci12345 (raw overview_cluster_ci12345_5) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if D1 clusterId parsing fails and log a warning
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=ci12345
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if D1 clusterId parsing fails and log a warning
+Error fetching/processing details for eventId ci12345 (raw overview_cluster_ci12345_5) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS fetch fails and log a warning/error
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=us7000mfp9
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS fetch fails and log a warning/error
+Error fetching/processing details for eventId us7000mfp9 (raw overview_cluster_us7000mfp9_15) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS fetch fails and log a warning/error
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=ci12345
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS fetch fails and log a warning/error
+Error fetching/processing details for eventId ci12345 (raw overview_cluster_ci12345_5) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS response is missing place or mag and log a warning
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=usMissingPlace
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS response is missing place or mag and log a warning
+Error fetching/processing details for eventId usMissingPlace (raw overview_cluster_usMissingPlace_10) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS response is missing place or mag and log a warning
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=usMissingMag
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS response is missing place or mag and log a warning
+Error fetching/processing details for eventId usMissingMag (raw overview_cluster_usMissingMag_8) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS response is missing place or mag and log a warning
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=ci12345
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS response is missing place or mag and log a warning
+Error fetching/processing details for eventId ci12345 (raw overview_cluster_ci12345_5) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries with invalid updatedAt date format from D1 and log a warning
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=validEntry1
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries with invalid updatedAt date format from D1 and log a warning
+Error fetching/processing details for eventId validEntry1 (raw overview_cluster_validEntry1_10) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries missing clusterId or updatedAt from D1 and log a warning
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=validEntry2
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries missing clusterId or updatedAt from D1 and log a warning
+Error fetching/processing details for eventId validEntry2 (raw overview_cluster_validEntry2_8) in cluster sitemap: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+ ❯ functions/sitemaps.clusters.test.js (10 tests | 7 failed) 126ms
+   × Cluster Sitemap Handler and URL Generation > /sitemap-clusters.xml should list clusters from D1 and return XML 61ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/1…'
+   ✓ Cluster Sitemap Handler and URL Generation > /sitemap-clusters.xml should handle DB not configured 2ms
+   ✓ Cluster Sitemap Handler and URL Generation > /sitemap-clusters.xml should handle D1 query failure 3ms
+   ✓ Cluster Sitemap Handler and URL Generation > /sitemap-clusters.xml should handle empty results from D1 4ms
+   × Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should generate correct new format URLs for valid D1 entries with successful USGS fetches 15ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain '<loc>https://earthquakeslive.com/clus…'
+   × Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if D1 clusterId parsing fails and log a warning 6ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/5…'
+   × Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS fetch fails and log a warning/error 9ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/5…'
+   × Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS response is missing place or mag and log a warning 10ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/5…'
+   × Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries with invalid updatedAt date format from D1 and log a warning 6ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/1…'
+   × Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries missing clusterId or updatedAt from D1 and log a warning 5ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/8…'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > /sitemap-clusters.xml should list clusters from D1 and return XML
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/1…'
+
+Expected: [32m"https://earthquakeslive.com/cluster/10-quakes-near-test-place-up-to-m5.0-cluster1"[39m
+Received: [31m"<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>"[39m
+
+ ❯ functions/sitemaps.clusters.test.js:73:22
+     71|         expect(text).toContain('<urlset');
+     72|         // Check for the new URL format
+     73|         expect(text).toContain('https://earthquakeslive.com/cluster/10…
+       |                      ^
+     74|         expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.str…
+     75|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should generate correct new format URLs for valid D1 entries with successful USGS fetches
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain '<loc>https://earthquakeslive.com/clus…'
+
+Expected: [32m"<[7mloc>[27mhttp[7ms[27m://[7mearthquakeslive.com/cluster/15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9</loc[27m>"[39m
+Received: [31m"<[7m?xml version="1.0" encoding="UTF-8"?><urlset xmlns="[27mhttp://[7mwww.sitemaps.org/schemas/sitemap/0.9"></urlset[27m>"[39m
+
+ ❯ functions/sitemaps.clusters.test.js:132:25
+    130|
+    131|             expect(response.status).toBe(200);
+    132|             expect(xml).toContain('<loc>https://earthquakeslive.com/cl…
+       |                         ^
+    133|             expect(xml).toContain('<lastmod>2023-01-01T00:00:00.000Z</…
+    134|             expect(xml).toContain('<loc>https://earthquakeslive.com/cl…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if D1 clusterId parsing fails and log a warning
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/5…'
+
+Expected: [32m"https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345"[39m
+Received: [31m"<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>"[39m
+
+ ❯ functions/sitemaps.clusters.test.js:153:25
+    151|
+    152|             expect(xml).not.toContain('invalid_format_id');
+    153|             expect(xml).toContain('https://earthquakeslive.com/cluster…
+       |                         ^
+    154|             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringC…
+    155|             // expect(fetch).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS fetch fails and log a warning/error
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/5…'
+
+Expected: [32m"https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345"[39m
+Received: [31m"<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>"[39m
+
+ ❯ functions/sitemaps.clusters.test.js:176:25
+    174|
+    175|             expect(xml).not.toContain('15-quakes-near');
+    176|             expect(xml).toContain('https://earthquakeslive.com/cluster…
+       |                         ^
+    177|             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringC…
+    178|             // expect(fetch).toHaveBeenCalledTimes(2);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries if USGS response is missing place or mag and log a warning
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/5…'
+
+Expected: [32m"https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345"[39m
+Received: [31m"<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>"[39m
+
+ ❯ functions/sitemaps.clusters.test.js:202:25
+    200|             expect(xml).not.toContain('usMissingPlace');
+    201|             expect(xml).not.toContain('usMissingMag');
+    202|             expect(xml).toContain('https://earthquakeslive.com/cluster…
+       |                         ^
+    203|             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringC…
+    204|             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringC…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries with invalid updatedAt date format from D1 and log a warning
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/1…'
+
+Expected: [32m"http[7ms[27m://[7mearthquakeslive.com/cluster/10-quakes-near-valid-place-up-to-m5.0-validEntry1[27m"[39m
+Received: [31m"[7m<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="[27mhttp://[7mwww.sitemaps.org/schemas/sitemap/0.9"></urlset>[27m"[39m
+
+ ❯ functions/sitemaps.clusters.test.js:224:25
+    222|             expect(response.status).toBe(200);
+    223|             expect(response.headers.get('Content-Type')).toContain('ap…
+    224|             expect(xml).toContain('https://earthquakeslive.com/cluster…
+       |                         ^
+    225|             expect(xml).not.toContain('invalidDate_5');
+    226|             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringC…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  functions/sitemaps.clusters.test.js > Cluster Sitemap Handler and URL Generation > handleClustersSitemapRequest New URL Generation > should skip entries missing clusterId or updatedAt from D1 and log a warning
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'https://earthquakeslive.com/cluster/8…'
+
+Expected: [32m"https://earthquakeslive.com/cluster/8-quakes-near-another-valid-place-up-to-m4.0-validEntry2"[39m
+Received: [31m"<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>"[39m
+
+ ❯ functions/sitemaps.clusters.test.js:247:25
+    245|             expect(response.status).toBe(200);
+    246|             expect(response.headers.get('Content-Type')).toContain('ap…
+    247|             expect(xml).toContain('https://earthquakeslive.com/cluster…
+       |                         ^
+    248|             expect(xml).not.toContain('null');
+    249|             expect(xml).not.toContain('missingUpdate_3');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 3 passed (10)
+   Start at  20:31:10
+   Duration  1.43s (transform 104ms, setup 322ms, collect 106ms, tests 126ms, environment 394ms, prepare 207ms)
+
+----------------------------------------
+----------------------------------------
+FAILED: functions/prerender-quake.integration.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest functions/prerender-quake.integration.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+stderr | functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should trigger prerender for crawler
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=usgs_event_abc123
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should trigger prerender for crawler
+Generic error in handleQuakeDetailPrerender for eventId "usgs_event_abc123": InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should handle fetch error during prerender
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=q_error
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should handle fetch error during prerender
+Generic error in handleQuakeDetailPrerender for eventId "q_error": InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should handle non-JSON response during prerender
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=q_non_json
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should handle non-JSON response during prerender
+Generic error in handleQuakeDetailPrerender for eventId "q_non_json": InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should handle invalid quake data structure during prerender
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=q_invalid_struct
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should handle invalid quake data structure during prerender
+Generic error in handleQuakeDetailPrerender for eventId "q_invalid_struct": InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should handle non-ok fetch response during prerender
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=q_404
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should handle non-ok fetch response during prerender
+Generic error in handleQuakeDetailPrerender for eventId "q_404": InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+ ❯ functions/prerender-quake.integration.test.js (5 tests | 3 failed) 93ms
+   × Prerendering Handler: /quake/:id > /quake/some-quake-id should trigger prerender for crawler 61ms
+     → expected 500 to be 200 // Object.is equality
+   ✓ Prerendering Handler: /quake/:id > /quake/some-quake-id should handle fetch error during prerender 9ms
+   ✓ Prerendering Handler: /quake/:id > /quake/some-quake-id should handle non-JSON response during prerender 6ms
+   × Prerendering Handler: /quake/:id > /quake/some-quake-id should handle invalid quake data structure during prerender 7ms
+     → expected 'Error prerendering earthquake page' to contain 'Invalid earthquake data'
+   × Prerendering Handler: /quake/:id > /quake/some-quake-id should handle non-ok fetch response during prerender 5ms
+     → expected 500 to be 404 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should trigger prerender for crawler
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/prerender-quake.integration.test.js:82:33
+     80|
+     81|         const response = await onRequest(context);
+     82|         expect(response.status).toBe(200);
+       |                                 ^
+     83|         expect(response.headers.get('Content-Type')).toContain('text/h…
+     84|         const text = await response.text();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should handle invalid quake data structure during prerender
+AssertionError: expected 'Error prerendering earthquake page' to contain 'Invalid earthquake data'
+
+Expected: [32m"[7mInvalid[27m earthquake [7mdata[27m"[39m
+Received: [31m"[7mError prerendering[27m earthquake [7mpage[27m"[39m
+
+ ❯ functions/prerender-quake.integration.test.js:122:22
+    120|         expect(response.status).toBe(500);
+    121|         const text = await response.text();
+    122|         expect(text).toContain("Invalid earthquake data");
+       |                      ^
+    123|     });
+    124|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  functions/prerender-quake.integration.test.js > Prerendering Handler: /quake/:id > /quake/some-quake-id should handle non-ok fetch response during prerender
+AssertionError: expected 500 to be 404 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 404[39m
+[31m+ 500[39m
+
+ ❯ functions/prerender-quake.integration.test.js:132:33
+    130|         const context = createMockContext(request);
+    131|         const response = await onRequest(context);
+    132|         expect(response.status).toBe(404);
+       |                                 ^
+    133|         const text = await response.text();
+    134|         expect(text).toContain("Earthquake data not found");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  20:31:15
+   Duration  1.34s (transform 93ms, setup 324ms, collect 97ms, tests 93ms, environment 383ms, prepare 174ms)
+
+----------------------------------------
+----------------------------------------
+FAILED: functions/api/usgs-proxy.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest functions/api/usgs-proxy.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+ ❯ functions/api/usgs-proxy.test.js (15 tests | 11 failed) 115ms
+   ✓ handleUsgsProxy > should return 400 if apiUrl is missing 6ms
+   × handleUsgsProxy > should proxy successfully with cache miss, cache the response, and call D1 if configured 51ms
+     → expected 500 to be 200 // Object.is equality
+   ✓ handleUsgsProxy > should return cached response on cache hit 2ms
+   × handleUsgsProxy > should use default cache duration if env var is not set 7ms
+     → expected 500 to be 200 // Object.is equality
+   × handleUsgsProxy > should use cache duration from valid env var 3ms
+     → expected 500 to be 200 // Object.is equality
+   × handleUsgsProxy > should use default cache duration and log warning if env var is "invalid-value" 3ms
+     → expected 500 to be 200 // Object.is equality
+   × handleUsgsProxy > should use default cache duration and log warning if env var is "0" 3ms
+     → expected 500 to be 200 // Object.is equality
+   × handleUsgsProxy > should handle upstream API error (500) 6ms
+     → expected { …(2) } to deeply equal ObjectContaining{…}
+   × handleUsgsProxy > should handle network error when fetching from upstream 4ms
+     → expected { …(2) } to deeply equal { …(2) }
+   × handleUsgsProxy > D1 Interaction Tests > should call D1 upsert when DB is configured and features are present 5ms
+     → expected "spy" to be called with arguments: [ { prepare: [Function spy] }, …(1) ][90m
+
+Number of calls: [1m0[22m
+[39m
+   ✓ handleUsgsProxy > D1 Interaction Tests > should NOT call D1 upsert when DB is not configured 3ms
+   ✓ handleUsgsProxy > D1 Interaction Tests > should NOT call D1 upsert when features are missing or empty 5ms
+   × handleUsgsProxy > D1 Interaction Tests > should handle D1 error gracefully and log it 3ms
+     → expected 500 to be 200 // Object.is equality
+   × handleUsgsProxy > should handle cache.put failure gracefully and log it 2ms
+     → expected 500 to be 200 // Object.is equality
+   × handleUsgsProxy > should return 500 and log if upstream responds 200 OK with non-JSON content 6ms
+     → expected 'USGS API fetch failed: [MSW] Cannot b…' to be 'USGS API fetch failed: Unexpected tok…' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > should proxy successfully with cache miss, cache the response, and call D1 if configured
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/api/usgs-proxy.test.js:100:29
+     98|     await mockContext.waitUntil.mock.calls[0]?.value; // Wait for cach…
+     99|
+    100|     expect(response.status).toBe(200);
+       |                             ^
+    101|     expect(await response.json()).toEqual(mockApiResponseData);
+    102|     // expect(global.fetch).toHaveBeenCalledWith(currentTestApiUrl, { …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > should use default cache duration if env var is not set
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ testCacheBehavior functions/api/usgs-proxy.test.js:146:29
+    144|     await mockContext.waitUntil.mock.calls[0]?.value; // Wait for cach…
+    145|
+    146|     expect(response.status).toBe(200);
+       |                             ^
+    147|     const putCallArgs = mockCache.put.mock.calls[0];
+    148|     const responseToCache = putCallArgs[1];
+ ❯ functions/api/usgs-proxy.test.js:161:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > should use cache duration from valid env var
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ testCacheBehavior functions/api/usgs-proxy.test.js:146:29
+    144|     await mockContext.waitUntil.mock.calls[0]?.value; // Wait for cach…
+    145|
+    146|     expect(response.status).toBe(200);
+       |                             ^
+    147|     const putCallArgs = mockCache.put.mock.calls[0];
+    148|     const responseToCache = putCallArgs[1];
+ ❯ functions/api/usgs-proxy.test.js:165:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > should use default cache duration and log warning if env var is "invalid-value"
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ testCacheBehavior functions/api/usgs-proxy.test.js:146:29
+    144|     await mockContext.waitUntil.mock.calls[0]?.value; // Wait for cach…
+    145|
+    146|     expect(response.status).toBe(200);
+       |                             ^
+    147|     const putCallArgs = mockCache.put.mock.calls[0];
+    148|     const responseToCache = putCallArgs[1];
+ ❯ functions/api/usgs-proxy.test.js:169:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > should use default cache duration and log warning if env var is "0"
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ testCacheBehavior functions/api/usgs-proxy.test.js:146:29
+    144|     await mockContext.waitUntil.mock.calls[0]?.value; // Wait for cach…
+    145|
+    146|     expect(response.status).toBe(200);
+       |                             ^
+    147|     const putCallArgs = mockCache.put.mock.calls[0];
+    148|     const responseToCache = putCallArgs[1];
+ ❯ functions/api/usgs-proxy.test.js:173:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > should handle upstream API error (500)
+AssertionError: expected { …(2) } to deeply equal ObjectContaining{…}
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- ObjectContaining {[39m
+[32m-   "message": StringContaining "Error fetching data from USGS API: 500",[39m
+[31m+ {[39m
+[31m+   "message": "USGS API fetch failed: [MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[39m
+[31m+   "source": "usgs-proxy-handler",[39m
+[2m  }[22m
+
+ ❯ functions/api/usgs-proxy.test.js:184:35
+    182|     const response = await handleUsgsProxy(mockContext);
+    183|     expect(response.status).toBe(500);
+    184|     expect(await response.json()).toEqual(expect.objectContaining({ me…
+       |                                   ^
+    185|     expect(mockCache.put).not.toHaveBeenCalled();
+    186|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > should handle network error when fetching from upstream
+AssertionError: expected { …(2) } to deeply equal { …(2) }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "message": "USGS API fetch failed: Fetch failed",[39m
+[31m+   "message": "USGS API fetch failed: [MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[39m
+[2m    "source": "usgs-proxy-handler",[22m
+[2m  }[22m
+
+ ❯ functions/api/usgs-proxy.test.js:196:35
+    194|     const response = await handleUsgsProxy(mockContext);
+    195|     expect(response.status).toBe(500);
+    196|     expect(await response.json()).toEqual({ message: 'USGS API fetch f…
+       |                                   ^
+    197|     expect(consoleErrorSpy).toHaveBeenCalledWith(`[usgs-proxy-handler]…
+    198|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > D1 Interaction Tests > should call D1 upsert when DB is configured and features are present
+AssertionError: expected "spy" to be called with arguments: [ { prepare: [Function spy] }, …(1) ][90m
+
+Number of calls: [1m0[22m
+[39m
+ ❯ functions/api/usgs-proxy.test.js:215:44
+    213|       await mockContext.waitUntil.mock.calls[0]?.value; // Wait for D1…
+    214|
+    215|       expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockDb…
+       |                                            ^
+    216|     });
+    217|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > D1 Interaction Tests > should handle D1 error gracefully and log it
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/api/usgs-proxy.test.js:261:31
+    259|       await mockContext.waitUntil.mock.calls[0]?.value; // Wait for D1…
+    260|
+    261|       expect(response.status).toBe(200); // Still successful for client
+       |                               ^
+    262|       expect(await response.json()).toEqual({ features: mockFeatures }…
+    263|       expect(consoleErrorSpy).toHaveBeenCalledWith(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > should handle cache.put failure gracefully and log it
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/api/usgs-proxy.test.js:281:29
+    279|     await mockContext.waitUntil.mock.calls[0]?.value; // Wait for cach…
+    280|
+    281|     expect(response.status).toBe(200); // Client response unaffected
+       |                             ^
+    282|     expect(await response.json()).toEqual(apiResponseData);
+    283|     expect(consoleErrorSpy).toHaveBeenCalledWith(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  functions/api/usgs-proxy.test.js > handleUsgsProxy > should return 500 and log if upstream responds 200 OK with non-JSON content
+AssertionError: expected 'USGS API fetch failed: [MSW] Cannot b…' to be 'USGS API fetch failed: Unexpected tok…' // Object.is equality
+
+Expected: [32m"USGS API fetch failed: [7mUnexpected token '<', "<html><bod"... is not valid JSON[27m"[39m
+Received: [31m"USGS API fetch failed: [7m[MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.[27m"[39m
+
+ ❯ functions/api/usgs-proxy.test.js:299:34
+    297|     expect(response.status).toBe(500);
+    298|     const jsonResponse = await response.json();
+    299|     expect(jsonResponse.message).toBe("USGS API fetch failed: Unexpect…
+       |                                  ^
+    300|     expect(jsonResponse.source).toBe('usgs-proxy-handler');
+    301|     // upstream_status is not set in this specific error path in the h…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  11 failed | 4 passed (15)
+   Start at  20:31:19
+   Duration  1.40s (transform 110ms, setup 325ms, collect 88ms, tests 115ms, environment 395ms, prepare 194ms)
+
+----------------------------------------
+----------------------------------------
+FAILED (logged failures): functions/api/cluster-definition.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest functions/api/cluster-definition.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+stderr | functions/api/cluster-definition.test.js > Cluster Definition API (/api/cluster-definition) > POST requests > should return 500 if KV put fails
+Error processing POST request to D1: Error: D1 insert failed
+    at [90m/app/[39mfunctions/api/cluster-definition.test.js:129:21
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1894:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1860:10[90m)[39m
+    at runTest [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1571:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at runSuite [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1726:8[90m)[39m
+    at runSuite [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1726:8[90m)[39m
+
+stderr | functions/api/cluster-definition.test.js > Cluster Definition API (/api/cluster-definition) > GET requests > should return 500 if D1 select fails
+Error processing GET request from D1: Error: D1 select failed
+    at [90m/app/[39mfunctions/api/cluster-definition.test.js:193:21
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1894:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1860:10[90m)[39m
+    at runTest [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1571:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at runSuite [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1726:8[90m)[39m
+    at runSuite [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1726:8[90m)[39m
+
+ ✓ functions/api/cluster-definition.test.js (12 tests) 33ms
+
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+   Start at  20:31:27
+   Duration  1.27s (transform 64ms, setup 325ms, collect 32ms, tests 33ms, environment 399ms, prepare 223ms)
+
+----------------------------------------
+----------------------------------------
+FAILED: functions/usgs-proxy.integration.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest functions/usgs-proxy.integration.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+stdout | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should proxy to apiUrl, cache miss, and cache the response
+Cache miss for (from handleUsgsProxy): http://localhost/api/usgs-proxy?apiUrl=http%3A%2F%2Fexample.com%2Fearthquakes
+
+stderr | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should proxy to apiUrl, cache miss, and cache the response
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET http://example.com/earthquakes
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should proxy to apiUrl, cache miss, and cache the response
+[usgs-proxy-handler] Fetch or JSON parse error for http://example.com/earthquakes: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option. InternalError
+
+stdout | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should proxy to apiUrl, call D1 upsert for multiple features, cache response
+Cache miss for (from handleUsgsProxy): http://localhost/api/usgs-proxy?apiUrl=http%3A%2F%2Fexample.com%2Fearthquakes_multiple_features
+
+stderr | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should proxy to apiUrl, call D1 upsert for multiple features, cache response
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET http://example.com/earthquakes_multiple_features
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should proxy to apiUrl, call D1 upsert for multiple features, cache response
+[usgs-proxy-handler] Fetch or JSON parse error for http://example.com/earthquakes_multiple_features: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option. InternalError
+
+stdout | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should return cached response on cache hit
+Cache hit for (from handleUsgsProxy): http://localhost/api/usgs-proxy?apiUrl=http%3A%2F%2Fexample.com%2Fearthquakes_cached
+
+stdout | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should handle fetch error during proxying
+Cache miss for (from handleUsgsProxy): http://localhost/api/usgs-proxy?apiUrl=http%3A%2F%2Fexample.com%2Fearthquakes_fetch_error
+
+stderr | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should handle fetch error during proxying
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET http://example.com/earthquakes_fetch_error
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should handle fetch error during proxying
+[usgs-proxy-handler] Fetch or JSON parse error for http://example.com/earthquakes_fetch_error: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option. InternalError
+
+stdout | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should handle non-JSON response from upstream API
+Cache miss for (from handleUsgsProxy): http://localhost/api/usgs-proxy?apiUrl=http%3A%2F%2Fexample.com%2Fearthquakes_html_error
+
+stderr | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should handle non-JSON response from upstream API
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET http://example.com/earthquakes_html_error
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should handle non-JSON response from upstream API
+[usgs-proxy-handler] Fetch or JSON parse error for http://example.com/earthquakes_html_error: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option. InternalError
+
+stdout | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid
+Cache miss for (from handleUsgsProxy): http://localhost/api/usgs-proxy?apiUrl=http%3A%2F%2Fexample.com%2Fearthquakes_invalid_ttl
+
+stderr | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET http://example.com/earthquakes_invalid_ttl
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid
+[usgs-proxy-handler] Fetch or JSON parse error for http://example.com/earthquakes_invalid_ttl: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option. InternalError
+
+stdout | functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should handle cache.put failure gracefully
+Cache miss for (from handleUsgsProxy): http://localhost/api/usgs-proxy?apiUrl=http%3A%2F%2Fexample.com%2Fearthquakes_cache_put_fail
+
+ ❯ functions/usgs-proxy.integration.test.js (8 tests | 6 failed) 98ms
+   ✓ /api/usgs-proxy > should return 400 if apiUrl is missing 7ms
+   × /api/usgs-proxy > should proxy to apiUrl, cache miss, and cache the response 53ms
+     → expected 500 to be 200 // Object.is equality
+   × /api/usgs-proxy > should proxy to apiUrl, call D1 upsert for multiple features, cache response 8ms
+     → expected 500 to be 200 // Object.is equality
+   ✓ /api/usgs-proxy > should return cached response on cache hit 2ms
+   × /api/usgs-proxy > should handle fetch error during proxying 8ms
+     → expected 'USGS API fetch failed: [MSW] Cannot b…' to be 'USGS API fetch failed: Network Failur…' // Object.is equality
+   × /api/usgs-proxy > should handle non-JSON response from upstream API 4ms
+     → expected 500 to be 503 // Object.is equality
+   × /api/usgs-proxy > should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid 6ms
+     → expected "spy" to be called at least once
+   × /api/usgs-proxy > should handle cache.put failure gracefully 4ms
+     → expected 500 to be 200 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should proxy to apiUrl, cache miss, and cache the response
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/usgs-proxy.integration.test.js:100:31
+     98|       await context._awaitWaitUntilPromises(); // Wait for cache.put a…
+     99|
+    100|       expect(response.status).toBe(200);
+       |                               ^
+    101|       const json = await response.json();
+    102|       expect(json).toEqual(mockApiResponseData);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should proxy to apiUrl, call D1 upsert for multiple features, cache response
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/usgs-proxy.integration.test.js:137:31
+    135|       await context._awaitWaitUntilPromises();
+    136|
+    137|       expect(response.status).toBe(200);
+       |                               ^
+    138|       const json = await response.json();
+    139|       expect(json).toEqual(mockApiResponseData);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should handle fetch error during proxying
+AssertionError: expected 'USGS API fetch failed: [MSW] Cannot b…' to be 'USGS API fetch failed: Network Failur…' // Object.is equality
+
+Expected: [32m"USGS API fetch failed: [7mNetwork Failure XYZ[27m"[39m
+Received: [31m"USGS API fetch failed: [7m[MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.[27m"[39m
+
+ ❯ functions/usgs-proxy.integration.test.js:175:28
+    173|       expect(response.status).toBe(500);
+    174|       const json = await response.json();
+    175|       expect(json.message).toBe('USGS API fetch failed: Network Failur…
+       |                            ^
+    176|       expect(json.source).toBe('usgs-proxy-handler');
+    177|       expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should handle non-JSON response from upstream API
+AssertionError: expected 500 to be 503 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 503[39m
+[31m+ 500[39m
+
+ ❯ functions/usgs-proxy.integration.test.js:192:31
+    190|
+    191|       const response = await onRequest(context);
+    192|       expect(response.status).toBe(503);
+       |                               ^
+    193|       const json = await response.json();
+    194|       const expectedMessagePart = `Error fetching data from USGS API: …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should use default cache duration if WORKER_CACHE_DURATION_SECONDS is invalid
+AssertionError: expected "spy" to be called at least once
+ ❯ functions/usgs-proxy.integration.test.js:218:31
+    216|         await context._awaitWaitUntilPromises();
+    217|
+    218|         expect(mockCache.put).toHaveBeenCalled();
+       |                               ^
+    219|         const cachedResponseArgs = mockCache.put.mock.calls[0];
+    220|         if (cachedResponseArgs && cachedResponseArgs[1]) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  functions/usgs-proxy.integration.test.js > /api/usgs-proxy > should handle cache.put failure gracefully
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/usgs-proxy.integration.test.js:241:31
+    239|
+    240|       const response = await onRequest(context);
+    241|       expect(response.status).toBe(200);
+       |                               ^
+    242|       await context._awaitWaitUntilPromises();
+    243|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 2 passed (8)
+   Start at  20:31:30
+   Duration  1.48s (transform 177ms, setup 332ms, collect 178ms, tests 98ms, environment 407ms, prepare 172ms)
+
+----------------------------------------
+----------------------------------------
+FAILED: functions/prerender-cluster.integration.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest functions/prerender-cluster.integration.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly parse slug, query D1, fetch USGS, and generate HTML for: Valid slug
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us7000mfp9.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly parse slug, query D1, fetch USGS, and generate HTML for: Valid slug
+Exception fetching strongest quake us7000mfp9: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly prerender with minimal D1 data, relying on slug and USGS fetch for details
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/usTestId123.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly prerender with minimal D1 data, relying on slug and USGS fetch for details
+Exception fetching strongest quake usTestId123: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly parse slug, query D1, fetch USGS, and generate HTML for: Valid slug with single-digit count
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ci12345.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly parse slug, query D1, fetch USGS, and generate HTML for: Valid slug with single-digit count
+Exception fetching strongest quake ci12345: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should return 404 if D1 returns null for a parsed D1 Query ID
+Cluster details not found in D1 for ID: overview_cluster_us7000mfp9_15
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > /cluster/some-cluster-id should handle D1 error during prerender
+Database error in handlePrerenderCluster for slug "10-quakes-near-anywhere-up-to-m1.0-error123": Error: D1 .first() error
+    at [90m/app/[39mfunctions/prerender-cluster.integration.test.js:236:127
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1894:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1860:10[90m)[39m
+    at runTest [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1571:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at runSuite [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1726:8[90m)[39m
+    at runSuite [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1726:8[90m)[39m
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > /cluster/some-cluster-id should handle fetch error for strongest quake during prerender
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/fetcherr1.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > /cluster/some-cluster-id should handle fetch error for strongest quake during prerender
+Exception fetching strongest quake fetcherr1: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+
+stderr | functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > /cluster/some-cluster-id should handle DB undefined for prerender
+Database not configured for prerender cluster
+
+ ❯ functions/prerender-cluster.integration.test.js (14 tests | 3 failed) 118ms
+   ✓ Prerendering Handler: /cluster/:id > /cluster/some-cluster-id (old format) should return 404 due to invalid format 8ms
+   × Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly parse slug, query D1, fetch USGS, and generate HTML for: Valid slug 66ms
+     → expected '\n<!DOCTYPE html>\n<html lang="en">\n…' to contain 'Southern Sumatra, Indonesia'
+   × Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly prerender with minimal D1 data, relying on slug and USGS fetch for details 16ms
+     → expected '\n<!DOCTYPE html>\n<html lang="en">\n…' to contain '<title>12 Earthquakes Near Test Locat…'
+   × Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly parse slug, query D1, fetch USGS, and generate HTML for: Valid slug with single-digit count 6ms
+     → expected '\n<!DOCTYPE html>\n<html lang="en">\n…' to contain 'California'
+   ✓ Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should return 404 for invalid slug (Completely invalid slug format): my-invalid-cluster-id-123 2ms
+   ✓ Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should return 404 for invalid slug (Slug with non-numeric count): abc-quakes-near-location-up-to-m5.0-id1 1ms
+   ✓ Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should return 404 for invalid slug (Slug missing final ID part): 10-quakes-near-location-up-to-m5.0- 1ms
+   ✓ Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should return 404 for invalid slug (Slug missing count part): -quakes-near-location-up-to-m5.0-id1 1ms
+   ✓ Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should return 404 for invalid slug (Slug too short for regex): 1-q-n-l-u-m1-id1 1ms
+   ✓ Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should return 404 if D1 returns null for a parsed D1 Query ID 2ms
+   ✓ Prerendering Handler: /cluster/:id > /cluster/some-cluster-id should handle D1 error during prerender 3ms
+   ✓ Prerendering Handler: /cluster/:id > /cluster/some-cluster-id should handle fetch error for strongest quake during prerender 4ms
+   ✓ Prerendering Handler: /cluster/:id > /cluster/some-cluster-id should handle DB undefined for prerender 1ms
+   ✓ Prerendering Handler: /cluster/:id > /cluster/some-cluster-id should handle error parsing earthquakeIds from D1 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly parse slug, query D1, fetch USGS, and generate HTML for: Valid slug
+AssertionError: expected '\n<!DOCTYPE html>\n<html lang="en">\n…' to contain 'Southern Sumatra, Indonesia'
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Southern Sumatra, Indonesia[39m
+[31m+[39m
+[31m+ <!DOCTYPE html>[39m
+[31m+ <html lang="en">[39m
+[31m+ <head>[39m
+[31m+   <meta charset="UTF-8">[39m
+[31m+   <title>15 Earthquakes Near southern sumatra indonesia (up to M5.8)</title>[39m
+[31m+   <meta name="description" content="An overview of 15 recent seismic activities near southern sumatra indonesia, with the strongest reaching M5.8.">[39m
+[31m+   <link rel="canonical" href="https://earthquakeslive.com/cluster/15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9">[39m
+[31m+   <meta property="og:title" content="15 Earthquakes Near southern sumatra indonesia (up to M5.8)">[39m
+[31m+   <meta property="og:description" content="An overview of 15 recent seismic activities near southern sumatra indonesia, with the strongest reaching M5.8.">[39m
+[31m+   <meta property="og:url" content="https://earthquakeslive.com/cluster/15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9">[39m
+[31m+   <meta property="og:type" content="website">[39m
+[31m+ <script type="application/ld+json">{"@context":"http://schema.org","@type":"EventSeries","name":"15 Earthquakes Near southern sumatra indonesia (up to M5.8)","description":"An overview of 15 recent seismic activities near southern sumatra indonesia, with the strongest reaching M5.8.","url":"https://earthquakeslive.com/cluster/15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9","location":{"@type":"Place","name":"southern sumatra indonesia"}}</script>[39m
+[31m+ </head>[39m
+[31m+ <body>[39m
+[31m+   <h1>15 Earthquakes Near southern sumatra indonesia (up to M5.8)</h1>[39m
+[31m+   <p>An overview of 15 recent seismic activities near southern sumatra indonesia, with the strongest reaching M5.8.</p>[39m
+[31m+   <p>Further details about the most significant event in this cluster are currently unavailable.</p><p><a href="https://earthquakeslive.com/">Back to main map</a></p>[39m
+[31m+ </body>[39m
+[31m+ </html>[39m
+
+ ❯ functions/prerender-cluster.integration.test.js:124:24
+    122|           // expect(fetch).toHaveBeenCalledWith(expect.stringContainin…
+    123|           expect(html).toContain(`<link rel="canonical" href="https://…
+    124|           expect(html).toContain('Southern Sumatra, Indonesia');
+       |                        ^
+    125|           expect(html).toContain('15 Earthquakes Near');
+    126|           expect(html).toContain('M5.8');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly prerender with minimal D1 data, relying on slug and USGS fetch for details
+AssertionError: expected '\n<!DOCTYPE html>\n<html lang="en">\n…' to contain '<title>12 Earthquakes Near Test Locat…'
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [7m<title>12 Earthquakes Near Test Location (up to M5.5)</title[27m>[39m
+[31m+[39m
+[31m+ <!DOCTYPE html>[39m
+[31m+ <html lang="en">[39m
+[31m+ <head>[39m
+[31m+   <meta charset="UTF-8">[39m
+[31m+   <title>12 Earthquakes Near test location (up to M5.5)</title>[39m
+[31m+   <meta name="description" content="An overview of 12 recent seismic activities near test location, with the strongest reaching M5.5.">[39m
+[31m+   <link rel="canonical" href="https://earthquakeslive.com/cluster/12-quakes-near-test-location-up-to-m5.5-usTestId123">[39m
+[31m+   <meta property="og:title" content="12 Earthquakes Near test location (up to M5.5)">[39m
+[31m+   <meta property="og:description" content="An overview of 12 recent seismic activities near test location, with the strongest reaching M5.5.">[39m
+[31m+   <meta property="og:url" content="https://earthquakeslive.com/cluster/12-quakes-near-test-location-up-to-m5.5-usTestId123">[39m
+[31m+   <meta property="og:type" content="website">[39m
+[31m+ <script type="application/ld+json">{"@context":"http://schema.org","@type":"EventSeries","name":"12 Earthquakes Near test location (up to M5.5)","description":"An overview of 12 recent seismic activities near test location, with the strongest reaching M5.5.","url":"https://earthquakeslive.com/cluster/12-quakes-near-test-location-up-to-m5.5-usTestId123","location":{"@type":"Place","name":"test location"}}</script>[39m
+[31m+ </head>[39m
+[31m+ <body>[39m
+[31m+   <h1>12 Earthquakes Near test location (up to M5.5)</h1>[39m
+[31m+   <p>An overview of 12 recent seismic activities near test location, with the strongest reaching M5.5.</p>[39m
+[31m+   <p>Further details about the most significant event in this cluster are currently unavailable.</p><p><a href="https://earthquakeslive.com/">Back to main map</a></p>[39m
+[31m+ </body>[39m
+[31m+ [7m</html[27m>[39m
+
+ ❯ functions/prerender-cluster.integration.test.js:159:24
+    157|           expect(response.status).toBe(200);
+    158|           expect(mockContext.env.DB.bind).toHaveBeenCalledWith(expecte…
+    159|           expect(html).toContain('<title>12 Earthquakes Near Test Loca…
+       |                        ^
+    160|           expect(html).toContain('<meta name="description" content="An…
+    161|           expect(html).toContain('Strongest quake in this cluster: <a …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  functions/prerender-cluster.integration.test.js > Prerendering Handler: /cluster/:id > handlePrerenderCluster Slug Parsing and D1 Query (New URL Format) > should correctly parse slug, query D1, fetch USGS, and generate HTML for: Valid slug with single-digit count
+AssertionError: expected '\n<!DOCTYPE html>\n<html lang="en">\n…' to contain 'California'
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- California[39m
+[31m+[39m
+[31m+ <!DOCTYPE html>[39m
+[31m+ <html lang="en">[39m
+[31m+ <head>[39m
+[31m+   <meta charset="UTF-8">[39m
+[31m+   <title>5 Earthquakes Near california (up to M4.2)</title>[39m
+[31m+   <meta name="description" content="An overview of 5 recent seismic activities near california, with the strongest reaching M4.2.">[39m
+[31m+   <link rel="canonical" href="https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345">[39m
+[31m+   <meta property="og:title" content="5 Earthquakes Near california (up to M4.2)">[39m
+[31m+   <meta property="og:description" content="An overview of 5 recent seismic activities near california, with the strongest reaching M4.2.">[39m
+[31m+   <meta property="og:url" content="https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345">[39m
+[31m+   <meta property="og:type" content="website">[39m
+[31m+ <script type="application/ld+json">{"@context":"http://schema.org","@type":"EventSeries","name":"5 Earthquakes Near california (up to M4.2)","description":"An overview of 5 recent seismic activities near california, with the strongest reaching M4.2.","url":"https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345","location":{"@type":"Place","name":"california"}}</script>[39m
+[31m+ </head>[39m
+[31m+ <body>[39m
+[31m+   <h1>5 Earthquakes Near california (up to M4.2)</h1>[39m
+[31m+   <p>An overview of 5 recent seismic activities near california, with the strongest reaching M4.2.</p>[39m
+[31m+   <p>Further details about the most significant event in this cluster are currently unavailable.</p><p><a href="https://earthquakeslive.com/">Back to main map</a></p>[39m
+[31m+ </body>[39m
+[31m+ </html>[39m
+
+ ❯ functions/prerender-cluster.integration.test.js:193:26
+    191|             expect(mockContext.env.DB.bind).toHaveBeenCalledWith(expec…
+    192|             expect(html).toContain(`<link rel="canonical" href="https:…
+    193|             expect(html).toContain('California');
+       |                          ^
+    194|         });
+    195|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 11 passed (14)
+   Start at  20:31:32
+   Duration  1.38s (transform 98ms, setup 316ms, collect 102ms, tests 118ms, environment 385ms, prepare 184ms)
+
+----------------------------------------
+----------------------------------------
+FAILED: functions/sitemaps.earthquakes.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest functions/sitemaps.earthquakes.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should fetch data and return XML
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should fetch data and return XML
+Exception in handleEarthquakesSitemap: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle fetch error
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle fetch error
+Exception in handleEarthquakesSitemap: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle non-OK response from fetch
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle non-OK response from fetch
+Exception in handleEarthquakesSitemap: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle empty features array
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle empty features array
+Exception in handleEarthquakesSitemap: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should skip features missing properties.detail
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should skip features missing properties.detail
+Exception in handleEarthquakesSitemap: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should skip features with missing or invalid properties.updated
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should skip features with missing or invalid properties.updated
+Exception in handleEarthquakesSitemap: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should use env.USGS_API_URL if provided
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET https://example.com/custom/feed.geojson
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should use env.USGS_API_URL if provided
+Exception in handleEarthquakesSitemap: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+ ❯ functions/sitemaps.earthquakes.test.js (7 tests | 5 failed) 103ms
+   × Earthquake Sitemap Handler > /sitemap-earthquakes.xml should fetch data and return XML 61ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'event_detail_url_1'
+   × Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle fetch error 10ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain '<!-- Exception processing earthquake …'
+   × Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle non-OK response from fetch 6ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain '<!-- Error fetching earthquake data -…'
+   ✓ Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle empty features array 5ms
+   × Earthquake Sitemap Handler > /sitemap-earthquakes.xml should skip features missing properties.detail 6ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain '<loc>event_detail_url_valid</loc>'
+   × Earthquake Sitemap Handler > /sitemap-earthquakes.xml should skip features with missing or invalid properties.updated 6ms
+     → expected '<?xml version="1.0" encoding="UTF-8"?…' to contain '<loc>event_detail_url_valid_update</l…'
+   ✓ Earthquake Sitemap Handler > /sitemap-earthquakes.xml should use env.USGS_API_URL if provided 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should fetch data and return XML
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain 'event_detail_url_1'
+
+Expected: [32m"event_detail_url_1"[39m
+Received: [31m"<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- Exception processing earthquake data: [MSW] Cannot bypass a request when using the &quot;error&quot; strategy for the &quot;onUnhandledRequest&quot; option. --></urlset>"[39m
+
+ ❯ functions/sitemaps.earthquakes.test.js:69:22
+     67|         const text = await response.text();
+     68|         expect(text).toContain('<urlset');
+     69|         expect(text).toContain(encodeURIComponent("event_detail_url_1"…
+       |                      ^
+     70|         // expect(fetch).toHaveBeenCalledWith(expect.stringContaining(…
+     71|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle fetch error
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain '<!-- Exception processing earthquake …'
+
+Expected: [32m"<[7m!-- Exception processing earthquake data: USGS Feed Down --[27m>"[39m
+Received: [31m"<[7m?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- Exception processing earthquake data: [MSW] Cannot bypass a request when using the &quot;error&quot; strategy for the &quot;onUnhandledRequest&quot; option. --></urlset[27m>"[39m
+
+ ❯ functions/sitemaps.earthquakes.test.js:80:22
+     78|         expect(response.status).toBe(200);
+     79|         const text = await response.text();
+     80|         expect(text).toContain("<!-- Exception processing earthquake d…
+       |                      ^
+     81|     });
+     82|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should handle non-OK response from fetch
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain '<!-- Error fetching earthquake data -…'
+
+Expected: [32m"<[7m!-- Error fetching earthquake data --[27m>"[39m
+Received: [31m"<[7m?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- Exception processing earthquake data: [MSW] Cannot bypass a request when using the &quot;error&quot; strategy for the &quot;onUnhandledRequest&quot; option. --></urlset[27m>"[39m
+
+ ❯ functions/sitemaps.earthquakes.test.js:90:22
+     88|         expect(response.status).toBe(200);
+     89|         const text = await response.text();
+     90|         expect(text).toContain("<!-- Error fetching earthquake data --…
+       |                      ^
+     91|     });
+     92|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should skip features missing properties.detail
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain '<loc>event_detail_url_valid</loc>'
+
+Expected: [32m"<[7mloc>event_detail_url_valid</loc[27m>"[39m
+Received: [31m"<[7m?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- Exception processing earthquake data: [MSW] Cannot bypass a request when using the &quot;error&quot; strategy for the &quot;onUnhandledRequest&quot; option. --></urlset[27m>"[39m
+
+ ❯ functions/sitemaps.earthquakes.test.js:120:20
+    118|       expect(response.status).toBe(200);
+    119|       expect(response.headers.get('Content-Type')).toContain('applicat…
+    120|       expect(text).toContain('<loc>event_detail_url_valid</loc>');
+       |                    ^
+    121|       const locCount = (text.match(/<loc>/g) || []).length;
+    122|       expect(locCount).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  functions/sitemaps.earthquakes.test.js > Earthquake Sitemap Handler > /sitemap-earthquakes.xml should skip features with missing or invalid properties.updated
+AssertionError: expected '<?xml version="1.0" encoding="UTF-8"?…' to contain '<loc>event_detail_url_valid_update</l…'
+
+Expected: [32m"<[7mloc>event_detail_url_valid_update</loc[27m>"[39m
+Received: [31m"<[7m?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- Exception processing earthquake data: [MSW] Cannot bypass a request when using the &quot;error&quot; strategy for the &quot;onUnhandledRequest&quot; option. --></urlset[27m>"[39m
+
+ ❯ functions/sitemaps.earthquakes.test.js:141:20
+    139|       expect(response.status).toBe(200);
+    140|       expect(response.headers.get('Content-Type')).toContain('applicat…
+    141|       expect(text).toContain('<loc>event_detail_url_valid_update</loc>…
+       |                    ^
+    142|       expect(text).toContain('<lastmod>');
+    143|       const urlCount = (text.match(/<url>/g) || []).length;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 2 passed (7)
+   Start at  20:31:38
+   Duration  1.44s (transform 104ms, setup 339ms, collect 104ms, tests 103ms, environment 430ms, prepare 186ms)
+
+----------------------------------------
+----------------------------------------
+FAILED: functions/routes/prerender/cluster-detail.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest functions/routes/prerender/cluster-detail.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+stderr | functions/routes/prerender/cluster-detail.test.js > handlePrerenderCluster > 5. Cluster Not Found in D1 (d1Response is null)
+Cluster details not found in D1 for ID: overview_cluster_us123_10
+
+ ❯ functions/routes/prerender/cluster-detail.test.js (9 tests | 4 failed) 111ms
+   × handlePrerenderCluster > 1. Successful Render (Full D1 data, Full USGS data) 67ms
+     → expected '\n<!DOCTYPE html>\n<html lang="en">\n…' to contain '<a href="http://usgs.gov/event/us123"…'
+   × handlePrerenderCluster > 2. Successful Render (Minimal D1 data, Full USGS data - fallbacks used) 16ms
+     → expected '\n<!DOCTYPE html>\n<html lang="en">\n…' to contain '<title>12 Earthquakes Near USGS Fallb…'
+   ✓ handlePrerenderCluster > 3. Invalid Slug Format 2ms
+   ✓ handlePrerenderCluster > 4. DB Not Configured (env.DB missing) 1ms
+   ✓ handlePrerenderCluster > 5. Cluster Not Found in D1 (d1Response is null) 3ms
+   ✓ handlePrerenderCluster > 6. D1 Query Error 2ms
+   × handlePrerenderCluster > 7. USGS Fetch Fails for Strongest Quake (e.g., network error) 10ms
+     → expected "error" to be called with arguments: [ Array(1) ][90m
+
+Received:
+
+[1m  1st error call:
+
+[22m[2m  [[22m
+[32m-   "Exception fetching strongest quake us123: USGS Network Down",[90m
+[31m+   "[MSW] Error: intercepted a request without a matching request handler:[90m
+[31m+[90m
+[31m+   • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson[90m
+[31m+[90m
+[31m+ If you still wish to intercept this unhandled request, please create a request handler for it.[90m
+[31m+ Read more: https://mswjs.io/docs/http/intercepting-requests",[90m
+[2m  ][22m
+
+[1m  2nd error call:
+
+[22m[2m  [[22m
+[32m-   "Exception fetching strongest quake us123: USGS Network Down",[90m
+[31m+   "Exception fetching strongest quake us123: [MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[90m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+   × handlePrerenderCluster > 8. USGS Data for Strongest Quake Incomplete (missing place) 4ms
+     → expected "error" to be called with arguments: [ Array(1) ][90m
+
+Received:
+
+[1m  1st error call:
+
+[22m[2m  [[22m
+[32m-   "Essential place or mag missing for strongest quake us123",[90m
+[31m+   "[MSW] Error: intercepted a request without a matching request handler:[90m
+[31m+[90m
+[31m+   • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson[90m
+[31m+[90m
+[31m+ If you still wish to intercept this unhandled request, please create a request handler for it.[90m
+[31m+ Read more: https://mswjs.io/docs/http/intercepting-requests",[90m
+[2m  ][22m
+
+[1m  2nd error call:
+
+[22m[2m  [[22m
+[32m-   "Essential place or mag missing for strongest quake us123",[90m
+[31m+   "Exception fetching strongest quake us123: [MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[90m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+   ✓ handlePrerenderCluster > 9. Error Parsing earthquakeIds from D1 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  functions/routes/prerender/cluster-detail.test.js > handlePrerenderCluster > 1. Successful Render (Full D1 data, Full USGS data)
+AssertionError: expected '\n<!DOCTYPE html>\n<html lang="en">\n…' to contain '<a href="http://usgs.gov/event/us123"…'
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [7m<a[27m href="http://[7musgs.gov/event/us123">M 5.0 - USGS Detailed Place</a[27m>[39m
+[31m+[39m
+[31m+ <!DOCTYPE html>[39m
+[31m+ <html lang="en">[39m
+[31m+ <head>[39m
+[31m+   <meta charset="UTF-8">[39m
+[31m+   <title>D1 Custom Title for Someplace Cluster</title>[39m
+[31m+   <meta name="description" content="D1 Custom Description of this cluster.">[39m
+[31m+ [7m  <link rel="canonical"[27m href="http[7ms[27m://[7mearthquakeslive.com/cluster/10-quakes-near-someplace-up-to-m5.0-us123">[27m[39m
+[31m+   <meta property="og:title" content="D1 Custom Title for Someplace Cluster">[39m
+[31m+   <meta property="og:description" content="D1 Custom Description of this cluster.">[39m
+[31m+   <meta property="og:url" content="https://earthquakeslive.com/cluster/10-quakes-near-someplace-up-to-m5.0-us123">[39m
+[31m+   <meta property="og:type" content="website">[39m
+[31m+ <script type="application/ld+json">{"@context":"http://schema.org","@type":"EventSeries","name":"D1 Custom Title for Someplace Cluster","description":"D1 Custom Description of this cluster.","url":"https://earthquakeslive.com/cluster/10-quakes-near-someplace-up-to-m5.0-us123","location":{"@type":"Place","name":"D1 Location Name"}}</script>[39m
+[31m+ </head>[39m
+[31m+ <body>[39m
+[31m+   <h1>D1 Custom Title for Someplace Cluster</h1>[39m
+[31m+   <p>D1 Custom Description of this cluster.</p>[39m
+[31m+   <p>Further details about the most significant event in this cluster are currently unavailable.</p><p><a href="https://earthquakeslive.com/">Back to main map</a></p>[39m
+[31m+ </body>[39m
+[31m+ [7m</html[27m>[39m
+
+ ❯ functions/routes/prerender/cluster-detail.test.js:88:18
+     86|     expect(html).toContain(`<link rel="canonical" href="https://earthq…
+     87|     expect(html).toContain(`<h1>${d1ResponseData.title}</h1>`);
+     88|     expect(html).toContain(`<a href="${usgsResponseData.properties.url…
+       |                  ^
+     89|   });
+     90|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  functions/routes/prerender/cluster-detail.test.js > handlePrerenderCluster > 2. Successful Render (Minimal D1 data, Full USGS data - fallbacks used)
+AssertionError: expected '\n<!DOCTYPE html>\n<html lang="en">\n…' to contain '<title>12 Earthquakes Near USGS Fallb…'
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [7m<title>12 Earthquakes Near USGS Fallback Region Details (up to M4.5)</title[27m>[39m
+[31m+[39m
+[31m+ <!DOCTYPE html>[39m
+[31m+ <html lang="en">[39m
+[31m+ <head>[39m
+[31m+   <meta charset="UTF-8">[39m
+[31m+   <title>12 Earthquakes Near fallback place (up to M4.5)</title>[39m
+[31m+   <meta name="description" content="An overview of 12 recent seismic activities near fallback place, with the strongest reaching M4.5.">[39m
+[31m+   <link rel="canonical" href="https://earthquakeslive.com/cluster/12-quakes-near-fallback-place-up-to-m4.5-us456">[39m
+[31m+   <meta property="og:title" content="12 Earthquakes Near fallback place (up to M4.5)">[39m
+[31m+   <meta property="og:description" content="An overview of 12 recent seismic activities near fallback place, with the strongest reaching M4.5.">[39m
+[31m+   <meta property="og:url" content="https://earthquakeslive.com/cluster/12-quakes-near-fallback-place-up-to-m4.5-us456">[39m
+[31m+   <meta property="og:type" content="website">[39m
+[31m+ <script type="application/ld+json">{"@context":"http://schema.org","@type":"EventSeries","name":"12 Earthquakes Near fallback place (up to M4.5)","description":"An overview of 12 recent seismic activities near fallback place, with the strongest reaching M4.5.","url":"https://earthquakeslive.com/cluster/12-quakes-near-fallback-place-up-to-m4.5-us456","location":{"@type":"Place","name":"fallback place"}}</script>[39m
+[31m+ </head>[39m
+[31m+ <body>[39m
+[31m+   <h1>12 Earthquakes Near fallback place (up to M4.5)</h1>[39m
+[31m+   <p>An overview of 12 recent seismic activities near fallback place, with the strongest reaching M4.5.</p>[39m
+[31m+   <p>Further details about the most significant event in this cluster are currently unavailable.</p><p><a href="https://earthquakeslive.com/">Back to main map</a></p>[39m
+[31m+ </body>[39m
+[31m+ [7m</html[27m>[39m
+
+ ❯ functions/routes/prerender/cluster-detail.test.js:125:18
+    123|     // Fallback title uses USGS place and slug magnitude
+    124|     const expectedTitle = `12 Earthquakes Near USGS Fallback Region De…
+    125|     expect(html).toContain(`<title>${expectedTitle}</title>`);
+       |                  ^
+    126|     // Fallback description also uses these parts
+    127|     const expectedDesc = `An overview of 12 recent seismic activities …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  functions/routes/prerender/cluster-detail.test.js > handlePrerenderCluster > 7. USGS Fetch Fails for Strongest Quake (e.g., network error)
+AssertionError: expected "error" to be called with arguments: [ Array(1) ][90m
+
+Received:
+
+[1m  1st error call:
+
+[22m[2m  [[22m
+[32m-   "Exception fetching strongest quake us123: USGS Network Down",[90m
+[31m+   "[MSW] Error: intercepted a request without a matching request handler:[90m
+[31m+[90m
+[31m+   • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson[90m
+[31m+[90m
+[31m+ If you still wish to intercept this unhandled request, please create a request handler for it.[90m
+[31m+ Read more: https://mswjs.io/docs/http/intercepting-requests",[90m
+[2m  ][22m
+
+[1m  2nd error call:
+
+[22m[2m  [[22m
+[32m-   "Exception fetching strongest quake us123: USGS Network Down",[90m
+[31m+   "Exception fetching strongest quake us123: [MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[90m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+ ❯ functions/routes/prerender/cluster-detail.test.js:195:29
+    193|     expect(response.status).toBe(200); // Page still renders with fall…
+    194|     expect(html).toContain('Further details about the most significant…
+    195|     expect(consoleErrorSpy).toHaveBeenCalledWith(`Exception fetching s…
+       |                             ^
+    196|   });
+    197|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  functions/routes/prerender/cluster-detail.test.js > handlePrerenderCluster > 8. USGS Data for Strongest Quake Incomplete (missing place)
+AssertionError: expected "error" to be called with arguments: [ Array(1) ][90m
+
+Received:
+
+[1m  1st error call:
+
+[22m[2m  [[22m
+[32m-   "Essential place or mag missing for strongest quake us123",[90m
+[31m+   "[MSW] Error: intercepted a request without a matching request handler:[90m
+[31m+[90m
+[31m+   • GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson[90m
+[31m+[90m
+[31m+ If you still wish to intercept this unhandled request, please create a request handler for it.[90m
+[31m+ Read more: https://mswjs.io/docs/http/intercepting-requests",[90m
+[2m  ][22m
+
+[1m  2nd error call:
+
+[22m[2m  [[22m
+[32m-   "Essential place or mag missing for strongest quake us123",[90m
+[31m+   "Exception fetching strongest quake us123: [MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[90m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+ ❯ functions/routes/prerender/cluster-detail.test.js:210:29
+    208|     expect(response.status).toBe(200);
+    209|     expect(html).toContain('Further details about the most significant…
+    210|     expect(consoleErrorSpy).toHaveBeenCalledWith(`Essential place or m…
+       |                             ^
+    211|   });
+    212|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 5 passed (9)
+   Start at  20:31:41
+   Duration  1.45s (transform 111ms, setup 350ms, collect 85ms, tests 111ms, environment 399ms, prepare 214ms)
+
+----------------------------------------
+----------------------------------------
+FAILED: functions/routes/prerender/quake-detail.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest functions/routes/prerender/quake-detail.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+ ❯ functions/routes/prerender/quake-detail.test.js (15 tests | 15 failed) 147ms
+   × handleQuakeDetailPrerender > Successful Render > should render correctly when properties.title is provided 57ms
+     → expected 500 to be 200 // Object.is equality
+   × handleQuakeDetailPrerender > Successful Render > should render correctly and generate title when properties.title is missing 7ms
+     → expected 500 to be 200 // Object.is equality
+   × handleQuakeDetailPrerender > USGS Fetch Failures > should return 404 if USGS fetch returns 404 4ms
+     → expected 500 to be 404 // Object.is equality
+   × handleQuakeDetailPrerender > USGS Fetch Failures > should return 500 if USGS fetch returns 500 server error 4ms
+     → expected 'Error prerendering earthquake page' to be 'Error prerendering earthquake page: U…' // Object.is equality
+   × handleQuakeDetailPrerender > USGS Fetch Failures > should return 500 if USGS fetch has network error 12ms
+     → expected "error" to be called with arguments: [ …(2) ][90m
+
+Received:
+
+[1m  1st error call:
+
+[22m[2m  [[22m
+[32m-   "Generic error in handleQuakeDetailPrerender for eventId \"usTestNetFail\":",[90m
+[32m-   Error {[90m
+[32m-     "message": "Network Failure",[90m
+[32m-   },[90m
+[31m+   "[MSW] Error: intercepted a request without a matching request handler:[90m
+[31m+[90m
+[31m+   • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=usTestNetFail[90m
+[31m+[90m
+[31m+ If you still wish to intercept this unhandled request, please create a request handler for it.[90m
+[31m+ Read more: https://mswjs.io/docs/http/intercepting-requests",[90m
+[2m  ][22m
+
+[1m  2nd error call:
+
+[22m[2m  [[22m
+[2m    "Generic error in handleQuakeDetailPrerender for eventId \"usTestNetFail\":",[22m
+[32m-   Error {[90m
+[32m-     "message": "Network Failure",[90m
+[31m+   InternalError {[90m
+[31m+     "message": "[MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[90m
+[31m+     "name": "InternalError",[90m
+[2m    },[22m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+   × handleQuakeDetailPrerender > should return 500 if USGS response is 200 OK but not JSON 5ms
+     → expected "error" to be called with arguments: [ Array(1) ][90m
+
+Received:
+
+[1m  1st error call:
+
+[22m[2m  [[22m
+[32m-   "Failed to parse JSON for quake prerender usTestHtml: Unexpected token '<', \"<html></html>\" is not valid JSON",[90m
+[31m+   "[MSW] Error: intercepted a request without a matching request handler:[90m
+[31m+[90m
+[31m+   • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=usTestHtml[90m
+[31m+[90m
+[31m+ If you still wish to intercept this unhandled request, please create a request handler for it.[90m
+[31m+ Read more: https://mswjs.io/docs/http/intercepting-requests",[90m
+[2m  ][22m
+
+[1m  2nd error call:
+
+[22m[2m  [[22m
+[32m-   "Failed to parse JSON for quake prerender usTestHtml: Unexpected token '<', \"<html></html>\" is not valid JSON",[90m
+[31m+   "Generic error in handleQuakeDetailPrerender for eventId \"usTestHtml\":",[90m
+[31m+   InternalError {[90m
+[31m+     "message": "[MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[90m
+[31m+     "name": "InternalError",[90m
+[31m+   },[90m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+   × handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties is null 5ms
+     → expected 'Error prerendering earthquake page' to be 'Invalid earthquake data' // Object.is equality
+   × handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if geometry is null 12ms
+     → expected 'Error prerendering earthquake page' to be 'Invalid earthquake data' // Object.is equality
+   × handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties.mag is missing 10ms
+     → expected 'Error prerendering earthquake page' to be 'Invalid earthquake data (missing fiel…' // Object.is equality
+   × handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties.time is missing 6ms
+     → expected 'Error prerendering earthquake page' to be 'Invalid earthquake data (missing fiel…' // Object.is equality
+   × handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties.place is missing 4ms
+     → expected 'Error prerendering earthquake page' to be 'Invalid earthquake data (missing fiel…' // Object.is equality
+   × handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties.url is missing 4ms
+     → expected 'Error prerendering earthquake page' to be 'Invalid earthquake data (missing fiel…' // Object.is equality
+   × handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties.detail is missing 4ms
+     → expected 'Error prerendering earthquake page' to be 'Invalid earthquake data (missing fiel…' // Object.is equality
+   × handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should succeed if properties.detail is missing but properties.url is present 4ms
+     → expected 500 to be 200 // Object.is equality
+   × handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should succeed if properties.url is missing but properties.detail is present 5ms
+     → expected 500 to be 200 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Successful Render > should render correctly when properties.title is provided
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/routes/prerender/quake-detail.test.js:84:31
+     82|       const html = await response.text();
+     83|
+     84|       expect(response.status).toBe(200);
+       |                               ^
+     85|       expect(response.headers.get('Content-Type')).toBe('text/html');
+     86|       expect(html).toContain('<title>M 5.8 - Párga, Greece Region</tit…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/15]⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Successful Render > should render correctly and generate title when properties.title is missing
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/routes/prerender/quake-detail.test.js:112:31
+    110|       const expectedGeneratedTitle = `M ${mockData.properties.mag} Ear…
+    111|
+    112|       expect(response.status).toBe(200);
+       |                               ^
+    113|       expect(response.headers.get('Content-Type')).toBe('text/html');
+    114|       expect(html).toContain(`<title>${expectedGeneratedTitle}</title>…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/15]⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > USGS Fetch Failures > should return 404 if USGS fetch returns 404
+AssertionError: expected 500 to be 404 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 404[39m
+[31m+ 500[39m
+
+ ❯ functions/routes/prerender/quake-detail.test.js:128:31
+    126|       const response = await handleQuakeDetailPrerender(context, event…
+    127|
+    128|       expect(response.status).toBe(404);
+       |                               ^
+    129|       expect(response.headers.get('Content-Type')).toBe('text/plain;ch…
+    130|       expect(await response.text()).toBe('Earthquake data not found');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/15]⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > USGS Fetch Failures > should return 500 if USGS fetch returns 500 server error
+AssertionError: expected 'Error prerendering earthquake page' to be 'Error prerendering earthquake page: U…' // Object.is equality
+
+Expected: [32m"Error prerendering earthquake page[7m: USGS upstream error 500[27m"[39m
+Received: [31m"Error prerendering earthquake page"[39m
+
+ ❯ functions/routes/prerender/quake-detail.test.js:142:37
+    140|       expect(response.status).toBe(500);
+    141|       expect(response.headers.get('Content-Type')).toBe('text/plain;ch…
+    142|       expect(await response.text()).toBe('Error prerendering earthquak…
+       |                                     ^
+    143|       expect(consoleErrorSpy).toHaveBeenCalledWith(`USGS fetch failed …
+    144|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/15]⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > USGS Fetch Failures > should return 500 if USGS fetch has network error
+AssertionError: expected "error" to be called with arguments: [ …(2) ][90m
+
+Received:
+
+[1m  1st error call:
+
+[22m[2m  [[22m
+[32m-   "Generic error in handleQuakeDetailPrerender for eventId \"usTestNetFail\":",[90m
+[32m-   Error {[90m
+[32m-     "message": "Network Failure",[90m
+[32m-   },[90m
+[31m+   "[MSW] Error: intercepted a request without a matching request handler:[90m
+[31m+[90m
+[31m+   • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=usTestNetFail[90m
+[31m+[90m
+[31m+ If you still wish to intercept this unhandled request, please create a request handler for it.[90m
+[31m+ Read more: https://mswjs.io/docs/http/intercepting-requests",[90m
+[2m  ][22m
+
+[1m  2nd error call:
+
+[22m[2m  [[22m
+[2m    "Generic error in handleQuakeDetailPrerender for eventId \"usTestNetFail\":",[22m
+[32m-   Error {[90m
+[32m-     "message": "Network Failure",[90m
+[31m+   InternalError {[90m
+[31m+     "message": "[MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[90m
+[31m+     "name": "InternalError",[90m
+[2m    },[22m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+ ❯ functions/routes/prerender/quake-detail.test.js:156:31
+    154|       expect(response.headers.get('Content-Type')).toBe('text/plain;ch…
+    155|       expect(await response.text()).toBe('Error prerendering earthquak…
+    156|       expect(consoleErrorSpy).toHaveBeenCalledWith(`Generic error in h…
+       |                               ^
+    157|     });
+    158|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/15]⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > should return 500 if USGS response is 200 OK but not JSON
+AssertionError: expected "error" to be called with arguments: [ Array(1) ][90m
+
+Received:
+
+[1m  1st error call:
+
+[22m[2m  [[22m
+[32m-   "Failed to parse JSON for quake prerender usTestHtml: Unexpected token '<', \"<html></html>\" is not valid JSON",[90m
+[31m+   "[MSW] Error: intercepted a request without a matching request handler:[90m
+[31m+[90m
+[31m+   • GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=usTestHtml[90m
+[31m+[90m
+[31m+ If you still wish to intercept this unhandled request, please create a request handler for it.[90m
+[31m+ Read more: https://mswjs.io/docs/http/intercepting-requests",[90m
+[2m  ][22m
+
+[1m  2nd error call:
+
+[22m[2m  [[22m
+[32m-   "Failed to parse JSON for quake prerender usTestHtml: Unexpected token '<', \"<html></html>\" is not valid JSON",[90m
+[31m+   "Generic error in handleQuakeDetailPrerender for eventId \"usTestHtml\":",[90m
+[31m+   InternalError {[90m
+[31m+     "message": "[MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[90m
+[31m+     "name": "InternalError",[90m
+[31m+   },[90m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+ ❯ functions/routes/prerender/quake-detail.test.js:169:29
+    167|     expect(response.headers.get('Content-Type')).toBe('text/plain;char…
+    168|     expect(await response.text()).toBe('Error prerendering earthquake …
+    169|     expect(consoleErrorSpy).toHaveBeenCalledWith(`Failed to parse JSON…
+       |                             ^
+    170|   });
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/15]⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties is null
+AssertionError: expected 'Error prerendering earthquake page' to be 'Invalid earthquake data' // Object.is equality
+
+Expected: [32m"[7mInvalid[27m earthquake [7mdata[27m"[39m
+Received: [31m"[7mError prerendering[27m earthquake [7mpage[27m"[39m
+
+ ❯ functions/routes/prerender/quake-detail.test.js:181:37
+    179|
+    180|       expect(response.status).toBe(500);
+    181|       expect(await response.text()).toBe('Invalid earthquake data');
+       |                                     ^
+    182|       expect(consoleErrorSpy).toHaveBeenCalledWith(`Invalid earthquake…
+    183|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/15]⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if geometry is null
+AssertionError: expected 'Error prerendering earthquake page' to be 'Invalid earthquake data' // Object.is equality
+
+Expected: [32m"[7mInvalid[27m earthquake [7mdata[27m"[39m
+Received: [31m"[7mError prerendering[27m earthquake [7mpage[27m"[39m
+
+ ❯ functions/routes/prerender/quake-detail.test.js:193:37
+    191|
+    192|       expect(response.status).toBe(500);
+    193|       expect(await response.text()).toBe('Invalid earthquake data');
+       |                                     ^
+    194|       expect(consoleErrorSpy).toHaveBeenCalledWith(`Invalid earthquake…
+    195|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/15]⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties.mag is missing
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties.time is missing
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties.place is missing
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties.url is missing
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should return 500 if properties.detail is missing
+AssertionError: expected 'Error prerendering earthquake page' to be 'Invalid earthquake data (missing fiel…' // Object.is equality
+
+Expected: [32m"Invalid earthquake data (missing fields)."[39m
+Received: [31m"Error prerendering earthquake page"[39m
+
+ ❯ functions/routes/prerender/quake-detail.test.js:212:39
+    210|
+    211|         expect(response.status).toBe(500);
+    212|         expect(await response.text()).toBe('Invalid earthquake data (m…
+       |                                       ^
+    213|         expect(consoleErrorSpy).toHaveBeenCalledWith(`Incomplete earth…
+    214|       });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/15]⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should succeed if properties.detail is missing but properties.url is present
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/routes/prerender/quake-detail.test.js:226:31
+    224|       const context = createMockContext();
+    225|       const response = await handleQuakeDetailPrerender(context, event…
+    226|       expect(response.status).toBe(200);
+       |                               ^
+    227|       const html = await response.text();
+    228|       expect(html).toContain(`<a href="${mockData.properties.url}">Mor…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/15]⎯
+
+ FAIL  functions/routes/prerender/quake-detail.test.js > handleQuakeDetailPrerender > Invalid/Incomplete Data from USGS > should succeed if properties.url is missing but properties.detail is present
+AssertionError: expected 500 to be 200 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+ ❯ functions/routes/prerender/quake-detail.test.js:241:31
+    239|       const context = createMockContext();
+    240|       const response = await handleQuakeDetailPrerender(context, event…
+    241|       expect(response.status).toBe(200);
+       |                               ^
+    242|       const html = await response.text();
+    243|       const expectedHref = mockData.properties.detail.replace(/&/g, '&…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/15]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  15 failed (15)
+   Start at  20:31:43
+   Duration  1.47s (transform 104ms, setup 333ms, collect 77ms, tests 147ms, environment 402ms, prepare 195ms)
+
+----------------------------------------
+----------------------------------------
+FAILED: src/components/NotableQuakeFeature.test.jsx
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest src/components/NotableQuakeFeature.test.jsx --no-color
+
+
+ RUN  v3.2.3 /app
+
+No test files found, exiting with code 1
+
+filter: src/components/NotableQuakeFeature.test.jsx
+include: **/*.{test,spec}.?(c|m)[jt]s?(x)
+exclude:  **/node_modules/**, **/dist/**, **/cypress/**, **/.{idea,git,cache,output,temp}/**, **/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*, src/components/InteractiveGlobeView.test.jsx, src/components/NotableQuakeFeature.test.jsx
+
+----------------------------------------
+----------------------------------------
+FAILED: src/components/InteractiveGlobeView.test.jsx
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest src/components/InteractiveGlobeView.test.jsx --no-color
+
+
+ RUN  v3.2.3 /app
+
+No test files found, exiting with code 1
+
+filter: src/components/InteractiveGlobeView.test.jsx
+include: **/*.{test,spec}.?(c|m)[jt]s?(x)
+exclude:  **/node_modules/**, **/dist/**, **/cypress/**, **/.{idea,git,cache,output,temp}/**, **/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*, src/components/InteractiveGlobeView.test.jsx, src/components/NotableQuakeFeature.test.jsx
+
+----------------------------------------
+----------------------------------------
+FAILED: src/components/ClusterDetailModalWrapper.test.jsx
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest src/components/ClusterDetailModalWrapper.test.jsx --no-color
+
+
+ RUN  v3.2.3 /app
+
+ ❯ src/components/ClusterDetailModalWrapper.test.jsx (4 tests | 3 failed) 3073ms
+   ✓ ClusterDetailModalWrapper > Prop Handling > should use cluster data from overviewClusters if found, matching by strongestQuakeId 45ms
+   × ClusterDetailModalWrapper > Cluster Reconstruction with fetchActiveClusters (Old ID Format) > Scenario 1: fetchActiveClusters returns data successfully 1010ms
+     → Unable to find an element with the text: Cluster: overview_cluster_reconTargetID_someLocation. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+        [36m>[39m
+          [0mCluster Not Found[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm mb-4"[39m
+        [36m>[39m
+          [0mInvalid cluster URL format. Could not extract quake ID.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+        [36m>[39m
+          [0mGo Back[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+        [36m>[39m
+          [0mCluster Not Found[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm mb-4"[39m
+        [36m>[39m
+          [0mInvalid cluster URL format. Could not extract quake ID.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+        [36m>[39m
+          [0mGo Back[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+   × ClusterDetailModalWrapper > Cluster Reconstruction with fetchActiveClusters (Old ID Format) > Scenario 2a: fetchActiveClusters fails, and fetchClusterDefinition also returns null 1007ms
+     → Unable to find an element with the text: Cluster details could not be found or were incomplete.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+        [36m>[39m
+          [0mCluster Not Found[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm mb-4"[39m
+        [36m>[39m
+          [0mInvalid cluster URL format. Could not extract quake ID.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+        [36m>[39m
+          [0mGo Back[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+        [36m>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+          [36m>[39m
+            [0mCluster Not Found[0m
+          [36m</h2>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"text-sm mb-4"[39m
+          [36m>[39m
+            [0mInvalid cluster URL format. Could not extract quake ID.[0m
+          [36m</p>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+          [36m>[39m
+            [0mGo Back[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+   × ClusterDetailModalWrapper > Cluster Reconstruction with fetchActiveClusters (Old ID Format) > Scenario 2b: fetchActiveClusters fails, but fetchClusterDefinition succeeds 1006ms
+     → Unable to find an element with the text: Cluster: overview_cluster_reconTargetID_someLocation. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+        [36m>[39m
+          [0mCluster Not Found[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm mb-4"[39m
+        [36m>[39m
+          [0mInvalid cluster URL format. Could not extract quake ID.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+        [36m>[39m
+          [0mGo Back[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+        [36m>[39m
+          [0mCluster Not Found[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm mb-4"[39m
+        [36m>[39m
+          [0mInvalid cluster URL format. Could not extract quake ID.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+        [36m>[39m
+          [0mGo Back[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/ClusterDetailModalWrapper.test.jsx > ClusterDetailModalWrapper > Cluster Reconstruction with fetchActiveClusters (Old ID Format) > Scenario 1: fetchActiveClusters returns data successfully
+TestingLibraryElementError: Unable to find an element with the text: Cluster: overview_cluster_reconTargetID_someLocation. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+        [36m>[39m
+          [0mCluster Not Found[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm mb-4"[39m
+        [36m>[39m
+          [0mInvalid cluster URL format. Could not extract quake ID.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+        [36m>[39m
+          [0mGo Back[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+        [36m>[39m
+          [0mCluster Not Found[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm mb-4"[39m
+        [36m>[39m
+          [0mInvalid cluster URL format. Could not extract quake ID.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+        [36m>[39m
+          [0mGo Back[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/components/ClusterDetailModalWrapper.test.jsx:188:20
+    186|       );
+    187|
+    188|       await screen.findByText(`Cluster: ${oldFormatSlug}`);
+       |                    ^
+    189|
+    190|       expect(mockFetchActiveClusters).toHaveBeenCalledWith(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/components/ClusterDetailModalWrapper.test.jsx > ClusterDetailModalWrapper > Cluster Reconstruction with fetchActiveClusters (Old ID Format) > Scenario 2a: fetchActiveClusters fails, and fetchClusterDefinition also returns null
+TestingLibraryElementError: Unable to find an element with the text: Cluster details could not be found or were incomplete.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+        [36m>[39m
+          [0mCluster Not Found[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm mb-4"[39m
+        [36m>[39m
+          [0mInvalid cluster URL format. Could not extract quake ID.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+        [36m>[39m
+          [0mGo Back[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+        [36m>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+          [36m>[39m
+            [0mCluster Not Found[0m
+          [36m</h2>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"text-sm mb-4"[39m
+          [36m>[39m
+            [0mInvalid cluster URL format. Could not extract quake ID.[0m
+          [36m</p>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+          [36m>[39m
+            [0mGo Back[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+ ❯ Proxy.waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ src/components/ClusterDetailModalWrapper.test.jsx:222:13
+    220|       );
+    221|
+    222|       await waitFor(() => {
+       |             ^
+    223|         // Expect an error message related to not finding the cluster
+    224|         expect(screen.getByText('Cluster details could not be found or…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/components/ClusterDetailModalWrapper.test.jsx > ClusterDetailModalWrapper > Cluster Reconstruction with fetchActiveClusters (Old ID Format) > Scenario 2b: fetchActiveClusters fails, but fetchClusterDefinition succeeds
+TestingLibraryElementError: Unable to find an element with the text: Cluster: overview_cluster_reconTargetID_someLocation. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+        [36m>[39m
+          [0mCluster Not Found[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm mb-4"[39m
+        [36m>[39m
+          [0mInvalid cluster URL format. Could not extract quake ID.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+        [36m>[39m
+          [0mGo Back[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-xl font-semibold text-amber-400 mb-3"[39m
+        [36m>[39m
+          [0mCluster Not Found[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-sm mb-4"[39m
+        [36m>[39m
+          [0mInvalid cluster URL format. Could not extract quake ID.[0m
+        [36m</p>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors"[39m
+        [36m>[39m
+          [0mGo Back[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/components/ClusterDetailModalWrapper.test.jsx:259:22
+    257|         );
+    258|
+    259|         await screen.findByText(`Cluster: ${oldFormatSlug}`); // Modal…
+       |                      ^
+    260|
+    261|         expect(mockFetchActiveClusters).toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  20:33:15
+   Duration  4.46s (transform 152ms, setup 315ms, collect 258ms, tests 3.07s, environment 382ms, prepare 170ms)
+
+----------------------------------------
+----------------------------------------
+FAILED: src/services/usgsApiService.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest src/services/usgsApiService.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+stderr | src/services/usgsApiService.test.js > fetchUsgsData > should fetch and return data successfully
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET /api/usgs-proxy?apiUrl=https%3A%2F%2Fexample.com%2Ftest-data
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/services/usgsApiService.test.js > fetchUsgsData > should fetch and return data successfully
+USGS API Service Error: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | src/services/usgsApiService.test.js > fetchUsgsData > should handle HTTP errors
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET /api/usgs-proxy?apiUrl=https%3A%2F%2Fexample.com%2Ftest-data
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/services/usgsApiService.test.js > fetchUsgsData > should handle HTTP errors
+USGS API Service Error: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | src/services/usgsApiService.test.js > fetchUsgsData > should handle network errors (fetch rejects)
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET /api/usgs-proxy?apiUrl=https%3A%2F%2Fexample.com%2Ftest-data
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/services/usgsApiService.test.js > fetchUsgsData > should handle network errors (fetch rejects)
+USGS API Service Error: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+stderr | src/services/usgsApiService.test.js > fetchUsgsData > should handle non-JSON responses (response.json() fails)
+[MSW] Error: intercepted a request without a matching request handler:
+
+  • GET /api/usgs-proxy?apiUrl=https%3A%2F%2Fexample.com%2Ftest-data
+
+If you still wish to intercept this unhandled request, please create a request handler for it.
+Read more: https://mswjs.io/docs/http/intercepting-requests
+
+stderr | src/services/usgsApiService.test.js > fetchUsgsData > should handle non-JSON responses (response.json() fails)
+USGS API Service Error: InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+    at applyStrategy [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:42:15[90m)[39m
+    at onUnhandledRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/request/onUnhandledRequest.ts:79:5[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/core/utils/handleRequest.ts:79:11[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at _Emitter.<anonymous> [90m(file:///app/[39mnode_modules/[4mmsw[24m/src/node/SetupServerCommonApi.ts:60:26[90m)[39m
+    at emitAsync [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/emitAsync.ts:23:5[90m)[39m
+    at [90mfile:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:145:5
+    at until [90m(file:///app/[39mnode_modules/[4m@open-draft[24m/until/src/until.ts:23:18[90m)[39m
+    at handleRequest [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/utils/handleRequest.ts:134:18[90m)[39m
+    at globalThis.fetch [90m(file:///app/[39mnode_modules/[4m@mswjs[24m/interceptors/src/interceptors/fetch/index.ts:72:32[90m)[39m
+
+ ❯ src/services/usgsApiService.test.js (4 tests | 4 failed) 51ms
+   × fetchUsgsData > should fetch and return data successfully 33ms
+     → expected { error: { …(2) } } to deeply equal { features: [ { id: 'test1', …(1) } ] }
+   × fetchUsgsData > should handle HTTP errors 7ms
+     → expected { error: { …(2) } } to deeply equal { error: { …(2) } }
+   × fetchUsgsData > should handle network errors (fetch rejects) 3ms
+     → expected { error: { …(2) } } to deeply equal { error: { …(2) } }
+   × fetchUsgsData > should handle non-JSON responses (response.json() fails) 4ms
+     → expected { error: { …(2) } } to deeply equal { error: { …(2) } }
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/usgsApiService.test.js > fetchUsgsData > should fetch and return data successfully
+AssertionError: expected { error: { …(2) } } to deeply equal { features: [ { id: 'test1', …(1) } ] }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "features": [[39m
+[32m-     {[39m
+[32m-       "id": "test1",[39m
+[32m-       "properties": {[39m
+[32m-         "mag": 5,[39m
+[32m-       },[39m
+[31m+   "error": {[39m
+[31m+     "message": "[MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[39m
+[31m+     "status": null,[39m
+[2m    },[22m
+[32m-   ],[39m
+[2m  }[22m
+
+ ❯ src/services/usgsApiService.test.js:24:18
+     22|     // expect(fetch).toHaveBeenCalledTimes(1);
+     23|     // expect(fetch).toHaveBeenCalledWith(`/api/usgs-proxy?apiUrl=${en…
+     24|     expect(data).toEqual(mockResponseData);
+       |                  ^
+     25|   });
+     26|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/services/usgsApiService.test.js > fetchUsgsData > should handle HTTP errors
+AssertionError: expected { error: { …(2) } } to deeply equal { error: { …(2) } }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "error": {[22m
+[32m-     "message": "HTTP error! status: 404",[39m
+[32m-     "status": 404,[39m
+[31m+     "message": "[MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[39m
+[31m+     "status": null,[39m
+[2m    },[22m
+[2m  }[22m
+
+ ❯ src/services/usgsApiService.test.js:37:20
+     35|     // expect(fetch).toHaveBeenCalledTimes(1);
+     36|     // expect(fetch).toHaveBeenCalledWith(`/api/usgs-proxy?apiUrl=${en…
+     37|     expect(result).toEqual({
+       |                    ^
+     38|       error: {
+     39|         message: `HTTP error! status: ${errorStatus}`,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/services/usgsApiService.test.js > fetchUsgsData > should handle network errors (fetch rejects)
+AssertionError: expected { error: { …(2) } } to deeply equal { error: { …(2) } }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "error": {[22m
+[32m-     "message": "Network request failed",[39m
+[31m+     "message": "[MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[39m
+[2m      "status": null,[22m
+[2m    },[22m
+[2m  }[22m
+
+ ❯ src/services/usgsApiService.test.js:52:20
+     50|     // expect(fetch).toHaveBeenCalledTimes(1);
+     51|     // expect(fetch).toHaveBeenCalledWith(`/api/usgs-proxy?apiUrl=${en…
+     52|     expect(result).toEqual({
+       |                    ^
+     53|       error: {
+     54|         message: networkErrorMessage,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/services/usgsApiService.test.js > fetchUsgsData > should handle non-JSON responses (response.json() fails)
+AssertionError: expected { error: { …(2) } } to deeply equal { error: { …(2) } }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "error": {[22m
+[32m-     "message": "Unexpected token N in JSON at position 0",[39m
+[31m+     "message": "[MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[39m
+[2m      "status": null,[22m
+[2m    },[22m
+[2m  }[22m
+
+ ❯ src/services/usgsApiService.test.js:70:20
+     68|     // expect(fetch).toHaveBeenCalledTimes(1);
+     69|     // expect(fetch).toHaveBeenCalledWith(`/api/usgs-proxy?apiUrl=${en…
+     70|     expect(result).toEqual({
+       |                    ^
+     71|       error: {
+     72|         message: parsingErrorMessage,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  20:33:33
+   Duration  1.23s (transform 52ms, setup 319ms, collect 17ms, tests 51ms, environment 384ms, prepare 202ms)
+
+----------------------------------------
+----------------------------------------
+FAILED: src/services/clusterApiService.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest src/services/clusterApiService.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+ ❯ src/services/clusterApiService.test.js (19 tests | 7 failed) 76ms
+   × clusterApiService > registerClusterDefinition > should return true on successful registration (201) 27ms
+     → expected false to be true // Object.is equality
+   ✓ clusterApiService > registerClusterDefinition > should return false and log error on failed registration (e.g., 400) 5ms
+   ✓ clusterApiService > registerClusterDefinition > should return false and log error on network error 3ms
+   ✓ clusterApiService > registerClusterDefinition > should return false and log error for invalid clusterData (null) 1ms
+   × clusterApiService > fetchClusterDefinition > should return cluster definition on successful fetch (200) 5ms
+     → [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+   × clusterApiService > fetchClusterDefinition > should return null if cluster not found (404) 2ms
+     → [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+   ✓ clusterApiService > fetchClusterDefinition > should throw error and log on other server errors (e.g., 500) 3ms
+   ✓ clusterApiService > fetchClusterDefinition > should re-throw error and log on network error 0ms
+   ✓ clusterApiService > fetchClusterDefinition > should throw error if response.json() fails 1ms
+   ✓ clusterApiService > fetchClusterDefinition > should throw error and log for invalid clusterId (null) 1ms
+   × clusterApiService > fetchActiveClusters > should return server data and not call local fallback if server responds OK and X-Cache-Hit is true 5ms
+     → expected undefined to deeply equal [ Array(1) ]
+   × clusterApiService > fetchActiveClusters > should call local fallback if server responds OK but X-Cache-Hit is false 5ms
+     → expected "warn" to be called with arguments: [ Array(1) ][90m
+
+Number of calls: [1m0[22m
+[39m
+   × clusterApiService > fetchActiveClusters > should call local fallback if server responds OK but X-Cache-Hit is missing 3ms
+     → expected "warn" to be called with arguments: [ Array(1) ][90m
+
+Number of calls: [1m0[22m
+[39m
+   × clusterApiService > fetchActiveClusters > should call local fallback if server responds with an error (e.g., 500) 5ms
+     → expected "error" to be called with arguments: [ Array(1) ][90m
+
+Received:
+
+[1m  1st error call:
+
+[22m[2m  [[22m
+[32m-   "Failed to fetch active clusters from server. Status: 500. Body: Internal Server Error. Falling back to local calculation.",[90m
+[31m+   "[MSW] Error: intercepted a request without a matching request handler:[90m
+[31m+[90m
+[31m+   • POST /api/calculate-clusters[90m
+[31m+[90m
+[31m+   • Request body: {\"earthquakes\":[{\"id\":\"eq1\",\"geometry\":{\"coordinates\":[1,2]},\"properties\":{\"time\":123,\"mag\":5}}],\"maxDistanceKm\":100,\"minQuakes\":2}[90m
+[31m+[90m
+[31m+ If you still wish to intercept this unhandled request, please create a request handler for it.[90m
+[31m+ Read more: https://mswjs.io/docs/http/intercepting-requests",[90m
+[2m  ][22m
+
+[1m  2nd error call:
+
+[22m[2m  [[22m
+[32m-   "Failed to fetch active clusters from server. Status: 500. Body: Internal Server Error. Falling back to local calculation.",[90m
+[31m+   "Network error while fetching active clusters. Falling back to local calculation:",[90m
+[31m+   InternalError {[90m
+[31m+     "message": "[MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[90m
+[31m+     "name": "InternalError",[90m
+[31m+   },[90m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+   ✓ clusterApiService > fetchActiveClusters > should call local fallback if fetch throws a network error 2ms
+   ✓ clusterApiService > fetchActiveClusters > should re-throw error if local fallback also fails 2ms
+   ✓ clusterApiService > fetchActiveClusters > should throw error for invalid earthquakes array 1ms
+   ✓ clusterApiService > fetchActiveClusters > should throw error for invalid maxDistanceKm 1ms
+   ✓ clusterApiService > fetchActiveClusters > should throw error for invalid minQuakes 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/clusterApiService.test.js > clusterApiService > registerClusterDefinition > should return true on successful registration (201)
+AssertionError: expected false to be true // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+ ❯ src/services/clusterApiService.test.js:48:22
+     46|
+     47|       const result = await registerClusterDefinition(validClusterData);
+     48|       expect(result).toBe(true);
+       |                      ^
+     49|       // expect(fetch).toHaveBeenCalledWith('/api/cluster-definition',…
+     50|       //   method: 'POST',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  src/services/clusterApiService.test.js > clusterApiService > fetchClusterDefinition > should return cluster definition on successful fetch (200)
+ FAIL  src/services/clusterApiService.test.js > clusterApiService > fetchClusterDefinition > should return null if cluster not found (404)
+InternalError: [MSW] Cannot bypass a request when using the "error" strategy for the "onUnhandledRequest" option.
+ ❯ applyStrategy node_modules/msw/src/core/utils/request/onUnhandledRequest.ts:42:15
+ ❯ onUnhandledRequest node_modules/msw/src/core/utils/request/onUnhandledRequest.ts:79:5
+ ❯ handleRequest node_modules/msw/src/core/utils/handleRequest.ts:79:11
+ ❯ _Emitter.<anonymous> node_modules/msw/src/node/SetupServerCommonApi.ts:60:26
+ ❯ emitAsync node_modules/@mswjs/interceptors/src/utils/emitAsync.ts:23:5
+ ❯ node_modules/@mswjs/interceptors/src/utils/handleRequest.ts:145:5
+ ❯ until node_modules/@open-draft/until/src/until.ts:23:18
+ ❯ handleRequest node_modules/@mswjs/interceptors/src/utils/handleRequest.ts:134:18
+ ❯ globalThis.fetch node_modules/@mswjs/interceptors/src/interceptors/fetch/index.ts:72:32
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  src/services/clusterApiService.test.js > clusterApiService > fetchActiveClusters > should return server data and not call local fallback if server responds OK and X-Cache-Hit is true
+AssertionError: expected undefined to deeply equal [ Array(1) ]
+
+[32m- Expected:[39m
+[
+  {
+    "clusterId": "serverCluster",
+    "quakes": [
+      "eq1",
+      "eq2",
+    ],
+  },
+]
+
+[31m+ Received:[39m
+undefined
+
+ ❯ src/services/clusterApiService.test.js:138:22
+    136|       const result = await fetchActiveClusters(mockEarthquakes, mockMa…
+    137|
+    138|       expect(result).toEqual(mockServerCalculatedData);
+       |                      ^
+    139|       // expect(fetch).toHaveBeenCalledTimes(1);
+    140|       expect(localFindActiveClusters).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  src/services/clusterApiService.test.js > clusterApiService > fetchActiveClusters > should call local fallback if server responds OK but X-Cache-Hit is false
+AssertionError: expected "warn" to be called with arguments: [ Array(1) ][90m
+
+Number of calls: [1m0[22m
+[39m
+ ❯ src/services/clusterApiService.test.js:157:30
+    155|       // expect(fetch).toHaveBeenCalledTimes(1);
+    156|       expect(localFindActiveClusters).toHaveBeenCalledWith(mockEarthqu…
+    157|       expect(consoleWarnSpy).toHaveBeenCalledWith('Server cache miss o…
+       |                              ^
+    158|       expect(consoleLogSpy).toHaveBeenCalledWith('Initiating client-si…
+    159|       expect(consoleLogSpy).toHaveBeenCalledWith('Client-side cluster …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  src/services/clusterApiService.test.js > clusterApiService > fetchActiveClusters > should call local fallback if server responds OK but X-Cache-Hit is missing
+AssertionError: expected "warn" to be called with arguments: [ Array(1) ][90m
+
+Number of calls: [1m0[22m
+[39m
+ ❯ src/services/clusterApiService.test.js:173:30
+    171|       expect(result).toEqual(mockLocalCalculatedData);
+    172|       expect(localFindActiveClusters).toHaveBeenCalledWith(mockEarthqu…
+    173|       expect(consoleWarnSpy).toHaveBeenCalledWith('Server cache miss o…
+       |                              ^
+    174|     });
+    175|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  src/services/clusterApiService.test.js > clusterApiService > fetchActiveClusters > should call local fallback if server responds with an error (e.g., 500)
+AssertionError: expected "error" to be called with arguments: [ Array(1) ][90m
+
+Received:
+
+[1m  1st error call:
+
+[22m[2m  [[22m
+[32m-   "Failed to fetch active clusters from server. Status: 500. Body: Internal Server Error. Falling back to local calculation.",[90m
+[31m+   "[MSW] Error: intercepted a request without a matching request handler:[90m
+[31m+[90m
+[31m+   • POST /api/calculate-clusters[90m
+[31m+[90m
+[31m+   • Request body: {\"earthquakes\":[{\"id\":\"eq1\",\"geometry\":{\"coordinates\":[1,2]},\"properties\":{\"time\":123,\"mag\":5}}],\"maxDistanceKm\":100,\"minQuakes\":2}[90m
+[31m+[90m
+[31m+ If you still wish to intercept this unhandled request, please create a request handler for it.[90m
+[31m+ Read more: https://mswjs.io/docs/http/intercepting-requests",[90m
+[2m  ][22m
+
+[1m  2nd error call:
+
+[22m[2m  [[22m
+[32m-   "Failed to fetch active clusters from server. Status: 500. Body: Internal Server Error. Falling back to local calculation.",[90m
+[31m+   "Network error while fetching active clusters. Falling back to local calculation:",[90m
+[31m+   InternalError {[90m
+[31m+     "message": "[MSW] Cannot bypass a request when using the \"error\" strategy for the \"onUnhandledRequest\" option.",[90m
+[31m+     "name": "InternalError",[90m
+[31m+   },[90m
+[2m  ][22m
+[39m[90m
+
+Number of calls: [1m2[22m
+[39m
+ ❯ src/services/clusterApiService.test.js:191:31
+    189|       // expect(fetch).toHaveBeenCalledTimes(1);
+    190|       expect(localFindActiveClusters).toHaveBeenCalledWith(mockEarthqu…
+    191|       expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch ac…
+       |                               ^
+    192|     });
+    193|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 12 passed (19)
+   Start at  20:33:35
+   Duration  1.33s (transform 97ms, setup 319ms, collect 73ms, tests 76ms, environment 397ms, prepare 202ms)
+
+----------------------------------------
+----------------------------------------
+FAILED (logged failures): src/utils/fetchUtils.test.js
+----------------------------------------
+
+> earthquake-dashboard@0.0.0 test
+> vitest src/utils/fetchUtils.test.js --no-color
+
+
+ RUN  v3.2.3 /app
+
+stderr | src/utils/fetchUtils.test.js > fetchDataCb > should handle HTTP errors
+Error in fetchDataCb from test_url_http_error: Error: HTTP error! status: 500 Server Error. Detailed error message from server
+    at fetchDataCb [90m(/app/[39msrc/utils/fetchUtils.js:38:19[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90m/app/[39msrc/utils/fetchUtils.test.js:137:20
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20
+
+stderr | src/utils/fetchUtils.test.js > fetchDataCb > should handle non-JSON responses
+Error in fetchDataCb from test_url_non_json: Error: Expected JSON but received text/html
+    at fetchDataCb [90m(/app/[39msrc/utils/fetchUtils.js:42:19[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at [90m/app/[39msrc/utils/fetchUtils.test.js:158:20
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:20
+
+stderr | src/utils/fetchUtils.test.js > fetchDataCb > should handle fetch throwing an error (e.g. network error)
+Error in fetchDataCb from test_url_network_error: Error: Network request failed
+    at [90m/app/[39msrc/utils/fetchUtils.test.js:167:33
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1894:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1860:10[90m)[39m
+    at runTest [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1571:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:105:5)[39m
+    at runSuite [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1726:8[90m)[39m
+    at runSuite [90m(file:///app/[39mnode_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1726:8[90m)[39m
+
+ ✓ src/utils/fetchUtils.test.js (6 tests) 22ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  20:33:44
+   Duration  1.20s (transform 57ms, setup 319ms, collect 29ms, tests 22ms, environment 385ms, prepare 178ms)
+
+----------------------------------------

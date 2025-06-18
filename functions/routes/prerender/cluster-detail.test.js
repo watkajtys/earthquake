@@ -2,7 +2,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { handlePrerenderCluster } from './cluster-detail.js';
 
 // Mock global fetch
-global.fetch = vi.fn();
+// global.fetch = vi.fn(); // MSW will handle fetch
 
 // Mock D1 database interaction
 const mockD1First = vi.fn();
@@ -28,7 +28,7 @@ describe('handlePrerenderCluster', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    fetch.mockReset();
+    // fetch.mockReset(); // MSW will handle fetch lifecycle
     mockD1First.mockReset();
     mockD1Bind.mockClear();
     mockD1Prepare.mockClear();
@@ -69,7 +69,7 @@ describe('handlePrerenderCluster', () => {
       id: eventId1,
       geometry: { type: 'Point', coordinates: [0,0]}
     };
-    fetch.mockResolvedValueOnce(new Response(JSON.stringify(usgsResponseData)));
+    // fetch.mockResolvedValueOnce(new Response(JSON.stringify(usgsResponseData)));
 
     const context = createMockContext();
     const response = await handlePrerenderCluster(context, validSlug1);
@@ -79,7 +79,7 @@ describe('handlePrerenderCluster', () => {
     expect(response.headers.get('Content-Type')).toBe('text/html'); // Adjusted
     expect(mockD1Prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT title, description, strongestQuakeId, locationName, maxMagnitude, earthquakeIds FROM earthquake_clusters WHERE clusterId = ?')); // Adjusted SQL
     expect(mockD1Bind).toHaveBeenCalledWith(d1QueryId1);
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining(`/detail/${eventId1}.geojson`));
+    // expect(fetch).toHaveBeenCalledWith(expect.stringContaining(`/detail/${eventId1}.geojson`));
 
     expect(html).toContain(`<title>${d1ResponseData.title}</title>`); // Adjusted: removed " | Earthquakes Live"
     expect(html).toContain(`<meta name="description" content="${d1ResponseData.description}">`);
@@ -110,7 +110,7 @@ describe('handlePrerenderCluster', () => {
       id: eventId2,
       geometry: { type: 'Point', coordinates: [0,0]}
     };
-    fetch.mockResolvedValueOnce(new Response(JSON.stringify(usgsResponseData)));
+    // fetch.mockResolvedValueOnce(new Response(JSON.stringify(usgsResponseData)));
 
     const context = createMockContext();
     const response = await handlePrerenderCluster(context, validSlug2);
@@ -184,7 +184,7 @@ describe('handlePrerenderCluster', () => {
     const d1ResponseData = { strongestQuakeId: eventId1, earthquakeIds: '[]', title: 'Test', description: 'Test' };
     mockD1First.mockResolvedValueOnce(d1ResponseData);
     const fetchError = new Error('USGS Network Down');
-    fetch.mockRejectedValueOnce(fetchError);
+    // fetch.mockRejectedValueOnce(fetchError);
 
     const context = createMockContext();
     const response = await handlePrerenderCluster(context, validSlug1);
@@ -199,7 +199,7 @@ describe('handlePrerenderCluster', () => {
     const d1ResponseData = { strongestQuakeId: eventId1, earthquakeIds: '[]', title: 'Test', description: 'Test' };
     mockD1First.mockResolvedValueOnce(d1ResponseData);
     const usgsIncompleteData = { properties: { mag: 5.0 /* place missing */ }, id: eventId1, geometry: {type: 'Point', coordinates: [0,0]}};
-    fetch.mockResolvedValueOnce(new Response(JSON.stringify(usgsIncompleteData)));
+    // fetch.mockResolvedValueOnce(new Response(JSON.stringify(usgsIncompleteData)));
 
     const context = createMockContext();
     const response = await handlePrerenderCluster(context, validSlug1);

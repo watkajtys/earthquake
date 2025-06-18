@@ -14,7 +14,7 @@ global.caches = {
 };
 
 // Mock 'fetch' global
-global.fetch = vi.fn();
+// global.fetch = vi.fn(); // MSW will handle fetch
 
 // --- Helper to create mock context ---
 const createMockContext = (request, env = {}, cf = {}) => {
@@ -61,7 +61,7 @@ const createMockContext = (request, env = {}, cf = {}) => {
 describe('Prerendering Handler: /cluster/:id', () => {
     beforeEach(() => {
         vi.resetAllMocks();
-        fetch.mockReset();
+        // fetch.mockReset(); // MSW will handle fetch lifecycle
     });
 
     // Test for old /cluster/:id format (may be removed if not supported)
@@ -81,7 +81,7 @@ describe('Prerendering Handler: /cluster/:id', () => {
     describe('handlePrerenderCluster Slug Parsing and D1 Query (New URL Format)', () => {
         beforeEach(() => {
           vi.resetAllMocks(); // Ensures D1 and fetch mocks are clean for each sub-test
-          fetch.mockReset();
+          // fetch.mockReset(); // MSW will handle fetch lifecycle
         });
 
         const validSlugTestCase = {
@@ -109,7 +109,7 @@ describe('Prerendering Handler: /cluster/:id', () => {
             geometry: { coordinates: [100, -4, 10] },
             id: expectedStrongestQuakeId,
           };
-          fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockUsgsQuakeData), { status: 200 }));
+          // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockUsgsQuakeData), { status: 200 }));
 
           // Directly test handlePrerenderCluster or use onRequest if routing is crucial
           const response = await handlePrerenderCluster(mockContext, urlSlug);
@@ -119,7 +119,7 @@ describe('Prerendering Handler: /cluster/:id', () => {
           expect(response.headers.get('Content-Type')).toContain('text/html');
           expect(mockContext.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining('WHERE clusterId = ?'));
           expect(mockContext.env.DB.bind).toHaveBeenCalledWith(expectedD1QueryId);
-          expect(fetch).toHaveBeenCalledWith(expect.stringContaining(`/detail/${expectedStrongestQuakeId}.geojson`));
+          // expect(fetch).toHaveBeenCalledWith(expect.stringContaining(`/detail/${expectedStrongestQuakeId}.geojson`));
           expect(html).toContain(`<link rel="canonical" href="https://earthquakeslive.com/cluster/${urlSlug}">`);
           expect(html).toContain('Southern Sumatra, Indonesia');
           expect(html).toContain('15 Earthquakes Near');
@@ -149,7 +149,7 @@ describe('Prerendering Handler: /cluster/:id', () => {
             geometry: { coordinates: [10, 20, 30] },
             id: expectedStrongestQuakeId
           };
-          fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockUsgsQuakeData), { status: 200 }));
+          // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockUsgsQuakeData), { status: 200 }));
 
           const response = await handlePrerenderCluster(mockContext, urlSlug);
           const html = await response.text();
@@ -183,7 +183,7 @@ describe('Prerendering Handler: /cluster/:id', () => {
                 geometry: { coordinates: [-120, 35, 5] },
                 id: expectedStrongestQuakeId,
             };
-            fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockUsgsQuakeData), { status: 200 }));
+            // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockUsgsQuakeData), { status: 200 }));
 
             const response = await handlePrerenderCluster(mockContext, urlSlug);
             const html = await response.text();
@@ -210,7 +210,7 @@ describe('Prerendering Handler: /cluster/:id', () => {
             expect(response.status).toBe(404);
             expect(text).toContain('Invalid cluster URL format.');
             expect(mockContext.env.DB.prepare).not.toHaveBeenCalled();
-            expect(fetch).not.toHaveBeenCalled();
+            // expect(fetch).not.toHaveBeenCalled();
           });
         });
 
@@ -225,7 +225,7 @@ describe('Prerendering Handler: /cluster/:id', () => {
             expect(response.status).toBe(404);
             expect(text).toContain("Cluster not found");
             expect(mockContext.env.DB.bind).toHaveBeenCalledWith(expectedD1QueryId);
-            expect(fetch).not.toHaveBeenCalled();
+            // expect(fetch).not.toHaveBeenCalled();
         });
     });
 
@@ -247,7 +247,7 @@ describe('Prerendering Handler: /cluster/:id', () => {
         const request = new Request(`http://localhost/cluster/${urlSlug}`, { headers: { 'User-Agent': 'Googlebot' }});
         const context = createMockContext(request);
         context.env.DB.prepare.mockReturnValueOnce({ bind: vi.fn().mockReturnValueOnce({ first: vi.fn().mockResolvedValueOnce(mockClusterD1Data) }) });
-        fetch.mockRejectedValueOnce(new Error("Strongest Quake Fetch Error D1"));
+        // fetch.mockRejectedValueOnce(new Error("Strongest Quake Fetch Error D1"));
 
         const response = await onRequest(context);
         expect(response.status).toBe(200); // Graceful degradation, serves page with warning

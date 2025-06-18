@@ -75,15 +75,15 @@ export const EarthquakeDataProvider = ({ children }) => {
                 if (isValidFeatureArray(data)) {
                     return { data, source: 'D1', error: null };
                 } else {
-                    console.warn(`D1 returned invalid feature array for ${timeWindow}:`, data);
+                    // console.warn(`D1 returned invalid feature array for ${timeWindow}:`, data);
                     return { data: null, source: 'D1_failed', error: 'D1 returned invalid feature array.' };
                 }
             }
             const errorText = await response.text();
-            console.warn(`Failed to fetch from D1 for ${timeWindow} or invalid response: ${response.status} ${errorText}`);
+            // console.warn(`Failed to fetch from D1 for ${timeWindow} or invalid response: ${response.status} ${errorText}`);
             return { data: null, source: 'D1_failed', error: `Failed to fetch from D1: ${response.status} ${errorText}` };
         } catch (error) {
-            console.error(`Error fetching from D1 for ${timeWindow}:`, error);
+            // console.error(`Error fetching from D1 for ${timeWindow}:`, error);
             return { data: null, source: 'D1_failed', error: error.message };
         }
     };
@@ -113,14 +113,14 @@ export const EarthquakeDataProvider = ({ children }) => {
         // --- Daily Data Fetching ---
         const d1DailyResponse = await fetchFromD1('day');
         if (d1DailyResponse.source === 'D1') {
-            console.log("Successfully fetched daily data from D1");
+            // console.log("Successfully fetched daily data from D1");
             dispatch({
                 type: actionTypes.DAILY_DATA_PROCESSED,
                 payload: { features: d1DailyResponse.data, metadata: null, fetchTime: nowForFiltering, dataSource: 'D1' }
             });
             dailyDataSource = 'D1';
         } else {
-            console.warn("Failed to fetch daily data from D1, falling back to USGS.", d1DailyResponse.error);
+            // console.warn("Failed to fetch daily data from D1, falling back to USGS.", d1DailyResponse.error);
             dailyErrorMsg = `D1 Error (Daily): ${d1DailyResponse.error || 'Unknown D1 error'}. `;
             try {
                 const usgsDailyRes = await fetchUsgsData(USGS_API_URL_DAY);
@@ -143,14 +143,14 @@ export const EarthquakeDataProvider = ({ children }) => {
         // --- Weekly Data Fetching ---
         const d1WeeklyResponse = await fetchFromD1('week');
         if (d1WeeklyResponse.source === 'D1') {
-            console.log("Successfully fetched weekly data from D1");
+            // console.log("Successfully fetched weekly data from D1");
             dispatch({
                 type: actionTypes.WEEKLY_DATA_PROCESSED,
                 payload: { features: d1WeeklyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' }
             });
             weeklyDataSource = 'D1';
         } else {
-            console.warn("Failed to fetch weekly data from D1, falling back to USGS.", d1WeeklyResponse.error);
+            // console.warn("Failed to fetch weekly data from D1, falling back to USGS.", d1WeeklyResponse.error);
             weeklyErrorMsg = `D1 Error (Weekly): ${d1WeeklyResponse.error || 'Unknown D1 error'}. `;
             try {
                 const usgsWeeklyRes = await fetchUsgsData(USGS_API_URL_WEEK);
@@ -260,23 +260,25 @@ export const EarthquakeDataProvider = ({ children }) => {
 
         const d1MonthlyResponse = await fetchFromD1('month');
         if (d1MonthlyResponse.source === 'D1') {
-            console.log("Successfully fetched monthly data from D1");
+            // console.log("Successfully fetched monthly data from D1");
             dispatch({
                 type: actionTypes.MONTHLY_DATA_PROCESSED,
                 payload: { features: d1MonthlyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' }
             });
             monthlyDataSource = 'D1';
         } else {
-            console.warn("Failed to fetch monthly data from D1, falling back to USGS.", d1MonthlyResponse.error);
+            // console.warn("Failed to fetch monthly data from D1, falling back to USGS.", d1MonthlyResponse.error);
             monthlyFetchError = `D1 Error (Monthly): ${d1MonthlyResponse.error || 'Unknown D1 error'}. `;
             try {
                 const usgsMonthlyRes = await fetchUsgsData(USGS_API_URL_MONTH);
+
                 if (usgsMonthlyRes.error || !isValidGeoJson(usgsMonthlyRes)) {
                     monthlyFetchError += `USGS Error (Monthly): ${usgsMonthlyRes?.error?.message || 'Monthly USGS data features missing or invalid.'}`;
                 } else {
+                    const payload = { features: usgsMonthlyRes.features, fetchTime: nowForFiltering, dataSource: 'USGS' };
                     dispatch({
                         type: actionTypes.MONTHLY_DATA_PROCESSED,
-                        payload: { features: usgsMonthlyRes.features, fetchTime: nowForFiltering, dataSource: 'USGS' }
+                        payload: payload
                     });
                     monthlyDataSource = 'USGS';
                     monthlyFetchError = null; // Clear D1 error if USGS succeeds
