@@ -1,8 +1,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { handlePrerenderCluster } from './cluster-detail.js';
-
-// Mock global fetch
-// global.fetch = vi.fn(); // MSW will handle fetch
+import { server } from '../../../src/mocks/server.js'; // MSW server
+import { http, HttpResponse } from 'msw';       // MSW http utilities
 
 // Mock D1 database interaction
 const mockD1First = vi.fn();
@@ -28,7 +27,7 @@ describe('handlePrerenderCluster', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // fetch.mockReset(); // MSW will handle fetch lifecycle
+    // MSW will handle fetch lifecycle, server.resetHandlers() is in setupTests.js or called by vi.clearAllMocks()
     mockD1First.mockReset();
     mockD1Bind.mockClear();
     mockD1Prepare.mockClear();
@@ -69,19 +68,17 @@ describe('handlePrerenderCluster', () => {
       id: eventId1,
       geometry: { type: 'Point', coordinates: [0,0]}
     };
-    // fetch.mockResolvedValueOnce(new Response(JSON.stringify(usgsResponseData)));
 
     const context = createMockContext();
     const response = await handlePrerenderCluster(context, validSlug1);
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('Content-Type')).toBe('text/html'); // Adjusted
-    expect(mockD1Prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT title, description, strongestQuakeId, locationName, maxMagnitude, earthquakeIds FROM earthquake_clusters WHERE clusterId = ?')); // Adjusted SQL
+    expect(response.headers.get('Content-Type')).toBe('text/html');
+    expect(mockD1Prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT title, description, strongestQuakeId, locationName, maxMagnitude, earthquakeIds FROM earthquake_clusters WHERE clusterId = ?'));
     expect(mockD1Bind).toHaveBeenCalledWith(d1QueryId1);
-    // expect(fetch).toHaveBeenCalledWith(expect.stringContaining(`/detail/${eventId1}.geojson`));
 
-    expect(html).toContain(`<title>${d1ResponseData.title}</title>`); // Adjusted: removed " | Earthquakes Live"
+    expect(html).toContain(`<title>${d1ResponseData.title}</title>`);
     expect(html).toContain(`<meta name="description" content="${d1ResponseData.description}">`);
     expect(html).toContain(`<link rel="canonical" href="https://earthquakeslive.com/cluster/${validSlug1}">`);
     expect(html).toContain(`<h1>${d1ResponseData.title}</h1>`);
@@ -110,7 +107,6 @@ describe('handlePrerenderCluster', () => {
       id: eventId2,
       geometry: { type: 'Point', coordinates: [0,0]}
     };
-    // fetch.mockResolvedValueOnce(new Response(JSON.stringify(usgsResponseData)));
 
     const context = createMockContext();
     const response = await handlePrerenderCluster(context, validSlug2);
@@ -183,8 +179,12 @@ describe('handlePrerenderCluster', () => {
   it('7. USGS Fetch Fails for Strongest Quake (e.g., network error)', async () => {
     const d1ResponseData = { strongestQuakeId: eventId1, earthquakeIds: '[]', title: 'Test', description: 'Test' };
     mockD1First.mockResolvedValueOnce(d1ResponseData);
-    const fetchError = new Error('USGS Network Down');
-    // fetch.mockRejectedValueOnce(fetchError);
+
+    server.use(
+      http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson', () => {
+        return HttpResponse.error(); // Simulates network error
+      })
+    );
 
     const context = createMockContext();
     const response = await handlePrerenderCluster(context, validSlug1);
@@ -192,14 +192,20 @@ describe('handlePrerenderCluster', () => {
 
     expect(response.status).toBe(200); // Page still renders with fallback
     expect(html).toContain('Further details about the most significant event in this cluster are currently unavailable.');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(`Exception fetching strongest quake ${eventId1}: ${fetchError.message}`); // Adjusted
+    expect(consoleErrorSpy).toHaveBeenCalledWith(`Exception fetching strongest quake ${eventId1}: Failed to fetch`);
   });
 
   it('8. USGS Data for Strongest Quake Incomplete (missing place)', async () => {
     const d1ResponseData = { strongestQuakeId: eventId1, earthquakeIds: '[]', title: 'Test', description: 'Test' };
     mockD1First.mockResolvedValueOnce(d1ResponseData);
-    const usgsIncompleteData = { properties: { mag: 5.0 /* place missing */ }, id: eventId1, geometry: {type: 'Point', coordinates: [0,0]}};
-    // fetch.mockResolvedValueOnce(new Response(JSON.stringify(usgsIncompleteData)));
+
+    server.use(
+      http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson', () => {
+        return HttpResponse.json(
+          { properties: { mag: 5.0 /* place missing */ }, id: 'us123', geometry: {type: 'Point', coordinates: [0,0]}}
+        );
+      })
+    );
 
     const context = createMockContext();
     const response = await handlePrerenderCluster(context, validSlug1);
@@ -207,7 +213,7 @@ describe('handlePrerenderCluster', () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain('Further details about the most significant event in this cluster are currently unavailable.');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(`Essential place or mag missing for strongest quake ${eventId1}`); // Adjusted
+    expect(consoleErrorSpy).toHaveBeenCalledWith(`Essential place or mag missing for strongest quake ${eventId1}`);
   });
 
   it('9. Error Parsing earthquakeIds from D1', async () => {

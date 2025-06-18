@@ -1,6 +1,8 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { handleUsgsProxy } from '../routes/api/usgs-proxy.js';
 import { upsertEarthquakeFeaturesToD1 } from '../../src/utils/d1Utils.js';
+import { server } from '../../src/mocks/server.js'; // Adjust path as necessary
+import { http, HttpResponse } from 'msw';
 
 // Mock d1Utils.js
 vi.mock('../../src/utils/d1Utils.js', () => ({
@@ -52,8 +54,7 @@ describe('handleUsgsProxy', () => {
       // No next() needed for direct handler tests
     };
 
-    // Reset global fetch to a default successful response
-    // global.fetch.mockResolvedValue(new Response(JSON.stringify({ data: 'default mock response' }), { status: 200, headers: { 'Content-Type': 'application/json' }}));
+    // MSW will handle fetch, server.resetHandlers() is in setupTests.js or called by vi.clearAllMocks()
     mockCache.put.mockResolvedValue(undefined); // Ensure cache put is successful by default
 
 
@@ -88,10 +89,6 @@ describe('handleUsgsProxy', () => {
     const mockDbInstance = { prepare: vi.fn() }; // Mock D1
     mockContext.env.DB = mockDbInstance;
 
-    // global.fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockApiResponseData), {
-    //   status: 200,
-    //   headers: { 'Content-Type': 'application/json' }
-    // }));
     mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
 
     const response = await handleUsgsProxy(mockContext);
@@ -99,8 +96,6 @@ describe('handleUsgsProxy', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(mockApiResponseData);
-    // expect(global.fetch).toHaveBeenCalledWith(currentTestApiUrl, { headers: { "User-Agent": "EarthquakesLive/1.0 (+https://earthquakeslive.com)" } });
-    // Adjusting to expect the URL string, as that's what the mock is reporting.
     expect(mockCache.match).toHaveBeenCalledWith(mockContext.request.url);
     expect(mockCache.put).toHaveBeenCalled();
 
@@ -123,7 +118,6 @@ describe('handleUsgsProxy', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(cachedData);
     expect(response.headers.get('X-Cache-Hit')).toBe('true');
-    // expect(global.fetch).not.toHaveBeenCalled();
     expect(mockCache.put).not.toHaveBeenCalled();
     expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
   });
@@ -137,7 +131,6 @@ describe('handleUsgsProxy', () => {
     }
 
     const fetchedData = { data: 'some data' };
-    // global.fetch.mockResolvedValueOnce(new Response(JSON.stringify(fetchedData), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
 
     const response = await handleUsgsProxy(mockContext);
@@ -176,7 +169,6 @@ describe('handleUsgsProxy', () => {
   it('should handle upstream API error (500)', async () => {
     setTestApiUrl('https://external.api/upstream_error');
     const errorResponse = { error: "Upstream Server Error" };
-    // global.fetch.mockResolvedValueOnce(new Response(JSON.stringify(errorResponse), { status: 500, headers: { 'Content-Type': 'application/json' }}));
     mockCache.match.mockResolvedValueOnce(undefined);
 
     const response = await handleUsgsProxy(mockContext);
@@ -187,14 +179,13 @@ describe('handleUsgsProxy', () => {
 
   it('should handle network error when fetching from upstream', async () => {
     setTestApiUrl('https://external.api/network_failure');
-    const networkError = new TypeError('Fetch failed');
-    // global.fetch.mockRejectedValueOnce(networkError);
+    const networkError = new TypeError('Fetch failed'); // This will be simulated by MSW's HttpResponse.error()
     mockCache.match.mockResolvedValueOnce(undefined);
 
     const response = await handleUsgsProxy(mockContext);
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ message: 'USGS API fetch failed: Fetch failed', source: 'usgs-proxy-handler' });
-    expect(consoleErrorSpy).toHaveBeenCalledWith(`[usgs-proxy-handler] Fetch or JSON parse error for ${currentTestApiUrl}:`, "Fetch failed", "TypeError");
+    expect(await response.json()).toEqual({ message: 'USGS API fetch failed: Failed to fetch', source: 'usgs-proxy-handler' });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(`[usgs-proxy-handler] Fetch or JSON parse error for ${currentTestApiUrl}:`, "Failed to fetch", "TypeError");
   });
 
   describe('D1 Interaction Tests', () => {
@@ -204,11 +195,11 @@ describe('handleUsgsProxy', () => {
     });
 
     it('should call D1 upsert when DB is configured and features are present', async () => {
-      const mockFeatures = [{ id: 'q1', type: 'Feature' }];
-      // global.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ features: mockFeatures }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      const mockFeatures = [{ id: 'default_d1_feat', type: 'Feature' }]; // Matches default MSW handler
       const mockDb = { prepare: vi.fn() };
       mockContext.env.DB = mockDb;
 
+      // MSW will use the default handler for 'https://external.api/d1_interaction'
       await handleUsgsProxy(mockContext);
       await mockContext.waitUntil.mock.calls[0]?.value; // Wait for D1 upsert
 
@@ -216,9 +207,8 @@ describe('handleUsgsProxy', () => {
     });
 
     it('should NOT call D1 upsert when DB is not configured', async () => {
-      // global.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ features: [{id: 'q2'}] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       mockContext.env.DB = undefined;
-
+      // MSW will use the default handler for 'https://external.api/d1_interaction'
       await handleUsgsProxy(mockContext);
       // Check if waitUntil was called with a promise that involves D1.
       // If D1 is not configured, the specific promise for D1 shouldn't be added.
@@ -231,37 +221,48 @@ describe('handleUsgsProxy', () => {
     });
 
     it('should NOT call D1 upsert when features are missing or empty', async () => {
-      // global.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ features: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       const mockDb = { prepare: vi.fn() };
       mockContext.env.DB = mockDb;
 
+      // Test case 1: features array is empty
+      server.use(
+        http.get('https://external.api/d1_interaction', () => {
+          return HttpResponse.json({ features: [] });
+        })
+      );
       await handleUsgsProxy(mockContext);
       await Promise.all(mockContext.waitUntil.mock.calls.map(c => c[0]));
       expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
 
       upsertEarthquakeFeaturesToD1.mockClear();
-      // global.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: 'no features key' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       mockCache.match.mockResolvedValueOnce(undefined); // reset for this call
+
+      // Test case 2: "features" key is missing
+      server.use(
+        http.get('https://external.api/d1_interaction', () => {
+          return HttpResponse.json({ data: 'no features key' });
+        })
+      );
       await handleUsgsProxy(mockContext);
       await Promise.all(mockContext.waitUntil.mock.calls.map(c => c[0]));
       expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
     });
 
     it('should handle D1 error gracefully and log it', async () => {
-      const mockFeatures = [{ id: 'q3', type: 'Feature' }];
-      // global.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ features: mockFeatures }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      const mockFeatures = [{ id: 'default_d1_feat', type: 'Feature' }]; // Matches default MSW handler
       const mockDb = { prepare: vi.fn() };
       mockContext.env.DB = mockDb;
       const d1Error = new Error('D1 Fails');
       upsertEarthquakeFeaturesToD1.mockRejectedValueOnce(d1Error);
 
+      // MSW will use the default handler for 'https://external.api/d1_interaction'
       const response = await handleUsgsProxy(mockContext); // client response should be unaffected
       await mockContext.waitUntil.mock.calls[0]?.value; // Wait for D1 upsert attempt
 
       expect(response.status).toBe(200); // Still successful for client
       expect(await response.json()).toEqual({ features: mockFeatures });
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        `Error during D1 upsert in handleUsgsProxy:`, // Adjusted message
+        `Error during D1 upsert in handleUsgsProxy:`,
         d1Error
       );
     });
@@ -270,7 +271,6 @@ describe('handleUsgsProxy', () => {
   it('should handle cache.put failure gracefully and log it', async () => {
     setTestApiUrl('https://external.api/cache_put_fail');
     const apiResponseData = { data: "important data" };
-    // global.fetch.mockResolvedValueOnce(new Response(JSON.stringify(apiResponseData), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
     const cachePutError = new Error('Cache Full');
     mockCache.put.mockRejectedValueOnce(cachePutError);
@@ -281,15 +281,14 @@ describe('handleUsgsProxy', () => {
     expect(response.status).toBe(200); // Client response unaffected
     expect(await response.json()).toEqual(apiResponseData);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      `Failed to cache response for ${currentTestApiUrl}: Error - Cache Full`, // Adjusted: uses targetApiUrl and includes error message string
+      `Failed to cache response for ${currentTestApiUrl}: Error - Cache Full`,
       cachePutError
     );
   });
 
   it('should return 500 and log if upstream responds 200 OK with non-JSON content', async () => {
     setTestApiUrl('https://external.api/html_response');
-    const htmlBody = "<html><body>Not JSON</body></html>";
-    // global.fetch.mockResolvedValueOnce(new Response(htmlBody, { status: 200, headers: { 'Content-Type': 'text/html' } }));
+    const htmlBody = "<html><body>Not JSON</body></html>"; // This will be returned by MSW
     mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
 
     const response = await handleUsgsProxy(mockContext);
