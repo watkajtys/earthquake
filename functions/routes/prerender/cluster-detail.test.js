@@ -226,7 +226,7 @@ describe('handlePrerenderCluster', () => {
     expect(response.status).toBe(500);
     expect(await response.text()).toBe('Error processing cluster data.');
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      `[prerender-cluster] Error parsing earthquakeIds for D1 Query ID ${d1QueryId1}: Unexpected token h in JSON at position 1` // Adjusted
+      `[prerender-cluster] Error parsing earthquakeIds for D1 Query ID ${d1QueryId1}: Unexpected token 'h', "this is not"... is not valid JSON`
     );
   });
 });
