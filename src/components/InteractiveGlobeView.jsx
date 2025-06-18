@@ -93,7 +93,7 @@ const InteractiveGlobeView = ({
     tectonicPlatesGeoJson,
     highlightedQuakeId,
     activeClusters = [],
-    atmosphereColor = "rgba(100,100,255,0.3)",
+    atmosphereColor = "#6464FF",
     defaultFocusLat = 20,
     defaultFocusLng = 0,
     defaultFocusAltitude = 2.5,
