@@ -5,7 +5,7 @@ import { handleQuakeDetailPrerender } from './quake-detail.js';
 // vi.mock('../../utils/xml-utils.js', () => ({ escapeXml: (str) => str.replace(/&/g, '&amp;') }));
 
 // Mock global fetch
-global.fetch = vi.fn();
+// global.fetch = vi.fn(); // MSW will handle fetch
 
 const createMockContext = (requestProps = {}, envProps = {}) => {
   return {
@@ -20,7 +20,7 @@ describe('handleQuakeDetailPrerender', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    fetch.mockReset();
+    // fetch.mockReset(); // MSW will handle fetch lifecycle
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -75,7 +75,7 @@ describe('handleQuakeDetailPrerender', () => {
           title: 'M 5.8 - Párga, Greece Region', // Pre-existing title
         },
       };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+      // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
       const context = createMockContext();
 
       const response = await handleQuakeDetailPrerender(context, eventId);
@@ -101,7 +101,7 @@ describe('handleQuakeDetailPrerender', () => {
       delete mockData.properties.title;
       mockData.id = eventId;
 
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+      // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
       const context = createMockContext();
 
       const response = await handleQuakeDetailPrerender(context, eventId);
@@ -121,7 +121,7 @@ describe('handleQuakeDetailPrerender', () => {
   describe('USGS Fetch Failures', () => {
     it('should return 404 if USGS fetch returns 404', async () => {
       const eventId = 'usTest404';
-      fetch.mockResolvedValueOnce(new Response('Not Found', { status: 404 }));
+      // fetch.mockResolvedValueOnce(new Response('Not Found', { status: 404 }));
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
 
@@ -133,7 +133,7 @@ describe('handleQuakeDetailPrerender', () => {
 
     it('should return 500 if USGS fetch returns 500 server error', async () => {
       const eventId = 'usTest500';
-      fetch.mockResolvedValueOnce(new Response('Server Error', { status: 500 }));
+      // fetch.mockResolvedValueOnce(new Response('Server Error', { status: 500 }));
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
 
@@ -146,7 +146,7 @@ describe('handleQuakeDetailPrerender', () => {
     it('should return 500 if USGS fetch has network error', async () => {
       const eventId = 'usTestNetFail';
       const networkError = new Error('Network Failure');
-      fetch.mockRejectedValueOnce(networkError);
+      // fetch.mockRejectedValueOnce(networkError);
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
 
@@ -159,7 +159,7 @@ describe('handleQuakeDetailPrerender', () => {
 
   it('should return 500 if USGS response is 200 OK but not JSON', async () => {
     const eventId = 'usTestHtml';
-    fetch.mockResolvedValueOnce(new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } }));
+    // fetch.mockResolvedValueOnce(new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } }));
     const context = createMockContext();
     const response = await handleQuakeDetailPrerender(context, eventId);
 
@@ -173,7 +173,7 @@ describe('handleQuakeDetailPrerender', () => {
     it('should return 500 if properties is null', async () => {
       const eventId = 'usTestNoProps';
       const mockData = { ...baseMockGeoJson, properties: null };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+      // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
 
@@ -185,7 +185,7 @@ describe('handleQuakeDetailPrerender', () => {
     it('should return 500 if geometry is null', async () => {
       const eventId = 'usTestNoGeom';
       const mockData = { ...baseMockGeoJson, geometry: null };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+      // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
 
@@ -204,7 +204,7 @@ describe('handleQuakeDetailPrerender', () => {
         if (field === 'url') delete mockData.properties.detail;
 
 
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+        // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
         const context = createMockContext();
         const response = await handleQuakeDetailPrerender(context, eventId);
 
@@ -220,7 +220,7 @@ describe('handleQuakeDetailPrerender', () => {
       delete mockData.properties.detail;
       mockData.properties.url = "https://some.usgs.gov/event/page";
       mockData.id = eventId;
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+      // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
       expect(response.status).toBe(200);
@@ -235,7 +235,7 @@ describe('handleQuakeDetailPrerender', () => {
       // Use raw ampersand here, as it will be escaped by the HTML generation
       mockData.properties.detail = `https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=${eventId}&format=geojson`;
       mockData.id = eventId;
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+      // fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
       expect(response.status).toBe(200);

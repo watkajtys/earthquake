@@ -9,7 +9,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 // --- Mocks for Cloudflare Environment ---
 
 // Mock 'fetch' global - can be removed if no remaining tests use fetch
-global.fetch = vi.fn();
+// global.fetch = vi.fn(); // MSW will handle fetch
 
 
 // --- Helper to create mock context ---
@@ -63,7 +63,7 @@ describe('Helper Functions from [[catchall]].js', () => {
 describe('onRequest (Main Router Remaining Tests)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    fetch.mockReset();
+    // fetch.mockReset(); // MSW will handle fetch lifecycle
   });
 
   // -- Prerendering Handlers --
@@ -99,7 +99,7 @@ describe('onRequest (Main Router Remaining Tests)', () => {
       const context = createMockContext(request);
       await onRequest(context);
       expect(context.next).toHaveBeenCalled();
-      expect(fetch).not.toHaveBeenCalled(); // Should not try to proxy if it's a normal SPA route
+      // expect(fetch).not.toHaveBeenCalled(); // Should not try to proxy if it's a normal SPA route
     });
 
     it('should log unhandled path and attempt ASSETS.fetch if context.next is not defined and not an API/Sitemap/Prerender path', async () => {
