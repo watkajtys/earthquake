@@ -188,12 +188,13 @@ export const EarthquakeDataProvider = ({ children }) => {
     useEffect(() => {
         let isMounted = true;
         const initialLoadSequence = async () => {
-            if (!isMounted) return;
+            if (!isMounted) {
+              return;
+            }
             // INITIAL_LOADING_MESSAGES is part of initialState from utils, so no need to dispatch SET_LOADING_MESSAGES here
             // if it's correctly set in the imported initialState.
             // dispatch({ type: actionTypes.SET_LOADING_MESSAGES, payload: INITIAL_LOADING_MESSAGES }); // This might be redundant
             dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
-
             await performDataFetch(true);
 
             if (isMounted) {
@@ -213,11 +214,13 @@ export const EarthquakeDataProvider = ({ children }) => {
         }
 
         let isMounted = true;
-        const intervalId = setInterval(() => {
+        const intervalCallback = () => {
             if (isMounted) {
                 performDataFetch(false);
             }
-        }, REFRESH_INTERVAL_MS);
+        };
+
+        const intervalId = setInterval(intervalCallback, REFRESH_INTERVAL_MS);
 
         return () => {
             isMounted = false;
