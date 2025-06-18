@@ -37,32 +37,46 @@ export const handlers = [
   http.get('https://earthquake.usgs.gov/fdsnws/event/1/query', ({ request }) => {
     const url = new URL(request.url);
     const eventId = url.searchParams.get('eventid');
+    const format = url.searchParams.get('format');
 
-    if (eventId === 'cluster1') {
-      return HttpResponse.json({ properties: { place: "Test Place", mag: 5.0 } }, { status: 200 });
-    }
-    if (eventId === 'us7000mfp9') {
-      return HttpResponse.json({ properties: { place: "Southern Sumatra, Indonesia", mag: 5.8 } }, { status: 200 });
-    }
-    if (eventId === 'ci12345') {
-      return HttpResponse.json({ properties: { place: "California", mag: 4.2 } }, { status: 200 });
-    }
-    if (eventId === 'usMissingPlace') {
-      return HttpResponse.json({ properties: { mag: 5.0 } }, { status: 200 });
-    }
-    if (eventId === 'usMissingMag') {
-      return HttpResponse.json({ properties: { place: "Some Place" } }, { status: 200 });
-    }
-    if (eventId === 'validEntry1') {
-      return HttpResponse.json({ properties: { place: "Valid Place", mag: 5.0 } }, { status: 200 });
-    }
-    if (eventId === 'validEntry2') {
-      return HttpResponse.json({ properties: { place: "Another Valid Place", mag: 4.0 } }, { status: 200 });
-    }
-    if (eventId === 'usgs_fetch_error_test') {
-      return new HttpResponse("USGS Error", { status: 500 });
+    // Specific handlers for sitemaps.clusters.test.js
+    if (format === 'geojson') {
+      if (eventId === 'cluster1') {
+        console.log(`[MSW] Matched sitemaps.clusters.test.js: eventid=cluster1`);
+        return HttpResponse.json({ properties: { place: "Test Place", mag: 5.0 } }, { status: 200 });
+      }
+      if (eventId === 'us7000mfp9') {
+        console.log(`[MSW] Matched sitemaps.clusters.test.js: eventid=us7000mfp9`);
+        // This will be overridden by server.use() in the specific test for failure cases
+        return HttpResponse.json({ properties: { place: "Southern Sumatra, Indonesia", mag: 5.8 } }, { status: 200 });
+      }
+      if (eventId === 'ci12345') {
+        console.log(`[MSW] Matched sitemaps.clusters.test.js: eventid=ci12345`);
+        return HttpResponse.json({ properties: { place: "California", mag: 4.2 } }, { status: 200 });
+      }
+      if (eventId === 'usMissingPlace') {
+        console.log(`[MSW] Matched sitemaps.clusters.test.js: eventid=usMissingPlace`);
+        return HttpResponse.json({ properties: { mag: 5.0 } }, { status: 200 });
+      }
+      if (eventId === 'usMissingMag') {
+        console.log(`[MSW] Matched sitemaps.clusters.test.js: eventid=usMissingMag`);
+        return HttpResponse.json({ properties: { place: "Some Place" } }, { status: 200 });
+      }
+      if (eventId === 'validEntry1') {
+        console.log(`[MSW] Matched sitemaps.clusters.test.js: eventid=validEntry1`);
+        return HttpResponse.json({ properties: { place: "Valid Place", mag: 5.0 } }, { status: 200 });
+      }
+      if (eventId === 'validEntry2') {
+        console.log(`[MSW] Matched sitemaps.clusters.test.js: eventid=validEntry2`);
+        return HttpResponse.json({ properties: { place: "Another Valid Place", mag: 4.0 } }, { status: 200 });
+      }
+      if (eventId === 'usgs_fetch_error_test') { // Specific for a test that needs a general USGS error for an ID
+        console.log(`[MSW] Matched sitemaps.clusters.test.js: eventid=usgs_fetch_error_test`);
+        return new HttpResponse("USGS Error", { status: 500 });
+      }
     }
 
+    // Existing handlers for other tests (make sure they don't conflict or are more specific)
     // Handlers for prerender-quake.integration.test.js
     if (eventId === 'usgs_event_abc123') {
       return HttpResponse.json(

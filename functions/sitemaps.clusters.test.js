@@ -50,6 +50,7 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
     beforeEach(() => {
         vi.resetAllMocks();
         // MSW will handle fetch lifecycle, server.resetHandlers() is in setupTests.js
+        // fetchMock.resetMocks(); // Ensure fetch mocks are clean before each test if still using any.
         mockCache.match.mockReset();
         mockCache.put.mockReset();
     });
@@ -58,6 +59,7 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
         const mockD1Results = [
             { clusterId: "overview_cluster_cluster1_10", updatedAt: new Date().toISOString() },
         ];
+        // MSW will handle the fetch for 'cluster1'
         const request = new Request('http://localhost/sitemap-clusters.xml');
         const context = createMockContext(request);
         context.env.DB.all.mockResolvedValueOnce({ results: mockD1Results, success: true });
@@ -70,6 +72,7 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
         // Check for the new URL format
         expect(text).toContain('https://earthquakeslive.com/cluster/10-quakes-near-test-place-up-to-m5.0-cluster1');
         expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT clusterId, updatedAt FROM ClusterDefinitions"));
+        // No direct fetch call count to check here as MSW handles it.
     });
 
     it('/sitemap-clusters.xml should handle DB not configured', async () => {
@@ -114,6 +117,7 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
                 { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
             ];
             mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
+            // MSW handlers for us7000mfp9 and ci12345 are defined in handlers.js
 
             const response = await handleClustersSitemapRequest(mockContext);
             const xml = await response.text();
@@ -123,13 +127,14 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
             expect(xml).toContain('<lastmod>2023-01-01T00:00:00.000Z</lastmod>');
             expect(xml).toContain('<loc>https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345</loc>');
             expect(xml).toContain('<lastmod>2023-01-02T00:00:00.000Z</lastmod>');
+            // No direct fetch call count to check here.
         });
 
         it('should skip entries if D1 clusterId parsing fails and log a warning', async () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
             const d1Results = [
                 { clusterId: "invalid_format_id", updatedAt: "2023-01-01T00:00:00Z" },
-                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
+                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" }, // ci12345 will be fetched by MSW
             ];
             mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -140,6 +145,7 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
             expect(xml).not.toContain('invalid_format_id');
             expect(xml).toContain('https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345');
             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to parse D1 clusterId: invalid_format_id'));
+            // No fetch call for invalid_format_id. One for ci12345.
             consoleWarnSpy.mockRestore();
         });
 
@@ -147,7 +153,7 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
             const d1Results = [
                 { clusterId: "overview_cluster_us7000mfp9_15", updatedAt: "2023-01-01T00:00:00Z" }, // This will fail due to server.use
-                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" }, // This will succeed
+                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" }, // This will succeed via MSW default or server.use override
             ];
             mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
 
@@ -174,14 +180,15 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
             expect(xml).toContain('https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345'); // ci12345 should be present
             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('USGS fetch failed for us7000mfp9: 500'));
             consoleWarnSpy.mockRestore();
+            // Fetch count is implicitly handled by MSW and server.use().
         });
 
         it('should skip entries if USGS response is missing place or mag and log a warning', async () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
             const d1Results = [
-                { clusterId: "overview_cluster_usMissingPlace_10", updatedAt: "2023-01-03T00:00:00Z" },
-                { clusterId: "overview_cluster_usMissingMag_8", updatedAt: "2023-01-04T00:00:00Z" },
-                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
+                { clusterId: "overview_cluster_usMissingPlace_10", updatedAt: "2023-01-03T00:00:00Z" }, // MSW provides missing place
+                { clusterId: "overview_cluster_usMissingMag_8", updatedAt: "2023-01-04T00:00:00Z" },   // MSW provides missing mag
+                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },       // MSW provides full data
             ];
             mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
 
@@ -196,12 +203,13 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Missing or invalid locationName for usMissingPlace'));
             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Missing or invalid maxMagnitude for usMissingMag'));
             consoleWarnSpy.mockRestore();
+            // Fetch count is implicitly handled by MSW.
         });
 
         it('should skip entries with invalid updatedAt date format from D1 and log a warning', async () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
             const d1Results = [
-                { clusterId: "overview_cluster_validEntry1_10", updatedAt: "2023-01-01T00:00:00Z" },
+                { clusterId: "overview_cluster_validEntry1_10", updatedAt: "2023-01-01T00:00:00Z" }, // MSW will handle validEntry1
                 { clusterId: "overview_cluster_invalidDate_5", updatedAt: "not-a-real-date" },
             ];
             mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
@@ -216,12 +224,13 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
             expect(xml).not.toContain('invalidDate_5');
             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid 'updated' date format for eventId invalidDate (raw overview_cluster_invalidDate_5): not-a-real-date"));
             consoleWarnSpy.mockRestore();
+            // One fetch for validEntry1.
         });
 
         it('should skip entries missing clusterId or updatedAt from D1 and log a warning', async () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
             const d1Results = [
-                { clusterId: "overview_cluster_validEntry2_8", updatedAt: "2023-02-01T00:00:00Z" },
+                { clusterId: "overview_cluster_validEntry2_8", updatedAt: "2023-02-01T00:00:00Z" }, // MSW for validEntry2
                 { clusterId: null, updatedAt: "2023-02-02T00:00:00Z" },
                 { clusterId: "overview_cluster_missingUpdate_3", updatedAt: undefined },
             ];
@@ -246,6 +255,7 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
             );
             expect(consoleWarnSpy).toHaveBeenCalledTimes(2);
             consoleWarnSpy.mockRestore();
+            // One fetch for validEntry2.
         });
     });
 });
