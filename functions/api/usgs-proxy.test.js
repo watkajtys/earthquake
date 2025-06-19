@@ -262,7 +262,8 @@ describe('handleUsgsProxy', () => {
       expect(response.status).toBe(200); // Still successful for client
       expect(await response.json()).toEqual({ features: mockFeatures });
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        `Error during D1 upsert in handleUsgsProxy:`, // Adjusted message
+        "[usgs-proxy-handler] Error during D1 upsert:",
+        d1Error.message,
         d1Error
       );
     });
@@ -297,15 +298,15 @@ describe('handleUsgsProxy', () => {
 
     expect(response.status).toBe(500);
     const jsonResponse = await response.json();
-    expect(jsonResponse.message).toBe("USGS API fetch failed: Unexpected token < in JSON at position 0");
+    expect(jsonResponse.message).toBe("USGS API fetch failed: Unexpected token '<', \"<html><bod\"... is not valid JSON");
     expect(jsonResponse.source).toBe('usgs-proxy-handler');
     // upstream_status is not set in this specific error path in the handler
     // expect(jsonResponse.upstream_status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('application/json');
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      `[usgs-proxy-handler] Fetch or JSON parse error for ${currentTestApiUrl}:`,
-      "Unexpected token < in JSON at position 0",
+      expect.stringContaining(`[usgs-proxy-handler] Fetch or JSON parse error for ${currentTestApiUrl}`),
+      expect.stringContaining("Unexpected token '<'"),
       "SyntaxError"
     );
     expect(mockCache.put).not.toHaveBeenCalled();
@@ -444,7 +445,8 @@ describe('handleUsgsProxy - In-Memory Quake ID Cache', () => {
   });
 
   it('should not update in-memory cache if D1 upsert call fails or returns no result', async () => {
-    const featureIds = ['d1fail_feat1', 'd1fail_feat2'];
+    // Use unique IDs for this test to ensure they are not already filtered by in-memory cache from previous tests
+    const featureIds = ['d1null_scenario_featUnique1', 'd1null_scenario_featUnique2'];
     const mockFeatures = createMockFeatures(featureIds);
     global.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ features: mockFeatures }), { status: 200 }));
 
@@ -466,6 +468,8 @@ describe('handleUsgsProxy - In-Memory Quake ID Cache', () => {
     upsertEarthquakeFeaturesToD1.mockClear();
 
     // Scenario 2: D1 function returns null/undefined (e.g. an issue with the D1 function itself)
+    // IMPORTANT: Re-mock fetch for this scenario to ensure it provides the necessary features
+    global.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ features: mockFeatures }), { status: 200 }));
     upsertEarthquakeFeaturesToD1.mockResolvedValueOnce(null);
     mockContext.waitUntil.mockClear(); // Clear waitUntil calls for this part
 

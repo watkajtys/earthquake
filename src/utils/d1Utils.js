@@ -69,8 +69,10 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
       operations.push(stmt.bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature_string, retrieved_at));
       // Awaiting each individually for now to match original logic's error reporting style.
       // Consider db.batch(operations) for performance on large sets if individual error tracking per feature is less critical.
-      await operations[operations.length-1].run(); // execute the last added operation
-      successCount++;
+      const result = await operations[operations.length-1].run(); // execute the last added operation
+      if (result && result.meta && result.meta.changes > 0) {
+        successCount++;
+      }
 
     } catch (e) {
       console.error(`[d1Utils-upsert] Error upserting feature ${feature?.id}: ${e.message}`, e);
