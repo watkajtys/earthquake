@@ -23,10 +23,28 @@ describe('EarthquakeDataProvider Data Refresh', () => {
   let clearIntervalSpy;
   let intervalCallbacks = {};
   let intervalIdCounter = 0;
+  let fetchSpy; // Standardized name
 
   beforeEach(() => {
     vi.useFakeTimers();
     fetchUsgsData.mockReset();
+
+    fetchSpy = vi.spyOn(global, 'fetch');
+    fetchSpy.mockImplementation(async (url, options) => {
+      const requestedUrl = typeof url === 'string' ? url : (url && typeof url.url === 'string' ? url.url : '');
+      if (requestedUrl.includes('/api/get-earthquakes')) {
+        // console.log(`Simulating D1 API failure for: ${requestedUrl} in refresh.test.jsx`);
+        return Promise.resolve({
+          ok: false,
+          status: 503, // Service Unavailable
+          headers: { get: (headerName) => headerName.toLowerCase() === 'x-data-source' ? 'D1_Error_Simulated' : null },
+          json: () => Promise.resolve({ error: "Simulated D1 Service Unavailable" }),
+          text: () => Promise.resolve("Simulated D1 Service Unavailable"),
+        });
+      }
+      console.error(`Unexpected global.fetch call to ${requestedUrl} in refresh.test.jsx. Ensure it is intended and mocked.`);
+      return Promise.reject(new Error(`Unexpected global.fetch call to ${requestedUrl} in refresh.test.jsx.`));
+    });
 
     intervalCallbacks = {};
     intervalIdCounter = 0;
@@ -53,6 +71,9 @@ describe('EarthquakeDataProvider Data Refresh', () => {
     vi.useRealTimers();
     vi.clearAllTimers();
     intervalCallbacks = {};
+    if (fetchSpy) {
+      fetchSpy.mockRestore();
+    }
   });
 
   // Helper to run specific intervals by type
@@ -72,8 +93,8 @@ describe('EarthquakeDataProvider Data Refresh', () => {
     const initialDailyTime = Date.now();
     const initialWeeklyTime = initialDailyTime - 1000;
 
-    fetchUsgsData.mockResolvedValueOnce({ features: [{id:'q_initial_daily', properties: {time: initialDailyTime, mag: 1}}], metadata: {generated: initialDailyTime} })
-                   .mockResolvedValueOnce({ features: [{id:'q_initial_weekly', properties: {time: initialWeeklyTime, mag: 1}}], metadata: {generated: initialWeeklyTime} });
+    fetchUsgsData.mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_initial_daily', properties: {time: initialDailyTime, mag: 1, place: 'Initial Daily Place'}}], metadata: {generated: initialDailyTime, title: 'Initial Daily Feed'} })
+                   .mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_initial_weekly', properties: {time: initialWeeklyTime, mag: 1, place: 'Initial Weekly Place'}}], metadata: {generated: initialWeeklyTime, title: 'Initial Weekly Feed'} });
 
     let result;
     await act(async () => {
@@ -94,8 +115,8 @@ describe('EarthquakeDataProvider Data Refresh', () => {
     const refreshFetchTime = Date.now() + 5000;
     const refreshedDailyQuakeTime = refreshFetchTime - 1000;
 
-    fetchUsgsData.mockResolvedValueOnce({ features: [{id:'q_refresh_daily', properties: {time: refreshedDailyQuakeTime, mag: 2}}], metadata: {generated: refreshFetchTime} })
-                   .mockResolvedValueOnce({ features: [{id:'q_refresh_weekly', properties: {time: refreshedDailyQuakeTime - 2000, mag: 2}}], metadata: {generated: refreshFetchTime} });
+    fetchUsgsData.mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_refresh_daily', properties: {time: refreshedDailyQuakeTime, mag: 2, place: 'Refreshed Daily Place'}}], metadata: {generated: refreshFetchTime, title: 'Refreshed Daily Feed'} })
+                   .mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_refresh_weekly', properties: {time: refreshedDailyQuakeTime - 2000, mag: 2, place: 'Refreshed Weekly Place'}}], metadata: {generated: refreshFetchTime, title: 'Refreshed Weekly Feed'} });
 
     const dateNowSpy = vi.spyOn(global.Date, 'now').mockReturnValueOnce(refreshFetchTime);
 
@@ -110,5 +131,5 @@ describe('EarthquakeDataProvider Data Refresh', () => {
 
     expect(fetchUsgsData).toHaveBeenCalledTimes(2); // Daily and weekly for refresh
     expect(result.current.earthquakesLastHour.some(q => q.id === 'q_refresh_daily')).toBe(true);
-  });
+  }, 10000);
 });

@@ -185,7 +185,7 @@ function App() {
         setFocusedNotableQuake
     } = useUIState();
 
-    const [registeredIdsThisSession, setRegisteredIdsThisSession] = useState(new Set());
+    // const [registeredIdsThisSession, setRegisteredIdsThisSession] = useState(new Set()); // Removed
 
     /**
      * Formats a timestamp into a human-readable date and time string (e.g., "Jan 1, 10:00 AM").
@@ -700,48 +700,7 @@ function App() {
 
     }, [activeClusters, formatTimeAgo, formatTimeDuration]);
 
-    // Effect to register cluster definitions
-    useEffect(() => {
-        if (overviewClusters && overviewClusters.length > 0) {
-            // console.log("----------- DEBUG: Registering Overview Clusters -----------");
-            // overviewClusters.forEach(c => console.log(c.id, c._latestTimeInternal, c._maxMagInternal, c._quakeCountInternal));
-
-            const registrationPromises = [];
-            const idsSuccessfullyRegisteredInEffect = new Set();
-
-            overviewClusters.forEach(cluster => {
-                if (!registeredIdsThisSession.has(cluster.id)) {
-                    const payload = {
-                        clusterId: cluster.id,
-                        earthquakeIds: cluster.originalQuakes.map(q => q.id),
-                        strongestQuakeId: cluster.strongestQuakeId,
-                    };
-                    const promise = registerClusterDefinition(payload)
-                        .then(success => {
-                            if (success) {
-                                idsSuccessfullyRegisteredInEffect.add(cluster.id);
-                            }
-                        })
-                        .catch(error => {
-                            console.error(`Error registering cluster ${cluster.id}:`, error);
-                        });
-                    registrationPromises.push(promise);
-                }
-            });
-
-            if (registrationPromises.length > 0) {
-                Promise.allSettled(registrationPromises).then(() => {
-                    if (idsSuccessfullyRegisteredInEffect.size > 0) {
-                        setRegisteredIdsThisSession(prevSet => {
-                            const newSet = new Set(prevSet);
-                            idsSuccessfullyRegisteredInEffect.forEach(id => newSet.add(id));
-                            return newSet;
-                        });
-                    }
-                });
-            }
-        }
-    }, [overviewClusters, registeredIdsThisSession]); // Added registeredIdsThisSession to dependencies
+    // Removed useEffect hook for registering cluster definitions
 
     // --- Event Handlers ---
     const navigate = useNavigate();
