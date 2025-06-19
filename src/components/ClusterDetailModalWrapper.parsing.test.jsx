@@ -9,8 +9,9 @@ import ClusterDetailModalWrapper from './ClusterDetailModalWrapper.jsx';
 const mockNavigate = vi.fn();
 const mockUseParams = vi.fn();
 
-const { mockFetchClusterDefinition } = vi.hoisted(() => {
-  return { mockFetchClusterDefinition: vi.fn() };
+// Changed to mock fetchClusterWithQuakes
+const { mockFetchClusterWithQuakes } = vi.hoisted(() => {
+  return { mockFetchClusterWithQuakes: vi.fn() };
 });
 
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -23,7 +24,9 @@ vi.mock('react-router-dom', async (importOriginal) => {
 });
 
 vi.mock('../services/clusterApiService.js', () => ({
-  fetchClusterDefinition: mockFetchClusterDefinition,
+  // fetchClusterDefinition: mockFetchClusterDefinition, // Old mock
+  fetchClusterWithQuakes: mockFetchClusterWithQuakes, // New mock
+  fetchActiveClusters: vi.fn(), // Keep other mocks if they are used by component, or remove if not
 }));
 
 vi.mock('./ClusterDetailModal', () => ({
@@ -105,7 +108,7 @@ describe('ClusterDetailModalWrapper URL Slug Parsing', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     // mockUseEarthquakeDataState.mockReturnValue(defaultEarthquakeData); // This will be set inside each test
-    mockFetchClusterDefinition.mockResolvedValue(null);
+    mockFetchClusterWithQuakes.mockResolvedValue(null); // Use the new mock
   });
 
   const parsingTestCases = [
@@ -182,10 +185,10 @@ describe('ClusterDetailModalWrapper URL Slug Parsing', () => {
       if (expectError) {
         const errorElement = await screen.findByText(errorMessageContent);
         expect(errorElement).toBeInTheDocument();
-        expect(mockFetchClusterDefinition).not.toHaveBeenCalled();
+        expect(mockFetchClusterWithQuakes).not.toHaveBeenCalled(); // Use new mock
       } else {
         await waitFor(() => {
-          expect(mockFetchClusterDefinition).toHaveBeenCalledWith(expectedId);
+          expect(mockFetchClusterWithQuakes).toHaveBeenCalledWith(expectedId); // Use new mock
         });
         if (errorMessageContent) {
              expect(screen.queryByText(errorMessageContent)).toBeNull();
