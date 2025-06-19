@@ -369,7 +369,7 @@ async function handleClusterDefinitionRequest(request, env, ctx) {
       }
 
       const stmt = DB.prepare(
-        'SELECT clusterId, earthquakeIds, strongestQuakeId, createdAt, updatedAt FROM ClusterDefinitions WHERE clusterId = ?'
+        'SELECT clusterId, earthquakeIds, strongestQuakeId, createdAt, updatedAt FROM ClusterDefinitions WHERE LOWER(clusterId) = LOWER(?)'
       ).bind(clusterId);
       const result = await stmt.first();
 
