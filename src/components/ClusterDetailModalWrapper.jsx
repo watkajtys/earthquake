@@ -8,6 +8,7 @@ import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
 // import { findActiveClusters } from '../utils/clusterUtils.js'; // Removed
 import { CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES } from '../constants/appConstants.js';
 
+// Main wrapper component for displaying cluster details, orchestrating data fetching and state management.
 /**
  * Calculates a human-readable string representing the active time range of an earthquake cluster.
  * It prioritizes short, user-friendly descriptions like "Active just now" or "Active over Xm/Xh"
