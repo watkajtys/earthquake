@@ -131,12 +131,36 @@ export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes)
 
     const cacheHit = response.headers.get('X-Cache-Hit');
 
-    if (response.ok && cacheHit === 'true') {
-      console.log('Active clusters fetched successfully from server cache.');
+    if (response.ok) {
       const data = await response.json();
-      return data; // Expected to be Array<Array<EarthquakeObject>>
-    } else if (response.ok && cacheHit !== 'true') {
-      console.warn(`Server cache miss or stale data (X-Cache-Hit: ${cacheHit}). Falling back to local calculation.`);
+      let parsedClusters = null;
+
+      if (data && data.clusters && Array.isArray(data.clusters)) {
+        console.log(`Active clusters fetched from server (parsed as object with .clusters property). Cache-Hit: ${cacheHit}`);
+        parsedClusters = data.clusters;
+      } else if (data && Array.isArray(data)) {
+        // This path handles cases where the server might directly return an array of clusters,
+        // which was an older expectation for cacheHit === 'true' path.
+        console.log(`Active clusters fetched from server (parsed as direct array). Cache-Hit: ${cacheHit}`);
+        parsedClusters = data;
+      } else {
+        console.warn(`Unexpected data structure from server. Cache-Hit: ${cacheHit}. Will attempt local calculation.`);
+        // parsedClusters remains null, proceed to local calculation
+      }
+
+      if (parsedClusters !== null) {
+        if (cacheHit === 'true') {
+          // Successfully got valid cluster data from server cache
+          return parsedClusters;
+        } else {
+          // Server response was OK, data structure was valid, but it was not a cache hit (or header absent).
+          // The original logic implies falling back to local calculation in this case.
+          console.warn(`Server data received (Cache-Hit: ${cacheHit}), but policy is to fall back to local calculation for non-cache-hits or when X-Cache-Hit is not explicitly 'true'.`);
+          // Fall through to local calculation by not returning here.
+        }
+      }
+      // If parsedClusters is null (unexpected structure), fall through to local calculation.
+
     } else { // !response.ok
       const errorBody = await response.text();
       console.error(
@@ -147,7 +171,7 @@ export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes)
     console.error('Network error while fetching active clusters. Falling back to local calculation:', error);
   }
 
-  // Fallback to local calculation if server fetch fails or indicates stale data
+  // Fallback to local calculation
   try {
     console.log('Initiating client-side cluster calculation using localFindActiveClusters.');
     const localClusters = localFindActiveClusters(earthquakes, maxDistanceKm, minQuakes);
