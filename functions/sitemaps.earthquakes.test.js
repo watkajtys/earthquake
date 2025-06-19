@@ -1,5 +1,7 @@
 import { onRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { server } from '../src/mocks/server.js'; // Corrected path
+import { http, HttpResponse } from 'msw';
 
 // --- Mocks for Cloudflare Environment ---
 const mockCache = {
@@ -10,8 +12,6 @@ global.caches = {
   default: mockCache,
   open: vi.fn().mockResolvedValue(mockCache)
 };
-
-global.fetch = vi.fn();
 
 // --- Helper to create mock context ---
 const createMockContext = (request, env = {}, cf = {}) => {
@@ -49,16 +49,13 @@ const createMockContext = (request, env = {}, cf = {}) => {
 describe('Earthquake Sitemap Handler', () => {
     beforeEach(() => {
         vi.resetAllMocks();
-        fetch.mockReset();
+        // MSW will handle fetch lifecycle, server.resetHandlers() is in setupTests.js or called by vi.clearAllMocks()
         mockCache.match.mockReset();
         mockCache.put.mockReset();
     });
 
     it('/sitemap-earthquakes.xml should fetch data and return XML', async () => {
-        const mockGeoJson = { features: [
-            { properties: { mag: 3.0, place: "Test Place", time: Date.now(), updated: Date.now(), detail: "event_detail_url_1" }, id: "ev1" }
-        ]};
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockGeoJson), { status: 200 }));
+        // This test will use the default MSW handler for 2.5_week.geojson
         const request = new Request('http://localhost/sitemap-earthquakes.xml');
         const context = createMockContext(request);
         const response = await onRequest(context);
@@ -66,22 +63,31 @@ describe('Earthquake Sitemap Handler', () => {
         expect(response.headers.get('Content-Type')).toContain('application/xml');
         const text = await response.text();
         expect(text).toContain('<urlset');
-        expect(text).toContain(encodeURIComponent("event_detail_url_1")); // Detail URL should be XML-escaped by handler
-        expect(fetch).toHaveBeenCalledWith(expect.stringContaining('2.5_week.geojson'));
+        // Check for data from the default MSW handler
+        expect(text).toContain(encodeURIComponent("default_msw_event_detail_url_1"));
     });
 
     it('/sitemap-earthquakes.xml should handle fetch error', async () => {
-        fetch.mockRejectedValueOnce(new Error("USGS Feed Down"));
+        server.use(
+          http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson', () => {
+            return HttpResponse.error(); // Simulates network error
+          })
+        );
         const request = new Request('http://localhost/sitemap-earthquakes.xml');
         const context = createMockContext(request);
         const response = await onRequest(context);
         expect(response.status).toBe(200);
         const text = await response.text();
-        expect(text).toContain("<!-- Exception processing earthquake data: USGS Feed Down -->");
+        // Adjusted to match the likely outcome of HttpResponse.error()
+        expect(text).toContain("<!-- Exception processing earthquake data: Failed to fetch -->");
     });
 
     it('/sitemap-earthquakes.xml should handle non-OK response from fetch', async () => {
-        fetch.mockResolvedValueOnce(new Response("Server Error", { status: 503 }));
+        server.use(
+          http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson', () => {
+            return new HttpResponse("Server Error", { status: 503 });
+          })
+        );
         const request = new Request('http://localhost/sitemap-earthquakes.xml');
         const context = createMockContext(request);
         const response = await onRequest(context);
@@ -91,8 +97,11 @@ describe('Earthquake Sitemap Handler', () => {
     });
 
     it('/sitemap-earthquakes.xml should handle empty features array', async () => {
-        const mockGeoJson = { features: [] };
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockGeoJson), { status: 200 }));
+        server.use(
+          http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson', () => {
+            return HttpResponse.json({ features: [] });
+          })
+        );
         const request = new Request('http://localhost/sitemap-earthquakes.xml');
         const context = createMockContext(request);
         const response = await onRequest(context);
@@ -102,14 +111,17 @@ describe('Earthquake Sitemap Handler', () => {
     });
 
     it('/sitemap-earthquakes.xml should skip features missing properties.detail', async () => {
-      const mockGeoJson = {
-        features: [
-          { properties: { mag: 3.0, place: "Test Place Valid", time: Date.now(), updated: Date.now(), detail: "event_detail_url_valid" }, id: "ev_valid" },
-          { properties: { mag: 2.5, place: "Test Place Missing Detail", time: Date.now(), updated: Date.now(), detail: null }, id: "ev_missing_detail" },
-          { properties: { mag: 2.8, place: "Test Place Undefined Detail", time: Date.now(), updated: Date.now() }, id: "ev_undefined_detail" }
-        ]
-      };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockGeoJson), { status: 200 }));
+      server.use(
+        http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson', () => {
+          return HttpResponse.json({
+            features: [
+              { properties: { mag: 3.0, place: "Test Place Valid", time: Date.now(), updated: Date.now(), detail: "event_detail_url_valid" }, id: "ev_valid" },
+              { properties: { mag: 2.5, place: "Test Place Missing Detail", time: Date.now(), updated: Date.now(), detail: null }, id: "ev_missing_detail" },
+              { properties: { mag: 2.8, place: "Test Place Undefined Detail", time: Date.now(), updated: Date.now() /* detail implicitly undefined */ }, id: "ev_undefined_detail" }
+            ]
+          });
+        })
+      );
       const request = new Request('http://localhost/sitemap-earthquakes.xml');
       const context = createMockContext(request);
       const response = await onRequest(context);
@@ -123,14 +135,17 @@ describe('Earthquake Sitemap Handler', () => {
     });
 
     it('/sitemap-earthquakes.xml should skip features with missing or invalid properties.updated', async () => {
-      const mockGeoJson = {
-        features: [
-          { properties: { mag: 3.1, place: "Test Place Valid Update", time: Date.now(), updated: Date.now(), detail: "event_detail_url_valid_update" }, id: "ev_valid_upd" },
-          { properties: { mag: 2.6, place: "Test Place Missing Update", time: Date.now(), detail: "event_detail_url_missing_update" }, id: "ev_missing_upd" },
-          { properties: { mag: 2.7, place: "Test Place Invalid Update", time: Date.now(), updated: "not-a-number", detail: "event_detail_url_invalid_update" }, id: "ev_invalid_upd" }
-        ]
-      };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockGeoJson), { status: 200 }));
+      server.use(
+        http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson', () => {
+          return HttpResponse.json({
+            features: [
+              { properties: { mag: 3.1, place: "Test Place Valid Update", time: Date.now(), updated: Date.now(), detail: "event_detail_url_valid_update" }, id: "ev_valid_upd" },
+              { properties: { mag: 2.6, place: "Test Place Missing Update", time: Date.now(), detail: "event_detail_url_missing_update" /* updated implicitly undefined */ }, id: "ev_missing_upd" },
+              { properties: { mag: 2.7, place: "Test Place Invalid Update", time: Date.now(), updated: "not-a-number", detail: "event_detail_url_invalid_update" }, id: "ev_invalid_upd" }
+            ]
+          });
+        })
+      );
       const request = new Request('http://localhost/sitemap-earthquakes.xml');
       const context = createMockContext(request);
       const response = await onRequest(context);
@@ -146,11 +161,12 @@ describe('Earthquake Sitemap Handler', () => {
 
     it('/sitemap-earthquakes.xml should use env.USGS_API_URL if provided', async () => {
       const customApiUrl = "https://example.com/custom/feed.geojson";
-      const mockGeoJson = { features: [] };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockGeoJson), { status: 200 }));
+      // This test will use the default MSW handler for customApiUrl
       const request = new Request('http://localhost/sitemap-earthquakes.xml');
       const context = createMockContext(request, { USGS_API_URL: customApiUrl });
-      await onRequest(context);
-      expect(fetch).toHaveBeenCalledWith(customApiUrl);
+      const response = await onRequest(context);
+      const text = await response.text();
+      expect(response.status).toBe(200);
+      expect(text).toContain(encodeURIComponent("custom_msw_event_detail_url_1"));
     });
 });

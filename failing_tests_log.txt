@@ -1,0 +1,72 @@
+FAIL: src/components/ClusterDetailModalWrapper.test.jsx (3 tests failed)
+
+Overall Test Summary:
+Test Files: 1 failed | 70 passed (71 total)
+Tests: 3 failed | 636 passed | 4 skipped | 2 todo (645 total)
+Duration: 41.27s
+
+Failing test details:
+
+1. FAIL src/components/ClusterDetailModalWrapper.test.jsx > ClusterDetailModalWrapper > Cluster Reconstruction with fetchActiveClusters (Old ID Format) > Scenario 1: fetchActiveClusters returns data successfully
+   TestingLibraryElementError: Unable to find an element with the text: Cluster: overview_cluster_reconTargetID_someLocation. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+   Body snapshot during failure:
+   <body>
+     <div>
+       <div class="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4">
+         <div class="bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700 text-center">
+           <svg aria-hidden="true" class="animate-spin h-8 w-8 text-indigo-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+             <path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
+           </svg>
+           <h2 class="text-lg font-semibold text-indigo-300">Loading Cluster Details...</h2>
+           <p class="text-sm text-slate-400">Please wait while we fetch the information. (Checking extended data...)</p>
+         </div>
+       </div>
+     </div>
+   </body>
+
+2. FAIL src/components/ClusterDetailModalWrapper.test.jsx > ClusterDetailModalWrapper > Cluster Reconstruction with fetchActiveClusters (Old ID Format) > Scenario 2a: fetchActiveClusters fails, and fetchClusterDefinition also returns null
+   TestingLibraryElementError: Unable to find an element with the text: Cluster details could not be found or were incomplete.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+   Body snapshot during failure:
+   <body>
+     <div>
+       <div class="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4">
+         <div class="bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700 text-center">
+           <svg aria-hidden="true" class="animate-spin h-8 w-8 text-indigo-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+             <path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
+           </svg>
+           <h2 class="text-lg font-semibold text-indigo-300">Loading Cluster Details...</h2>
+           <p class="text-sm text-slate-400">Please wait while we fetch the information.</p>
+         </div>
+       </div>
+     </div>
+   </body>
+
+3. FAIL src/components/ClusterDetailModalWrapper.test.jsx > ClusterDetailModalWrapper > Cluster Reconstruction with fetchActiveClusters (Old ID Format) > Scenario 2b: fetchActiveClusters fails, but fetchClusterDefinition succeeds
+   TestingLibraryElementError: Unable to find an element with the text: Cluster: overview_cluster_reconTargetID_someLocation. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+   Body snapshot during failure:
+   <body>
+     <div>
+       <div class="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-[60] p-4">
+         <div class="bg-slate-800 p-6 rounded-lg shadow-2xl text-slate-200 border border-slate-700 text-center">
+           <svg aria-hidden="true" class="animate-spin h-8 w-8 text-indigo-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+             <path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
+           </svg>
+           <h2 class="text-lg font-semibold text-indigo-300">Loading Cluster Details...</h2>
+           <p class="text-sm text-slate-400">Please wait while we fetch the information. (Checking extended data...)</p>
+         </div>
+       </div>
+     </div>
+   </body>
+
+Skipped tests:
+- src/tests/contexts/EarthquakeDataContext.initialLoad.test.jsx > EarthquakeDataProvider Initial Load with D1 Fallback > should cycle loading messages during initial load and stop after
+- src/pages/HomePage.rendering.test.jsx > HomePage Rendering and Basic UI > Accessibility > should have accessibility tests implemented for HomePage
+- src/components/TimeSinceLastMajorQuakeBanner.test.jsx > TimeSinceLastMajorQuakeBanner > Scenario 1: Renders with all data present and handles clicks
+- src/components/TimeSinceLastMajorQuakeBanner.test.jsx > TimeSinceLastMajorQuakeBanner > Scenario 5: Renders partial skeleton when effectively loading monthly and lastMajorQuake exists
+
+Todo tests:
+- src/pages/HomePage.rendering.test.jsx > HomePage Rendering and Basic UI > Cluster Loading State Management > should have tests implemented for cluster loading states
+- src/components/TimeSinceLastMajorQuakeBanner.test.jsx > TimeSinceLastMajorQuakeBanner > Scenario 2: Renders with lastMajorQuake, but no previousMajorQuake data
