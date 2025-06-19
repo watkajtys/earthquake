@@ -11,10 +11,11 @@
 import { calculateDistance } from '../utils/mathUtils.js';
 import { storeClusterDefinition } from '../utils/d1ClusterUtils.js';
 import { randomUUID } from 'node:crypto';
+import { CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE } from '../../src/constants/appConstants.js';
 
-// Constants for defining significant clusters
-const MIN_QUAKES_FOR_DEFINITION = 5;
-const MIN_MAG_FOR_DEFINITION = 3.0;
+// Constants for defining significant clusters -- REMOVED
+// const MIN_QUAKES_FOR_DEFINITION = 5; // No longer needed, using CLUSTER_MIN_QUAKES from appConstants
+// const MIN_MAG_FOR_DEFINITION = 3.0; // No longer needed, using DEFINED_CLUSTER_MIN_MAGNITUDE from appConstants
 
 // Helper Functions for Cluster Definition
 function getStrongestQuake(cluster) {
@@ -193,12 +194,19 @@ export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
  * @param {Request} context.request - The incoming HTTP request object, expected to have a JSON body.
  * @param {object} context.env - Environment variables, expected to contain `DB` (D1 Database binding).
  * @returns {Promise<Response>} A `Response` object containing either the calculated cluster data (Array of arrays of earthquake objects)
- *   or a JSON error object with appropriate HTTP status codes (400 for bad request, 500 for internal server error).
+ *   or an error response (405 for wrong method, 400 for bad request, 500 for internal server error).
  */
-export async function onRequestPost(context) {
+export async function onRequest(context) {
+  if (context.request.method !== 'POST') {
+    return new Response('Method Not Allowed', {
+      status: 405,
+      headers: { 'Allow': 'POST' }
+    });
+  }
+
   try {
-    const { env } = context;
-    const { earthquakes, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours } = await context.request.json();
+    const { env, request } = context; // Destructure request from context
+    const { earthquakes, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours } = await request.json();
 
     // Input Validation
     if (!Array.isArray(earthquakes)) {
@@ -322,7 +330,8 @@ export async function onRequestPost(context) {
 
         const clusterMaxMag = strongestQuakeInCalcCluster.properties.mag;
 
-        if (calculatedCluster.length >= MIN_QUAKES_FOR_DEFINITION && clusterMaxMag >= MIN_MAG_FOR_DEFINITION) {
+        // Use imported constants for significance check
+        if (calculatedCluster.length >= CLUSTER_MIN_QUAKES && clusterMaxMag >= DEFINED_CLUSTER_MIN_MAGNITUDE) {
           const clusterId = randomUUID();
           const quakeCount = calculatedCluster.length;
           const startTime = getStartTime(calculatedCluster);
@@ -388,7 +397,7 @@ export async function onRequestPost(context) {
         });
     }
     // General error handler for other issues
-    console.error('Unhandled error in onRequestPost:', error.message, error.stack);
+    console.error('Unhandled error in onRequest:', error.message, error.stack); // Changed onRequestPost to onRequest
     return new Response(JSON.stringify({ error: 'Internal server error', details: error.message }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
     });

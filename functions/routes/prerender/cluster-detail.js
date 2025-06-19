@@ -68,7 +68,7 @@ export async function handlePrerenderCluster(context, clusterSlug) {
   try {
     // Query by slug using the new ClusterDefinitions table schema
     const d1Stmt = env.DB.prepare(
-      "SELECT id, slug, title, description, strongestQuakeId, locationName, maxMagnitude, earthquakeIds, startTime, endTime FROM ClusterDefinitions WHERE slug = ?"
+      "SELECT id, slug, title, description, strongestQuakeId, locationName, maxMagnitude, earthquakeIds, startTime, endTime, quakeCount FROM ClusterDefinitions WHERE slug = ?"
     );
     d1Response = await d1Stmt.bind(clusterSlug).first();
 
@@ -133,11 +133,17 @@ export async function handlePrerenderCluster(context, clusterSlug) {
       console.error(fetchErrorForStrongestQuake);
   }
 
-  // Use locationName and maxMagnitude from d1Response, with fallbacks if necessary (though ideally d1Response is complete)
-  const effectiveLocationName = d1Response.locationName || "Unknown Location";
-  const effectiveMaxMagnitude = d1Response.maxMagnitude !== null ? d1Response.maxMagnitude : "N/A";
-  const magForDisplay = typeof effectiveMaxMagnitude === 'number' ? parseFloat(effectiveMaxMagnitude).toFixed(1) : effectiveMaxMagnitude;
+  const sqProps = strongestQuakeDetailsProperties; // shorthand
 
+  const finalLocationName = d1Response.locationName || (sqProps ? sqProps.place : null);
+  const effectiveLocationName = finalLocationName || "Unknown Location";
+
+  const finalMaxMagnitude = (d1Response.maxMagnitude !== null && d1Response.maxMagnitude !== undefined)
+                            ? d1Response.maxMagnitude
+                            : (sqProps ? sqProps.mag : null);
+  const magForDisplay = (finalMaxMagnitude !== null && finalMaxMagnitude !== undefined && typeof finalMaxMagnitude === 'number')
+                        ? parseFloat(finalMaxMagnitude).toFixed(1)
+                        : "N/A";
 
   let startDateIso = null;
   let endDateIso = null;
@@ -159,9 +165,12 @@ export async function handlePrerenderCluster(context, clusterSlug) {
   }
 
   // Use title and description directly from d1Response
-  // Fallback to a generic title/description if d1Response fields are empty
-  const pageTitleText = d1Response.title || `Earthquake Cluster Near ${effectiveLocationName}`;
-  const pageDescriptionText = d1Response.description || `Details about an earthquake cluster located near ${effectiveLocationName}, with events up to M${magForDisplay}.`;
+  // Fallback to a generated title/description if d1Response fields are empty
+  const countForDisplay = d1Response.quakeCount || 'Multiple'; // Use quakeCount from D1
+  const titleSuffix = effectiveLocationName !== "Unknown Location" ? `Near ${effectiveLocationName}` : "Cluster Overview";
+
+  const pageTitleText = d1Response.title || `${countForDisplay} Earthquakes ${titleSuffix}${magForDisplay !== 'N/A' ? ` (up to M${magForDisplay})` : ''}`;
+  const pageDescriptionText = d1Response.description || `An overview of ${countForDisplay} recent seismic activities ${effectiveLocationName !== "Unknown Location" ? `near ${effectiveLocationName}` : 'in an active region'}, with the strongest reaching M${magForDisplay}.`;
   const canonicalUrl = `https://earthquakeslive.com/cluster/${d1Response.slug || clusterSlug}`;
 
   let strongestQuakeHtml = `<p><a href="https://earthquakeslive.com/">Back to main map</a></p>`;
