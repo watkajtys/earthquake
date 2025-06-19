@@ -34,7 +34,14 @@ vi.mock('react-router-dom', async (importOriginal) => {
 // }));
 
 vi.mock('./ClusterDetailModal', () => ({
-  default: vi.fn(({ cluster }) => <div data-testid="mock-cluster-detail-modal">Cluster: {cluster?.id || 'N/A'}</div>),
+  default: vi.fn(({ cluster }) => (
+    <div data-testid="mock-cluster-detail-modal">
+      <p>Cluster ID: {cluster?.id}</p>
+      <p>Location: {cluster?.locationName}</p>
+      <p>Magnitude: M {cluster?.maxMagnitude?.toFixed(1)}</p>
+      <p>Quake Count: {cluster?.quakeCount} Quakes</p>
+    </div>
+  )),
 }));
 
 vi.mock('./SeoMetadata', () => ({
@@ -156,7 +163,13 @@ describe('ClusterDetailModalWrapper', () => {
       </MemoryRouter>
     );
 
-    await screen.findByText(`Cluster: ${slug}`);
+    // await screen.findByText(`Cluster: ${slug}`); // Old assertion based on previous mock
+    // New assertions based on updated mock:
+    await screen.findByText(`Cluster ID: ${slug}`);
+    expect(screen.getByText(`Location: ${mockClusterFromProps.locationName}`)).toBeInTheDocument();
+    expect(screen.getByText(`Magnitude: M ${mockClusterFromProps.maxMagnitude.toFixed(1)}`)).toBeInTheDocument();
+    expect(screen.getByText(`Quake Count: ${mockClusterFromProps.quakeCount} Quakes`)).toBeInTheDocument();
+
     // With MSW, we don't check service mocks. Verification is via UI or other side effects.
     // expect(mockFetchClusterDefinition).not.toHaveBeenCalled();
     // expect(mockFetchActiveClusters).not.toHaveBeenCalled();
@@ -167,38 +180,39 @@ describe('ClusterDetailModalWrapper', () => {
     const oldFormatSlug = 'overview_cluster_reconTargetID_someLocation';
     const strongestQuakeIdInOldFormat = 'reconTargetID';
 
-    const sourceQuakeStrongest = { id: strongestQuakeIdInOldFormat, properties: { mag: 4.5, time: Date.now(), place: 'Recon Place' }, geometry: { coordinates: [1,2,3] } };
-    const sourceQuakeOther = { id: 'otherInSource', properties: { mag: 3.0, time: Date.now() - 1000, place: 'Recon Place' }, geometry: { coordinates: [1.1,2.1,3.1] } };
-    const unrelatedQuake = { id: 'unrelated', properties: { mag: 2.0, time: Date.now() - 2000, place: 'Far away' }, geometry: { coordinates: [10,20,30] } };
+    const now = Date.now();
+    const sourceQuakeStrongest = { id: strongestQuakeIdInOldFormat, properties: { mag: 4.5, time: now, place: 'Recon Place' }, geometry: { coordinates: [1,2,3] } };
+    const sourceQuakeOther = { id: 'otherInSource1', properties: { mag: 3.0, time: now - 1000, place: 'Recon Place' }, geometry: { coordinates: [1.1,2.1,3.1] } };
+    const sourceQuakeAnother = { id: 'otherInSource2', properties: { mag: 2.5, time: now - 2000, place: 'Recon Place' }, geometry: { coordinates: [1.05,2.05,3.05] } }; // Meets CLUSTER_MIN_QUAKES = 3
+    const unrelatedQuake = { id: 'unrelated', properties: { mag: 2.0, time: now - 3000, place: 'Far away' }, geometry: { coordinates: [10,20,30] } };
+
+    const sourceQuakesForReconScenarios = [sourceQuakeStrongest, sourceQuakeOther, sourceQuakeAnother, unrelatedQuake];
+
+    // For assertion clarity, based on the reconstructed cluster from sourceQuakeStrongest, sourceQuakeOther, sourceQuakeAnother
+    const mockReconstructedClusterForAssertion = {
+      id: oldFormatSlug,
+      locationName: sourceQuakeStrongest.properties.place, // "Recon Place"
+      maxMagnitude: sourceQuakeStrongest.properties.mag,   // 4.5
+      quakeCount: 3, // Based on the three relevant quakes
+    };
 
 
     it('Scenario 1: fetchActiveClusters returns data successfully', async () => {
       mockUseParams.mockReturnValue({ clusterId: oldFormatSlug });
+      const scenario1SourceQuakes = [sourceQuakeStrongest, sourceQuakeOther, sourceQuakeAnother]; // Ensure enough quakes for this mock
+
       mockUseEarthquakeDataState.mockReturnValue({
         ...defaultEarthquakeData,
-        earthquakesLast72Hours: [sourceQuakeStrongest, sourceQuakeOther, unrelatedQuake], // Provide source quakes
+        earthquakesLast72Hours: scenario1SourceQuakes,
       });
 
-      // This is the array of quake features.
-      const quakeFeaturesForCluster = [sourceQuakeStrongest, sourceQuakeOther];
-      // fetchActiveClusters expects the API to return a list of *cluster objects*.
-      // Each cluster object should have an 'id' and 'originalQuakes' (which is an array of features).
-      const mockApiCluster = {
-        id: oldFormatSlug, // The component will use this ID.
-        originalQuakes: quakeFeaturesForCluster,
-        strongestQuakeId: strongestQuakeIdInOldFormat,
-        // Add other derived properties if the component/modal uses them directly from this top-level cluster object
-        locationName: sourceQuakeStrongest.properties.place,
-        maxMagnitude: sourceQuakeStrongest.properties.mag,
-        quakeCount: quakeFeaturesForCluster.length,
-        _latestTimeInternal: sourceQuakeStrongest.properties.time,
-        _earliestTimeInternal: sourceQuakeOther.properties.time,
-      };
+      const quakeFeaturesForCluster = [sourceQuakeStrongest, sourceQuakeOther, sourceQuakeAnother];
+      const mockApiClusterData = [quakeFeaturesForCluster];
 
       server.use(
         http.post('/api/calculate-clusters', async () => {
           console.log('[MSW Test Log] Scenario 1: /api/calculate-clusters hit');
-          return HttpResponse.json({ clusters: [mockApiCluster] }, { headers: { 'X-Cache-Hit': 'true' } });
+          return HttpResponse.json(mockApiClusterData, { headers: { 'X-Cache-Hit': 'true' } });
         })
       );
 
@@ -210,36 +224,33 @@ describe('ClusterDetailModalWrapper', () => {
         </MemoryRouter>
       );
 
-      await screen.findByText(`Cluster: ${oldFormatSlug}`);
-
-      // We no longer check mockFetchActiveClusters directly.
-      // The successful rendering of the modal with the cluster ID is the primary verification.
-      // expect(mockFetchClusterDefinition).not.toHaveBeenCalled();
-
-      // The component internally will form a cluster object with an id, originalQuakes, etc.
-      // The mock modal displays `cluster.id`.
-      const modal = await screen.findByTestId('mock-cluster-detail-modal');
-      expect(modal).toHaveTextContent(`Cluster: ${oldFormatSlug}`);
+      // Assertions based on the updated mock modal
+      await screen.findByText(`Location: ${mockReconstructedClusterForAssertion.locationName}`);
+      expect(screen.getByText(`Cluster ID: ${oldFormatSlug}`)).toBeInTheDocument();
+      expect(screen.getByText(`Magnitude: M ${mockReconstructedClusterForAssertion.maxMagnitude.toFixed(1)}`)).toBeInTheDocument();
+      expect(screen.getByText(`Quake Count: ${mockReconstructedClusterForAssertion.quakeCount} Quakes`)).toBeInTheDocument();
     });
 
-    it('Scenario 2a: fetchActiveClusters fails, and fetchClusterDefinition also returns null', async () => {
+    it('Scenario 2a: fetchActiveClusters (client-side) succeeds; D1 lookup (mocked to fail) should not be reached for old IDs', async () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockUseParams.mockReturnValue({ clusterId: oldFormatSlug });
+
       mockUseEarthquakeDataState.mockReturnValue({
         ...defaultEarthquakeData,
-        earthquakesLast72Hours: [sourceQuakeStrongest, sourceQuakeOther, unrelatedQuake],
+        earthquakesLast72Hours: sourceQuakesForReconScenarios,
+        hasAttemptedMonthlyLoad: true,
       });
 
       server.use(
-        http.post('/api/calculate-clusters', () => {
-          console.log('[MSW Test Log] Scenario 2a: /api/calculate-clusters hit (expecting X-Cache-Hit: false)');
-          // Simulate server responding but cache miss, or an error that leads to fallback
-          return HttpResponse.json({ clusters: [] }, { headers: { 'X-Cache-Hit': 'false' } });
+        http.post('/api/calculate-clusters', async () => {
+          console.log('[MSW Test Log] Scenario 2a: /api/calculate-clusters hit (X-Cache-Hit: false, client recon success)');
+          return HttpResponse.json([], { headers: { 'X-Cache-Hit': 'false' } });
         }),
         http.get('/api/cluster-definition', ({ request }) => {
           if (new URL(request.url).searchParams.get('id') === strongestQuakeIdInOldFormat) {
-            console.log('[MSW Test Log] Scenario 2a: /api/cluster-definition hit (expecting 404)');
-            return new HttpResponse(null, { status: 404 }); // Simulate fetchClusterDefinition returning null/404
+            console.error('[MSW Test Log ERROR] Scenario 2a: /api/cluster-definition was called (SHOULD NOT HAPPEN)');
+            return new HttpResponse(null, { status: 404 });
           }
         })
       );
@@ -252,56 +263,49 @@ describe('ClusterDetailModalWrapper', () => {
         </MemoryRouter>
       );
 
-      await waitFor(() => {
-        expect(screen.getByText('Cluster details could not be found or were incomplete.')).toBeInTheDocument();
-      });
-      // The UI state and console warnings (if any related to the service calls themselves) become the verification points.
-      // Expect the warning about fetchActiveClusters *actually failing* or cache miss, then local calc, then D1 fail.
-      // The component will try localFindActiveClusters, which will "succeed" but may not find a matching cluster for 'reconTargetID'.
-      // This then leads to attempting fetchClusterDefinition.
-      await waitFor(() => {
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Server cache miss or stale data (X-Cache-Hit: false). Falling back to local calculation.`));
-      });
-      await waitFor(() => {
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining(`fetchClusterDefinition failed for ID ${strongestQuakeIdInOldFormat} (likely 404), attempting reconstruction with local data as last resort.`)
-        );
-      });
-      // Since local reconstruction for old ID will also fail if D1 returns 404, it should show error.
-      // The consoleWarnSpy will have multiple calls. We need to ensure the specific sequence or final outcome.
+      await screen.findByText(`Location: ${mockReconstructedClusterForAssertion.locationName}`);
+      expect(screen.getByText(`Cluster ID: ${oldFormatSlug}`)).toBeInTheDocument();
+      expect(screen.getByText(`Magnitude: M ${mockReconstructedClusterForAssertion.maxMagnitude.toFixed(1)}`)).toBeInTheDocument();
+      expect(screen.getByText(`Quake Count: ${mockReconstructedClusterForAssertion.quakeCount} Quakes`)).toBeInTheDocument();
+
+      expect(screen.queryByText('Cluster definition not found in D1.')).toBeNull();
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('[MSW Test Log ERROR] Scenario 2a: /api/cluster-definition was called'));
+
       consoleWarnSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
     });
 
-    it('Scenario 2b: fetchActiveClusters fails, but fetchClusterDefinition succeeds', async () => {
+    it('Scenario 2b: fetchActiveClusters (client-side) succeeds; D1 lookup (mocked to succeed) should not be reached for old IDs', async () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockUseParams.mockReturnValue({ clusterId: oldFormatSlug });
-      mockUseEarthquakeDataState.mockReturnValue({
-        ...defaultEarthquakeData,
-        earthquakesLast72Hours: [sourceQuakeStrongest, sourceQuakeOther],
-      });
 
       const d1ClusterDefinition = {
         clusterId: strongestQuakeIdInOldFormat,
-        earthquakeIds: JSON.stringify([sourceQuakeStrongest.id, sourceQuakeOther.id]), // Ensure earthquakeIds is a string
+        earthquakeIds: JSON.stringify([sourceQuakeStrongest.id, sourceQuakeOther.id, sourceQuakeAnother.id]),
         strongestQuakeId: sourceQuakeStrongest.id,
-        updatedAt: Date.now().toString(), // Ensure updatedAt is a string if service expects it
-        // Add other fields like title, description, locationName, maxMagnitude if your component uses them from D1
-        title: "D1 Cluster Title",
-        description: "D1 Cluster Description",
-        locationName: "D1 Location",
-        maxMagnitude: 4.5,
+        updatedAt: Date.now().toString(),
+        title: "D1 Should Not Be Used Title",
+        description: "D1 Should Not Be Used Description",
+        locationName: "D1 Should Not Be Used Location",
+        maxMagnitude: 1.0,
       };
 
+      mockUseEarthquakeDataState.mockReturnValue({
+        ...defaultEarthquakeData,
+        earthquakesLast72Hours: sourceQuakesForReconScenarios,
+        hasAttemptedMonthlyLoad: true,
+      });
+
       server.use(
-        http.post('/api/calculate-clusters', () => {
-          console.log('[MSW Test Log] Scenario 2b: /api/calculate-clusters hit (expecting X-Cache-Hit: false)');
-          // Simulate server responding but cache miss, or an error that leads to fallback
-          return HttpResponse.json({ clusters: [] }, { headers: { 'X-Cache-Hit': 'false' } });
+        http.post('/api/calculate-clusters', async () => {
+          console.log('[MSW Test Log] Scenario 2b: /api/calculate-clusters hit (X-Cache-Hit: false, client recon success)');
+          return HttpResponse.json([], { headers: { 'X-Cache-Hit': 'false' } });
         }),
         http.get('/api/cluster-definition', ({ request }) => {
           if (new URL(request.url).searchParams.get('id') === strongestQuakeIdInOldFormat) {
-            console.log('[MSW Test Log] Scenario 2b: /api/cluster-definition hit (expecting success)');
-            return HttpResponse.json(d1ClusterDefinition); // Simulate fetchClusterDefinition success
+            console.error('[MSW Test Log ERROR] Scenario 2b: /api/cluster-definition was called (SHOULD NOT HAPPEN)');
+            return HttpResponse.json(d1ClusterDefinition);
           }
         })
       );
@@ -314,14 +318,16 @@ describe('ClusterDetailModalWrapper', () => {
         </MemoryRouter>
       );
 
-      await screen.findByText(`Cluster: ${oldFormatSlug}`);
+      await screen.findByText(`Location: ${mockReconstructedClusterForAssertion.locationName}`);
+      expect(screen.getByText(`Cluster ID: ${oldFormatSlug}`)).toBeInTheDocument();
+      expect(screen.getByText(`Magnitude: M ${mockReconstructedClusterForAssertion.maxMagnitude.toFixed(1)}`)).toBeInTheDocument();
+      expect(screen.getByText(`Quake Count: ${mockReconstructedClusterForAssertion.quakeCount} Quakes`)).toBeInTheDocument();
 
-      // Expect the warning about fetchActiveClusters failing (due to X-Cache-Hit: false which triggers fallback)
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Server cache miss or stale data (X-Cache-Hit: false). Falling back to local calculation.`));
-      // Then it should successfully use the D1 data.
-      const modal = await screen.findByTestId('mock-cluster-detail-modal');
-      expect(modal).toHaveTextContent(`Cluster: ${oldFormatSlug}`);
+      expect(screen.queryByText(d1ClusterDefinition.locationName)).toBeNull(); // Should not see D1 data
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('[MSW Test Log ERROR] Scenario 2b: /api/cluster-definition was called'));
+
       consoleWarnSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
     });
   });
 });
