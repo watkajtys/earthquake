@@ -1,16 +1,18 @@
 // Import D1 utility functions
 // Note: Adjusted path assuming worker.js is in src/ and d1Utils.js is in src/utils/
 import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js';
+// Import common math utilities
+import { calculateDistance } from '../common/mathUtils.js';
 
-// === Helper Functions (originally from [[catchall]].js) ===
-const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefined) => {
+// === Helper Functions (originally from [[catchall]].js or new) ===
+const jsonErrorResponse = (message, status, sourceName, details = undefined) => {
   const errorBody = {
     status: "error",
     message: message,
     source: sourceName,
   };
-  if (upstreamStatus !== undefined) {
-    errorBody.upstream_status = upstreamStatus;
+  if (details !== undefined) {
+    errorBody.details = details;
   }
   return new Response(JSON.stringify(errorBody), {
     status: status,
@@ -53,7 +55,96 @@ function isCrawler(request) {
   return crawlerRegex.test(userAgent);
 }
 
-// === Request Handler Functions (originally from [[catchall]].js) ===
+// === Clustering Logic (adapted from functions/api/calculate-clusters.js) ===
+
+/**
+ * Finds clusters of earthquakes based on proximity.
+ * (Originally from `functions/api/calculate-clusters.js` which was adapted from `src/utils/clusterUtils.js`)
+ * @param {Array<Object>} earthquakes - Array of earthquake objects. Each object is expected to have an `id`,
+ *   `properties.mag` (magnitude), and `geometry.coordinates`.
+ * @param {number} maxDistanceKm - Maximum geographic distance (in kilometers) for clustering.
+ * @param {number} minQuakes - Minimum number of earthquakes required to form a valid cluster.
+ * @returns {Array<Array<Object>>} An array of clusters, where each cluster is an array of earthquake objects.
+ */
+function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
+    const clusters = [];
+    const processedQuakeIds = new Set();
+
+    const validEarthquakes = earthquakes.filter(q => {
+        if (!q) return false;
+        return true;
+    });
+
+    const sortedEarthquakes = [...validEarthquakes].sort((a, b) => (b.properties?.mag || 0) - (a.properties?.mag || 0));
+
+    for (const quake of sortedEarthquakes) {
+        if (!quake.id || processedQuakeIds.has(quake.id)) {
+            if (!quake.id && !processedQuakeIds.has(quake.id)) {
+                console.warn(`[findActiveClusters] Skipping quake with missing ID or invalid object.`);
+            }
+            continue;
+        }
+
+        const baseCoords = quake.geometry?.coordinates;
+        if (!Array.isArray(baseCoords) || baseCoords.length < 2) {
+            console.warn(`[findActiveClusters] Skipping quake ${quake.id} due to invalid coordinates.`);
+            continue;
+        }
+        const baseLat = baseCoords[1];
+        const baseLon = baseCoords[0];
+
+        const newCluster = [quake];
+        processedQuakeIds.add(quake.id);
+
+        for (const otherQuake of sortedEarthquakes) {
+            if (otherQuake.id === quake.id || processedQuakeIds.has(otherQuake.id)) {
+                continue;
+            }
+            if (!otherQuake.id ) {
+                console.warn(`[findActiveClusters] Skipping potential cluster member with missing ID or invalid object.`);
+                continue;
+            }
+
+            const otherCoords = otherQuake.geometry?.coordinates;
+            if (!Array.isArray(otherCoords) || otherCoords.length < 2) {
+                console.warn(`[findActiveClusters] Skipping potential cluster member ${otherQuake.id} due to invalid coordinates.`);
+                continue;
+            }
+            const dist = calculateDistance(baseLat, baseLon, otherCoords[1], otherCoords[0]);
+            if (dist <= maxDistanceKm) {
+                newCluster.push(otherQuake);
+                processedQuakeIds.add(otherQuake.id);
+            }
+        }
+        if (newCluster.length >= minQuakes) {
+            const newClusterQuakeIds = new Set(newCluster.map(q => q.id));
+            let isDuplicate = false;
+            for (const existingCluster of clusters) {
+                const existingClusterQuakeIds = new Set(existingCluster.map(q => q.id));
+                if (newClusterQuakeIds.size === existingClusterQuakeIds.size) {
+                    let allSame = true;
+                    for (const id of newClusterQuakeIds) {
+                        if (!existingClusterQuakeIds.has(id)) {
+                            allSame = false;
+                            break;
+                        }
+                    }
+                    if (allSame) {
+                        isDuplicate = true;
+                        break;
+                    }
+                }
+            }
+            if (!isDuplicate) {
+                clusters.push(newCluster);
+            }
+        }
+    }
+    return clusters;
+}
+
+
+// === Request Handler Functions ===
 
 async function handleUsgsProxyRequest(request, env, ctx, apiUrl) {
   const sourceName = "usgs-proxy-handler";
@@ -90,7 +181,7 @@ async function handleUsgsProxyRequest(request, env, ctx, apiUrl) {
     }
 
     const data = await externalResponse.json();
-    const DB = env.DB;
+    const DB = env.DB; // D1 binding from wrangler.toml
 
     if (DB && data && Array.isArray(data.features) && data.features.length > 0) {
       console.log(`[${sourceName}] Proactively upserting ${data.features.length} features from proxied feed into D1.`);
@@ -135,6 +226,176 @@ async function handleUsgsProxyRequest(request, env, ctx, apiUrl) {
     return jsonErrorResponse(`Error processing request: ${error.message}`, 500, sourceName);
   }
 }
+
+async function handleCalculateClustersRequest(request, env, ctx) {
+  const sourceName = "calculate-clusters-handler";
+  try {
+    const { earthquakes, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours } = await request.json();
+
+    if (!Array.isArray(earthquakes)) {
+      return jsonErrorResponse('Invalid earthquakes payload: not an array.', 400, sourceName);
+    }
+    if (earthquakes.length === 0) {
+      return jsonErrorResponse('Earthquakes array is empty, no clusters to calculate.', 400, sourceName);
+    }
+    for (let i = 0; i < earthquakes.length; i++) {
+        const quake = earthquakes[i];
+        if (!quake || typeof quake !== 'object') {
+            return jsonErrorResponse(`Invalid earthquake object at index ${i}: not an object.`, 400, sourceName);
+        }
+        if (!quake.geometry || typeof quake.geometry !== 'object') {
+            return jsonErrorResponse(`Invalid earthquake at index ${i} (id: ${quake.id || 'N/A'}): missing or invalid 'geometry' object.`, 400, sourceName);
+        }
+        if (!Array.isArray(quake.geometry.coordinates) || quake.geometry.coordinates.length < 2 ||
+            typeof quake.geometry.coordinates[0] !== 'number' || typeof quake.geometry.coordinates[1] !== 'number') {
+            return jsonErrorResponse(`Invalid earthquake at index ${i} (id: ${quake.id || 'N/A'}): 'geometry.coordinates' must be an array of at least 2 numbers.`, 400, sourceName);
+        }
+        if (!quake.properties || typeof quake.properties !== 'object') {
+            return jsonErrorResponse(`Invalid earthquake at index ${i} (id: ${quake.id || 'N/A'}): missing or invalid 'properties' object.`, 400, sourceName);
+        }
+        if (typeof quake.properties.time !== 'number') {
+            return jsonErrorResponse(`Invalid earthquake at index ${i} (id: ${quake.id || 'N/A'}): 'properties.time' must be a number.`, 400, sourceName);
+        }
+        if (!quake.id) {
+            return jsonErrorResponse(`Invalid earthquake at index ${i}: missing 'id' property.`, 400, sourceName);
+        }
+    }
+    if (typeof maxDistanceKm !== 'number' || maxDistanceKm <= 0) {
+      return jsonErrorResponse('Invalid maxDistanceKm', 400, sourceName);
+    }
+    if (typeof minQuakes !== 'number' || minQuakes <= 0) {
+      return jsonErrorResponse('Invalid minQuakes', 400, sourceName);
+    }
+
+    const requestParams = { numQuakes: earthquakes.length, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours };
+    const cacheKey = `clusters-${JSON.stringify(requestParams)}`;
+    const responseHeaders = { 'Content-Type': 'application/json' };
+    const DB = env.DB;
+
+    if (!DB) {
+      console.warn(`[${sourceName}] D1 Database (DB) not available. Proceeding without cache.`);
+      const clustersNoDB = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+      responseHeaders['X-Cache-Hit'] = 'false';
+      responseHeaders['X-Cache-Info'] = 'DB not configured';
+      return new Response(JSON.stringify(clustersNoDB), { status: 200, headers: responseHeaders });
+    }
+
+    const cacheQuery = "SELECT clusterData FROM ClusterCache WHERE cacheKey = ? AND createdAt > datetime('now', '-1 hour')";
+    const insertQuery = "INSERT OR REPLACE INTO ClusterCache (cacheKey, clusterData, requestParams) VALUES (?, ?, ?)";
+
+    try {
+      const selectStmt = DB.prepare(cacheQuery).bind(cacheKey);
+      const cachedResult = await selectStmt.first();
+      if (cachedResult && cachedResult.clusterData) {
+        try {
+          const parsedData = JSON.parse(cachedResult.clusterData);
+          responseHeaders['X-Cache-Hit'] = 'true';
+          console.log(`[${sourceName}] Cache hit for key: ${cacheKey}`);
+          return new Response(JSON.stringify(parsedData), { status: 200, headers: responseHeaders });
+        } catch (parseError) {
+          console.error(`[${sourceName}] D1 Cache: Error parsing cached JSON for key ${cacheKey}: ${parseError.message}`);
+        }
+      }
+       console.log(`[${sourceName}] Cache miss for key: ${cacheKey}`);
+    } catch (dbGetError) {
+      console.error(`[${sourceName}] D1 GET error for cacheKey ${cacheKey}: ${dbGetError.message}`, dbGetError.cause);
+    }
+
+    const clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+    const clusterDataString = JSON.stringify(clusters);
+
+    try {
+      const insertStmt = DB.prepare(insertQuery).bind(cacheKey, clusterDataString, JSON.stringify(requestParams));
+      ctx.waitUntil(insertStmt.run().catch(dbPutError => {
+         console.error(`[${sourceName}] D1 PUT error for cacheKey ${cacheKey}: ${dbPutError.message}`, dbPutError.cause);
+      }));
+    } catch (dbPrepareError) {
+        console.error(`[${sourceName}] D1 PUT statement preparation error for cacheKey ${cacheKey}: ${dbPrepareError.message}`, dbPrepareError.cause);
+    }
+
+    responseHeaders['X-Cache-Hit'] = 'false';
+    return new Response(clusterDataString, { status: 200, headers: responseHeaders });
+
+  } catch (error) {
+    if (error instanceof SyntaxError && error.message.includes("JSON")) {
+        return jsonErrorResponse('Invalid JSON payload', 400, sourceName, error.message);
+    }
+    console.error(`[${sourceName}] Unhandled error: ${error.message}`, error.stack);
+    return jsonErrorResponse('Internal server error', 500, sourceName, error.message);
+  }
+}
+
+async function handleClusterDefinitionRequest(request, env, ctx) {
+  const sourceName = "cluster-definition-handler";
+  const method = request.method;
+  const DB = env.DB;
+
+  if (!DB) {
+    return jsonErrorResponse("Database not configured.", 500, sourceName);
+  }
+
+  if (method === 'POST') {
+    try {
+      const clusterData = await request.json();
+
+      if (!clusterData || typeof clusterData.clusterId !== 'string' || !Array.isArray(clusterData.earthquakeIds) || typeof clusterData.strongestQuakeId !== 'string') {
+        return jsonErrorResponse('Invalid cluster data. Missing or invalid type for required fields: clusterId (string), earthquakeIds (array), strongestQuakeId (string).', 400, sourceName);
+      }
+
+      const { clusterId, earthquakeIds, strongestQuakeId } = clusterData;
+
+      const stmt = DB.prepare(
+        'INSERT OR REPLACE INTO ClusterDefinitions (clusterId, earthquakeIds, strongestQuakeId, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
+      ).bind(clusterId, JSON.stringify(earthquakeIds), strongestQuakeId);
+
+      await stmt.run();
+      console.log(`[${sourceName}] Cluster definition for ${clusterId} registered/updated successfully.`);
+      return new Response(JSON.stringify({ status: "success", message: `Cluster definition for ${clusterId} registered/updated.`, clusterId: clusterId }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+
+    } catch (e) {
+      if (e instanceof SyntaxError) { // JSON parsing error
+        return jsonErrorResponse('Invalid JSON payload.', 400, sourceName, e.message);
+      }
+      console.error(`[${sourceName}] Error processing POST request: ${e.message}`, e.cause);
+      return jsonErrorResponse('Failed to process cluster definition POST request.', 500, sourceName, e.message);
+    }
+  } else if (method === 'GET') {
+    try {
+      const url = new URL(request.url);
+      const clusterId = url.searchParams.get('id');
+
+      if (!clusterId) {
+        return jsonErrorResponse('Missing clusterId query parameter.', 400, sourceName);
+      }
+
+      const stmt = DB.prepare(
+        'SELECT clusterId, earthquakeIds, strongestQuakeId, createdAt, updatedAt FROM ClusterDefinitions WHERE clusterId = ?'
+      ).bind(clusterId);
+      const result = await stmt.first();
+
+      if (!result) {
+        return jsonErrorResponse(`Cluster definition for ${clusterId} not found.`, 404, sourceName);
+      }
+
+      const responsePayload = {
+        ...result,
+        earthquakeIds: JSON.parse(result.earthquakeIds || '[]'),
+      };
+
+      console.log(`[${sourceName}] Successfully retrieved cluster definition for ${clusterId}.`);
+      return new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (e) {
+      console.error(`[${sourceName}] Error processing GET request: ${e.message}`, e.cause);
+      return jsonErrorResponse('Failed to process cluster definition GET request.', 500, sourceName, e.message);
+    }
+  } else {
+    return jsonErrorResponse(`Method ${method} Not Allowed for /api/cluster-definition`, 405, sourceName, `Allowed methods: GET, POST`);
+  }
+}
+
 
 // eslint-disable-next-line no-unused-vars
 async function handleSitemapIndexRequest(request, env, ctx) {
@@ -377,7 +638,7 @@ async function handlePrerenderCluster(request, env, ctx, urlSlugParam) {
 
 async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
   const sourceName = "earthquake-detail-handler";
-  const DATA_FRESHNESS_THRESHOLD_MS = 60 * 60 * 1000;
+  const DATA_FRESHNESS_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
   const DB = env.DB;
 
   if (!DB) {
@@ -387,8 +648,8 @@ async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
       console.log(`[${sourceName}] Querying D1 for event: ${event_id}`);
       const stmt = DB.prepare("SELECT geojson_feature, retrieved_at FROM EarthquakeEvents WHERE id = ?").bind(event_id);
       const result = await stmt.first();
-      if (result && result.retrieved_at && (Date.now() - result.retrieved_at < DATA_FRESHNESS_THRESHOLD_MS)) {
-        console.log(`[${sourceName}] Fresh data found in D1 for event: ${event_id}. Freshness: ${Date.now() - result.retrieved_at}ms.`);
+      if (result && result.retrieved_at && (Date.now() - new Date(result.retrieved_at).getTime() < DATA_FRESHNESS_THRESHOLD_MS)) {
+        console.log(`[${sourceName}] Fresh data found in D1 for event: ${event_id}. Freshness: ${Date.now() - new Date(result.retrieved_at).getTime()}ms.`);
         return new Response(result.geojson_feature, { headers: { 'Content-Type': 'application/json', 'X-Data-Source': 'D1-Cache' }});
       }
       if (result) console.log(`[${sourceName}] Data for event ${event_id} found in D1 but is stale (retrieved_at: ${result.retrieved_at}). Proceeding to USGS fetch.`);
@@ -412,22 +673,22 @@ async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
     const geojsonFeature = await usgsResponse.json();
 
     if (DB) {
-      const retrieved_at = Date.now();
+      const retrieved_at_timestamp = Date.now();
       const geojson_feature_string = JSON.stringify(geojsonFeature);
       const id = geojsonFeature.id;
-      const event_time = geojsonFeature.properties?.time;
+      const event_time_timestamp = geojsonFeature.properties?.time;
       const latitude = geojsonFeature.geometry?.coordinates?.[1];
       const longitude = geojsonFeature.geometry?.coordinates?.[0];
       const depth = geojsonFeature.geometry?.coordinates?.[2];
       const magnitude = geojsonFeature.properties?.mag;
       const place = geojsonFeature.properties?.place;
 
-      if (id == null || event_time == null || latitude == null || longitude == null || depth == null || magnitude == null || place == null) {
+      if (id == null || event_time_timestamp == null || latitude == null || longitude == null || depth == null || magnitude == null || place == null) {
         console.warn(`[${sourceName}] Skipping D1 upsert for event ${id} due to missing critical GeoJSON properties.`);
       } else {
         const usgs_detail_json_url = usgsUrl;
         const upsertStmt = `INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature, retrieved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET event_time=excluded.event_time, latitude=excluded.latitude, longitude=excluded.longitude, depth=excluded.depth, magnitude=excluded.magnitude, place=excluded.place, usgs_detail_url=excluded.usgs_detail_url, geojson_feature=excluded.geojson_feature, retrieved_at=excluded.retrieved_at;`;
-        const d1WritePromise = DB.prepare(upsertStmt).bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_json_url, geojson_feature_string, retrieved_at).run()
+        const d1WritePromise = DB.prepare(upsertStmt).bind(id, event_time_timestamp, latitude, longitude, depth, magnitude, place, usgs_detail_json_url, geojson_feature_string, retrieved_at_timestamp).run()
           .then(({ success, error }) => {
             if (success) console.log(`[${sourceName}] Successfully upserted event ${id} into D1 from USGS fallback.`);
             else console.error(`[${sourceName}] Failed to upsert event ${id} into D1 from USGS fallback: ${error}`);
@@ -488,6 +749,12 @@ export default {
         return jsonErrorResponse("Invalid earthquake event ID path", 400, "worker-router-earthquake-format");
       }
     }
+    if (pathname === "/api/calculate-clusters" && request.method === "POST") {
+      return handleCalculateClustersRequest(request, env, ctx);
+    }
+    if (pathname === "/api/cluster-definition") {
+      return handleClusterDefinitionRequest(request, env, ctx);
+    }
 
     // Serve static assets from ASSETS binding
     try {
@@ -495,9 +762,6 @@ export default {
         console.error("[worker-fetch] env.ASSETS binding is not available.");
         return new Response("Static asset serving is not configured.", { status: 500 });
       }
-      // Attempt to fetch the request directly from the ASSETS binding.
-      // This will serve static files like CSS, JS, images, and also index.html for SPA routes
-      // if 'not_found_handling = "single-page-application"' is correctly configured for the [assets] in wrangler.toml.
       return env.ASSETS.fetch(request);
     } catch (e) {
       console.error(`[worker-fetch] Error fetching from ASSETS for ${pathname}: ${e.message}`, e);
@@ -536,8 +800,21 @@ export default {
 
       console.log(`[worker-scheduled] Fetched ${data.features.length} earthquake features. Starting D1 upsert.`);
 
+      const featuresToUpsert = data.features.map(feature => {
+        if (feature.properties && typeof feature.properties.retrieved_at === 'string') {
+          return {
+            ...feature,
+            properties: {
+              ...feature.properties,
+              retrieved_at: new Date(feature.properties.retrieved_at).getTime(),
+            },
+          };
+        }
+        return feature;
+      });
+
       ctx.waitUntil(
-        upsertEarthquakeFeaturesToD1(env.DB, data.features)
+        upsertEarthquakeFeaturesToD1(env.DB, featuresToUpsert)
           .then(({ successCount, errorCount }) => {
             console.log(`[worker-scheduled] D1 upsert complete. Success: ${successCount}, Errors: ${errorCount}`);
           })
