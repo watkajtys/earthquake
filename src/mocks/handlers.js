@@ -322,4 +322,88 @@ export const handlers = [
       // headers: { 'X-Cache-Hit': 'false' } // cacheHit is in the body now
     });
   }),
+
+  // New handler for POST /api/cluster-definition (comprehensive schema)
+  http.post('/api/cluster-definition', async ({ request }) => {
+    const requestBody = await request.json();
+    // Basic check for a few mandatory fields
+    if (
+      requestBody &&
+      requestBody.id &&
+      requestBody.slug &&
+      Array.isArray(requestBody.earthquakeIds) && // Check if it's an array
+      requestBody.strongestQuakeId &&
+      typeof requestBody.maxMagnitude === 'number' &&
+      typeof requestBody.startTime === 'number' &&
+      typeof requestBody.endTime === 'number' &&
+      typeof requestBody.quakeCount === 'number'
+    ) {
+      console.log('[MSW] POST /api/cluster-definition - Valid request for ID:', requestBody.id);
+      return HttpResponse.json({ message: `Cluster ${requestBody.id} definition processed.` }, { status: 201 });
+    } else {
+      console.log('[MSW] POST /api/cluster-definition - Invalid/incomplete request body:', requestBody);
+      return HttpResponse.json({ error: 'Missing or invalid required fields for cluster definition.' }, { status: 400 });
+    }
+  }),
+
+  // New handler for GET /api/cluster-detail-with-quakes
+  http.get('/api/cluster-detail-with-quakes', ({ request }) => {
+    const url = new URL(request.url);
+    const clusterId = url.searchParams.get('id');
+    console.log(`[MSW] GET /api/cluster-detail-with-quakes for id: ${clusterId}`);
+
+    const mockDetailedCluster1Data = {
+      id: 'test-cluster-id-1',
+      slug: '3-quakes-near-test-valley-m5.2-testc1',
+      title: 'Test Cluster 1 Title - 3 Quakes in Test Valley',
+      description: 'A significant test cluster of 3 earthquakes occurred in Test Valley.',
+      strongestQuakeId: 'mock-quake-1a',
+      earthquakeIds: ['mock-quake-1a', 'mock-quake-1b', 'mock-quake-1c'], // Array of strings
+      locationName: 'Test Valley, NV',
+      maxMagnitude: 5.2,
+      meanMagnitude: 4.8,
+      minMagnitude: 4.5,
+      depthRange: "5.0-10.0km",
+      centroidLat: 36.0,
+      centroidLon: -118.0,
+      radiusKm: 15.0,
+      startTime: Date.now() - (2 * 3600000), // 2 hours ago
+      endTime: Date.now() - 300000, // 5 minutes ago
+      durationHours: 1.91, // approx
+      quakeCount: 3,
+      significanceScore: 2.5,
+      version: 1,
+      createdAt: new Date(Date.now() - (3 * 3600000)).toISOString(), // 3 hours ago
+      updatedAt: new Date(Date.now() - 300000).toISOString(), // 5 minutes ago
+      quakes: [ // Full GeoJSON objects
+        {
+          type: 'Feature',
+          properties: { mag: 5.2, place: '10km N of Test Valley, NV', time: Date.now() - 300000, code: 'mock_quake_1a', updated: Date.now() - 200000, url: 'http://example.com/quake/1a', detail: 'http://example.com/quake/1a.geojson', felt: 10, cdi: 4.0, mmi: 5.1, alert: 'green', status: 'reviewed', tsunami: 0, sig: 400, net: 'testnet', sources: ',test,', types: ',origin,phase-data,', nst: 50, dmin: 0.1, rms: 0.5, gap: 90, magType: 'ml', title: 'M 5.2 - 10km N of Test Valley, NV' },
+          geometry: { type: 'Point', coordinates: [-118.0, 36.1, 8.0] },
+          id: 'mock-quake-1a'
+        },
+        {
+          type: 'Feature',
+          properties: { mag: 4.5, place: '12km NW of Test Valley, NV', time: Date.now() - 3600000, code: 'mock_quake_1b', updated: Date.now() - 3500000, url: 'http://example.com/quake/1b', detail: 'http://example.com/quake/1b.geojson', felt: 2, cdi: 2.0, mmi: 3.0, alert: null, status: 'reviewed', tsunami: 0, sig: 300, net: 'testnet', sources: ',test,', types: ',origin,phase-data,', nst: 40, dmin: 0.15, rms: 0.6, gap: 100, magType: 'ml', title: 'M 4.5 - 12km NW of Test Valley, NV' },
+          geometry: { type: 'Point', coordinates: [-118.1, 36.05, 5.0] },
+          id: 'mock-quake-1b'
+        },
+        {
+          type: 'Feature',
+          properties: { mag: 4.7, place: '8km S of Test Valley, NV', time: Date.now() - (2 * 3600000), code: 'mock_quake_1c', updated: Date.now() - (2*3600000 - 100000) , url: 'http://example.com/quake/1c', detail: 'http://example.com/quake/1c.geojson', felt: 5, cdi: 3.0, mmi: 4.0, alert: 'yellow', status: 'reviewed', tsunami: 0, sig: 350, net: 'testnet', sources: ',test,', types: ',origin,phase-data,', nst: 45, dmin: 0.05, rms: 0.4, gap: 80, magType: 'ml', title: 'M 4.7 - 8km S of Test Valley, NV' },
+          geometry: { type: 'Point', coordinates: [-117.95, 35.9, 10.0] },
+          id: 'mock-quake-1c'
+        }
+      ]
+    };
+
+    if (clusterId === 'test-cluster-id-1') {
+      return HttpResponse.json(mockDetailedCluster1Data, { status: 200 });
+    }
+    if (clusterId === 'not-found-cluster-id') {
+      return HttpResponse.json({ error: 'Cluster not found' }, { status: 404 });
+    }
+    // Default fallback if specific test IDs aren't matched in this handler
+    return HttpResponse.json({ error: `Mock for cluster ID ${clusterId} not specifically handled in /api/cluster-detail-with-quakes.` }, { status: 404 });
+  }),
 ];
