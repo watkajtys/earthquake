@@ -34,21 +34,49 @@ export async function onRequest(context) {
     try {
       const clusterData = await request.json();
 
-      if (!clusterData || !clusterData.clusterId || !clusterData.earthquakeIds || !clusterData.strongestQuakeId) {
-        return new Response('Invalid cluster data provided. Missing required fields.', { status: 400 });
+      // Validate required fields
+      const requiredFields = ['clusterId', 'earthquakeIds', 'strongestQuakeId', 'title', 'description', 'quakeCount'];
+      for (const field of requiredFields) {
+        if (clusterData[field] === undefined) {
+          return new Response(`Invalid cluster data provided. Missing required field: ${field}.`, { status: 400 });
+        }
       }
-      if (!Array.isArray(clusterData.earthquakeIds)) {
-        return new Response('Invalid cluster data: earthquakeIds must be an array.', { status: 400 });
-      }
-      if (typeof clusterData.clusterId !== 'string' || typeof clusterData.strongestQuakeId !== 'string') {
-          return new Response('Invalid cluster data: clusterId and strongestQuakeId must be strings.', { status: 400 });
+      // locationName can be null/missing, maxMagnitude can be null
+      // Validate types
+      if (typeof clusterData.clusterId !== 'string' ||
+          typeof clusterData.strongestQuakeId !== 'string' ||
+          typeof clusterData.title !== 'string' ||
+          typeof clusterData.description !== 'string' ||
+          (clusterData.locationName !== null && typeof clusterData.locationName !== 'string') || // locationName can be null
+          (clusterData.maxMagnitude !== null && typeof clusterData.maxMagnitude !== 'number') || // maxMagnitude can be null
+          typeof clusterData.quakeCount !== 'number' ||
+          !Number.isInteger(clusterData.quakeCount) || // Ensure quakeCount is an integer
+          !Array.isArray(clusterData.earthquakeIds)) {
+        return new Response('Invalid cluster data: Type mismatch for one or more fields.', { status: 400 });
       }
 
-      const { clusterId, earthquakeIds, strongestQuakeId } = clusterData;
+      const {
+        clusterId, earthquakeIds, strongestQuakeId,
+        title, description, locationName, maxMagnitude, quakeCount
+      } = clusterData;
+
+      // Ensure quakeCount is positive
+      if (quakeCount <= 0) {
+        return new Response('Invalid cluster data: quakeCount must be a positive integer.', { status: 400 });
+      }
 
       const stmt = env.DB.prepare(
-        'INSERT OR REPLACE INTO ClusterDefinitions (clusterId, earthquakeIds, strongestQuakeId, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
-      ).bind(clusterId, JSON.stringify(earthquakeIds), strongestQuakeId);
+        'INSERT OR REPLACE INTO ClusterDefinitions (clusterId, earthquakeIds, strongestQuakeId, title, description, locationName, maxMagnitude, quakeCount, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+      ).bind(
+        clusterId,
+        JSON.stringify(earthquakeIds),
+        strongestQuakeId,
+        title,
+        description,
+        locationName, // Will be null if not provided and column is nullable
+        maxMagnitude, // Will be null if not provided and column is nullable
+        quakeCount
+      );
       await stmt.run();
 
       return new Response(`Cluster definition for ${clusterId} registered/updated successfully in D1.`, { status: 201 });
@@ -69,7 +97,7 @@ export async function onRequest(context) {
       }
 
       const stmt = env.DB.prepare(
-        'SELECT clusterId, earthquakeIds, strongestQuakeId, createdAt, updatedAt FROM ClusterDefinitions WHERE clusterId = ?'
+        'SELECT clusterId, earthquakeIds, strongestQuakeId, title, description, locationName, maxMagnitude, quakeCount, createdAt, updatedAt FROM ClusterDefinitions WHERE clusterId = ?'
       ).bind(clusterId);
       const result = await stmt.first();
 
@@ -79,8 +107,16 @@ export async function onRequest(context) {
 
       // Parse earthquakeIds from JSON string to an array
       const responsePayload = {
-        ...result,
+        clusterId: result.clusterId,
         earthquakeIds: JSON.parse(result.earthquakeIds || '[]'), // Handle null/empty if necessary
+        strongestQuakeId: result.strongestQuakeId,
+        title: result.title,
+        description: result.description,
+        locationName: result.locationName,
+        maxMagnitude: result.maxMagnitude,
+        quakeCount: result.quakeCount,
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
       };
 
       return new Response(JSON.stringify(responsePayload), {

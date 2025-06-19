@@ -703,27 +703,32 @@ function App() {
     // Effect to register cluster definitions
     useEffect(() => {
         if (overviewClusters && overviewClusters.length > 0) {
-            // console.log("----------- DEBUG: Registering Overview Clusters -----------");
-            // overviewClusters.forEach(c => console.log(c.id, c._latestTimeInternal, c._maxMagInternal, c._quakeCountInternal));
-
             const registrationPromises = [];
             const idsSuccessfullyRegisteredInEffect = new Set();
 
             overviewClusters.forEach(cluster => {
-                if (!registeredIdsThisSession.has(cluster.id)) {
+                // Key change: Use strongestQuakeId for checking registration status
+                if (!registeredIdsThisSession.has(cluster.strongestQuakeId)) {
                     const payload = {
-                        clusterId: cluster.id,
+                        clusterId: cluster.strongestQuakeId, // Key change: Use strongestQuakeId as the primary ID for D1
                         earthquakeIds: cluster.originalQuakes.map(q => q.id),
-                        strongestQuakeId: cluster.strongestQuakeId,
+                        strongestQuakeId: cluster.strongestQuakeId, // Still useful to store explicitly
+                        title: cluster.locationName ? `Cluster: ${cluster.quakeCount} quakes near ${cluster.locationName}` : `Cluster: ${cluster.quakeCount} quakes, M${cluster.maxMagnitude?.toFixed(1)}`,
+                        description: `A cluster of ${cluster.quakeCount} earthquakes, with the strongest event (ID: ${cluster.strongestQuakeId}) reaching magnitude M${cluster.maxMagnitude?.toFixed(1)}${cluster.locationName ? ` near ${cluster.locationName}` : ''}. Occurred around ${cluster.timeRange?.value ? cluster.timeRange.prefix + cluster.timeRange.value : 'recently'}.`,
+                        locationName: cluster.locationName,
+                        maxMagnitude: cluster.maxMagnitude === -Infinity ? null : cluster.maxMagnitude,
+                        quakeCount: cluster.quakeCount
                     };
                     const promise = registerClusterDefinition(payload)
                         .then(success => {
                             if (success) {
-                                idsSuccessfullyRegisteredInEffect.add(cluster.id);
+                                // Key change: Add strongestQuakeId to the set of registered IDs
+                                idsSuccessfullyRegisteredInEffect.add(cluster.strongestQuakeId);
                             }
                         })
                         .catch(error => {
-                            console.error(`Error registering cluster ${cluster.id}:`, error);
+                            // Use new clusterId (strongestQuakeId) in error message
+                            console.error(`Error registering cluster ${cluster.strongestQuakeId}:`, error);
                         });
                     registrationPromises.push(promise);
                 }

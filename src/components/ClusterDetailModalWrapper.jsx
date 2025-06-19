@@ -337,19 +337,9 @@ function ClusterDetailModalWrapper({
                 }
                 // If not found in props, decide next step
                 if (isMounted) {
-                    let sourceQuakesAvailable = earthquakesLast72Hours?.length > 0 || (hasAttemptedMonthlyLoad && allEarthquakes?.length > 0);
-                    // console.log(`[Wrapper Status] 'checkingProps': Not found in props. isOldFormat: ${isOldFormat}, sourceQuakesAvailable: ${sourceQuakesAvailable}, hasAttemptedMonthlyLoad: ${hasAttemptedMonthlyLoad}`); // DEBUG
-                    if (isOldFormat && sourceQuakesAvailable) {
-                        // console.log("[Wrapper Status] 'checkingProps': Transitioning to 'reconstructingOldFormat'."); // DEBUG
-                        setFetchStatus('reconstructingOldFormat');
-                    } else if (isOldFormat && !sourceQuakesAvailable && !hasAttemptedMonthlyLoad) {
-                        // console.log("[Wrapper Status] 'checkingProps': Old format, no quakes, monthly not tried. Transitioning to 'needsMonthlyDataCheck'."); // DEBUG
-                        setFetchStatus('needsMonthlyDataCheck');
-                    }
-                    else {
-                        // console.log("[Wrapper Status] 'checkingProps': Defaulting to 'fetchingD1'."); // DEBUG
-                        setFetchStatus('fetchingD1');
-                    }
+                    // Regardless of old or new format, if not in props, the first attempt should be D1.
+                    // console.log(`[Wrapper Status] 'checkingProps': Not found in props. effectiveQuakeId: ${effectiveQuakeId}. Transitioning to 'fetchingD1'.`);
+                    setFetchStatus('fetchingD1');
                 }
                 return;
             }
@@ -362,22 +352,23 @@ function ClusterDetailModalWrapper({
 
             if (fetchStatus === 'reconstructingOldFormat') {
                 // console.log(`[Wrapper Status] In 'reconstructingOldFormat'. isOldFormat: ${isOldFormat}, sourceQuakes length: ${sourceQuakesForReconstruction?.length}`); // DEBUG
-                if (!isOldFormat) {
+                if (!isOldFormat) { // Should only be called for old format as a fallback
                      if (isMounted) {
-                        // console.warn("[Wrapper Status] 'reconstructingOldFormat': Not old format. Transitioning to 'fetchingD1'."); // DEBUG - this is a warn
-                        setFetchStatus('fetchingD1');
+                        // console.warn("[Wrapper Status] 'reconstructingOldFormat': Not old format. This should not happen. Transitioning to 'error'.");
+                        setErrorMessage("Reconstruction attempted for non-old-format URL.");
+                        setSeoProps(generateSeo(null, fullSlugFromParams, "Reconstruction attempted for non-old-format URL."));
+                        setFetchStatus('error');
                      }
                      return;
                 }
                 if (!sourceQuakesForReconstruction?.length) {
                     if (isMounted) {
-                        if (!hasAttemptedMonthlyLoad) {
-                            // console.log("[Wrapper Status] 'reconstructingOldFormat': No source quakes, monthly not attempted. Transitioning to 'needsMonthlyDataCheck'."); // DEBUG
-                            setFetchStatus('needsMonthlyDataCheck');
-                        } else {
-                            // console.warn("[Wrapper Status] 'reconstructingOldFormat': No source quakes after monthly load attempt. Falling to D1. Transitioning to 'fetchingD1'."); // DEBUG - this is a warn
-                            setFetchStatus('fetchingD1');
-                        }
+                        // This implies D1 failed, and now reconstruction also lacks data.
+                        const msg = `Failed to reconstruct cluster for old format ID ${effectiveQuakeId}: No source earthquake data available even after monthly load attempt.`;
+                        // console.warn(`[Wrapper Status] 'reconstructingOldFormat': ${msg}`);
+                        setErrorMessage(msg);
+                        setSeoProps(generateSeo(null, fullSlugFromParams, msg));
+                        setFetchStatus('error');
                     }
                     return;
                 }
@@ -427,14 +418,20 @@ function ClusterDetailModalWrapper({
                     if (foundMatchingCluster) return;
 
                     if (isMounted) {
-                         // console.warn(`[Wrapper Status] 'reconstructingOldFormat': Old format ID ${effectiveQuakeId} not found. Transitioning to 'fetchingD1'.`); // DEBUG - this is a warn
-                         setFetchStatus('fetchingD1');
+                        const msg = `Failed to reconstruct cluster for old format ID ${effectiveQuakeId} from available earthquake data. The cluster definition was also not found directly.`;
+                        // console.warn(`[Wrapper Status] 'reconstructingOldFormat': ${msg}`);
+                        setErrorMessage(msg);
+                        setSeoProps(generateSeo(null, fullSlugFromParams, msg));
+                        setFetchStatus('error'); // Go to error state.
                     }
 
                 } catch (error) {
                     if (isMounted) {
-                        // console.warn(`[Wrapper Status] 'reconstructingOldFormat': Error during fetchActiveClusters for old ID path: ${error.message}. Transitioning to 'fetchingD1'.`); // DEBUG - this is a warn
-                        setFetchStatus('fetchingD1');
+                        const msg = `Error during reconstruction for old format ID ${effectiveQuakeId}: ${error.message}.`;
+                        // console.warn(`[Wrapper Status] 'reconstructingOldFormat': ${msg}`);
+                        setErrorMessage(msg);
+                        setSeoProps(generateSeo(null, fullSlugFromParams, msg));
+                        setFetchStatus('error');
                     }
                 }
                 return;
@@ -509,20 +506,45 @@ function ClusterDetailModalWrapper({
                     // console.log(`[Wrapper Status] 'fetchingD1': fetchClusterDefinition returned:`, d1Definition ? "data" : "null/undefined"); // DEBUG
 
                     if (d1Definition) {
+                        // Estimate cluster recency from d1Definition.updatedAt or createdAt
+                        const clusterTimestamp = d1Definition.updatedAt ? new Date(d1Definition.updatedAt).getTime() : (d1Definition.createdAt ? new Date(d1Definition.createdAt).getTime() : null);
+                        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+                        let sufficientDataAvailable = false;
+                        if (earthquakesLast72Hours?.length > 0 && clusterTimestamp && clusterTimestamp > sevenDaysAgo) {
+                            // If cluster is recent (e.g., updated in last 7 days) and 72hr data is loaded, assume it might be sufficient
+                            sufficientDataAvailable = true;
+                        } else if (hasAttemptedMonthlyLoad && allEarthquakes?.length > 0) {
+                            // If monthly data is loaded, assume it's sufficient for any cluster age
+                            sufficientDataAvailable = true;
+                        }
+
+                        if (!sufficientDataAvailable && !hasAttemptedMonthlyLoad && clusterTimestamp && clusterTimestamp <= sevenDaysAgo) {
+                            // If data doesn't seem sufficient (e.g., cluster is older than 7 days or timestamp unknown),
+                            // and monthly data hasn't been tried, trigger it.
+                            if (isMounted) {
+                                // console.log("[Wrapper Status] 'fetchingD1': D1 definition found, but data might be insufficient for hydration. Triggering monthly load. Cluster timestamp:", clusterTimestamp);
+                                loadMonthlyData(); // Trigger monthly data load
+                                setFetchStatus('waitingForMonthlyData'); // Change status to wait
+                                return;
+                            }
+                        }
+
                         const quakesToSearchForD1 = (hasAttemptedMonthlyLoad && allEarthquakes?.length > 0) ? allEarthquakes : earthquakesLast72Hours;
                         // console.log(`[Wrapper Status] 'fetchingD1': Using quakesToSearchForD1 length: ${quakesToSearchForD1?.length}`); // DEBUG
 
                         if (quakesToSearchForD1?.length > 0) {
                             const { earthquakeIds, strongestQuakeId: defStrongestQuakeIdFromD1, updatedAt: d1UpdatedAt, title: d1Title, description: d1Description, locationName: d1LocationName, maxMagnitude: d1MaxMagnitude } = d1Definition;
+                            const definedEarthquakeIds = JSON.parse(earthquakeIds || "[]");
 
                             if (defStrongestQuakeIdFromD1 !== effectiveQuakeId && d1Definition.clusterId !== effectiveQuakeId) {
                                 // console.warn(`[Wrapper Status] 'fetchingD1': D1 ClusterDefinition for ${effectiveQuakeId} returned data for ${defStrongestQuakeIdFromD1}. Mismatch.`); // DEBUG - this is a warn
                             }
 
-                            const foundQuakes = (JSON.parse(earthquakeIds || "[]")).map(id => quakesToSearchForD1.find(q => q.id === id)).filter(Boolean);
-                            // console.log(`[Wrapper Status] 'fetchingD1': Found ${foundQuakes.length} of ${JSON.parse(earthquakeIds || "[]").length} quakes from D1 definition.`); // DEBUG
+                            const foundQuakes = definedEarthquakeIds.map(id => quakesToSearchForD1.find(q => q.id === id)).filter(Boolean);
+                            // console.log(`[Wrapper Status] 'fetchingD1': Found ${foundQuakes.length} of ${definedEarthquakeIds.length} quakes from D1 definition.`); // DEBUG
 
-                            if (foundQuakes.length === (JSON.parse(earthquakeIds || "[]")).length) {
+                            if (foundQuakes.length === definedEarthquakeIds.length && definedEarthquakeIds.length > 0) {
                                 let earliestTime = Infinity, latestTime = -Infinity;
                                 foundQuakes.forEach(q => {
                                     if (q.properties.time < earliestTime) earliestTime = q.properties.time;
@@ -553,18 +575,30 @@ function ClusterDetailModalWrapper({
                                         setFetchStatus('success');
                                     }
                                 } else {
-                                    d1ErrorMessage = "Error processing D1 cluster data (strongest quake mismatch).";
+                                    // This case means all earthquake IDs from definition were found, but the strongestQuakeId from definition didn't match any of them.
+                                    d1ErrorMessage = "Error processing D1 cluster data (strongest quake ID from definition not found in its own earthquake list).";
                                     // console.warn(`[Wrapper Status] 'fetchingD1': ${d1ErrorMessage}`); // DEBUG - this is a warn
                                 }
-                            } else if (JSON.parse(earthquakeIds || "[]").length > 0) {
-                                d1ErrorMessage = "Cluster data found, but some quakes are not in recent client records.";
-                                // console.warn(`[Wrapper Status] 'fetchingD1': ${d1ErrorMessage}`); // DEBUG - this is a warn
-                            } else {
-                                d1ErrorMessage = "Cluster definition found but no quakes could be matched from client records.";
-                                 // console.warn(`[Wrapper Status] 'fetchingD1': ${d1ErrorMessage}`); // DEBUG - this is a warn
+                            } else if (definedEarthquakeIds.length > 0 && (foundQuakes.length === 0 || foundQuakes.length < definedEarthquakeIds.length)) {
+                                // This condition means: (has definition IDs, but no quakes found) OR (has definition IDs, some found, but not all)
+                                if (!hasAttemptedMonthlyLoad && isMounted) {
+                                    // console.warn("[Wrapper Status] 'fetchingD1': D1 Definition present, but full hydration failed and monthly not loaded. Triggering monthly load.");
+                                    loadMonthlyData();
+                                    setFetchStatus('waitingForMonthlyData'); // Go wait for data
+                                    return;
+                                } else if (foundQuakes.length < definedEarthquakeIds.length) {
+                                    d1ErrorMessage = "Cluster definition found, but some constituent earthquakes are not available in the client's current dataset (even after checking extended data). The cluster display may be incomplete or unavailable.";
+                                    // console.warn(`[Wrapper Status] 'fetchingD1': ${d1ErrorMessage}`);
+                                } else { // No definition IDs or other case (e.g. definedEarthquakeIds.length === 0, but this case should be caught by foundQuakes.length === definedEarthquakeIds.length if definedEarthquakeIds is empty)
+                                     d1ErrorMessage = "Cluster definition found but no quakes could be matched from client records, or definition had no quake IDs.";
+                                     // console.warn(`[Wrapper Status] 'fetchingD1': ${d1ErrorMessage}`);
+                                }
+                            } else if (definedEarthquakeIds.length === 0) {
+                                d1ErrorMessage = "Cluster definition loaded but contains no earthquake IDs to display.";
+                                // console.warn(`[Wrapper Status] 'fetchingD1': ${d1ErrorMessage}`);
                             }
-                        } else {
-                             d1ErrorMessage = "Cluster definition found, but source quakes unavailable on client for full display.";
+                        } else { // This means quakesToSearchForD1.length is 0
+                             d1ErrorMessage = "Cluster definition found, but no source earthquake data (72hr or monthly) is available on the client for hydration.";
                              // console.warn(`[Wrapper Status] 'fetchingD1': ${d1ErrorMessage}`); // DEBUG - this is a warn
                         }
                     } else {
@@ -577,7 +611,23 @@ function ClusterDetailModalWrapper({
                     d1ErrorMessage = "Failed to fetch or process cluster details from D1.";
                 }
 
-                if (isMounted && fetchStatus !== 'success') {
+                if (isMounted && fetchStatus !== 'success') { // This is the existing outer check for error path
+                    if (isOldFormat && d1ErrorMessage) { // If it was an old format URL and D1 fetch failed
+                        // console.warn(`[Wrapper Status] 'fetchingD1': D1 fetch failed for old format ID ${effectiveQuakeId}. Attempting reconstruction as fallback.`);
+                        let sourceQuakesAvailable = earthquakesLast72Hours?.length > 0 || (hasAttemptedMonthlyLoad && allEarthquakes?.length > 0);
+                        if (sourceQuakesAvailable) {
+                            // console.log("[Wrapper Status] 'fetchingD1' (error path): Old format, D1 failed. Transitioning to 'reconstructingOldFormat'.");
+                            setFetchStatus('reconstructingOldFormat');
+                            return; // Exit to allow reconstruction attempt
+                        } else if (!hasAttemptedMonthlyLoad) {
+                            // console.log("[Wrapper Status] 'fetchingD1' (error path): Old format, D1 failed, no quakes for recon, monthly not tried. Transitioning to 'needsMonthlyDataCheck'.");
+                            setFetchStatus('needsMonthlyDataCheck');
+                            return; // Exit to allow monthly data load then retry reconstruction
+                        }
+                        // If quakes not available even after monthly load, it will fall through to the general error setting.
+                    }
+
+                    // Original error setting logic:
                     const finalMsg = d1ErrorMessage || (monthlyError ? `Failed to load extended data: ${monthlyError}. Cluster details may be incomplete.` : "Cluster details could not be found or were incomplete after D1 attempt.");
                     // console.log(`[Wrapper Status] 'fetchingD1': Failed. Error: ${finalMsg}. Transitioning to 'error'.`); // DEBUG
                     setErrorMessage(finalMsg);
@@ -589,10 +639,8 @@ function ClusterDetailModalWrapper({
             }
         };
 
-        // Add a log before calling processClusterFetch
-        // Add a log before calling processClusterFetch
         // console.log(`[Wrapper Status] Effect run. Initial fetchStatus: ${fetchStatus}, effectiveQuakeId: ${effectiveQuakeId}, mounted: ${isMounted}`); // DEBUG
-        processClusterFetch(); // New location
+        processClusterFetch();
 
         return () => { isMounted = false; };
 
