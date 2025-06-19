@@ -90,6 +90,54 @@ export async function fetchClusterDefinition(clusterId) {
 }
 
 /**
+ * Fetches a specific cluster definition along with all its associated earthquake GeoJSON feature data.
+ *
+ * @export
+ * @async
+ * @param {string} clusterId - The ID of the cluster to fetch.
+ * @returns {Promise<Object|null>} A promise that resolves to the cluster definition object
+ *   (including a `quakes` array property containing the GeoJSON features) if found (200 OK),
+ *   `null` if not found (404), or throws an error for other server/network issues.
+ * @throws {Error} If `clusterId` is invalid, or if the fetch operation fails due to network
+ *                 or server issues (other than 404), or if JSON parsing fails.
+ */
+export async function fetchClusterWithQuakes(clusterId) {
+  if (!clusterId) {
+    console.error("fetchClusterWithQuakes: Invalid clusterId provided.");
+    throw new Error("Invalid clusterId");
+  }
+
+  try {
+    const response = await fetch(`/api/cluster-detail-with-quakes?id=${encodeURIComponent(clusterId)}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (response.status === 200) {
+      const data = await response.json();
+      console.log(`Cluster with quakes for ${clusterId} fetched successfully.`);
+      return data; // Expected full cluster definition including 'quakes' array
+    } else if (response.status === 404) {
+      console.log(`Cluster with quakes for ${clusterId} not found (404).`);
+      return null;
+    } else {
+      const errorBody = await response.text();
+      console.error(
+        `Failed to fetch cluster with quakes for ${clusterId}. Status: ${response.status}`,
+        errorBody
+      );
+      throw new Error(`Failed to fetch cluster with quakes. Status: ${response.status}`);
+    }
+  } catch (error) {
+    // This catches network errors, or errors from response.json() if status was 200 but body wasn't valid JSON.
+    console.error(`Network or parsing error while fetching cluster with quakes for ${clusterId}:`, error);
+    throw error; // Re-throw the caught error
+  }
+}
+
+/**
  * Fetches active earthquake clusters. It first attempts to retrieve them from a backend service
  * at `/api/calculate-clusters`. This backend service is responsible for calculating and potentially
  * caching the clusters (e.g., using data sourced from D1). The request body to the backend

@@ -54,14 +54,10 @@ function generateClusterJsonLd(pageTitleText, pageDescriptionText, canonicalUrl,
 export async function handlePrerenderCluster(context, clusterSlug) {
   const { env } = context;
 
-  const slugParts = clusterSlug.match(/^(\d+)-quakes-near-(.+)-up-to-m(\d+\.?\d*)-([a-zA-Z0-9_.-]+)$/);
-
-  if (!slugParts) {
-    return new Response("Invalid cluster URL format.", { status: 404, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } });
-  }
-
-  const [, countStr, locationNameFromSlug, maxMagnitudeFromSlug, strongestQuakeIdFromSlug] = slugParts;
-  const count = parseInt(countStr, 10);
+  // Basic slug validation (optional, as DB query is the main check)
+  // Example: if (clusterSlug && !/^[a-z0-9-]+$/.test(clusterSlug)) {
+  //   return new Response("Invalid cluster slug format.", { status: 400, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } });
+  // }
 
   if (!env.DB) {
     console.error("Database not configured for prerender cluster");
@@ -70,22 +66,24 @@ export async function handlePrerenderCluster(context, clusterSlug) {
 
   let d1Response;
   try {
-    const d1QueryId = `overview_cluster_${strongestQuakeIdFromSlug}_${count}`;
-    const d1Stmt = env.DB.prepare("SELECT title, description, strongestQuakeId, locationName, maxMagnitude, earthquakeIds FROM earthquake_clusters WHERE clusterId = ?");
-    d1Response = await d1Stmt.bind(d1QueryId).first();
+    // Query by slug using the new ClusterDefinitions table schema
+    const d1Stmt = env.DB.prepare(
+      "SELECT id, slug, title, description, strongestQuakeId, locationName, maxMagnitude, earthquakeIds, startTime, endTime FROM ClusterDefinitions WHERE slug = ?"
+    );
+    d1Response = await d1Stmt.bind(clusterSlug).first();
 
     if (!d1Response) {
-      console.warn(`Cluster details not found in D1 for ID: ${d1QueryId}`);
+      console.warn(`Cluster details not found in D1 for slug: ${clusterSlug}`);
       return new Response("Cluster not found", { status: 404, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } });
     }
 
-    // This try-catch is primarily to satisfy a specific test case for "Error parsing earthquakeIds"
+    // Optional: Validate earthquakeIds if still needed for other purposes (not for dates anymore)
     if (d1Response.earthquakeIds) {
         try {
             JSON.parse(d1Response.earthquakeIds);
         } catch (e) {
-            console.error(`[prerender-cluster] Error parsing earthquakeIds for D1 Query ID ${d1QueryId}: ${e.message}`);
-            return new Response("Error processing cluster data.", { status: 500, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } });
+            console.error(`[prerender-cluster] Error parsing earthquakeIds for slug ${clusterSlug}: ${e.message}`);
+            // Depending on severity, might return 500 or just log
         }
     }
 
@@ -94,10 +92,11 @@ export async function handlePrerenderCluster(context, clusterSlug) {
     return new Response("Error prerendering cluster page", { status: 500, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } });
   }
 
-  const finalStrongestQuakeId = d1Response.strongestQuakeId || strongestQuakeIdFromSlug;
+  // Use strongestQuakeId directly from d1Response for fetching USGS details
+  const finalStrongestQuakeId = d1Response.strongestQuakeId;
   let strongestQuakeDetailsProperties;
   let fetchErrorForStrongestQuake = null;
-  let fetchedQuakeLocationName = null;
+  // let fetchedQuakeLocationName = null; // This will now primarily come from d1Response.locationName
 
   try {
     const usgsDetailsUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${finalStrongestQuakeId}.geojson`;
@@ -134,44 +133,36 @@ export async function handlePrerenderCluster(context, clusterSlug) {
       console.error(fetchErrorForStrongestQuake);
   }
 
-  const effectiveLocationName = d1Response.locationName || fetchedQuakeLocationName || locationNameFromSlug.replace(/-/g, ' ');
-  const effectiveMaxMagnitude = d1Response.maxMagnitude || (strongestQuakeDetailsProperties ? strongestQuakeDetailsProperties.mag : null) || maxMagnitudeFromSlug;
-  const magForDisplay = typeof effectiveMaxMagnitude === 'number' ? parseFloat(effectiveMaxMagnitude).toFixed(1) : parseFloat(maxMagnitudeFromSlug).toFixed(1);
+  // Use locationName and maxMagnitude from d1Response, with fallbacks if necessary (though ideally d1Response is complete)
+  const effectiveLocationName = d1Response.locationName || "Unknown Location";
+  const effectiveMaxMagnitude = d1Response.maxMagnitude !== null ? d1Response.maxMagnitude : "N/A";
+  const magForDisplay = typeof effectiveMaxMagnitude === 'number' ? parseFloat(effectiveMaxMagnitude).toFixed(1) : effectiveMaxMagnitude;
+
 
   let startDateIso = null;
   let endDateIso = null;
 
-  if (d1Response.earthquakeIds && typeof d1Response.earthquakeIds === 'string' && d1Response.earthquakeIds.length > 2) { // Check for non-empty array string
+  // Use startTime and endTime from d1Response for JSON-LD
+  if (d1Response.startTime) {
     try {
-      const quakeIdsArray = JSON.parse(d1Response.earthquakeIds);
-      if (Array.isArray(quakeIdsArray) && quakeIdsArray.length > 0) {
-        const placeholders = quakeIdsArray.map(() => '?').join(',');
-        const query = `SELECT event_time FROM EarthquakeEvents WHERE id IN (${placeholders}) ORDER BY event_time ASC`;
-        const eventTimesStmt = env.DB.prepare(query);
-        const eventTimesResult = await eventTimesStmt.bind(...quakeIdsArray).all();
-
-        if (eventTimesResult && eventTimesResult.results && eventTimesResult.results.length > 0) {
-          const eventTimes = eventTimesResult.results.map(row => row.event_time);
-          const minTime = eventTimes[0];
-          const maxTime = eventTimes[eventTimes.length - 1];
-
-          if (minTime) {
-            startDateIso = new Date(minTime).toISOString();
-          }
-          if (maxTime) {
-            endDateIso = new Date(maxTime).toISOString();
-          }
-        }
-      }
+      startDateIso = new Date(d1Response.startTime).toISOString();
     } catch (e) {
-      console.error(`[prerender-cluster] Error processing earthquakeIds for date range: ${e.message} for clusterId ${d1Response.clusterId || `overview_cluster_${strongestQuakeIdFromSlug}_${count}`}`);
-      // startDateIso and endDateIso remain null
+      console.error(`[prerender-cluster] Error parsing startTime for slug ${clusterSlug}: ${e.message}`);
+    }
+  }
+  if (d1Response.endTime) {
+    try {
+      endDateIso = new Date(d1Response.endTime).toISOString();
+    } catch (e) {
+      console.error(`[prerender-cluster] Error parsing endTime for slug ${clusterSlug}: ${e.message}`);
     }
   }
 
-  const pageTitleText = d1Response.title || `${count} Earthquakes Near ${effectiveLocationName} (up to M${magForDisplay})`;
-  const pageDescriptionText = d1Response.description || `An overview of ${count} recent seismic activities near ${effectiveLocationName}, with the strongest reaching M${magForDisplay}.`;
-  const canonicalUrl = `https://earthquakeslive.com/cluster/${clusterSlug}`;
+  // Use title and description directly from d1Response
+  // Fallback to a generic title/description if d1Response fields are empty
+  const pageTitleText = d1Response.title || `Earthquake Cluster Near ${effectiveLocationName}`;
+  const pageDescriptionText = d1Response.description || `Details about an earthquake cluster located near ${effectiveLocationName}, with events up to M${magForDisplay}.`;
+  const canonicalUrl = `https://earthquakeslive.com/cluster/${d1Response.slug || clusterSlug}`;
 
   let strongestQuakeHtml = `<p><a href="https://earthquakeslive.com/">Back to main map</a></p>`;
   if (strongestQuakeDetailsProperties && strongestQuakeDetailsProperties.url && strongestQuakeDetailsProperties.title) {
