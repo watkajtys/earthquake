@@ -64,6 +64,9 @@ export async function storeClusterDefinition(db, clusterData) {
   // Set updatedAt timestamp at the application layer
   clusterData.updatedAt = Date.now(); // Milliseconds Unix epoch
 
+  // Log received clusterData (after validation and before try...catch)
+  console.log('[storeClusterDefinition] Received clusterData:', JSON.stringify(clusterData, null, 2)); // Added null, 2 for pretty print
+
   try {
     const {
       id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
@@ -74,14 +77,16 @@ export async function storeClusterDefinition(db, clusterData) {
       updatedAt  // Now explicitly set
     } = clusterData;
 
-    const stmt = db.prepare(
-      `INSERT OR REPLACE INTO ClusterDefinitions
+    const sqlQuery = `
+      INSERT OR REPLACE INTO ClusterDefinitions
        (id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
         maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
         radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore, version,
         createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // Added 2 placeholders
-    );
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    console.log('[storeClusterDefinition] Preparing SQL Query:', sqlQuery);
+    const stmt = db.prepare(sqlQuery);
 
     const params = [
       id,
@@ -107,6 +112,9 @@ export async function storeClusterDefinition(db, clusterData) {
       createdAt === undefined ? null : createdAt, // Pass null for DB default on new records, or existing value
       updatedAt // Always provide the new updatedAt timestamp
     ];
+
+    // Log parameters before binding
+    console.log('[storeClusterDefinition] Binding parameters:', JSON.stringify(params, null, 2)); // Added null, 2 for pretty print
 
     await stmt.bind(...params).run();
 
