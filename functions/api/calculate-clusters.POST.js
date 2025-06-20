@@ -197,12 +197,7 @@ export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
  *   or an error response (405 for wrong method, 400 for bad request, 500 for internal server error).
  */
 export async function onRequest(context) {
-  if (context.request.method !== 'POST') {
-    return new Response('Method Not Allowed', {
-      status: 405,
-      headers: { 'Allow': 'POST' }
-    });
-  }
+  // Method check removed as this file will be specifically routed for POST requests.
 
   try {
     const { env, request } = context; // Destructure request from context

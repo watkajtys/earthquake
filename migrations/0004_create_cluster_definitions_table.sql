@@ -24,14 +24,6 @@ CREATE TABLE ClusterDefinitions (
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create a trigger to update updatedAt on row update
-CREATE TRIGGER trigger_cluster_definitions_update_updatedAt
-AFTER UPDATE ON ClusterDefinitions
-FOR EACH ROW
-BEGIN
-    UPDATE ClusterDefinitions SET updatedAt = CURRENT_TIMESTAMP WHERE id = OLD.id;
-END;
-
 -- Add indexes
 CREATE INDEX idx_cluster_definitions_slug ON ClusterDefinitions(slug);
 CREATE INDEX idx_cluster_definitions_strongestQuakeId ON ClusterDefinitions(strongestQuakeId);

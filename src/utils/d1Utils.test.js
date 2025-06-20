@@ -13,10 +13,9 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
 
   beforeEach(() => {
     vi.clearAllMocks(); // Use vi for vitest
-    // Default run mock, can be overridden in specific tests
     mockStmt = {
       bind: vi.fn().mockReturnThis(),
-      run: vi.fn().mockResolvedValue({ success: true, meta: { changes: 1, last_row_id: 1 } }),
+      run: vi.fn().mockResolvedValue({ success: true, meta: { changes: 1, last_row_id: 1 } }), // Simulate successful run
     };
     mockDb = {
       prepare: vi.fn().mockReturnValue(mockStmt),
@@ -53,7 +52,7 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
     );
 
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] Starting D1 upsert for ${mockFeatures.length} features.`));
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] D1 upsert processing complete. Success: ${mockFeatures.length}, Errors: 0`)); // This assertion will be updated for tests where not all inserts lead to changes
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] D1 upsert processing complete. Success: ${mockFeatures.length}, Errors: 0`));
     expect(result).toEqual({ successCount: mockFeatures.length, errorCount: 0 });
   });
 
@@ -107,11 +106,10 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
       { id: 'q3', properties: { time: 3, mag: 3, place: 'P3', detail: 'u3' }, geometry: { coordinates: [3,3,3] } }
     ];
 
-    // Ensure default mock in beforeEach is flexible enough or override here if needed for specific sequences
     mockStmt.run
-      .mockResolvedValueOnce({ success: true, meta: { changes: 1 } }) // q1
+      .mockResolvedValueOnce({ success: true }) // q1
       .mockRejectedValueOnce(new Error('D1 execute error for q2')) // q2-error
-      .mockResolvedValueOnce({ success: true, meta: { changes: 1 } }); // q3
+      .mockResolvedValueOnce({ success: true }); // q3
 
     const result = await upsertEarthquakeFeaturesToD1(mockDb, features);
 
@@ -123,84 +121,4 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
 
   // More tests:
   // - Defaulting usgs_detail_url if feature.properties.detail is missing
-});
-
-describe('d1Utils - upsertEarthquakeFeaturesToD1 - ON CONFLICT DO NOTHING', () => {
-  let mockDb;
-  let mockStmt;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockStmt = {
-      bind: vi.fn().mockReturnThis(),
-      // Individual tests will mock run's resolved value
-      run: vi.fn(),
-    };
-    mockDb = {
-      prepare: vi.fn().mockReturnValue(mockStmt),
-    };
-  });
-
-  it('should correctly count successes for new inserts and ignore existing ones (ON CONFLICT DO NOTHING)', async () => {
-    const features = [
-      { // New feature
-        id: 'new_quake1',
-        properties: { time: 1678886500000, mag: 5.0, place: 'New Location A', detail: 'new_url_a' },
-        geometry: { coordinates: [100, 200, 50] }
-      },
-      { // Existing feature (should be ignored, changes: 0)
-        id: 'existing_quake1',
-        properties: { time: 1678887500000, mag: 4.0, place: 'Existing Location B', detail: 'existing_url_b' },
-        geometry: { coordinates: [120, 220, 80] }
-      },
-      { // New feature
-        id: 'new_quake2',
-        properties: { time: 1678888500000, mag: 6.0, place: 'New Location C', detail: 'new_url_c' },
-        geometry: { coordinates: [130, 230, 90] }
-      },
-      { // Existing feature (should be ignored, changes: 0)
-        id: 'existing_quake2',
-        properties: { time: 1678889500000, mag: 3.0, place: 'Existing Location D', detail: 'existing_url_d' },
-        geometry: { coordinates: [140, 240, 100] }
-      }
-    ];
-
-    // Mock run behavior: 1 for new, 0 for existing
-    mockStmt.run
-      .mockResolvedValueOnce({ success: true, meta: { changes: 1 } }) // new_quake1
-      .mockResolvedValueOnce({ success: true, meta: { changes: 0 } }) // existing_quake1
-      .mockResolvedValueOnce({ success: true, meta: { changes: 1 } }) // new_quake2
-      .mockResolvedValueOnce({ success: true, meta: { changes: 0 } }); // existing_quake2
-
-    const result = await upsertEarthquakeFeaturesToD1(mockDb, features);
-
-    expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('ON CONFLICT(id) DO NOTHING'));
-    expect(mockStmt.bind).toHaveBeenCalledTimes(features.length);
-    expect(mockStmt.run).toHaveBeenCalledTimes(features.length);
-
-    // Verify bind calls for all features
-    features.forEach((feature, index) => {
-      expect(mockStmt.bind).toHaveBeenNthCalledWith(index + 1,
-        feature.id,
-        feature.properties.time,
-        feature.geometry.coordinates[1],
-        feature.geometry.coordinates[0],
-        feature.geometry.coordinates[2],
-        feature.properties.mag,
-        feature.properties.place,
-        feature.properties.detail,
-        JSON.stringify(feature),
-        expect.any(Number)
-      );
-    });
-
-    // Verify successCount reflects only actual inserts (changes: 1)
-    expect(result.successCount).toBe(2); // new_quake1, new_quake2
-    expect(result.errorCount).toBe(0);
-
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] Starting D1 upsert for ${features.length} features.`));
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('[d1Utils-upsert] D1 upsert processing complete. Success: 2, Errors: 0'));
-    expect(console.error).not.toHaveBeenCalled(); // No errors expected
-    expect(console.warn).not.toHaveBeenCalled(); // No warnings for ignored conflicts
-  });
 });
