@@ -28,16 +28,7 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
   const upsertStmtText = `
     INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature, retrieved_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-        event_time = excluded.event_time,
-        latitude = excluded.latitude,
-        longitude = excluded.longitude,
-        depth = excluded.depth,
-        magnitude = excluded.magnitude,
-        place = excluded.place,
-        usgs_detail_url = excluded.usgs_detail_url,
-        geojson_feature = excluded.geojson_feature,
-        retrieved_at = excluded.retrieved_at;
+    ON CONFLICT(id) DO NOTHING;
   `;
   // In a real worker environment, db.prepare() is synchronous.
   // If this code were to run outside a CF Worker (e.g. Node.js with a D1 client), it might be async.
@@ -78,8 +69,10 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
       operations.push(stmt.bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature_string, retrieved_at));
       // Awaiting each individually for now to match original logic's error reporting style.
       // Consider db.batch(operations) for performance on large sets if individual error tracking per feature is less critical.
-      await operations[operations.length-1].run(); // execute the last added operation
-      successCount++;
+      const result = await operations[operations.length-1].run(); // execute the last added operation
+      if (result && result.meta && result.meta.changes > 0) {
+        successCount++;
+      }
 
     } catch (e) {
       console.error(`[d1Utils-upsert] Error upserting feature ${feature?.id}: ${e.message}`, e);
