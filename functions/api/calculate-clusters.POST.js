@@ -81,6 +81,76 @@ function generateDescription(quakeCount, locationName, maxMagnitude, durationHou
 //    - Logging is adjusted for a backend environment.
 // It uses calculateDistance imported from '../utils/mathUtils.js' (synced from /common/mathUtils.js).
 // Algorithmic changes to core clustering logic should be synchronized with the frontend version where applicable.
+
+async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE) {
+  if (!db || !clusters || clusters.length === 0) {
+    console.log("storeClusterDefinitionsInBackground: DB not available or no clusters to process.");
+    return;
+  }
+
+  console.log(`storeClusterDefinitionsInBackground: Starting processing of ${clusters.length} clusters.`);
+  for (const calculatedCluster of clusters) {
+    if (!calculatedCluster || calculatedCluster.length === 0) continue;
+
+    const strongestQuakeInCalcCluster = getStrongestQuake(calculatedCluster);
+    if (!strongestQuakeInCalcCluster || !strongestQuakeInCalcCluster.properties) {
+        console.warn("storeClusterDefinitionsInBackground: Skipping cluster definition due to missing strongest quake or properties.");
+        continue;
+    }
+
+    const clusterMaxMag = strongestQuakeInCalcCluster.properties.mag;
+
+    if (calculatedCluster.length >= CLUSTER_MIN_QUAKES && clusterMaxMag >= DEFINED_CLUSTER_MIN_MAGNITUDE) {
+      const clusterId = randomUUID();
+      const quakeCount = calculatedCluster.length;
+      const startTime = getStartTime(calculatedCluster);
+      const endTime = getEndTime(calculatedCluster);
+      const durationHours = (endTime > startTime) ? (endTime - startTime) / (1000 * 60 * 60) : 0;
+      const locationName = strongestQuakeInCalcCluster.properties.place || "Unknown Location";
+      const maxMagnitude = clusterMaxMag;
+
+      const clusterDataToStore = {
+        id: clusterId,
+        earthquakeIds: calculatedCluster.map(q => q.id),
+        quakeCount: quakeCount,
+        strongestQuakeId: strongestQuakeInCalcCluster.id,
+        maxMagnitude: maxMagnitude,
+        minMagnitude: getMinMagnitude(calculatedCluster),
+        meanMagnitude: getMeanMagnitude(calculatedCluster),
+        startTime: startTime,
+        endTime: endTime,
+        durationHours: durationHours,
+        locationName: locationName,
+        centroidLat: strongestQuakeInCalcCluster.geometry.coordinates[1] || 0,
+        centroidLon: strongestQuakeInCalcCluster.geometry.coordinates[0] || 0,
+        radiusKm: 0, // Placeholder
+        depthRange: getDepthRangeString(calculatedCluster),
+        slug: generateSlug(quakeCount, locationName, maxMagnitude, clusterId),
+        title: generateTitle(quakeCount, locationName, maxMagnitude),
+        description: generateDescription(quakeCount, locationName, maxMagnitude, durationHours),
+        significanceScore: quakeCount > 0 ? maxMagnitude * Math.log10(quakeCount) : 0,
+        version: 1,
+      };
+
+      console.log(`storeClusterDefinitionsInBackground: Attempting to store definition for significant cluster ${clusterId} with ${quakeCount} quakes, maxMag ${maxMagnitude.toFixed(1)}.`);
+      try {
+        // Note: storeClusterDefinition is already async, so it's awaited here.
+        const storeResult = await storeClusterDefinition(db, clusterDataToStore);
+        if (storeResult.success) {
+          console.log(`storeClusterDefinitionsInBackground: Successfully stored definition for cluster ${clusterDataToStore.id}`);
+        } else {
+          console.error(`storeClusterDefinitionsInBackground: Failed to store definition for cluster ${clusterDataToStore.id}: ${storeResult.error}`);
+        }
+      } catch (e) {
+        console.error(`storeClusterDefinitionsInBackground: Error during storage of cluster ${clusterDataToStore.id}: ${e.message}`, e.stack);
+      }
+    } else {
+      // console.log(`storeClusterDefinitionsInBackground: Cluster with ${calculatedCluster.length} quakes, maxMag ${clusterMaxMag.toFixed(1)} did not meet significance criteria.`);
+    }
+  }
+  console.log("storeClusterDefinitionsInBackground: Finished processing clusters for definition storage.");
+}
+
 /**
  * Finds clusters of earthquakes based on proximity.
  * (Duplicated from `src/utils/clusterUtils.js` - keep synchronized)
@@ -310,77 +380,12 @@ export async function onRequest(context) {
       responseHeaders['X-Cache-Info'] = 'Cache write failed';
     }
 
-    // Asynchronously store significant cluster definitions (fire and forget style from client's perspective)
-    // This section runs after cache logic and before returning the response for the current request.
-    if (env.DB && clusters && clusters.length > 0) {
-      console.log(`Starting processing of ${clusters.length} calculated clusters for definition storage.`);
-      for (const calculatedCluster of clusters) {
-        if (!calculatedCluster || calculatedCluster.length === 0) continue;
-
-        const strongestQuakeInCalcCluster = getStrongestQuake(calculatedCluster);
-        if (!strongestQuakeInCalcCluster || !strongestQuakeInCalcCluster.properties) {
-            console.warn("Skipping cluster definition due to missing strongest quake or properties.");
-            continue;
-        }
-
-        const clusterMaxMag = strongestQuakeInCalcCluster.properties.mag;
-
-        // Use imported constants for significance check
-        if (calculatedCluster.length >= CLUSTER_MIN_QUAKES && clusterMaxMag >= DEFINED_CLUSTER_MIN_MAGNITUDE) {
-          const clusterId = randomUUID();
-          const quakeCount = calculatedCluster.length;
-          const startTime = getStartTime(calculatedCluster);
-          const endTime = getEndTime(calculatedCluster);
-          const durationHours = (endTime > startTime) ? (endTime - startTime) / (1000 * 60 * 60) : 0;
-          const locationName = strongestQuakeInCalcCluster.properties.place || "Unknown Location";
-          const maxMagnitude = clusterMaxMag; // Already have this from strongestQuakeInCalcCluster
-
-          const clusterDataToStore = {
-            id: clusterId,
-            earthquakeIds: calculatedCluster.map(q => q.id),
-            quakeCount: quakeCount,
-            strongestQuakeId: strongestQuakeInCalcCluster.id,
-            maxMagnitude: maxMagnitude,
-            minMagnitude: getMinMagnitude(calculatedCluster),
-            meanMagnitude: getMeanMagnitude(calculatedCluster),
-            startTime: startTime,
-            endTime: endTime,
-            durationHours: durationHours,
-            locationName: locationName,
-            centroidLat: strongestQuakeInCalcCluster.geometry.coordinates[1] || 0,
-            centroidLon: strongestQuakeInCalcCluster.geometry.coordinates[0] || 0,
-            radiusKm: 0, // Placeholder
-            depthRange: getDepthRangeString(calculatedCluster),
-            slug: generateSlug(quakeCount, locationName, maxMagnitude, clusterId),
-            title: generateTitle(quakeCount, locationName, maxMagnitude),
-            description: generateDescription(quakeCount, locationName, maxMagnitude, durationHours),
-            significanceScore: quakeCount > 0 ? maxMagnitude * Math.log10(quakeCount) : 0,
-            version: 1,
-          };
-
-          // Asynchronous storage attempt
-          // Wrapping in a self-invoking async function or Promise.resolve().then()
-          // to ensure it doesn't block the main response path if storeClusterDefinition is slow.
-          // For Cloudflare Workers, simple await might be fine if total execution time is within limits.
-          // Using await here for simplicity, assuming storeClusterDefinition is efficient.
-          console.log(`Attempting to store definition for significant cluster ${clusterId} with ${quakeCount} quakes, maxMag ${maxMagnitude.toFixed(1)}.`);
-          try {
-            const storeResult = await storeClusterDefinition(env.DB, clusterDataToStore);
-            if (storeResult.success) {
-              console.log(`Successfully stored definition for cluster ${clusterDataToStore.id}`);
-            } else {
-              console.error(`Failed to store definition for cluster ${clusterDataToStore.id}: ${storeResult.error}`);
-            }
-          } catch (e) {
-            console.error(`Error during async storage of cluster ${clusterDataToStore.id}: ${e.message}`, e.stack);
-          }
-        } else {
-           // console.log(`Cluster with ${calculatedCluster.length} quakes, maxMag ${clusterMaxMag.toFixed(1)} did not meet significance criteria.`);
-        }
-      }
-      console.log("Finished processing calculated clusters for definition storage.");
+    // If DB is available and clusters were calculated (not from cache), store definitions in background.
+    if (env.DB && clusters && clusters.length > 0 && responseHeaders['X-Cache-Hit'] === 'false') {
+        // Using context.waitUntil to ensure the function completes even after the response is sent.
+        // CLUSTER_MIN_QUAKES and DEFINED_CLUSTER_MIN_MAGNITUDE are imported and available in the module scope.
+        context.waitUntil(storeClusterDefinitionsInBackground(env.DB, clusters, CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE));
     }
-
 
     return new Response(clusterDataString, { status: 200, headers: responseHeaders });
 
