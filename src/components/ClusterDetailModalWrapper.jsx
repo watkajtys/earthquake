@@ -202,11 +202,12 @@ function ClusterDetailModalWrapper({
 
         let newParsedEffectiveId = null;
         let newParsedIsOldFormat = false;
-        let newParsingErrorMsg = '';
+        let newParsingErrorMsg = ''; // Keep this initialized to empty
 
         const newFormatMatch = fullSlugFromParams.match(/-([a-zA-Z0-9]+)$/);
         if (newFormatMatch) {
             newParsedEffectiveId = newFormatMatch[1];
+            // newParsedIsOldFormat remains false by default
         } else if (fullSlugFromParams.startsWith('overview_cluster_')) {
             const parts = fullSlugFromParams.split('_');
             if (parts.length === 4 && parts[1] === 'cluster') {
@@ -216,19 +217,23 @@ function ClusterDetailModalWrapper({
                 newParsingErrorMsg = "Invalid old cluster URL format.";
             }
         } else {
-            newParsingErrorMsg = "Invalid cluster URL format. Does not match known patterns.";
+            // If it's not a new format (e.g. cluster-name-actualID)
+            // AND it's not an old format (overview_cluster_...)
+            // THEN assume the full slug is the ID.
+            newParsedEffectiveId = fullSlugFromParams;
+            newParsedIsOldFormat = false; // Assuming these direct IDs are not "old format"
         }
 
         if (newParsingErrorMsg) {
             setErrorMessage(newParsingErrorMsg);
-            setEffectiveQuakeId(null); // Ensure ID is null on error
+            setEffectiveQuakeId(null);
             setIsOldFormat(false);
             setFetchStatus('error');
         } else {
+            // This block is now also hit for simple slugs if newParsedEffectiveId is set directly
             setEffectiveQuakeId(newParsedEffectiveId);
             setIsOldFormat(newParsedIsOldFormat);
-            // Transition to the next step in the main effect after successful parsing
-            setFetchStatus('checkingProps');
+            setFetchStatus('checkingProps'); // Ensure this leads to the fetching pathway
         }
     }, [fullSlugFromParams]);
 
