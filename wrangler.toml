@@ -20,7 +20,7 @@ preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" # Preview D1 ID for
 directory = "./dist"
 not_found_handling = "single-page-application"
 binding = "ASSETS"
-run_worker_first = false
+run_worker_first = true
 
 # KV Namespace binding for cluster definitions
 # -----------------------------------------------------------------------------------------
