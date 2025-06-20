@@ -191,32 +191,28 @@ export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes)
         // which was an older expectation for cacheHit === 'true' path.
         console.log(`Active clusters fetched from server (parsed as direct array). Cache-Hit: ${cacheHit}`);
         parsedClusters = data;
-      } else {
-        console.warn(`Unexpected data structure from server. Cache-Hit: ${cacheHit}. Will attempt local calculation.`);
-        // parsedClusters remains null, proceed to local calculation
       }
 
+      // If clusters were successfully parsed from server response, return them.
+      // Log whether it was a cache hit or not, but use the data regardless.
       if (parsedClusters !== null) {
-        if (cacheHit === 'true') {
-          // Successfully got valid cluster data from server cache
-          return parsedClusters;
-        } else {
-          // Server response was OK, data structure was valid, but it was not a cache hit (or header absent).
-          // The original logic implies falling back to local calculation in this case.
-          console.warn(`Server data received (Cache-Hit: ${cacheHit}), but policy is to fall back to local calculation for non-cache-hits or when X-Cache-Hit is not explicitly 'true'.`);
-          // Fall through to local calculation by not returning here.
-        }
+        console.log(`Using server data. Cache-Hit: ${cacheHit === 'true' ? 'true' : 'false or not present'}.`);
+        return parsedClusters;
+      } else {
+        // Server response was OK, but data structure was not as expected.
+        console.warn(`Unexpected data structure from server. Cache-Hit: ${cacheHit}. Falling back to local calculation.`);
+        // Fall through to local calculation by not returning here.
       }
-      // If parsedClusters is null (unexpected structure), fall through to local calculation.
-
     } else { // !response.ok
       const errorBody = await response.text();
       console.error(
         `Failed to fetch active clusters from server. Status: ${response.status}. Body: ${errorBody}. Falling back to local calculation.`
       );
+      // Fall through to local calculation.
     }
   } catch (error) {
-    console.error('Network error while fetching active clusters. Falling back to local calculation:', error);
+    console.error('Network error or JSON parsing error while fetching/processing active clusters. Falling back to local calculation:', error);
+    // Fall through to local calculation.
   }
 
   // Fallback to local calculation
