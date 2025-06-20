@@ -1,8 +1,10 @@
--- Migration 0006: Add updatedAt Trigger to ClusterDefinitions
--- Description: Adds a trigger to automatically update the updatedAt timestamp
---              on rows in the ClusterDefinitions table when they are updated.
+-- Migration 0006: Add updatedAt Trigger to ClusterDefinitions (Attempt 2)
+-- Description: Adds a trigger to automatically update the updatedAt timestamp.
+-- Includes DROP TRIGGER IF EXISTS to ensure clean application if trigger exists from prior attempt.
 
-CREATE TRIGGER IF NOT EXISTS trg_ClusterDefinitions_AutoUpdate_UpdatedAt
+DROP TRIGGER IF EXISTS trg_ClusterDefinitions_AutoUpdate_UpdatedAt;
+
+CREATE TRIGGER trg_ClusterDefinitions_AutoUpdate_UpdatedAt
 AFTER UPDATE ON ClusterDefinitions
 FOR EACH ROW
 BEGIN
