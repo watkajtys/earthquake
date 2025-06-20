@@ -169,41 +169,57 @@ describe('clusterApiService', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith('Active clusters fetched from server (parsed as direct array). Cache-Hit: true');
     });
 
-    it('should call local fallback if server responds OK but X-Cache-Hit is false', async () => {
+    it('should use server data if server responds OK and X-Cache-Hit is false', async () => {
       server.use(
         http.post('/api/calculate-clusters', () => {
-          // Simulate server returning data that would be valid if cacheHit was true, but isn't.
-          // The service will parse it, see cacheHit is false, warn, and then proceed to local.
-          return HttpResponse.json(mockServerCalculatedData, {
+          return HttpResponse.json(mockServerCalculatedData, { // Body is the array of clusters
             status: 200,
             headers: { 'X-Cache-Hit': 'false' }
           });
         })
       );
-      localFindActiveClusters.mockReturnValueOnce(mockLocalCalculatedData);
       const result = await fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(result).toEqual(mockLocalCalculatedData);
-      expect(localFindActiveClusters).toHaveBeenCalledWith(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(consoleWarnSpy).toHaveBeenCalledWith('Server data received (Cache-Hit: false), but policy is to fall back to local calculation for non-cache-hits or when X-Cache-Hit is not explicitly \'true\'.');
-      expect(consoleLogSpy).toHaveBeenCalledWith('Initiating client-side cluster calculation using localFindActiveClusters.');
-      expect(consoleLogSpy).toHaveBeenCalledWith('Client-side cluster calculation successful.');
+      expect(result).toEqual(mockServerCalculatedData);
+      expect(localFindActiveClusters).not.toHaveBeenCalled();
+      expect(consoleWarnSpy).not.toHaveBeenCalledWith('Server data received (Cache-Hit: false), but policy is to fall back to local calculation for non-cache-hits or when X-Cache-Hit is not explicitly \'true\'.');
+      expect(consoleLogSpy).toHaveBeenCalledWith('Active clusters fetched from server (parsed as direct array). Cache-Hit: false');
+      expect(consoleLogSpy).toHaveBeenCalledWith('Using server data. Cache-Hit: false or not present.');
     });
 
-    it('should call local fallback if server responds OK but X-Cache-Hit is missing', async () => {
+    it('should use server data if server responds OK and X-Cache-Hit is missing', async () => {
       server.use(
         http.post('/api/calculate-clusters', () => {
-          // Simulate server returning data that would be valid, but no X-Cache-Hit header.
-          return HttpResponse.json(mockServerCalculatedData, {
+          return HttpResponse.json(mockServerCalculatedData, { // Body is the array of clusters
             status: 200,
             headers: { /* No X-Cache-Hit header */ }
           });
+        })
+      );
+      const result = await fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
+      expect(result).toEqual(mockServerCalculatedData);
+      expect(localFindActiveClusters).not.toHaveBeenCalled();
+      expect(consoleWarnSpy).not.toHaveBeenCalledWith('Server data received (Cache-Hit: null), but policy is to fall back to local calculation for non-cache-hits or when X-Cache-Hit is not explicitly \'true\'.');
+      expect(consoleLogSpy).toHaveBeenCalledWith('Active clusters fetched from server (parsed as direct array). Cache-Hit: null');
+      expect(consoleLogSpy).toHaveBeenCalledWith('Using server data. Cache-Hit: false or not present.');
+    });
+
+    it('should call local fallback if server responds OK but with unexpected data structure', async () => {
+      const cacheHeaderValue = 'irrelevant-for-this-test';
+      server.use(
+        http.post('/api/calculate-clusters', () => {
+          return HttpResponse.json(
+            { notes: 'Payload does not match expected cluster structure' },
+            { status: 200, headers: { 'X-Cache-Hit': cacheHeaderValue } }
+          );
         })
       );
       localFindActiveClusters.mockReturnValueOnce(mockLocalCalculatedData);
       const result = await fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
       expect(result).toEqual(mockLocalCalculatedData);
       expect(localFindActiveClusters).toHaveBeenCalledWith(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(consoleWarnSpy).toHaveBeenCalledWith('Server data received (Cache-Hit: null), but policy is to fall back to local calculation for non-cache-hits or when X-Cache-Hit is not explicitly \'true\'.');
+      expect(consoleWarnSpy).toHaveBeenCalledWith(`Unexpected data structure from server. Cache-Hit: ${cacheHeaderValue}. Falling back to local calculation.`);
+      expect(consoleLogSpy).toHaveBeenCalledWith('Initiating client-side cluster calculation using localFindActiveClusters.');
+      expect(consoleLogSpy).toHaveBeenCalledWith('Client-side cluster calculation successful.');
     });
 
     it('should call local fallback if server responds with an error (e.g., 500)', async () => {
