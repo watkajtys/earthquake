@@ -1,0 +1,51 @@
+# Global Seismic Activity Monitor
+
+> A React-based web application visualizing real-time and historical global earthquake data (from USGS GeoJSON feeds) on an interactive 3D globe (using React Globe GL). It provides detailed statistics, insights into seismic events, and educational information about earthquake science.
+
+This site allows users to explore, understand, and learn about global earthquake activity.
+
+## Core Features
+
+- **Interactive 3D Globe**: Visualize earthquake epicenters on a zoomable, rotatable globe. Includes geographical layers like tectonic plate boundaries and coastlines.
+- **Data Timeframes**: View data for various periods (last hour, day, week, month) using a feed selector.
+- **Latest Major Quake Highlight**: A visual pulsing ring on the globe and a timer highlight the most recent significant earthquake (M4.5+).
+- **Smart Globe Interaction**: Globe auto-rotates and intelligently pauses on user hover.
+- **Earthquake Cluster Analysis**: Identifies and displays details for clusters of seismic events, including a mini-map and summary statistics.
+- **Featured Quakes**: Highlights notable recent or historical earthquakes.
+- **Responsive Sidebar**: Dynamically loads and displays detailed analysis panels and charts.
+
+## Detailed Earthquake Information
+
+When an earthquake is selected, a detailed view provides:
+- Magnitude, depth, location, time.
+- Fault plane solutions (beachball diagrams).
+- ShakeMap and PAGER alerts (if available).
+- Moment tensor solutions (Mww).
+- Seismic wave data and energy estimations.
+- An integrated 2D regional map showing the epicenter, ShakeMap intensity, and tectonic plates.
+
+## Data Visualization & Lists
+
+- **Charts**: Magnitude distribution, earthquake frequency timelines, magnitude vs. depth scatter plots.
+- **Lists**: Paginated and sortable list of earthquakes.
+
+## Key Pages & Educational Content
+
+- [Home Page](https://global-seismic-activity-monitor.com/): The main interactive globe, dashboard, and earthquake lists.
+- [Overview Page](/overview/): Provides a summary or different perspective on seismic activity.
+- [/learn/](/learn/): Main educational section.
+  - [Measuring Earthquakes](/learn/measuring-earthquakes/): Detailed explanation of how earthquakes are measured.
+  - [Magnitude vs. Intensity](/learn/magnitude-vs-intensity/): Understanding the difference.
+  - [Plate Tectonics](/learn/plate-tectonics/): Information about tectonic plates and earthquakes.
+- **Educational Snippets**: Brief explanations on earthquake concepts are provided throughout the site.
+
+## Data Sources
+
+- [USGS Earthquake Hazards Program](https://www.usgs.gov/programs/earthquake-hazards): Primary source of earthquake data (GeoJSON feeds).
+
+## Sitemaps
+
+- [Main Sitemap](/sitemap.xml): Provides a list of all pages available on the site.
+
+## About This Site
+This site was developed with a "vibe-coding" approach using Gemini Canvas and is an ongoing testbed for AI-assisted software engineering. It's built with React, React Globe GL, and Cloudflare Workers.

@@ -4,6 +4,10 @@
 
 import { upsertEarthquakeFeaturesToD1 } from '../../../src/utils/d1Utils.js';
 
+// In-memory cache for recent quake IDs to reduce D1 load
+const MAX_RECENT_QUAKE_IDS = 1000;
+let recentQuakeIds = new Set();
+
 /**
  * Handles requests to the `/api/usgs-proxy` endpoint.
  * It fetches data from a specified USGS API URL, caches the response,
@@ -86,12 +90,56 @@ export async function handleUsgsProxy(context) {
         });
       waitUntil(cachePromise);
 
-      // D1 logic
+      // D1 logic, now with in-memory cache filtering
       if (env.DB && responseDataForLogic.features && responseDataForLogic.features.length > 0) {
-        try {
-           await upsertEarthquakeFeaturesToD1(env.DB, responseDataForLogic.features);
-        } catch (e) {
-          console.error("Error during D1 upsert in handleUsgsProxy:", e);
+        let featuresToUpsert = [];
+        if (responseDataForLogic.features && responseDataForLogic.features.length > 0) {
+          for (const feature of responseDataForLogic.features) {
+            if (feature && feature.id && !recentQuakeIds.has(feature.id)) {
+              featuresToUpsert.push(feature);
+            }
+          }
+          const filteredCount = responseDataForLogic.features.length - featuresToUpsert.length;
+          if (filteredCount > 0) {
+            console.log(`[usgs-proxy-handler] In-memory cache filtered out ${filteredCount} features before D1 upsert.`);
+          }
+        }
+
+        if (featuresToUpsert.length > 0) {
+          try {
+            console.log(`[usgs-proxy-handler] Attempting to upsert ${featuresToUpsert.length} new features to D1.`);
+            // Assuming upsertEarthquakeFeaturesToD1 returns an object like { successCount, errorCount }
+            // and doesn't throw for "DO NOTHING" cases, but logs them.
+            const upsertResult = await upsertEarthquakeFeaturesToD1(env.DB, featuresToUpsert);
+
+            // Add successfully processed (attempted) feature IDs to the in-memory cache
+            // even if D1 did "DO NOTHING" because they've been processed from this worker's perspective.
+            // The successCount from D1 indicates actual DB changes, not items processed by the function.
+            if (upsertResult) { // Check if upsertResult is not null/undefined
+                featuresToUpsert.forEach(feature => {
+                    if (feature && feature.id) {
+                        recentQuakeIds.add(feature.id);
+                    }
+                });
+                console.log(`[usgs-proxy-handler] Added ${featuresToUpsert.length} feature IDs to in-memory cache. Current cache size: ${recentQuakeIds.size}`);
+
+                // Cache eviction logic
+                if (recentQuakeIds.size > MAX_RECENT_QUAKE_IDS) {
+                    const idsArray = Array.from(recentQuakeIds);
+                    const toRemoveCount = idsArray.length - MAX_RECENT_QUAKE_IDS;
+                    idsArray.splice(0, toRemoveCount); // Remove oldest items
+                    recentQuakeIds = new Set(idsArray);
+                    console.log(`[usgs-proxy-handler] In-memory cache evicted ${toRemoveCount} oldest quake IDs. New size: ${recentQuakeIds.size}`);
+                }
+            } else {
+                console.warn("[usgs-proxy-handler] D1 upsert function did not return a result. Skipping in-memory cache update for this batch.");
+            }
+
+          } catch (e) {
+            console.error("[usgs-proxy-handler] Error during D1 upsert:", e.message, e);
+          }
+        } else {
+          console.log("[usgs-proxy-handler] No new features to upsert to D1 after in-memory cache filtering.");
         }
       }
       // Return the 'response' which has the correct body and headers
