@@ -282,8 +282,7 @@ describe('handlePrerenderCluster', () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('Test Title Invalid QuakeIDs');
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      `[prerender-cluster] Error parsing earthquakeIds for D1 Query ID ${d1QueryId1}: Unexpected token 'h', "this is not\"... is not valid JSON`
-
+      `[prerender-cluster] Error parsing earthquakeIds for slug ${validSlug1}: Unexpected token 'h', "this is not"... is not valid JSON`
     );
   });
 });

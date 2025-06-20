@@ -29,7 +29,7 @@ run_worker_first = true
 #    You need to create KV namespaces using the Wrangler CLI. It's recommended to have
 #    separate namespaces for production and preview/local development.
 #    Run these commands in your terminal:
-#      wrangler kv:namespace create CLUSTER_KV
+#      wrangler kv namespace create CLUSTER_KV
 #      wrangler kv namespace create CLUSTER_KV_PREVIEW
 #
 # 2. Update IDs Below:
