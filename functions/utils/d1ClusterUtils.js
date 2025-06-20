@@ -61,21 +61,26 @@ export async function storeClusterDefinition(db, clusterData) {
   if (typeof clusterData.endTime !== 'number') return { success: false, error: 'Invalid type for endTime: must be a number.' };
   if (typeof clusterData.quakeCount !== 'number') return { success: false, error: 'Invalid type for quakeCount: must be a number.' };
 
+  // Set updatedAt timestamp at the application layer
+  clusterData.updatedAt = Date.now(); // Milliseconds Unix epoch
 
   try {
     const {
       id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
       maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
       radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore,
-      version // version can be undefined, DB will use default
+      version, // version can be undefined, DB will use default
+      createdAt, // If present, use it; otherwise, DB default on new insert
+      updatedAt  // Now explicitly set
     } = clusterData;
 
     const stmt = db.prepare(
       `INSERT OR REPLACE INTO ClusterDefinitions
        (id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
         maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
-        radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore, version)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore, version,
+        createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` // Added 2 placeholders
     );
 
     const params = [
@@ -98,7 +103,9 @@ export async function storeClusterDefinition(db, clusterData) {
       durationHours === undefined ? null : durationHours,
       quakeCount,
       significanceScore === undefined ? null : significanceScore,
-      version === undefined ? null : version // Let DB handle default if undefined/null
+      version === undefined ? null : version, // Let DB handle default for version if undefined/null
+      createdAt === undefined ? null : createdAt, // Pass null for DB default on new records, or existing value
+      updatedAt // Always provide the new updatedAt timestamp
     ];
 
     await stmt.bind(...params).run();
