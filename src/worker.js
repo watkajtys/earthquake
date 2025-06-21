@@ -7,6 +7,9 @@ import { onRequestPost as handlePostCalculateClusters } from '../functions/api/c
 // Import the KV-enabled proxy handler
 import { handleUsgsProxy as kvEnabledUsgsProxyHandler } from '../functions/routes/api/usgs-proxy.js';
 
+// Import the get-earthquakes handler
+import { onRequestGet as handleGetEarthquakes } from '../functions/api/get-earthquakes.js';
+
 
 // === Helper Functions (originally from [[catchall]].js) ===
 const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefined) => {
@@ -402,8 +405,8 @@ export default {
     // API routes
     if (pathname === "/api/usgs-proxy") {
       // Call the imported KV-enabled proxy handler
-      // The handler expects a context object { request, env, waitUntil: ctx.waitUntil }
-      return kvEnabledUsgsProxyHandler({ request, env, waitUntil: ctx.waitUntil });
+      // Pass the entire ctx as executionContext, consistent with scheduled handler
+      return kvEnabledUsgsProxyHandler({ request, env, executionContext: ctx });
     }
     if (pathname.startsWith("/api/earthquake/")) {
       const parts = pathname.split('/');
@@ -427,6 +430,13 @@ export default {
 
     if (pathname === '/api/calculate-clusters' && request.method === 'POST') {
       return handlePostCalculateClusters({ request, env, ctx });
+    }
+
+    if (pathname === '/api/get-earthquakes' && request.method === 'GET') {
+      // Note: handleGetEarthquakes is an onRequestGet style handler,
+      // so it expects a context object similar to Pages Functions.
+      // We pass { request, env, ctx } to provide necessary bindings and execution context.
+      return handleGetEarthquakes({ request, env, ctx });
     }
 
     // Serve static assets from ASSETS binding
