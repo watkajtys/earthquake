@@ -99,7 +99,7 @@ describe('kvUtils.js', () => {
       const stringifiedFeatures = JSON.stringify(mockFeatures);
       mockKvNamespace.put.mockResolvedValue(undefined); // Simulate successful put
 
-      setFeaturesToKV(mockKvNamespace, mockKey, mockFeatures, mockWaitUntil);
+      setFeaturesToKV(mockKvNamespace, mockKey, mockFeatures, { waitUntil: mockWaitUntil });
 
       // Check that waitUntil was called with a promise
       expect(mockWaitUntil).toHaveBeenCalledTimes(1);
@@ -119,7 +119,7 @@ describe('kvUtils.js', () => {
       const error = new Error('KV Put Failed');
       mockKvNamespace.put.mockRejectedValue(error);
 
-      setFeaturesToKV(mockKvNamespace, mockKey, mockFeatures, mockWaitUntil);
+      setFeaturesToKV(mockKvNamespace, mockKey, mockFeatures, { waitUntil: mockWaitUntil });
 
       // The promise passed to waitUntil should resolve because setFeaturesToKV handles the rejection internally.
       const putPromise = mockWaitUntil.mock.calls[0][0];
@@ -138,10 +138,15 @@ describe('kvUtils.js', () => {
         const circularObject = {};
         circularObject.self = circularObject; // Creates a circular reference
 
-        setFeaturesToKV(mockKvNamespace, mockKey, [circularObject], mockWaitUntil);
+        // Pass a valid executionContext, but the error should occur before waitUntil is used
+        setFeaturesToKV(mockKvNamespace, mockKey, [circularObject], { waitUntil: mockWaitUntil });
 
         expect(mockKvNamespace.put).not.toHaveBeenCalled();
-        expect(mockWaitUntil).not.toHaveBeenCalled(); // waitUntil should not be called if stringify fails before put promise
+        // WaitUntil might not be called if stringify fails, or it might be called with a rejected promise
+        // Depending on exact implementation, this check might be too strict.
+        // The core is that put isn't called and an error is logged.
+        // Let's assume for now that if JSON.stringify fails, executionContext.waitUntil is not reached.
+        expect(mockWaitUntil).not.toHaveBeenCalled();
         expect(consoleErrorSpy).toHaveBeenCalledWith(
           `[kvUtils-set] Error preparing data for KV storage (key "${mockKey}"):`,
           expect.stringContaining("circular structure"), // Error message varies
@@ -150,31 +155,37 @@ describe('kvUtils.js', () => {
       });
 
     it('should log error and not call put if kvNamespace is not provided', () => {
-      setFeaturesToKV(null, 'someKey', [], mockWaitUntil);
+      setFeaturesToKV(null, 'someKey', [], { waitUntil: mockWaitUntil });
       expect(mockKvNamespace.put).not.toHaveBeenCalled();
       expect(mockWaitUntil).not.toHaveBeenCalled();
       expect(consoleErrorSpy).toHaveBeenCalledWith("[kvUtils-set] KV Namespace binding not provided.");
     });
 
     it('should log error and not call put if key is not provided', () => {
-      setFeaturesToKV(mockKvNamespace, null, [], mockWaitUntil);
+      setFeaturesToKV(mockKvNamespace, null, [], { waitUntil: mockWaitUntil });
       expect(mockKvNamespace.put).not.toHaveBeenCalled();
       expect(mockWaitUntil).not.toHaveBeenCalled();
       expect(consoleErrorSpy).toHaveBeenCalledWith("[kvUtils-set] Key not provided for KV storage.");
     });
 
     it('should log error and not call put if features are invalid', () => {
-      setFeaturesToKV(mockKvNamespace, 'someKey', "not-an-array", mockWaitUntil);
+      setFeaturesToKV(mockKvNamespace, 'someKey', "not-an-array", { waitUntil: mockWaitUntil });
       expect(mockKvNamespace.put).not.toHaveBeenCalled();
       expect(mockWaitUntil).not.toHaveBeenCalled();
       expect(consoleErrorSpy).toHaveBeenCalledWith("[kvUtils-set] Features data is invalid or not provided for KV storage.");
     });
 
-    it('should log error and not call put if waitUntil is not a function', () => {
-      setFeaturesToKV(mockKvNamespace, 'someKey', [], "not-a-function");
+    it('should log error and not call put if executionContext or its waitUntil is invalid', () => {
+      // Test case 1: executionContext is null
+      setFeaturesToKV(mockKvNamespace, 'someKeyECNull', [], null);
       expect(mockKvNamespace.put).not.toHaveBeenCalled();
-      expect(mockWaitUntil).not.toHaveBeenCalled(); // Our mockWaitUntil won't be called
-      expect(consoleErrorSpy).toHaveBeenCalledWith("[kvUtils-set] waitUntil function not provided. KV set will not be performed reliably in the background.");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("[kvUtils-set] executionContext with a valid waitUntil function not provided. KV set will not be performed reliably in the background.");
+      consoleErrorSpy.mockClear(); // Clear spy for next assertion in same test
+
+      // Test case 2: executionContext.waitUntil is not a function
+      setFeaturesToKV(mockKvNamespace, 'someKeyECWaitUntilInvalid', [], { waitUntil: "not-a-function" });
+      expect(mockKvNamespace.put).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).toHaveBeenCalledWith("[kvUtils-set] executionContext with a valid waitUntil function not provided. KV set will not be performed reliably in the background.");
     });
   });
 });

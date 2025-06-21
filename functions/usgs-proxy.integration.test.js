@@ -48,10 +48,28 @@ const createMockContext = (request, env = {}, cf = {}) => {
       ...env,
     },
     params: {},
-    waitUntil: vi.fn((promise) => { waitUntilPromises.push(promise); }),
+    // next is fine here
     next: vi.fn().mockResolvedValue(new Response("Fallback to env.ASSETS.fetch for static assets", { status: 200 })),
     cf,
-    _awaitWaitUntilPromises: async () => { await Promise.all(waitUntilPromises); }
+    // executionContext should contain waitUntil
+    executionContext: {
+      waitUntil: vi.fn((promise) => { // This is context.executionContext.waitUntil
+        if (promise) { // Ensure promise exists before pushing
+            waitUntilPromises.push(promise);
+        }
+      }),
+    },
+    // This helper will await promises pushed to `waitUntilPromises` via `context.executionContext.waitUntil`
+    _awaitWaitUntilPromises: async () => {
+      // Wait for all promises to settle, catching individual errors
+      const results = await Promise.allSettled(waitUntilPromises);
+      results.forEach(result => {
+        if (result.status === 'rejected') {
+          console.error("Error in waitUntil promise:", result.reason);
+        }
+      });
+      waitUntilPromises.length = 0; // Clear after awaiting
+    }
   };
 };
 

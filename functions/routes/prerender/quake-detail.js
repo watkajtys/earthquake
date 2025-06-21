@@ -69,6 +69,38 @@ export async function handleQuakeDetailPrerender(context, eventId) {
   <meta property="og:description" content="${escapeXml(description)}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${canonicalUrl}">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Event",
+      "name": "${title}",
+      "startDate": "${new Date(properties.time).toISOString()}",
+      "endDate": "${new Date(properties.time).toISOString()}",
+      "eventStatus": "https://schema.org/EventHappened",
+      "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
+      "location": {
+        "@type": "Place",
+        "name": "${escapeXml(properties.place)}",
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": ${geometry.coordinates[1]},
+          "longitude": ${geometry.coordinates[0]},
+          "elevation": ${- (geometry.coordinates[2] || 0) * 1000}
+        }
+      },
+      "image": ["https://earthquakeslive.com/social-default-earthquake.png"],
+      "description": "${escapeXml(description)}",
+      "url": "${canonicalUrl}",
+      "organizer": {
+        "@type": "Organization",
+        "name": "Earthquakes Live",
+        "url": "https://earthquakeslive.com"
+      },
+      "identifier": "${eventId}",
+      "sameAs": "${escapeXml(PbfPropertiesUrl)}",
+      "keywords": "${escapeXml(properties.place.split(', ')[0].toLowerCase())}, ${escapeXml(properties.place.split(', ').slice(1).join(' ').toLowerCase())}, m${properties.mag.toFixed(1)}, earthquake, seismic event, earthquake report, ${new Date(properties.time).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toLowerCase().replace(',', '')}"
+    }
+  </script>
 </head>
 <body>
   <h1>${title}</h1>
