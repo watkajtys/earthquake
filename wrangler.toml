@@ -8,7 +8,13 @@ main = "src/worker.js"
 
 # Top-level bindings can define defaults or include preview IDs for 'wrangler dev'
 kv_namespaces = [
-  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
+  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" },
+  # KV store for the last successful USGS API response
+  # IMPORTANT: Create this KV namespace in your Cloudflare dashboard or via Wrangler CLI:
+  # `wrangler kv:namespace create USGS_LAST_RESPONSE_KV`
+  # `wrangler kv:namespace create USGS_LAST_RESPONSE_KV --preview`
+  # Then, replace the placeholder IDs below with the actual IDs provided.
+  { binding = "USGS_LAST_RESPONSE_KV", id = "REPLACE_WITH_PRODUCTION_USGS_KV_ID", preview_id = "REPLACE_WITH_PREVIEW_USGS_KV_ID" }
 ]
 
 [[d1_databases]]
@@ -59,7 +65,10 @@ workers_dev = true # Assuming preview might also use a *.workers.dev subdomain i
 
 # Use preview specific IDs for bindings
 kv_namespaces = [
-  { binding = "CLUSTER_KV", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
+  { binding = "CLUSTER_KV", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" },
+  # For preview, ensure you have a preview version of USGS_LAST_RESPONSE_KV
+  # and have updated its preview_id in the top-level kv_namespaces definition.
+  { binding = "USGS_LAST_RESPONSE_KV", preview_id = "REPLACE_WITH_PREVIEW_USGS_KV_ID" } # This will use the preview_id from the top-level definition if available
 ]
 d1_databases = [
   { binding = "DB", database_name = "PrimaryDB", preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" }
@@ -71,7 +80,10 @@ name = "earthquake" # Explicitly set name for production environment
 main = "src/worker.js"
 workers_dev = true # Set to false if using custom domain for production and not workers.dev
 kv_namespaces = [
-  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" } # Production KV
+  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" }, # Production KV
+  # For production, ensure you have a production version of USGS_LAST_RESPONSE_KV
+  # and have updated its id in the top-level kv_namespaces definition.
+  { binding = "USGS_LAST_RESPONSE_KV", id = "REPLACE_WITH_PRODUCTION_USGS_KV_ID" } # This will use the id from the top-level definition
 ]
 d1_databases = [
   { binding = "DB", database_name = "PrimaryDB", database_id = "8a0a26e9-ba3c-4984-9023-c1803f611a05" } # Production D1
@@ -90,6 +102,9 @@ d1_databases = [
 # This explicitly tells 'wrangler dev' to use the preview_id for CLUSTER_KV.
 [env.dev.kv_namespaces]
 CLUSTER_KV = { preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
+# For 'wrangler dev', also map USGS_LAST_RESPONSE_KV to its preview_id.
+# This ensures that 'wrangler dev' uses the preview KV namespace.
+USGS_LAST_RESPONSE_KV = { preview_id = "REPLACE_WITH_PREVIEW_USGS_KV_ID" }
 
 
 # Staging environment configuration
@@ -99,7 +114,10 @@ name = "earthquake" # Explicitly set name for staging environment
 main = "src/worker.js"
 # For KV, staging uses the production ID. This is consistent with original.
 kv_namespaces = [
-  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" }
+  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" },
+  # For staging, ensure you have a production/staging version of USGS_LAST_RESPONSE_KV
+  # and have updated its id in the top-level kv_namespaces definition.
+  { binding = "USGS_LAST_RESPONSE_KV", id = "REPLACE_WITH_PRODUCTION_USGS_KV_ID" } # This will use the id from the top-level definition
 ]
 # For D1, staging uses the production database_id. This is consistent with original.
 d1_databases = [

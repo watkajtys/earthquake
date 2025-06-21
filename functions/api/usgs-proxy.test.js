@@ -185,7 +185,8 @@ describe('handleUsgsProxy', () => {
     const response = await handleUsgsProxy(mockContext);
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ message: 'USGS API fetch failed: Failed to fetch', source: 'usgs-proxy-handler' });
-    expect(consoleErrorSpy).toHaveBeenCalledWith(`[usgs-proxy-handler] Fetch or JSON parse error for ${currentTestApiUrl}:`, "Failed to fetch", "TypeError");
+    // The error message now includes the stack trace, so we check for the beginning of the message.
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(`[usgs-proxy] Outer catch block: Fetch, JSON parse, or other error for ${currentTestApiUrl}:`), "Failed to fetch", "TypeError", expect.any(String));
   });
 
   describe('D1 Interaction Tests', () => {
@@ -262,8 +263,9 @@ describe('handleUsgsProxy', () => {
       expect(response.status).toBe(200); // Still successful for client
       expect(await response.json()).toEqual({ features: mockFeatures });
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        `Error during D1 upsert in handleUsgsProxy:`,
-        d1Error
+        `[usgs-proxy] Error during D1 upsert:`, // Updated log message
+        d1Error.message, // Log now includes message and name separately
+        d1Error.name
       );
     });
   });
@@ -302,9 +304,10 @@ describe('handleUsgsProxy', () => {
     expect(response.headers.get('Content-Type')).toBe('application/json');
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      `[usgs-proxy-handler] Fetch or JSON parse error for ${currentTestApiUrl}:`,
+      expect.stringContaining(`[usgs-proxy] Outer catch block: Fetch, JSON parse, or other error for ${currentTestApiUrl}:`),
       "Unexpected token '<', \"<html><bod\"... is not valid JSON",
-      "SyntaxError"
+      "SyntaxError",
+      expect.any(String) // For the stack trace
     );
     expect(mockCache.put).not.toHaveBeenCalled();
   });
