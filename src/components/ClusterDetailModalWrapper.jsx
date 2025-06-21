@@ -149,24 +149,78 @@ function ClusterDetailModalWrapper({
                 canonicalUrl: pageUrl, pageUrl, noindex: true,
             };
         }
-        const { locationName, quakeCount, maxMagnitude, strongestQuake, updatedAt, _latestTimeInternal } = clusterData;
+        const {
+            locationName,
+            quakeCount,
+            maxMagnitude,
+            strongestQuake,
+            updatedAt,
+            _earliestTimeInternal, // For startDate
+            _latestTimeInternal   // For endDate and potentially dateModified fallback
+        } = clusterData;
+
         const pageTitle = `Earthquake Cluster: ${locationName || 'Unknown Area'}`;
         const pageDescription = `Explore an earthquake cluster near ${locationName || 'Unknown Area'} with ${quakeCount} events, max magnitude M${maxMagnitude?.toFixed(1)}. View details, map, and activity period.`;
         const pageKeywords = `earthquake cluster, seismic swarm, ${locationName || 'unknown area'}, active seismic zone, earthquake activity, seismic events`;
 
         const eventJsonLd = {
-            '@context': 'https://schema.org', '@type': 'CollectionPage',
-            name: pageTitle, description: pageDescription, url: pageUrl, keywords: pageKeywords.toLowerCase(),
+            '@context': 'https://schema.org',
+            '@type': 'EventSeries', // Changed from CollectionPage
+            name: pageTitle,
+            description: pageDescription,
+            url: pageUrl,
+            keywords: pageKeywords.toLowerCase(),
             dateModified: updatedAt ? new Date(updatedAt).toISOString() : (_latestTimeInternal !== -Infinity && _latestTimeInternal ? new Date(_latestTimeInternal).toISOString() : undefined),
         };
-        if (strongestQuake?.id && locationName && maxMagnitude) {
-            eventJsonLd.about = { "@type": "Event", "name": `M ${maxMagnitude.toFixed(1)} - ${locationName}`, "identifier": strongestQuake.id };
+
+        // Add startDate and endDate for EventSeries
+        if (_earliestTimeInternal && _earliestTimeInternal !== Infinity) {
+            try {
+                eventJsonLd.startDate = new Date(_earliestTimeInternal).toISOString();
+            } catch (e) {
+                console.warn("Error formatting _earliestTimeInternal for JSON-LD startDate:", e);
+            }
         }
-        if (strongestQuake?.geometry?.coordinates) {
-             eventJsonLd.location = { "@type": "Place", name: locationName || "Unknown Area", geo: { "@type": "GeoCoordinates", latitude: strongestQuake.geometry.coordinates[1], longitude: strongestQuake.geometry.coordinates[0] }};
-        } else if (locationName) {
-            eventJsonLd.location = { "@type": "Place", name: locationName || 'Unknown Area' };
+        if (_latestTimeInternal && _latestTimeInternal !== -Infinity) {
+            try {
+                eventJsonLd.endDate = new Date(_latestTimeInternal).toISOString();
+            } catch (e) {
+                console.warn("Error formatting _latestTimeInternal for JSON-LD endDate:", e);
+            }
         }
+
+        // Add information about the most significant event in the series
+        if (strongestQuake?.id && locationName && typeof maxMagnitude === 'number') {
+            // 'about' is okay, but 'event' or 'subEvent' might be more specific for EventSeries items.
+            // However, 'about' is broadly understood. Let's stick with 'about' for the primary event.
+            eventJsonLd.about = {
+                "@type": "Event",
+                "name": `M ${maxMagnitude.toFixed(1)} - ${locationName}`,
+                "identifier": strongestQuake.id
+            };
+        }
+
+        // Location of the EventSeries (overall area)
+        const seriesLocationName = locationName || "Unknown Area";
+        const locationObject = {
+            "@type": "Place",
+            name: seriesLocationName
+        };
+
+        // Add GeoCoordinates if available and valid for the strongest quake (representing the series epicenter)
+        const coords = strongestQuake?.geometry?.coordinates;
+        if (Array.isArray(coords) &&
+            coords.length >= 2 &&
+            typeof coords[0] === 'number' && // longitude
+            typeof coords[1] === 'number') { // latitude
+            locationObject.geo = {
+                "@type": "GeoCoordinates",
+                latitude: coords[1],
+                longitude: coords[0]
+            };
+        }
+        eventJsonLd.location = locationObject;
+
         return { title: pageTitle, description: pageDescription, keywords: pageKeywords, canonicalUrl: pageUrl, pageUrl, eventJsonLd, type: 'website' };
     }, []);
 
