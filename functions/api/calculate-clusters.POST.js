@@ -435,9 +435,17 @@ export async function onRequestPost(context) {
 
     // If DB is available and clusters were calculated (not from cache), store definitions in background.
     if (env.DB && clusters && clusters.length > 0 && responseHeaders['X-Cache-Hit'] === 'false') {
-        // Using context.waitUntil to ensure the function completes even after the response is sent.
+        // Using context.ctx.waitUntil as 'context' here is { request, env, ctx }
         // CLUSTER_MIN_QUAKES and DEFINED_CLUSTER_MIN_MAGNITUDE are imported and available in the module scope.
-        context.waitUntil(storeClusterDefinitionsInBackground(env.DB, clusters, CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE));
+        if (context.ctx && typeof context.ctx.waitUntil === 'function') {
+          context.ctx.waitUntil(storeClusterDefinitionsInBackground(env.DB, clusters, CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE));
+        } else {
+          console.error("calculate-clusters.POST.js: context.ctx.waitUntil is not available. Background tasks might not complete.");
+          // Fallback or alternative handling if needed, though this indicates a deeper issue if ctx isn't passed correctly.
+          // For now, just log, as the primary issue is the incorrect access path.
+          storeClusterDefinitionsInBackground(env.DB, clusters, CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE)
+            .catch(err => console.error("Error in fallback execution of storeClusterDefinitionsInBackground:", err));
+        }
     }
 
     return new Response(clusterDataString, { status: 200, headers: responseHeaders });
