@@ -1,8 +1,12 @@
 // Import D1 utility functions
 // Note: Adjusted path assuming worker.js is in src/ and d1Utils.js is in src/utils/
-import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js';
+import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js'; // Used by the KV-enabled proxy too.
 import { onRequestGet as handleGetClusterWithQuakes } from '../functions/api/cluster-detail-with-quakes.js';
 import { onRequestPost as handlePostCalculateClusters } from '../functions/api/calculate-clusters.POST.js';
+
+// Import the KV-enabled proxy handler
+import { handleUsgsProxy as kvEnabledUsgsProxyHandler } from '../functions/routes/api/usgs-proxy.js';
+
 
 // === Helper Functions (originally from [[catchall]].js) ===
 const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefined) => {
@@ -57,86 +61,12 @@ function isCrawler(request) {
 
 // === Request Handler Functions (originally from [[catchall]].js) ===
 
+// The original handleUsgsProxyRequest is removed/commented out to ensure the KV-enabled one is used.
+/*
 async function handleUsgsProxyRequest(request, env, ctx, apiUrl) {
-  const sourceName = "usgs-proxy-handler";
-  const cacheUrl = new URL(request.url);
-  cacheUrl.pathname = '/cache/usgs-proxy';
-  cacheUrl.searchParams.set("actualApiUrl", apiUrl);
-  const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
-  const cache = caches.default;
-
-  try {
-    const cachedResponse = await cache.match(cacheKey);
-    if (cachedResponse) {
-      console.log(`Cache hit for: ${apiUrl}`);
-      return cachedResponse;
-    }
-
-    console.log(`Cache miss for: ${apiUrl}. Fetching from origin.`);
-    let externalResponse;
-    try {
-      externalResponse = await fetch(apiUrl);
-    } catch (error) {
-      console.error(`USGS API fetch failed for ${apiUrl}: ${error.message}`, error);
-      return jsonErrorResponse(`USGS API fetch failed: ${error.message}`, 500, sourceName);
-    }
-
-    if (!externalResponse.ok) {
-      console.error(`Error fetching data from USGS API (${apiUrl}): ${externalResponse.status} ${externalResponse.statusText}`);
-      return jsonErrorResponse(
-        `Error fetching data from USGS API: ${externalResponse.status} ${externalResponse.statusText}`,
-        externalResponse.status,
-        sourceName,
-        externalResponse.status
-      );
-    }
-
-    const data = await externalResponse.json();
-    const DB = env.DB;
-
-    if (DB && data && Array.isArray(data.features) && data.features.length > 0) {
-      console.log(`[${sourceName}] Proactively upserting ${data.features.length} features from proxied feed into D1.`);
-      ctx.waitUntil(upsertEarthquakeFeaturesToD1(DB, data.features).catch(err => {
-        console.error(`[${sourceName}] Error during background D1 upsert from proxied feed: ${err.message}`, err);
-      }));
-    }
-
-    const DEFAULT_CACHE_DURATION_SECONDS = 60;
-    let durationInSeconds = DEFAULT_CACHE_DURATION_SECONDS;
-    const envCacheDuration = env.WORKER_CACHE_DURATION_SECONDS;
-    if (envCacheDuration) {
-      const parsedDuration = parseInt(envCacheDuration, 10);
-      if (!isNaN(parsedDuration) && parsedDuration > 0) {
-        durationInSeconds = parsedDuration;
-      } else {
-        console.warn(`Invalid WORKER_CACHE_DURATION_SECONDS value: "${envCacheDuration}". Using default: ${DEFAULT_CACHE_DURATION_SECONDS}s.`);
-      }
-    }
-
-    const newResponseHeaders = new Headers(externalResponse.headers);
-    newResponseHeaders.set("Content-Type", "application/json");
-    newResponseHeaders.set("Cache-Control", `s-maxage=${durationInSeconds}`);
-    newResponseHeaders.delete("Set-Cookie");
-
-    let newResponse = new Response(JSON.stringify(data), {
-      status: externalResponse.status,
-      statusText: externalResponse.statusText,
-      headers: newResponseHeaders,
-    });
-
-    ctx.waitUntil(
-      cache.put(cacheKey, newResponse.clone()).then(() => {
-        console.log(`Successfully cached response for: ${apiUrl} (duration: ${durationInSeconds}s)`);
-      }).catch(err => {
-        console.error(`Failed to cache response for ${apiUrl}: ${err.message}`, err);
-      })
-    );
-    return newResponse;
-  } catch (error) {
-    console.error(`Error processing request for ${apiUrl}: ${error.message}`, error);
-    return jsonErrorResponse(`Error processing request: ${error.message}`, 500, sourceName);
-  }
+  // ... this is the old implementation without KV logic ...
 }
+*/
 
 // eslint-disable-next-line no-unused-vars
 async function handleSitemapIndexRequest(request, env, ctx) {
@@ -471,9 +401,9 @@ export default {
 
     // API routes
     if (pathname === "/api/usgs-proxy") {
-      const apiUrl = url.searchParams.get("apiUrl");
-      if (!apiUrl) return jsonErrorResponse("Missing apiUrl query parameter", 400, "worker-router-usgs-proxy");
-      return handleUsgsProxyRequest(request, env, ctx, apiUrl);
+      // Call the imported KV-enabled proxy handler
+      // The handler expects a context object { request, env, waitUntil: ctx.waitUntil }
+      return kvEnabledUsgsProxyHandler({ request, env, waitUntil: ctx.waitUntil });
     }
     if (pathname.startsWith("/api/earthquake/")) {
       const parts = pathname.split('/');
@@ -524,40 +454,53 @@ export default {
     }
 
     const USGS_FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson";
+    const proxyRequestUrl = `https://dummy-host/api/usgs-proxy?apiUrl=${encodeURIComponent(USGS_FEED_URL)}`;
+    // Note: 'dummy-host' is used because new Request() requires a full URL.
+    // The host itself doesn't matter when calling the handler directly as below,
+    // but the URL structure (pathname, searchParams) is important.
+
+    console.log(`[worker-scheduled] Cron Triggered. Will invoke KV-enabled proxy for URL: ${USGS_FEED_URL}`);
 
     try {
-      console.log(`[worker-scheduled] Fetching earthquake data from ${USGS_FEED_URL}`);
-      const response = await fetch(USGS_FEED_URL, {
-        headers: { 'User-Agent': 'CloudflareWorker-EarthquakeFetcher/1.0' }
+      // Construct a Request object as expected by the kvEnabledUsgsProxyHandler
+      const scheduledRequest = new Request(proxyRequestUrl, {
+        method: "GET",
+        headers: {
+          "User-Agent": "CloudflareWorker-ScheduledTask/1.0",
+          // Add any other headers the proxy might expect or that are useful for logging/tracing
+        }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[worker-scheduled] Error fetching data from USGS: ${response.status} ${response.statusText} - ${errorText}`);
-        return;
-      }
-
-      const data = await response.json();
-
-      if (!data || !Array.isArray(data.features) || data.features.length === 0) {
-        console.log("[worker-scheduled] No earthquake features found in the response or data is invalid.");
-        return;
-      }
-
-      console.log(`[worker-scheduled] Fetched ${data.features.length} earthquake features. Starting D1 upsert.`);
-
+      // Call the KV-enabled proxy handler directly.
+      // The handler function `kvEnabledUsgsProxyHandler` expects an object similar to the Pages Function context.
+      // We pass `ctx.waitUntil` for any background tasks the proxy needs to perform (like KV writes).
       ctx.waitUntil(
-        upsertEarthquakeFeaturesToD1(env.DB, data.features)
-          .then(({ successCount, errorCount }) => {
-            console.log(`[worker-scheduled] D1 upsert complete. Success: ${successCount}, Errors: ${errorCount}`);
-          })
-          .catch(err => {
-            console.error(`[worker-scheduled] Error during D1 upsert process: ${err.message}`, err);
-          })
+        kvEnabledUsgsProxyHandler({
+          request: scheduledRequest,
+          env: env,
+          waitUntil: ctx.waitUntil,
+          // 'params' and 'next' are not used by this specific handler, so not passed.
+        })
+        .then(response => {
+          // Log the outcome of the proxy call from the scheduled task
+          if (response.ok) {
+            console.log(`[worker-scheduled] KV-enabled proxy call successful (Status: ${response.status}) for ${USGS_FEED_URL}. KV store and D1 should be updated if changes were found.`);
+          } else {
+            // Attempt to read the error response body if possible
+            response.text().then(text => {
+              console.error(`[worker-scheduled] KV-enabled proxy call failed (Status: ${response.status}) for ${USGS_FEED_URL}. Response: ${text}`);
+            }).catch(() => {
+              console.error(`[worker-scheduled] KV-enabled proxy call failed (Status: ${response.status}) for ${USGS_FEED_URL}. Unable to read response body.`);
+            });
+          }
+        })
+        .catch(err => {
+          console.error(`[worker-scheduled] Error invoking kvEnabledUsgsProxyHandler: ${err.message}`, err.stack);
+        })
       );
 
     } catch (error) {
-      console.error(`[worker-scheduled] Unhandled error in scheduled function: ${error.message}`, error);
+      console.error(`[worker-scheduled] Unhandled error setting up scheduled proxy call: ${error.message}`, error.stack);
     }
   }
 };
