@@ -1,11 +1,10 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { handleQuakeDetailPrerender } from './quake-detail.js';
+import { server } from '../../../src/mocks/server.js'; // MSW server
+import { http, HttpResponse } from 'msw';       // MSW http utilities
 // escapeXml is imported by quake-detail.js, assuming it's available and simple.
 // If it caused issues, it would be mocked like:
 // vi.mock('../../utils/xml-utils.js', () => ({ escapeXml: (str) => str.replace(/&/g, '&amp;') }));
-
-// Mock global fetch
-global.fetch = vi.fn();
 
 const createMockContext = (requestProps = {}, envProps = {}) => {
   return {
@@ -20,7 +19,7 @@ describe('handleQuakeDetailPrerender', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    fetch.mockReset();
+    // MSW will handle fetch lifecycle, server.resetHandlers() is in setupTests.js or called by vi.clearAllMocks()
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -75,7 +74,6 @@ describe('handleQuakeDetailPrerender', () => {
           title: 'M 5.8 - Párga, Greece Region', // Pre-existing title
         },
       };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
       const context = createMockContext();
 
       const response = await handleQuakeDetailPrerender(context, eventId);
@@ -92,7 +90,7 @@ describe('handleQuakeDetailPrerender', () => {
       expect(html).toContain("Details for earthquake usTest1");
       expect(html).toContain("Magnitude 5.8");
       expect(html).toContain("Occurred on Sun, 01 Jan 2023 00:00:00 GMT");
-      expect(html).toContain(`<a href="${mockData.properties.url}">More details on USGS</a>`);
+      expect(html).toContain(`<a href="https://earthquake.usgs.gov/earthquakes/eventpage/${eventId}">More details on USGS</a>`);
     });
 
     it('should render correctly and generate title when properties.title is missing', async () => {
@@ -101,7 +99,6 @@ describe('handleQuakeDetailPrerender', () => {
       delete mockData.properties.title;
       mockData.id = eventId;
 
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
       const context = createMockContext();
 
       const response = await handleQuakeDetailPrerender(context, eventId);
@@ -121,126 +118,156 @@ describe('handleQuakeDetailPrerender', () => {
   describe('USGS Fetch Failures', () => {
     it('should return 404 if USGS fetch returns 404', async () => {
       const eventId = 'usTest404';
-      fetch.mockResolvedValueOnce(new Response('Not Found', { status: 404 }));
+      server.use(
+        http.get('https://earthquake.usgs.gov/fdsnws/event/1/query', ({ request }) => {
+          if (new URL(request.url).searchParams.get('eventid') === eventId) {
+            return new HttpResponse('Not Found', { status: 404 });
+          }
+        })
+      );
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
 
       expect(response.status).toBe(404);
       expect(response.headers.get('Content-Type')).toBe('text/plain;charset=UTF-8');
       expect(await response.text()).toBe('Earthquake data not found');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(`USGS fetch failed for quake prerender ${eventId}: 404 `); // Adjusted
+      expect(consoleErrorSpy).toHaveBeenCalledWith(`USGS fetch failed for quake prerender ${eventId}: 404 Not Found`);
     });
 
     it('should return 500 if USGS fetch returns 500 server error', async () => {
       const eventId = 'usTest500';
-      fetch.mockResolvedValueOnce(new Response('Server Error', { status: 500 }));
+      server.use(
+        http.get('https://earthquake.usgs.gov/fdsnws/event/1/query', ({ request }) => {
+          if (new URL(request.url).searchParams.get('eventid') === eventId) {
+            return new HttpResponse('Server Error', { status: 500 });
+          }
+        })
+      );
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
 
       expect(response.status).toBe(500);
       expect(response.headers.get('Content-Type')).toBe('text/plain;charset=UTF-8');
       expect(await response.text()).toBe('Error prerendering earthquake page: USGS upstream error 500');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(`USGS fetch failed for quake prerender ${eventId}: 500 `);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(`USGS fetch failed for quake prerender ${eventId}: 500 Internal Server Error`);
     });
 
     it('should return 500 if USGS fetch has network error', async () => {
       const eventId = 'usTestNetFail';
-      const networkError = new Error('Network Failure');
-      fetch.mockRejectedValueOnce(networkError);
+      server.use(
+        http.get('https://earthquake.usgs.gov/fdsnws/event/1/query', ({ request }) => {
+          if (new URL(request.url).searchParams.get('eventid') === eventId) {
+            return HttpResponse.error();
+          }
+        })
+      );
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
 
       expect(response.status).toBe(500);
       expect(response.headers.get('Content-Type')).toBe('text/plain;charset=UTF-8');
       expect(await response.text()).toBe('Error prerendering earthquake page');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(`Generic error in handleQuakeDetailPrerender for eventId "${eventId}":`, networkError); // Adjusted
+      expect(consoleErrorSpy).toHaveBeenCalledWith(`Generic error in handleQuakeDetailPrerender for eventId "${eventId}":`, expect.objectContaining({ message: 'Failed to fetch' }));
     });
   });
 
   it('should return 500 if USGS response is 200 OK but not JSON', async () => {
     const eventId = 'usTestHtml';
-    fetch.mockResolvedValueOnce(new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } }));
+    server.use(
+      http.get('https://earthquake.usgs.gov/fdsnws/event/1/query', ({ request }) => {
+        if (new URL(request.url).searchParams.get('eventid') === eventId) {
+          return new HttpResponse('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+        }
+      })
+    );
     const context = createMockContext();
     const response = await handleQuakeDetailPrerender(context, eventId);
 
     expect(response.status).toBe(500);
     expect(response.headers.get('Content-Type')).toBe('text/plain;charset=UTF-8');
     expect(await response.text()).toBe('Error prerendering earthquake page');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(`Failed to parse JSON for quake prerender ${eventId}: Unexpected token < in JSON at position 0`); // Adjusted
+    expect(consoleErrorSpy).toHaveBeenCalledWith(`Failed to parse JSON for quake prerender ${eventId}: Unexpected token '<', "<html></html>" is not valid JSON`);
   });
 
   describe('Invalid/Incomplete Data from USGS', () => {
     it('should return 500 if properties is null', async () => {
       const eventId = 'usTestNoProps';
-      const mockData = { ...baseMockGeoJson, properties: null };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+      server.use(
+        http.get('https://earthquake.usgs.gov/fdsnws/event/1/query', ({ request }) => {
+          if (new URL(request.url).searchParams.get('eventid') === eventId) {
+            return HttpResponse.json({ ...baseMockGeoJson, id: eventId, properties: null });
+          }
+        })
+      );
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
 
       expect(response.status).toBe(500);
       expect(await response.text()).toBe('Invalid earthquake data');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(`Invalid earthquake data structure for prerender ${eventId} (missing top-level keys):`, mockData); // Adjusted
+      expect(consoleErrorSpy).toHaveBeenCalledWith(`Invalid earthquake data structure for prerender ${eventId} (missing top-level keys):`, { ...baseMockGeoJson, id: eventId, properties: null });
     });
 
     it('should return 500 if geometry is null', async () => {
       const eventId = 'usTestNoGeom';
-      const mockData = { ...baseMockGeoJson, geometry: null };
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+      server.use(
+        http.get('https://earthquake.usgs.gov/fdsnws/event/1/query', ({ request }) => {
+          if (new URL(request.url).searchParams.get('eventid') === eventId) {
+            return HttpResponse.json({ ...baseMockGeoJson, id: eventId, geometry: null });
+          }
+        })
+      );
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
 
       expect(response.status).toBe(500);
       expect(await response.text()).toBe('Invalid earthquake data');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(`Invalid earthquake data structure for prerender ${eventId} (missing top-level keys):`, mockData); // Adjusted
+      expect(consoleErrorSpy).toHaveBeenCalledWith(`Invalid earthquake data structure for prerender ${eventId} (missing top-level keys):`, { ...baseMockGeoJson, id: eventId, geometry: null });
     });
 
     const essentialFields = ['mag', 'time', 'place', 'url', 'detail'];
     essentialFields.forEach(field => {
       it(`should return 500 if properties.${field} is missing`, async () => {
-        const eventId = `usTestMissing_${field}`;
-        const mockData = JSON.parse(JSON.stringify(baseMockGeoJson));
-        delete mockData.properties[field];
-        if (field === 'detail') delete mockData.properties.url;
-        if (field === 'url') delete mockData.properties.detail;
+        const currentEventId = `usTestMissing_${field}`;
+        const tempData = JSON.parse(JSON.stringify(baseMockGeoJson));
+        delete tempData.properties[field];
+        if (field === 'detail') delete tempData.properties.url; // Match test logic for this specific case
+        if (field === 'url') delete tempData.properties.detail; // Match test logic for this specific case
+        tempData.id = currentEventId;
 
-
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+        server.use(
+          http.get('https://earthquake.usgs.gov/fdsnws/event/1/query', ({ request }) => {
+            if (new URL(request.url).searchParams.get('eventid') === currentEventId) {
+              return HttpResponse.json(tempData);
+            }
+          })
+        );
         const context = createMockContext();
-        const response = await handleQuakeDetailPrerender(context, eventId);
+        const response = await handleQuakeDetailPrerender(context, currentEventId);
 
         expect(response.status).toBe(500);
         expect(await response.text()).toBe('Invalid earthquake data (missing fields).');
-        expect(consoleErrorSpy).toHaveBeenCalledWith(`Incomplete earthquake data fields for prerender ${eventId}:`, mockData.properties, mockData.geometry); // Adjusted
+        expect(consoleErrorSpy).toHaveBeenCalledWith(`Incomplete earthquake data fields for prerender ${currentEventId}:`, tempData.properties, tempData.geometry);
       });
     });
 
     it('should succeed if properties.detail is missing but properties.url is present', async () => {
       const eventId = 'usTestMissingDetailHasUrl';
-      const mockData = JSON.parse(JSON.stringify(baseMockGeoJson));
-      delete mockData.properties.detail;
-      mockData.properties.url = "https://some.usgs.gov/event/page";
-      mockData.id = eventId;
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+      // This test relies on the default MSW handler for usTestMissingDetailHasUrl
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
       expect(response.status).toBe(200);
       const html = await response.text();
-      expect(html).toContain(`<a href="${mockData.properties.url}">More details on USGS</a>`);
+      expect(html).toContain(`<a href="https://some.usgs.gov/event/page">More details on USGS</a>`);
     });
 
     it('should succeed if properties.url is missing but properties.detail is present', async () => {
       const eventId = 'usTestMissingUrlHasDetail';
-      const mockData = JSON.parse(JSON.stringify(baseMockGeoJson));
-      delete mockData.properties.url;
-      // Use raw ampersand here, as it will be escaped by the HTML generation
-      mockData.properties.detail = `https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=${eventId}&format=geojson`;
-      mockData.id = eventId;
-      fetch.mockResolvedValueOnce(new Response(JSON.stringify(mockData)));
+      // This test relies on the default MSW handler for usTestMissingUrlHasDetail
       const context = createMockContext();
       const response = await handleQuakeDetailPrerender(context, eventId);
       expect(response.status).toBe(200);
       const html = await response.text();
-      const expectedHref = mockData.properties.detail.replace(/&/g, '&amp;');
+      const expectedHref = `https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=${eventId}&amp;format=geojson`;
       expect(html).toContain(`<a href="${expectedHref}">More details on USGS</a>`);
     });
 

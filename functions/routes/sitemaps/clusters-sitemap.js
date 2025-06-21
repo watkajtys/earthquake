@@ -6,7 +6,7 @@ import { escapeXml } from '../../utils/xml-utils.js';
 /**
  * Handles requests for the earthquake cluster sitemap.
  * This sitemap lists URLs for cluster pages, which group multiple earthquakes.
- * URLs are generated based on data from a D1 database and details fetched from USGS.
+ * URLs are generated based on cluster definitions stored in a D1 database.
  *
  * @param {object} context - The Cloudflare Pages function context.
  * @param {object} context.env - Environment variables.
@@ -23,80 +23,49 @@ export async function handleClustersSitemapRequest(context) {
   }
 
   try {
-    const d1Results = await env.DB.prepare("SELECT clusterId, updatedAt FROM ClusterDefinitions")
-      .all();
+    // Fetch the canonical slug and updatedAt timestamp for each cluster definition.
+    // The slug is the part of the URL path after '/cluster/'.
+    // Ensures that only entries with valid slugs are included.
+    const d1Results = await env.DB.prepare(
+      "SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> ''"
+    ).all();
 
     const clusterDefinitions = d1Results.results;
 
     if (!clusterDefinitions || clusterDefinitions.length === 0) {
-      console.log("No cluster definitions found in D1 table ClusterDefinitions.");
+      console.log("No valid cluster definitions with slugs found in D1 table ClusterDefinitions.");
       return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
 
     for (const definition of clusterDefinitions) {
-      const updatedTimestamp = definition.updated || definition.updatedAt;
+      // Prioritize definition.updatedAt as it's directly selected. Fallback for 'updated' can be removed if 'updatedAt' is standard.
+      const updatedTimestamp = definition.updatedAt || definition.updated;
 
-      if (!definition.clusterId || typeof updatedTimestamp === 'undefined') {
-        console.warn(`Invalid definition from D1 (missing clusterId or updated/updatedAt):`, definition);
+      if (!definition.slug || typeof updatedTimestamp === 'undefined') {
+        // This check might be redundant due to the SQL WHERE clause, but kept as a safeguard.
+        console.warn(`Invalid definition from D1 (missing slug or updatedAt):`, definition);
         continue;
-      }
-
-      const rawD1ClusterId = definition.clusterId;
-      const parts = rawD1ClusterId.split('_');
-
-      let eventIdForFetchAndUrl = "";
-      let count = NaN;
-
-      if (parts.length >= 2) {
-        count = parseInt(parts.pop(), 10);
-        eventIdForFetchAndUrl = parts.join('_');
-      }
-
-      if (parts.length < 2 || isNaN(count) || !eventIdForFetchAndUrl) {
-        console.warn(`Failed to parse D1 clusterId: ${rawD1ClusterId}`);
-        continue;
-      }
-
-      const overviewPrefix = "overview_cluster_";
-      if (eventIdForFetchAndUrl.startsWith(overviewPrefix)) {
-        eventIdForFetchAndUrl = eventIdForFetchAndUrl.substring(overviewPrefix.length);
       }
 
       try {
         const lastmodDate = new Date(updatedTimestamp);
         if (isNaN(lastmodDate.getTime())) {
-            console.warn(`Invalid 'updated' date format for eventId ${eventIdForFetchAndUrl} (raw ${rawD1ClusterId}): ${updatedTimestamp}`);
+            console.warn(`Invalid 'updatedAt' date format for slug ${definition.slug}: ${updatedTimestamp}`);
             continue;
         }
         const lastmod = lastmodDate.toISOString();
 
-        const usgsResponse = await fetch(`https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${eventIdForFetchAndUrl}`);
-        if (!usgsResponse.ok) {
-          console.warn(`USGS fetch failed for ${eventIdForFetchAndUrl}: ${usgsResponse.status}`);
-          continue;
-        }
-        const quakeDetails = await usgsResponse.json();
+        // Construct the full sitemap URL using the canonical slug.
+        // Ensure no double slashes if slug might start with one (though typically it shouldn't).
+        const sitemapUrlPath = definition.slug.startsWith('/') ? definition.slug.substring(1) : definition.slug;
+        const sitemapUrl = `https://earthquakeslive.com/cluster/${sitemapUrlPath}`;
 
-        const place = quakeDetails.properties && quakeDetails.properties.place;
-        const mag = quakeDetails.properties && typeof quakeDetails.properties.mag === 'number' ? quakeDetails.properties.mag : null;
-
-        if (!place || mag === null) {
-          if (!place) console.warn(`Missing or invalid locationName for ${eventIdForFetchAndUrl}`);
-          if (mag === null) console.warn(`Missing or invalid maxMagnitude for ${eventIdForFetchAndUrl}`);
-          continue;
-        }
-
-        const locationName = place;
-        const maxMagnitude = mag;
-        const locationNameSlug = locationName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-
-        const sitemapUrl = `https://earthquakeslive.com/cluster/${count}-quakes-near-${locationNameSlug}-up-to-m${maxMagnitude.toFixed(1)}-${eventIdForFetchAndUrl}`;
         xml += `<url><loc>${escapeXml(sitemapUrl)}</loc><lastmod>${lastmod}</lastmod></url>`;
 
-      } catch (fetchError) {
-        console.error(`Error fetching/processing details for eventId ${eventIdForFetchAndUrl} (raw ${rawD1ClusterId}) in cluster sitemap: ${fetchError.message}`);
+      } catch (processError) {
+        console.error(`Error processing definition for slug ${definition.slug} in cluster sitemap: ${processError.message}`);
         continue;
       }
     }

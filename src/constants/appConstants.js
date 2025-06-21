@@ -20,6 +20,8 @@ export const CLUSTER_MAX_DISTANCE_KM = 100;
 export const CLUSTER_MIN_QUAKES = 3;
 /** @description Time window in hours to consider when grouping earthquakes into clusters. */
 export const CLUSTER_TIME_WINDOW_HOURS = 48;
+/** @description Minimum magnitude for a cluster's strongest quake to be considered significant enough for persistent definition. */
+export const DEFINED_CLUSTER_MIN_MAGNITUDE = 3.0;
 
 // Earthquake Thresholds
 /** @description Minimum magnitude for an earthquake to be considered 'major' or 'significant' in many contexts. */
