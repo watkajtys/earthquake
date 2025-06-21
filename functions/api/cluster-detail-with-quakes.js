@@ -125,7 +125,10 @@ export async function onRequestGet(context) {
     // 3. Return Combined Data
     return new Response(JSON.stringify(clusterDefinition), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, s-maxage=300', // Added Cache-Control header (5 minutes)
+      },
     });
 
   } catch (e) {
