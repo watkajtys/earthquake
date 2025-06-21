@@ -1,7 +1,9 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react'; // Removed 'within'
+import { render, screen, waitFor } from '@testing-library/react';
 import EarthquakeDetailView from './EarthquakeDetailView'; // Component to test
-import { vi } from 'vitest'; // Using Vitest's mocking utilities
+import { vi } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { server } from '../mocks/server'; // MSW server
 
 import { axe } from 'jest-axe'; // Import axe
 
@@ -94,11 +96,10 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     geometry: { coordinates: [-122.0, 38.0, 15.0] }
   };
 
-  let fetchSpy;
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(global, 'fetch'); // Spy on global fetch
+    // fetchSpy = vi.spyOn(global, 'fetch'); // Spy on global fetch - REMOVED
     mockOnClose.mockClear();
     mockDefaultPropsGlobal.handleLoadMonthlyData.mockClear();
     mockDefaultPropsGlobal.onDataLoadedForSeo.mockClear();
@@ -106,30 +107,28 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
   });
 
   afterEach(() => {
-    fetchSpy.mockRestore();
+    // fetchSpy.mockRestore(); // REMOVED
+    server.resetHandlers(); // Reset MSW handlers after each test
     vi.restoreAllMocks(); // Ensure console.warn is restored
   });
 
   it('renders loading skeleton immediately on mount if detailUrl is provided', () => {
-    // Mock fetch for the new API endpoint to be pending
-    fetchSpy.mockImplementation((url) => {
-      if (url === `/api/earthquake/${MOCK_EVENT_ID_BASE}`) {
+    server.use(
+      http.get(`/api/earthquake/${MOCK_EVENT_ID_BASE}`, () => {
         return new Promise(() => {}); // Pending promise
-      }
-      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
-    });
+      })
+    );
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
     expect(screen.queryByText(/Details Not Available/i)).not.toBeInTheDocument();
   });
 
   it('displays loading state initially, then renders fetched data', async () => {
-    fetchSpy.mockImplementation((url) => {
-      if (url === `/api/earthquake/${MOCK_EVENT_ID_BASE}`) {
-        return Promise.resolve({ ok: true, json: async () => deepClone(baseMockDetailData) });
-      }
-      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
-    });
+    server.use(
+      http.get(`/api/earthquake/${MOCK_EVENT_ID_BASE}`, () => {
+        return HttpResponse.json(deepClone(baseMockDetailData));
+      })
+    );
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} />);
     expect(screen.getByTestId('loading-skeleton-container')).toBeInTheDocument();
     expect(screen.queryByText(/Details Not Available/i)).not.toBeInTheDocument();
@@ -149,15 +148,11 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     mockDataScenarioA.properties.title = 'M 6.0 - Null Coords Test';
     mockDataScenarioA.geometry.coordinates = [null, null, 10];
 
-    fetchSpy.mockImplementation((url) => {
-      if (url === `/api/earthquake/${MOCK_EVENT_ID_A}`) {
-        return Promise.resolve({ ok: true, json: async () => mockDataScenarioA });
-      }
-      if (url === `/api/earthquake/${MOCK_EVENT_ID_B}`) { // Pre-configure for scenario B
-        return Promise.resolve({ ok: true, json: async () => mockDataScenarioB });
-      }
-      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
-    });
+    server.use(
+      http.get(`/api/earthquake/${MOCK_EVENT_ID_A}`, () => {
+        return HttpResponse.json(mockDataScenarioA);
+      })
+    );
 
     const { rerender } = render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlA} />);
     await waitFor(() => expect(screen.queryByTestId('loading-skeleton-container')).not.toBeInTheDocument());
@@ -172,7 +167,12 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     mockDataScenarioB.id = MOCK_EVENT_ID_B;
     mockDataScenarioB.properties.title = 'M Null - Null Mag Test';
     mockDataScenarioB.properties.mag = null;
-    // fetchSpy is already configured to handle MOCK_EVENT_ID_B from above
+
+    server.use(
+      http.get(`/api/earthquake/${MOCK_EVENT_ID_B}`, () => {
+        return HttpResponse.json(mockDataScenarioB);
+      })
+    );
 
     rerender(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlB} />);
     await waitFor(() => expect(screen.queryByTestId('loading-skeleton-container')).not.toBeInTheDocument());
@@ -199,19 +199,13 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
   it('displays an error message if fetching data fails', async () => {
     const MOCK_EVENT_ID_ERROR = 'testquake_error';
     const mockDetailUrlError = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${MOCK_EVENT_ID_ERROR}.geojson`;
-    const localErrorMessage = 'Application API error! Status: 500. Message: Server Issue';
+    const localErrorMessage = 'Application API error! Status: 500. Message: Server Issue From MSW';
 
-    fetchSpy.mockImplementation((url) => {
-      if (url === `/api/earthquake/${MOCK_EVENT_ID_ERROR}`) {
-        return Promise.resolve({
-          ok: false,
-          status: 500,
-          statusText: "Server Issue",
-          json: async () => ({ message: "Server Issue" })
-        });
-      }
-      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
-    });
+    server.use(
+      http.get(`/api/earthquake/${MOCK_EVENT_ID_ERROR}`, () => {
+        return HttpResponse.json({ message: "Server Issue From MSW" }, { status: 500 });
+      })
+    );
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlError} />);
@@ -226,12 +220,11 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     const mockOnDataLoadedForSeo = vi.fn();
     const currentMockData = deepClone(baseMockDetailData); // Uses MOCK_EVENT_ID_BASE
 
-    fetchSpy.mockImplementation((url) => {
-      if (url === `/api/earthquake/${MOCK_EVENT_ID_BASE}`) {
-        return Promise.resolve({ ok: true, json: async () => currentMockData });
-      }
-      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
-    });
+    server.use(
+      http.get(`/api/earthquake/${MOCK_EVENT_ID_BASE}`, () => {
+        return HttpResponse.json(currentMockData);
+      })
+    );
 
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl} onDataLoadedForSeo={mockOnDataLoadedForSeo} />);
     await waitFor(() => expect(mockOnDataLoadedForSeo).toHaveBeenCalledTimes(1));
@@ -261,12 +254,11 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     currentMockData.properties.time = null;
     currentMockData.properties.title = "Test Null Time";
 
-    fetchSpy.mockImplementation((url) => {
-      if (url === `/api/earthquake/${MOCK_EVENT_ID_NULLTIME}`) {
-        return Promise.resolve({ ok: true, json: async () => currentMockData });
-      }
-      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
-    });
+    server.use(
+      http.get(`/api/earthquake/${MOCK_EVENT_ID_NULLTIME}`, () => {
+        return HttpResponse.json(currentMockData);
+      })
+    );
 
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlNullTime} />);
     await screen.findAllByText(currentMockData.properties.title);
@@ -283,24 +275,24 @@ describe('EarthquakeDetailView Accessibility', () => {
     properties: { title: 'M 7.0 - Axe Test Region', mag: 7.0, place: 'Axe Test Place', time: Date.now(), updated: Date.now(), products: {} },
     geometry: { coordinates: [-120, 37, 10] }
   };
-  let fetchSpy;
+
   beforeEach(() => {
-    fetchSpy = vi.spyOn(global, 'fetch');
+    // fetchSpy = vi.spyOn(global, 'fetch'); // REMOVED
     mockOnClose.mockClear();
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
   afterEach(() => {
-    fetchSpy.mockRestore();
+    // fetchSpy.mockRestore(); // REMOVED
+    server.resetHandlers();
     vi.restoreAllMocks();
   });
 
   it('should have no axe violations when displaying data', async () => {
-    fetchSpy.mockImplementation((url) => {
-      if (url === `/api/earthquake/${MOCK_EVENT_ID_AXE}`) {
-        return Promise.resolve({ ok: true, json: async () => JSON.parse(JSON.stringify(mockDetailDataAxe)) });
-      }
-      return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
-    });
+    server.use(
+      http.get(`/api/earthquake/${MOCK_EVENT_ID_AXE}`, () => {
+        return HttpResponse.json(JSON.parse(JSON.stringify(mockDetailDataAxe)));
+      })
+    );
     const { container } = render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlAxe} onDataLoadedForSeo={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByText((content, element) => element.id === 'earthquake-detail-title' && content.startsWith(mockDetailDataAxe.properties.title))).toBeInTheDocument();

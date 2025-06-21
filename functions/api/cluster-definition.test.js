@@ -1,153 +1,108 @@
-import { onRequest } from './cluster-definition'; // Assuming default export or named export
+import { onRequest } from './cluster-definition';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
+// Mock the d1ClusterUtils module
+vi.mock('../utils/d1ClusterUtils.js', () => ({
+  storeClusterDefinition: vi.fn(),
+}));
+// Import the mocked function AFTER vi.mock has been called
+import { storeClusterDefinition } from '../utils/d1ClusterUtils.js';
+
+
 // Helper to create mock context
-const mockDB = {
+// No longer need to mock individual DB methods here if storeClusterDefinition is mocked
+const mockDBInstance = {
+  // We might still need a placeholder DB object if other parts of the code expect env.DB to exist
+  // but its methods (prepare, bind, run, first) won't be called by the POST handler directly.
+  // For GET requests, these will still be used.
   prepare: vi.fn().mockReturnThis(),
   bind: vi.fn().mockReturnThis(),
-  run: vi.fn(),
   first: vi.fn(),
+  run: vi.fn(), // Keep for GET if needed, or if other tests in this file use it.
 };
 
+
 const createMockContext = (request, env = {}) => {
-  // Reset mocks for DB methods that might be chained
-  mockDB.prepare = vi.fn().mockReturnThis();
-  mockDB.bind = vi.fn().mockReturnThis();
-  mockDB.run = vi.fn();
-  mockDB.first = vi.fn();
+  // Reset specific D1 method mocks if they are used by GET requests in this file
+  mockDBInstance.prepare.mockReset().mockReturnThis();
+  mockDBInstance.bind.mockReset().mockReturnThis();
+  mockDBInstance.first.mockReset();
+  // storeClusterDefinition is reset in beforeEach of the describe block
 
   return {
     request,
     env: {
-      DB: mockDB, // Use the mockDB for D1 interactions
-      // CLUSTER_KV: { // Keep CLUSTER_KV if other parts of tests still use it, or remove
-      //   get: vi.fn(),
-      //   put: vi.fn(),
-      // },
-      ...env, // Allow overriding DB or adding other env vars
+      DB: mockDBInstance,
+      ...env,
     },
-    // waitUntil and other properties can be added if needed by the function
   };
 };
 
 describe('Cluster Definition API (/api/cluster-definition)', () => {
   beforeEach(() => {
-    // vi.resetAllMocks(); // This might be too broad if mockDB setup is complex.
-    // Instead, specific mocks are reset in createMockContext or per test.
+    vi.resetAllMocks(); // Resets all mocks, including storeClusterDefinition
+    // If storeClusterDefinition needs specific default behavior for all tests, set it here.
+    // e.g., storeClusterDefinition.mockResolvedValue({ success: true, id: 'default-mock-id' });
   });
 
   describe('POST requests', () => {
-    const baseTime = Date.now();
-    const validClusterData = {
-      id: 'testClusterPost123',
-      slug: 'test-cluster-post-123',
-      strongestQuakeId: 'eq2',
-      earthquakeIds: ['eq1', 'eq2', 'eq3'],
-      title: 'Test Cluster Title',
-      description: 'A test cluster description.',
-      locationName: 'Test Location',
-      maxMagnitude: 5.5,
-      meanMagnitude: 4.5,
-      minMagnitude: 3.5,
-      depthRange: '5-15km',
-      centroidLat: 34.0522,
-      centroidLon: -118.2437,
-      radiusKm: 50,
-      startTime: baseTime - 3600000, // 1 hour ago
-      endTime: baseTime,
-      durationHours: 1.0,
-      quakeCount: 3,
-      significanceScore: 100,
-      version: 1,
-    };
+    let baseTime; // Will be set in beforeEach of this describe block
+    let validClusterData;
 
-    it('should store valid cluster definition in D1 and return 201', async () => {
+    beforeEach(() => {
+      baseTime = Date.now(); // Ensure consistent time for each test run
+      // Define validClusterData here to use the fresh baseTime
+      validClusterData = {
+        id: 'testClusterPost123',
+        slug: 'test-cluster-post-123',
+        strongestQuakeId: 'eq2',
+        earthquakeIds: ['eq1', 'eq2', 'eq3'],
+        title: 'Test Cluster Title',
+        description: 'A test cluster description.',
+        locationName: 'Test Location',
+        maxMagnitude: 5.5,
+        meanMagnitude: 4.5,
+        minMagnitude: 3.5,
+        depthRange: '5-15km',
+        centroidLat: 34.0522,
+        centroidLon: -118.2437,
+        radiusKm: 50,
+        startTime: baseTime - 3600000, // 1 hour ago
+        endTime: baseTime,
+        durationHours: 1.0,
+        quakeCount: 3,
+        significanceScore: 100,
+        version: 1,
+        // No createdAt, updatedAt here, storeClusterDefinition adds updatedAt
+      };
+       // Reset specific mocks for POST requests if necessary, or rely on global beforeEach
+      storeClusterDefinition.mockReset();
+    });
+
+
+    it('should store valid cluster definition and return 201', async () => {
       const request = new Request('http://localhost/api/cluster-definition', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(validClusterData),
       });
       const context = createMockContext(request);
-      // Simulate storeClusterDefinition success (which is called by the endpoint)
-      // The endpoint itself doesn't directly call mockDB.run for INSERT anymore.
-      // We are testing the endpoint's validation and response based on storeClusterDefinition's mocked behavior.
-      // For this test, we assume storeClusterDefinition works (tested elsewhere or implicitly via this if not mocked).
-      // The MSW handler for POST /api/cluster-definition already provides a 201 for valid body.
-      // This unit test should verify the endpoint correctly calls storeClusterDefinition.
-      // However, since storeClusterDefinition is imported and used directly, we'd need to mock it
-      // if we want to isolate the onRequest handler logic. For now, let's assume it passes data correctly.
-      // The endpoint itself creates the SQL and binds params.
 
-      mockDB.run.mockResolvedValueOnce({ success: true }); // Mock D1 run success from within the endpoint
+      // Mock the behavior of the imported storeClusterDefinition utility
+      storeClusterDefinition.mockResolvedValueOnce({ success: true, id: validClusterData.id });
 
       const response = await onRequest(context);
       expect(response.status).toBe(201);
       const responseText = await response.text();
-      // The response text changed in the implementation to be more generic
       expect(responseText).toBe(`Cluster definition for ${validClusterData.id} registered/updated successfully.`);
 
-      // Adjusted to match the exact string format from the implementation, including leading/trailing spaces if any from the template literal.
-      // To avoid whitespace issues with template literals in tests, construct the string line by line or use .trim() carefully.
-      // The actual query in cluster-definition.js is a multi-line template literal.
-      // The key is the exact string value passed to env.DB.prepare().
-      const expectedSqlParts = [
-        'INSERT OR REPLACE INTO ClusterDefinitions',
-        '(id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,',
-        'maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,',
-        'radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore, version)',
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ];
-      // This reconstruction attempts to match the likely formatting after JS template literal processing
-      // where common leading whitespace on subsequent lines is removed.
-      // The implementation string is:
-      // `INSERT OR REPLACE INTO ClusterDefinitions
-      //    (id, slug, ...)
-      //    VALUES (?, ...)`
-      // The `         ` (9 spaces) on the (id, slug...) line and VALUES line is the common indent.
-      // So, effectively these lines start with no indent relative to the content block.
-      // The most reliable way is often to see the exact string from a console.log in the implementation if issues persist.
-      // Based on the last diff: `+        (id, slug...` (8 spaces), it implies the internal processing
-      // or the way the string is captured results in that specific indentation.
-      // Let's try to match the actual implementation more directly.
-      // Using a normalized string comparison to avoid whitespace issues.
-      const expectedSqlBase = `
-        INSERT OR REPLACE INTO ClusterDefinitions
-         (id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
-          maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
-          radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore, version)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-      const normalizeSql = (sql) => sql.replace(/\s+/g, ' ').trim();
-      const expectedNormalizedSql = normalizeSql(expectedSqlBase);
-
-      // Check if prepare was called, then check the argument with normalized comparison
-      expect(mockDB.prepare).toHaveBeenCalled();
-      const actualSqlReceived = mockDB.prepare.mock.calls[0][0];
-      expect(normalizeSql(actualSqlReceived)).toBe(expectedNormalizedSql);
-
-      expect(mockDB.bind).toHaveBeenCalledWith(
-        validClusterData.id,
-        validClusterData.slug,
-        validClusterData.strongestQuakeId,
-        JSON.stringify(validClusterData.earthquakeIds),
-        validClusterData.title,
-        validClusterData.description,
-        validClusterData.locationName,
-        validClusterData.maxMagnitude,
-        validClusterData.meanMagnitude,
-        validClusterData.minMagnitude,
-        validClusterData.depthRange,
-        validClusterData.centroidLat,
-        validClusterData.centroidLon,
-        validClusterData.radiusKm,
-        validClusterData.startTime,
-        validClusterData.endTime,
-        validClusterData.durationHours,
-        validClusterData.quakeCount,
-        validClusterData.significanceScore,
-        validClusterData.version
-      );
-      expect(mockDB.run).toHaveBeenCalledTimes(1);
+      // Verify that storeClusterDefinition was called correctly
+      // The actual validClusterData passed to storeClusterDefinition will have 'updatedAt' added by the utility itself,
+      // but the endpoint calls it with the original payload.
+      // The endpoint itself does not add `updatedAt` before calling `storeClusterDefinition`.
+      // `storeClusterDefinition` adds `updatedAt` internally.
+      // So, we expect the endpoint to call `storeClusterDefinition` with the payload as it received it (after its own validation).
+      expect(storeClusterDefinition).toHaveBeenCalledWith(context.env.DB, validClusterData);
     });
 
     it('should return 400 for invalid JSON payload', async () => {
@@ -208,53 +163,61 @@ describe('Cluster Definition API (/api/cluster-definition)', () => {
         body: JSON.stringify(validClusterData),
       });
       const context = createMockContext(request);
-      const error = new Error("D1 run failed");
-      mockDB.run.mockRejectedValueOnce(error); // D1 run fails
+      const storeError = new Error("Simulated D1 storage failure from utility");
+      // Mock storeClusterDefinition to simulate a failure from the utility
+      storeClusterDefinition.mockResolvedValueOnce({ success: false, error: storeError.message });
 
       const response = await onRequest(context);
       expect(response.status).toBe(500);
-      expect(await response.text()).toBe('Failed to store cluster definition: ' + error.message);
+      // The endpoint returns the error message directly from the storeResult.error
+      expect(await response.text()).toBe(storeError.message);
+      expect(storeClusterDefinition).toHaveBeenCalledWith(context.env.DB, validClusterData);
     });
   });
 
   describe('GET requests', () => {
     const clusterId = 'testClusterGet123';
-    const now = Date.now();
+    let now; // Define now inside beforeEach for consistency per test
     // This represents the raw row from D1
-    const dbRow = {
-      id: clusterId,
-      slug: `test-cluster-${clusterId}`,
-      strongestQuakeId: 'eqA',
-      earthquakeIds: JSON.stringify(['eqA', 'eqB']), // Stored as JSON string in DB
-      title: 'Test Cluster for GET',
-      description: 'Description for test cluster GET.',
-      locationName: 'Test Location GET',
-      maxMagnitude: 6.1,
-      meanMagnitude: 5.0,
-      minMagnitude: 4.1,
-      depthRange: '10-20km',
-      centroidLat: 35.123,
-      centroidLon: -119.456,
-      radiusKm: 25,
-      startTime: now - 7200000, // 2 hours ago
-      endTime: now - 3600000,   // 1 hour ago
-      durationHours: 1.0,
-      quakeCount: 2,
-      significanceScore: 200,
-      version: 2,
-      createdAt: new Date(now - 10800000).toISOString(), // 3 hours ago
-      updatedAt: new Date(now - 3600000).toISOString(),  // 1 hour ago
-    };
-    // This represents the final API response after parsing earthquakeIds
-    const expectedResponseData = {
-      ...dbRow,
-      earthquakeIds: ['eqA', 'eqB'], // Parsed to an array
-    };
+    let dbRow;
+    let expectedResponseData;
+
+    beforeEach(() => {
+      now = Date.now(); // Set 'now' for each test in this block
+      dbRow = {
+        id: clusterId,
+        slug: `test-cluster-${clusterId}`,
+        strongestQuakeId: 'eqA',
+        earthquakeIds: JSON.stringify(['eqA', 'eqB']), // Stored as JSON string in DB
+        title: 'Test Cluster for GET',
+        description: 'Description for test cluster GET.',
+        locationName: 'Test Location GET',
+        maxMagnitude: 6.1,
+        meanMagnitude: 5.0,
+        minMagnitude: 4.1,
+        depthRange: '10-20km',
+        centroidLat: 35.123,
+        centroidLon: -119.456,
+        radiusKm: 25,
+        startTime: now - 7200000, // 2 hours ago
+        endTime: now - 3600000,   // 1 hour ago
+        durationHours: 1.0,
+        quakeCount: 2,
+        significanceScore: 200,
+        version: 2,
+        createdAt: new Date(now - 10800000).toISOString(), // 3 hours ago
+        updatedAt: new Date(now - 3600000).toISOString(),  // 1 hour ago
+      };
+      expectedResponseData = {
+        ...dbRow,
+        earthquakeIds: ['eqA', 'eqB'], // Parsed to an array
+      };
+    });
 
     it('should retrieve and return cluster definition from D1 if found', async () => {
       const request = new Request(`http://localhost/api/cluster-definition?id=${clusterId}`, { method: 'GET' });
       const context = createMockContext(request);
-      mockDB.first.mockResolvedValueOnce(dbRow);
+      mockDBInstance.first.mockResolvedValueOnce(dbRow); // Use mockDBInstance
 
       const response = await onRequest(context);
       expect(response.status).toBe(200);
@@ -266,9 +229,9 @@ describe('Cluster Definition API (/api/cluster-definition)', () => {
                 radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore,
                 version, createdAt, updatedAt
          FROM ClusterDefinitions WHERE id = ?`;
-      expect(mockDB.prepare).toHaveBeenCalledWith(expectedQuery);
-      expect(mockDB.bind).toHaveBeenCalledWith(clusterId);
-      expect(mockDB.first).toHaveBeenCalledTimes(1);
+      expect(mockDBInstance.prepare).toHaveBeenCalledWith(expectedQuery); // Use mockDBInstance
+      expect(mockDBInstance.bind).toHaveBeenCalledWith(clusterId);     // Use mockDBInstance
+      expect(mockDBInstance.first).toHaveBeenCalledTimes(1);    // Use mockDBInstance
     });
 
     it('should return 400 if id query parameter is missing', async () => {
@@ -282,7 +245,7 @@ describe('Cluster Definition API (/api/cluster-definition)', () => {
     it('should return 404 if cluster definition is not found', async () => {
       const request = new Request(`http://localhost/api/cluster-definition?id=nonexistent${clusterId}`, { method: 'GET' });
       const context = createMockContext(request);
-      mockDB.first.mockResolvedValueOnce(null); // D1 returns null if not found
+      mockDBInstance.first.mockResolvedValueOnce(null); // Use mockDBInstance
 
       const response = await onRequest(context);
       expect(response.status).toBe(404);
@@ -293,7 +256,7 @@ describe('Cluster Definition API (/api/cluster-definition)', () => {
       const request = new Request(`http://localhost/api/cluster-definition?id=${clusterId}`, { method: 'GET' });
       const context = createMockContext(request);
       const error = new Error("D1 select failed");
-      mockDB.first.mockRejectedValueOnce(error);
+      mockDBInstance.first.mockRejectedValueOnce(error); // Use mockDBInstance
 
       const response = await onRequest(context);
       expect(response.status).toBe(500);
