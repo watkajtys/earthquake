@@ -2,7 +2,7 @@
 // Note: Adjusted path assuming worker.js is in src/ and d1Utils.js is in src/utils/
 import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js';
 import { onRequestGet as handleGetClusterWithQuakes } from '../functions/api/cluster-detail-with-quakes.js';
-import { onRequest as handlePostCalculateClusters } from '../functions/api/calculate-clusters.POST.js';
+import { onRequestPost as handlePostCalculateClusters } from '../functions/api/calculate-clusters.POST.js';
 
 // === Helper Functions (originally from [[catchall]].js) ===
 const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefined) => {
