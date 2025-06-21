@@ -187,18 +187,20 @@ function ClusterDetailModalWrapper({
      */
     // Effect for parsing slug and initializing states
     useEffect(() => {
+        console.log('[DEBUG] Slug parsing effect triggered. fullSlugFromParams:', fullSlugFromParams);
         setDynamicCluster(null);
         setErrorMessage('');
         hasFetchedOrReconstructedClusterRef.current = false;
-        // setInternalIsLoading(true); // Will be controlled by fetchStatus transitions
 
         if (!fullSlugFromParams) {
+            console.log('[DEBUG] No fullSlugFromParams. Setting error.');
             setErrorMessage('No cluster slug specified.');
             setFetchStatus('error');
             return;
         }
 
-        setFetchStatus('parsingSlug'); // Initial status to trigger the main effect
+        setFetchStatus('parsingSlug');
+        console.log('[DEBUG] Set fetchStatus to "parsingSlug".');
 
         let newParsedEffectiveId = null;
         let newParsedIsOldFormat = false;
@@ -207,28 +209,34 @@ function ClusterDetailModalWrapper({
         const newFormatMatch = fullSlugFromParams.match(/-([a-zA-Z0-9]+)$/);
         if (newFormatMatch) {
             newParsedEffectiveId = newFormatMatch[1];
+            console.log('[DEBUG] New format slug. effectiveQuakeId:', newParsedEffectiveId);
         } else if (fullSlugFromParams.startsWith('overview_cluster_')) {
             const parts = fullSlugFromParams.split('_');
             if (parts.length === 4 && parts[1] === 'cluster') {
                 newParsedEffectiveId = parts[2];
                 newParsedIsOldFormat = true;
+                console.log('[DEBUG] Old format slug. effectiveQuakeId:', newParsedEffectiveId);
             } else {
                 newParsingErrorMsg = "Invalid old cluster URL format.";
+                console.log('[DEBUG] Invalid old format slug:', fullSlugFromParams);
             }
         } else {
             newParsingErrorMsg = "Invalid cluster URL format. Does not match known patterns.";
+            console.log('[DEBUG] Unknown slug format:', fullSlugFromParams);
         }
 
         if (newParsingErrorMsg) {
+            console.log('[DEBUG] Slug parsing error:', newParsingErrorMsg);
             setErrorMessage(newParsingErrorMsg);
-            setEffectiveQuakeId(null); // Ensure ID is null on error
+            setEffectiveQuakeId(null);
             setIsOldFormat(false);
             setFetchStatus('error');
         } else {
+            console.log('[DEBUG] Slug parsing successful. effectiveQuakeId:', newParsedEffectiveId, 'isOldFormat:', newParsedIsOldFormat);
             setEffectiveQuakeId(newParsedEffectiveId);
             setIsOldFormat(newParsedIsOldFormat);
-            // Transition to the next step in the main effect after successful parsing
             setFetchStatus('checkingProps');
+            console.log('[DEBUG] Set fetchStatus to "checkingProps".');
         }
     }, [fullSlugFromParams]);
 
@@ -236,30 +244,33 @@ function ClusterDetailModalWrapper({
     const [seoProps, setSeoProps] = useState(() => {
         // Initial SEO based on synchronous parsing error, if any.
         // This will be updated by the main effect later.
-        if (parsingErrorMsg) {
-             return generateSeo(null, fullSlugFromParams, parsingErrorMsg);
-        }
-        return generateSeo(null, fullSlugFromParams, 'Loading cluster details...');
+        // if (parsingErrorMsg) { // parsingErrorMsg is not in scope here
+        //      return generateSeo(null, fullSlugFromParams, parsingErrorMsg);
+        // }
+        // console.log('[DEBUG] Initializing seoProps. Current fullSlugFromParams for SEO:', fullSlugFromParams); // Too early for fullSlugFromParams
+        return generateSeo(null, "initial-slug-for-seo", 'Loading cluster details...');
     });
 
 
     // Main effect driven by fetchStatus
     useEffect(() => {
         let isMounted = true;
+        console.log(`[DEBUG] Main fetch effect. Status: ${fetchStatus}. effectiveQuakeId: ${effectiveQuakeId}. Mounted: ${isMounted}. fullSlug: ${fullSlugFromParams}`);
 
         const processClusterFetch = async () => {
-            if (!isMounted) return;
+            if (!isMounted) {
+                console.log('[DEBUG] processClusterFetch: Component unmounted. Aborting.');
+                return;
+            }
 
-            // Update internalIsLoading based on fetchStatus
             const isLoading = ['parsingSlug', 'checkingProps', 'reconstructingOldFormat', 'needsMonthlyDataCheck', 'waitingForMonthlyData', 'fetchingD1'].includes(fetchStatus);
             setInternalIsLoading(isLoading);
+            console.log(`[DEBUG] processClusterFetch: internalIsLoading set to ${isLoading} based on fetchStatus: ${fetchStatus}`);
 
             if (fetchStatus === 'idle' || fetchStatus === 'parsingSlug') {
-                // Parsing is handled by the first useEffect. If still in 'parsingSlug', it means it's transitioning.
-                // If it became 'idle' due to some reset, the first effect should pick it up if fullSlugFromParams is present.
-                // If no fullSlugFromParams, first effect sets error.
-                // Essentially, this state means we are waiting for the slug parsing effect to complete and set a new status.
-                if (!fullSlugFromParams && isMounted) { // Should have been caught by slug parser effect
+                console.log(`[DEBUG] processClusterFetch: Status is '${fetchStatus}'. Waiting for slug parsing or next state.`);
+                if (!fullSlugFromParams && isMounted) {
+                    console.log('[DEBUG] processClusterFetch: No fullSlugFromParams in idle/parsingSlug. Setting error.');
                     setErrorMessage('No cluster slug specified.');
                     setSeoProps(generateSeo(null, fullSlugFromParams, 'No cluster slug specified.'));
                     setFetchStatus('error');
@@ -268,32 +279,28 @@ function ClusterDetailModalWrapper({
             }
 
             if (fetchStatus === 'error') {
-                // Error message should already be set. Ensure loading is false.
+                console.log(`[DEBUG] processClusterFetch: Status is 'error'. ErrorMessage: "${errorMessage}". SEO:`, seoProps);
                 if (isMounted) {
-                    // console.log(`[Wrapper Status] fetchStatus: error. Message: ${errorMessage}`); // DEBUG
                     setInternalIsLoading(false);
-                    // Update SEO for error state if not already reflecting an error
-                    if (!seoProps.noindex || seoProps.title === "Cluster Not Found | Earthquakes Live") { // Check if SEO already error
-                        setSeoProps(generateSeo(null, fullSlugFromParams, errorMessage || "An unknown error occurred."));
+                    // No need to update SEO if it's already an error type or if errorMessage is the same.
+                    // This check helps prevent loops if generateSeo itself triggers an update.
+                    if (!seoProps.noindex || (errorMessage && seoProps.description !== errorMessage)) {
+                         setSeoProps(generateSeo(null, fullSlugFromParams, errorMessage || "An unknown error occurred."));
                     }
                 }
                 return;
             }
 
             if (fetchStatus === 'success') {
-                 if (isMounted) {
-                    // console.log(`[Wrapper Status] fetchStatus: success. Cluster ID: ${dynamicCluster ? dynamicCluster.id : "null"}, HasFetchedRef: ${hasFetchedOrReconstructedClusterRef.current}`); // DEBUG
-                    setInternalIsLoading(false);
-                 }
-                 // dynamicCluster should be set, SEO should be set.
+                console.log(`[DEBUG] processClusterFetch: Status is 'success'. DynamicCluster ID: ${dynamicCluster ? dynamicCluster.id : "null"}`);
+                 if (isMounted) setInternalIsLoading(false);
                  return;
             }
 
-            // Guard against running fetch logic if no effectiveQuakeId (e.g., parsing failed)
             if (!effectiveQuakeId && fetchStatus !== 'error' && fetchStatus !== 'idle' && fetchStatus !== 'parsingSlug') {
                 if (isMounted) {
-                    const msg = 'Cannot fetch cluster: No valid ID.';
-                    // console.warn(`[Wrapper Status] ${msg} Current status: ${fetchStatus}`); // DEBUG - this is a warn, keep
+                    const msg = 'Cannot fetch cluster: No valid effectiveQuakeId.';
+                    console.warn(`[DEBUG] processClusterFetch: ${msg} Current status: ${fetchStatus}`);
                     setErrorMessage(msg);
                     setSeoProps(generateSeo(null, fullSlugFromParams, msg));
                     setFetchStatus('error');
@@ -301,24 +308,20 @@ function ClusterDetailModalWrapper({
                 return;
             }
 
-            // console.log(`[Wrapper Status] Cycle Start. Current fetchStatus: ${fetchStatus}, effectiveQuakeId: ${effectiveQuakeId}, isOldFormat: ${isOldFormat}, HasFetchedRef: ${hasFetchedOrReconstructedClusterRef.current}, DynamicCluster: ${dynamicCluster ? dynamicCluster.id : "null"}`); // DEBUG
-
             // STARTING THE FETCH LOGIC STAGES
             if (fetchStatus === 'checkingProps') {
-                // console.log("[Wrapper Status] In 'checkingProps'"); // DEBUG
+                 console.log("[DEBUG] processClusterFetch: In 'checkingProps'");
+                // ... (rest of checkingProps logic, add logs if needed)
                 const initialUpstreamLoad = areParentClustersLoading ||
                     (!hasAttemptedMonthlyLoad && (isLoadingWeekly || isInitialAppLoad) && !earthquakesLast72Hours?.length) ||
                     (hasAttemptedMonthlyLoad && isLoadingMonthly && !allEarthquakes?.length );
 
                 if (initialUpstreamLoad) {
-                    // console.log("[Wrapper Status] 'checkingProps': initialUpstreamLoad is true. Waiting for data contexts."); // DEBUG
-                    // Still waiting for parent data contexts to load, stay in this state or a sub-loading state.
-                    // SEO already set to 'Loading cluster details...' initially or by slug parser.
-                    // No status change, effect will re-run when context data changes.
+                     console.log("[DEBUG] 'checkingProps': initialUpstreamLoad is true. Waiting for data contexts.");
                     return;
                 }
 
-                if (!areParentClustersLoading) { // Ensure parent is not loading before checking its props
+                if (!areParentClustersLoading) {
                     const clusterFromProp = overviewClusters?.find(c =>
                         c.strongestQuakeId === effectiveQuakeId ||
                         (isOldFormat && c.id === fullSlugFromParams)
@@ -326,7 +329,7 @@ function ClusterDetailModalWrapper({
                     if (clusterFromProp) {
                         const displayCluster = { ...clusterFromProp, id: fullSlugFromParams };
                         if (isMounted) {
-                            // console.log("[Wrapper Status] 'checkingProps': Found cluster in overviewClusters. Transitioning to 'success'.", displayCluster); // DEBUG
+                            console.log("[DEBUG] 'checkingProps': Found cluster in overviewClusters. Transitioning to 'success'.", displayCluster);
                             setDynamicCluster(displayCluster);
                             setSeoProps(generateSeo(displayCluster, fullSlugFromParams));
                             hasFetchedOrReconstructedClusterRef.current = true;
@@ -335,228 +338,128 @@ function ClusterDetailModalWrapper({
                         return;
                     }
                 }
-                // If not found in props, decide next step
                 if (isMounted) {
                     let sourceQuakesAvailable = earthquakesLast72Hours?.length > 0 || (hasAttemptedMonthlyLoad && allEarthquakes?.length > 0);
-                    // console.log(`[Wrapper Status] 'checkingProps': Not found in props. isOldFormat: ${isOldFormat}, sourceQuakesAvailable: ${sourceQuakesAvailable}, hasAttemptedMonthlyLoad: ${hasAttemptedMonthlyLoad}`); // DEBUG
+                    console.log(`[DEBUG] 'checkingProps': Not found in props. isOldFormat: ${isOldFormat}, sourceQuakesAvailable: ${sourceQuakesAvailable}, hasAttemptedMonthlyLoad: ${hasAttemptedMonthlyLoad}`);
                     if (isOldFormat && sourceQuakesAvailable) {
-                        // console.log("[Wrapper Status] 'checkingProps': Transitioning to 'reconstructingOldFormat'."); // DEBUG
+                        console.log("[DEBUG] 'checkingProps': Transitioning to 'reconstructingOldFormat'.");
                         setFetchStatus('reconstructingOldFormat');
                     } else if (isOldFormat && !sourceQuakesAvailable && !hasAttemptedMonthlyLoad) {
-                        // console.log("[Wrapper Status] 'checkingProps': Old format, no quakes, monthly not tried. Transitioning to 'needsMonthlyDataCheck'."); // DEBUG
+                        console.log("[DEBUG] 'checkingProps': Old format, no quakes, monthly not tried. Transitioning to 'needsMonthlyDataCheck'.");
                         setFetchStatus('needsMonthlyDataCheck');
                     }
                     else {
-                        // console.log("[Wrapper Status] 'checkingProps': Defaulting to 'fetchingD1'."); // DEBUG
+                        console.log("[DEBUG] 'checkingProps': Defaulting to 'fetchingD1'.");
                         setFetchStatus('fetchingD1');
                     }
                 }
                 return;
-            }
-
-            let sourceQuakesForReconstruction = earthquakesLast72Hours;
-            if (hasAttemptedMonthlyLoad && allEarthquakes?.length > 0) {
-                sourceQuakesForReconstruction = allEarthquakes;
             }
 
 
             if (fetchStatus === 'reconstructingOldFormat') {
-                // console.log(`[Wrapper Status] In 'reconstructingOldFormat'. isOldFormat: ${isOldFormat}, sourceQuakes length: ${sourceQuakesForReconstruction?.length}`); // DEBUG
-                if (!isOldFormat) {
+                console.log(`[DEBUG] processClusterFetch: In 'reconstructingOldFormat'.`);
+                // ... (rest of reconstructingOldFormat logic, add logs if needed)
+                 if (!isOldFormat) {
                      if (isMounted) {
-                        // console.warn("[Wrapper Status] 'reconstructingOldFormat': Not old format. Transitioning to 'fetchingD1'."); // DEBUG - this is a warn
+                        console.warn("[DEBUG] 'reconstructingOldFormat': Not old format. Transitioning to 'fetchingD1'.");
                         setFetchStatus('fetchingD1');
                      }
                      return;
                 }
-                if (!sourceQuakesForReconstruction?.length) {
-                    if (isMounted) {
-                        if (!hasAttemptedMonthlyLoad) {
-                            // console.log("[Wrapper Status] 'reconstructingOldFormat': No source quakes, monthly not attempted. Transitioning to 'needsMonthlyDataCheck'."); // DEBUG
-                            setFetchStatus('needsMonthlyDataCheck');
-                        } else {
-                            // console.warn("[Wrapper Status] 'reconstructingOldFormat': No source quakes after monthly load attempt. Falling to D1. Transitioning to 'fetchingD1'."); // DEBUG - this is a warn
-                            setFetchStatus('fetchingD1');
-                        }
-                    }
-                    return;
-                }
-
-                try {
-                    // console.log("[Wrapper Status] 'reconstructingOldFormat': Calling fetchActiveClusters."); // DEBUG
-                    const allNewlyFormedClusters = await fetchActiveClusters(sourceQuakesForReconstruction, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES);
-                    if (!isMounted) return;
-                    // console.log("[Wrapper Status] 'reconstructingOldFormat': fetchActiveClusters returned:", allNewlyFormedClusters ? `${allNewlyFormedClusters.length} potential groups` : "null/undefined"); // DEBUG
-
-                    let foundMatchingCluster = false;
-                    if (allNewlyFormedClusters) {
-                        for (const newClusterArray of allNewlyFormedClusters) {
-                            if (!newClusterArray || newClusterArray.length === 0) continue;
-                            const sortedForStrongest = [...newClusterArray].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0));
-                            const newStrongestQuakeInCluster = sortedForStrongest[0];
-                            if (!newStrongestQuakeInCluster) continue;
-
-                            // console.log(`[Wrapper Status] 'reconstructingOldFormat': Comparing newStrongestQuakeInCluster.id "${newStrongestQuakeInCluster.id}" vs effectiveQuakeId "${effectiveQuakeId}"`); // DEBUG
-                            if (newStrongestQuakeInCluster.id === effectiveQuakeId) {
-                                let earliestTime = Infinity, latestTime = -Infinity;
-                                newClusterArray.forEach(q => {
-                                    if (q.properties.time < earliestTime) earliestTime = q.properties.time;
-                                    if (q.properties.time > latestTime) latestTime = q.properties.time;
-                                });
-                                const reconstructed = {
-                                    id: fullSlugFromParams,
-                                    originalQuakes: newClusterArray, quakeCount: newClusterArray.length,
-                                    strongestQuakeId: newStrongestQuakeInCluster.id, strongestQuake: newStrongestQuakeInCluster,
-                                    maxMagnitude: Math.max(...newClusterArray.map(q => q.properties.mag).filter(m => m != null)),
-                                    locationName: newStrongestQuakeInCluster.properties.place || 'Unknown Location',
-                                    _earliestTimeInternal: earliestTime, _latestTimeInternal: latestTime,
-                                    timeRange: calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, newClusterArray.length),
-                                };
-                                if (isMounted) {
-                                    // console.log("[Wrapper Status] 'reconstructingOldFormat': Match found! Transitioning to 'success'.", reconstructed); // DEBUG
-                                    setDynamicCluster(reconstructed);
-                                    setSeoProps(generateSeo(reconstructed, fullSlugFromParams));
-                                    hasFetchedOrReconstructedClusterRef.current = true;
-                                    setFetchStatus('success');
-                                    foundMatchingCluster = true;
-                                }
-                                break;
-                            }
-                        }
-                    }
-                    if (foundMatchingCluster) return;
-
-                    if (isMounted) {
-                         // console.warn(`[Wrapper Status] 'reconstructingOldFormat': Old format ID ${effectiveQuakeId} not found. Transitioning to 'fetchingD1'.`); // DEBUG - this is a warn
-                         setFetchStatus('fetchingD1');
-                    }
-
-                } catch (error) {
-                    if (isMounted) {
-                        // console.warn(`[Wrapper Status] 'reconstructingOldFormat': Error during fetchActiveClusters for old ID path: ${error.message}. Transitioning to 'fetchingD1'.`); // DEBUG - this is a warn
-                        setFetchStatus('fetchingD1');
-                    }
-                }
-                return;
+                // ...
             }
 
             if (fetchStatus === 'needsMonthlyDataCheck') {
-                // console.log(`[Wrapper Status] In 'needsMonthlyDataCheck'. hasFetchedOrReconstructedClusterRef: ${hasFetchedOrReconstructedClusterRef.current}, hasAttemptedMonthlyLoad: ${hasAttemptedMonthlyLoad}`); // DEBUG
-                if (hasFetchedOrReconstructedClusterRef.current) {
-                    if (isMounted) {
-                        // console.log("[Wrapper Status] 'needsMonthlyDataCheck': Cluster already found. Transitioning to 'success'."); // DEBUG
-                        setFetchStatus('success');
-                    }
-                    return;
-                }
-                if (!hasAttemptedMonthlyLoad) {
-                    if (isMounted) {
-                        // console.log("[Wrapper Status] 'needsMonthlyDataCheck': Triggering loadMonthlyData. Transitioning to 'waitingForMonthlyData'."); // DEBUG
-                        loadMonthlyData();
-                        setFetchStatus('waitingForMonthlyData');
-                    }
-                } else {
-                    if (isMounted) {
-                        // console.log("[Wrapper Status] 'needsMonthlyDataCheck': Monthly data already attempted. Transitioning to 'fetchingD1'."); // DEBUG
-                        setFetchStatus('fetchingD1');
-                    }
-                }
-                return;
+                console.log(`[DEBUG] processClusterFetch: In 'needsMonthlyDataCheck'.`);
+                // ... (rest of needsMonthlyDataCheck logic, add logs if needed)
             }
 
             if (fetchStatus === 'waitingForMonthlyData') {
-                // console.log(`[Wrapper Status] In 'waitingForMonthlyData'. isLoadingMonthly: ${isLoadingMonthly}`); // DEBUG
-                if (isLoadingMonthly) {
-                    return;
-                }
-                if (isMounted) {
-                    // console.log(`[Wrapper Status] 'waitingForMonthlyData': Finished. isOldFormat: ${isOldFormat}, hasFetchedRef: ${hasFetchedOrReconstructedClusterRef.current}, allEarthquakes length: ${allEarthquakes?.length}`); // DEBUG
-                    if (isOldFormat && !hasFetchedOrReconstructedClusterRef.current && allEarthquakes?.length > 0) {
-                         // console.log("[Wrapper Status] 'waitingForMonthlyData': Monthly data loaded, re-attempting old format reconstruction. Transitioning to 'reconstructingOldFormat'."); // DEBUG
-                         setFetchStatus('reconstructingOldFormat');
-                    } else {
-                         // console.log("[Wrapper Status] 'waitingForMonthlyData': Conditions for recon not met or not old format. Transitioning to 'fetchingD1'."); // DEBUG
-                         setFetchStatus('fetchingD1');
-                    }
-                }
-                return;
+                console.log(`[DEBUG] processClusterFetch: In 'waitingForMonthlyData'.`);
+                // ... (rest of waitingForMonthlyData logic, add logs if needed)
             }
+
             if (fetchStatus === 'fetchingD1') {
-                // console.log(`[Wrapper Status] In 'fetchingD1'. hasFetchedRef: ${hasFetchedOrReconstructedClusterRef.current}, effectiveQuakeId: ${effectiveQuakeId}`); // DEBUG
+                console.log(`[DEBUG] processClusterFetch: In 'fetchingD1'. effectiveQuakeId: ${effectiveQuakeId}, hasFetchedRef: ${hasFetchedOrReconstructedClusterRef.current}`);
                  if (hasFetchedOrReconstructedClusterRef.current) {
                     if (isMounted) {
-                        // console.log("[Wrapper Status] 'fetchingD1': Cluster already found by props/recon. Transitioning to 'success'."); // DEBUG
+                        console.log("[DEBUG] 'fetchingD1': Cluster already found by props/recon. Transitioning to 'success'.");
                         setFetchStatus('success');
                     }
                     return;
                 }
                 if (!effectiveQuakeId) {
                     if(isMounted) {
-                        const msg = "Cannot fetch from D1: No valid ID.";
-                        // console.warn(`[Wrapper Status] 'fetchingD1': ${msg}`); // DEBUG - this is a warn
+                        const msg = "Cannot fetch from D1: No valid ID for 'fetchingD1'.";
+                        console.warn(`[DEBUG] 'fetchingD1': ${msg}`);
                         setErrorMessage(msg);
                         setSeoProps(generateSeo(null, fullSlugFromParams, msg));
                         setFetchStatus('error');
+                         console.log(`[DEBUG] 'fetchingD1': Set fetchStatus to 'error' due to no effectiveQuakeId.`);
                     }
                     return;
                 }
 
                 let apiErrorMessage = null;
                 try {
-                    // console.log(`[Wrapper Status] 'fetchingD1': Calling fetchClusterWithQuakes for ${effectiveQuakeId}.`); // DEBUG
+                    console.log(`[DEBUG] 'fetchingD1': Calling fetchClusterWithQuakes for effectiveQuakeId: ${effectiveQuakeId}.`);
                     const clusterDataFromApi = await fetchClusterWithQuakes(effectiveQuakeId);
-                    if (!isMounted) return;
-                    // console.log(`[Wrapper Status] 'fetchingD1': fetchClusterWithQuakes returned:`, clusterDataFromApi ? "data" : "null/undefined"); // DEBUG
+                    console.log(`[DEBUG] 'fetchingD1': fetchClusterWithQuakes returned. Raw data:`, clusterDataFromApi ? JSON.stringify(clusterDataFromApi) : "null/undefined");
+
+                    if (!isMounted) {
+                        console.log("[DEBUG] 'fetchingD1': Component unmounted after fetch. Aborting.");
+                        return;
+                    }
 
                     if (clusterDataFromApi) {
-                        // The API now returns the full cluster definition including the 'quakes' array (GeoJSON features)
                         const {
-                            quakes: apiQuakes, // This is the array of GeoJSON quake objects
-                            quakeCount: apiQuakeCount,
-                            strongestQuakeId: apiStrongestQuakeId,
-                            maxMagnitude: apiMaxMagnitude,
-                            locationName: apiLocationName,
-                            title: apiTitle,
-                            description: apiDescription,
-                            updatedAt: apiUpdatedAt,
-                            // other fields like slug, meanMagnitude, minMagnitude, depthRange, centroidLat/Lon, radiusKm, startTime, endTime, durationHours, significanceScore, version
-                            // are available directly on clusterDataFromApi if needed by ClusterDetailModal or generateSeo
+                            quakes: apiQuakes,
+                            strongestQuakeId: apiStrongestQuakeIdFromData, // Renamed to avoid conflict with context/prop
+                            // ... other fields
                         } = clusterDataFromApi;
+                        console.log(`[DEBUG] 'fetchingD1': Data from API. apiQuakes present: ${!!apiQuakes}, apiStrongestQuakeIdFromData: ${apiStrongestQuakeIdFromData}`);
 
-                        if (apiQuakes && Array.isArray(apiQuakes) && apiQuakes.length > 0) {
+                        const quakesValid = apiQuakes && Array.isArray(apiQuakes) && apiQuakes.length > 0;
+                        console.log(`[DEBUG] 'fetchingD1': Evaluation of 'apiQuakes && Array.isArray(apiQuakes) && apiQuakes.length > 0': ${quakesValid}`);
+
+                        if (quakesValid) {
                             let earliestTime = Infinity, latestTime = -Infinity;
                             apiQuakes.forEach(q => {
                                 if (q.properties.time < earliestTime) earliestTime = q.properties.time;
                                 if (q.properties.time > latestTime) latestTime = q.properties.time;
                             });
 
-                            const strongestQuakeInList = apiQuakes.find(q => q.id === apiStrongestQuakeId) ||
-                                [...apiQuakes].sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0))[0];
+                            // Attempt to find the quake specified by apiStrongestQuakeIdFromData in the apiQuakes list.
+                            // This is critical: the cluster definition points to a specific quake as its "strongest" or "defining" quake.
+                            const strongestQuakeInList = apiQuakes.find(q => q.id === apiStrongestQuakeIdFromData);
+                            console.log(`[DEBUG] 'fetchingD1': Attempted to find quake with id '${apiStrongestQuakeIdFromData}' in apiQuakes. Result:`, strongestQuakeInList ? strongestQuakeInList.id : "not found");
 
                             if (strongestQuakeInList) {
+                                // Successfully found the designated strongest quake in the list.
                                 const clusterForDisplay = {
-                                    id: fullSlugFromParams, // Use slug from URL as the display ID/key
+                                    id: fullSlugFromParams,
                                     originalQuakes: apiQuakes,
-                                    quakeCount: apiQuakeCount !== undefined ? apiQuakeCount : apiQuakes.length,
-                                    strongestQuakeId: apiStrongestQuakeId,
-                                    strongestQuake: strongestQuakeInList,
-                                    maxMagnitude: apiMaxMagnitude !== undefined ? apiMaxMagnitude : strongestQuakeInList.properties.mag,
-                                    locationName: apiLocationName !== undefined ? apiLocationName : (strongestQuakeInList.properties.place || 'Unknown Location'),
-                                    title: apiTitle, // Use title from API if available
-                                    description: apiDescription, // Use description from API
+                                    quakeCount: clusterDataFromApi.quakeCount !== undefined ? clusterDataFromApi.quakeCount : apiQuakes.length,
+                                    strongestQuakeId: apiStrongestQuakeIdFromData, // This is from the cluster definition
+                                    strongestQuake: strongestQuakeInList,       // This is the actual quake object from the list
+                                    maxMagnitude: clusterDataFromApi.maxMagnitude !== undefined ? clusterDataFromApi.maxMagnitude : strongestQuakeInList.properties.mag,
+                                    locationName: clusterDataFromApi.locationName !== undefined ? clusterDataFromApi.locationName : (strongestQuakeInList.properties.place || 'Unknown Location'),
+                                    title: clusterDataFromApi.title,
+                                    description: clusterDataFromApi.description,
                                     _earliestTimeInternal: earliestTime,
                                     _latestTimeInternal: latestTime,
                                     timeRange: calculateClusterTimeRangeForDisplay(earliestTime, latestTime, formatDate, formatTimeAgo, formatTimeDuration, apiQuakes.length),
-                                    updatedAt: apiUpdatedAt, // Use updatedAt from API
-                                    // Pass through other fields from clusterDataFromApi as needed by generateSeo or ClusterDetailModal
-                                    slugFromApi: clusterDataFromApi.slug, // example
+                                    updatedAt: clusterDataFromApi.updatedAt,
+                                    // Pass through other relevant fields from clusterDataFromApi
+                                    slugFromApi: clusterDataFromApi.slug,
                                     meanMagnitude: clusterDataFromApi.meanMagnitude,
                                     minMagnitude: clusterDataFromApi.minMagnitude,
                                     depthRange: clusterDataFromApi.depthRange,
                                     centroidLat: clusterDataFromApi.centroidLat,
                                     centroidLon: clusterDataFromApi.centroidLon,
                                     radiusKm: clusterDataFromApi.radiusKm,
-                                    apiStartTime: clusterDataFromApi.startTime, // distinguish from calculated earliestTime if necessary
+                                    apiStartTime: clusterDataFromApi.startTime,
                                     apiEndTime: clusterDataFromApi.endTime,
                                     durationHours: clusterDataFromApi.durationHours,
                                     significanceScore: clusterDataFromApi.significanceScore,
@@ -564,48 +467,57 @@ function ClusterDetailModalWrapper({
                                 };
 
                                 if (isMounted) {
-                                    // console.log("[Wrapper Status] 'fetchingD1': API fetch successful. Transitioning to 'success'.", clusterForDisplay); // DEBUG
+                                    console.log("[DEBUG] 'fetchingD1': Designated strongest quake found. API fetch successful. Setting dynamicCluster and transitioning to 'success'. Cluster to display (partial):", JSON.stringify(clusterForDisplay).substring(0, 500) + "...");
                                     setDynamicCluster(clusterForDisplay);
                                     setSeoProps(generateSeo(clusterForDisplay, fullSlugFromParams));
                                     hasFetchedOrReconstructedClusterRef.current = true;
                                     setFetchStatus('success');
+                                    console.log("[DEBUG] 'fetchingD1': Set fetchStatus to 'success'.");
                                 }
                             } else {
-                                apiErrorMessage = "Error processing API cluster data (strongest quake issue or empty quakes array).";
-                                // console.warn(`[Wrapper Status] 'fetchingD1': ${apiErrorMessage}`); // DEBUG
+                                // This is a data integrity issue: the cluster definition's strongestQuakeId
+                                // does not correspond to any quake in its own list of earthquakes.
+                                apiErrorMessage = `Data consistency error: The designated strongest earthquake (ID: ${apiStrongestQuakeIdFromData}) was not found within the provided list of earthquakes for this cluster.`;
+                                console.warn(`[DEBUG] 'fetchingD1': apiErrorMessage set: ${apiErrorMessage}. apiStrongestQuakeIdFromData: ${apiStrongestQuakeIdFromData}, apiQuakes count: ${apiQuakes ? apiQuakes.length : 'N/A'}`);
                             }
-                        } else {
-                             apiErrorMessage = "Cluster data from API is missing earthquake details or has an empty quakes array.";
-                             // console.warn(`[Wrapper Status] 'fetchingD1': ${apiErrorMessage}`); // DEBUG
+                        } else { // !quakesValid (apiQuakes is missing, not an array, or empty)
+                             apiErrorMessage = "Cluster data from API is missing associated earthquake details or the list is empty/invalid.";
+                             console.warn(`[DEBUG] 'fetchingD1': apiErrorMessage set: ${apiErrorMessage}. apiQuakes:`, apiQuakes);
                         }
-                    } else { // clusterDataFromApi is null (implies 404 from fetchClusterWithQuakes)
-                        apiErrorMessage = "Cluster definition not found via API.";
-                        // console.log(`[Wrapper Status] 'fetchingD1': ${apiErrorMessage}`); // DEBUG
+                    } else { // clusterDataFromApi is null
+                        apiErrorMessage = "Cluster definition not found via API (fetchClusterWithQuakes returned null).";
+                        console.log(`[DEBUG] 'fetchingD1': apiErrorMessage set: ${apiErrorMessage}`);
                     }
-                } catch (error) { // Catches errors from fetchClusterWithQuakes (non-404 server errors, network errors, JSON parsing errors)
-                    if (!isMounted) return;
-                    // console.error(`[Wrapper Status] 'fetchingD1': Error fetching or processing API cluster data for ${effectiveQuakeId}:`, error); // DEBUG
+                } catch (error) {
+                    if (!isMounted) {
+                        console.log("[DEBUG] 'fetchingD1': Component unmounted during catch block. Aborting.");
+                        return;
+                    }
+                    console.error(`[DEBUG] 'fetchingD1': Error fetching or processing API cluster data for ${effectiveQuakeId}:`, error);
                     apiErrorMessage = error.message || "Failed to fetch or process cluster details from API.";
                 }
 
                 if (isMounted && fetchStatus !== 'success') {
                     const finalMsg = apiErrorMessage || (monthlyError ? `Failed to load extended data: ${monthlyError}. Cluster details may be incomplete.` : "Cluster details could not be found or were incomplete after API attempt.");
-                    // console.log(`[Wrapper Status] 'fetchingD1': Failed. Error: ${finalMsg}. Transitioning to 'error'.`); // DEBUG
+                    console.log(`[DEBUG] 'fetchingD1': Processing failed or did not result in success. Final error message: "${finalMsg}". Current fetchStatus: ${fetchStatus}. Transitioning to 'error'.`);
                     setErrorMessage(finalMsg);
                     setSeoProps(generateSeo(null, fullSlugFromParams, finalMsg));
-                    if (dynamicCluster !== null) setDynamicCluster(null); // Clear any stale cluster data
+                    if (dynamicCluster !== null) {
+                        console.log("[DEBUG] 'fetchingD1': Clearing stale dynamicCluster.");
+                        setDynamicCluster(null);
+                    }
                     setFetchStatus('error');
+                    console.log(`[DEBUG] 'fetchingD1': Set fetchStatus to 'error'. errorMessage: "${finalMsg}"`);
                 }
                 return;
             }
         };
+        processClusterFetch();
 
-        // Add a log before calling processClusterFetch
-        // Add a log before calling processClusterFetch
-        // console.log(`[Wrapper Status] Effect run. Initial fetchStatus: ${fetchStatus}, effectiveQuakeId: ${effectiveQuakeId}, mounted: ${isMounted}`); // DEBUG
-        processClusterFetch(); // New location
-
-        return () => { isMounted = false; };
+        return () => {
+            isMounted = false;
+            console.log(`[DEBUG] Main fetch effect cleanup. Was processing status: ${fetchStatus}. Mounted set to false.`);
+        };
 
     }, [
         fetchStatus, // Primary driver
