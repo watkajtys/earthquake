@@ -12,9 +12,12 @@ import { escapeXml } from '../../utils/xml-utils.js';
  * @param {string} effectiveLocationName - The name of the location.
  * @param {string} [startDate] - Optional start date in ISO 8601 format.
  * @param {string} [endDate] - Optional end date in ISO 8601 format.
+ * @param {object} [geoCoords] - Optional geographic coordinates.
+ * @param {number} geoCoords.latitude - The latitude.
+ * @param {number} geoCoords.longitude - The longitude.
  * @returns {object} The JSON-LD object.
  */
-function generateClusterJsonLd(pageTitleText, pageDescriptionText, canonicalUrl, effectiveLocationName, startDate, endDate) {
+function generateClusterJsonLd(pageTitleText, pageDescriptionText, canonicalUrl, effectiveLocationName, startDate, endDate, geoCoords) {
   const ldJson = {
     "@context": "http://schema.org",
     "@type": "EventSeries",
@@ -26,6 +29,14 @@ function generateClusterJsonLd(pageTitleText, pageDescriptionText, canonicalUrl,
       "name": effectiveLocationName,
     },
   };
+
+  if (geoCoords && typeof geoCoords.latitude === 'number' && typeof geoCoords.longitude === 'number') {
+    ldJson.location.geo = {
+      "@type": "GeoCoordinates",
+      "latitude": geoCoords.latitude,
+      "longitude": geoCoords.longitude,
+    };
+  }
 
   if (startDate) {
     ldJson.startDate = startDate;
@@ -94,53 +105,70 @@ export async function handlePrerenderCluster(context, clusterSlug) {
 
   // Use strongestQuakeId directly from d1Response for fetching USGS details
   const finalStrongestQuakeId = d1Response.strongestQuakeId;
-  let strongestQuakeDetailsProperties;
+  let strongestQuakeDetailsProperties = null; // Initialize to null
+  let fetchedStrongestQuakeGeoCoords = null; // For GeoCoordinates
   let fetchErrorForStrongestQuake = null;
   // let fetchedQuakeLocationName = null; // This will now primarily come from d1Response.locationName
 
-  try {
-    const usgsDetailsUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${finalStrongestQuakeId}.geojson`;
-    const usgsResponse = await fetch(usgsDetailsUrl);
+  if (finalStrongestQuakeId) { // Only attempt fetch if strongestQuakeId is present
+    try {
+      const usgsDetailsUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${finalStrongestQuakeId}.geojson`;
+      const usgsResponse = await fetch(usgsDetailsUrl);
 
-    if (!usgsResponse.ok) {
-      fetchErrorForStrongestQuake = `USGS fetch failed for strongest quake ${finalStrongestQuakeId}: ${usgsResponse.status}`;
-      console.error(fetchErrorForStrongestQuake);
-    } else {
-      const fetchedDetails = await usgsResponse.json();
-      if (!fetchedDetails || !fetchedDetails.properties) {
-        fetchErrorForStrongestQuake = `Incomplete data structure for strongest quake ${finalStrongestQuakeId}`;
+      if (!usgsResponse.ok) {
+        fetchErrorForStrongestQuake = `USGS fetch failed for strongest quake ${finalStrongestQuakeId}: ${usgsResponse.status}`;
         console.error(fetchErrorForStrongestQuake);
       } else {
-        if (typeof fetchedDetails.properties.place === 'string' && typeof fetchedDetails.properties.mag === 'number') {
-            strongestQuakeDetailsProperties = fetchedDetails.properties;
-            if (!strongestQuakeDetailsProperties.title) {
-                strongestQuakeDetailsProperties.title = `M ${strongestQuakeDetailsProperties.mag.toFixed(1)} - ${strongestQuakeDetailsProperties.place}`;
-            }
-            if (!strongestQuakeDetailsProperties.url && fetchedDetails.id) { // Use fetchedDetails.id for eventpage URL
-                strongestQuakeDetailsProperties.url = `https://earthquake.usgs.gov/earthquakes/eventpage/${fetchedDetails.id}`;
-            }
-
-            const placeParts = strongestQuakeDetailsProperties.place.split(',');
-            fetchedQuakeLocationName = placeParts.length > 1 ? placeParts.pop().trim() : strongestQuakeDetailsProperties.place.trim();
+        const fetchedDetails = await usgsResponse.json();
+        if (!fetchedDetails || !fetchedDetails.properties || !fetchedDetails.geometry) { // Check geometry too
+          fetchErrorForStrongestQuake = `Incomplete data structure for strongest quake ${finalStrongestQuakeId}`;
+          console.error(fetchErrorForStrongestQuake);
         } else {
-            fetchErrorForStrongestQuake = `Essential place or mag missing for strongest quake ${finalStrongestQuakeId}`;
-            console.error(fetchErrorForStrongestQuake);
+          // Basic validation for properties needed
+          if (typeof fetchedDetails.properties.place === 'string' && typeof fetchedDetails.properties.mag === 'number') {
+              strongestQuakeDetailsProperties = fetchedDetails.properties;
+              if (!strongestQuakeDetailsProperties.title) {
+                  strongestQuakeDetailsProperties.title = `M ${strongestQuakeDetailsProperties.mag.toFixed(1)} - ${strongestQuakeDetailsProperties.place}`;
+              }
+              if (!strongestQuakeDetailsProperties.url && fetchedDetails.id) { // Use fetchedDetails.id for eventpage URL
+                  strongestQuakeDetailsProperties.url = `https://earthquake.usgs.gov/earthquakes/eventpage/${fetchedDetails.id}`;
+              }
+              // const placeParts = strongestQuakeDetailsProperties.place.split(','); // Not strictly needed here if d1Response.locationName is primary
+              // fetchedQuakeLocationName = placeParts.length > 1 ? placeParts.pop().trim() : strongestQuakeDetailsProperties.place.trim();
+
+              // Extract GeoCoordinates
+              const coords = fetchedDetails.geometry.coordinates;
+              if (Array.isArray(coords) && coords.length >= 2 &&
+                  typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+                fetchedStrongestQuakeGeoCoords = {
+                  longitude: coords[0],
+                  latitude: coords[1],
+                };
+              } else {
+                console.warn(`Invalid or missing coordinates for strongest quake ${finalStrongestQuakeId}:`, coords);
+              }
+          } else {
+              fetchErrorForStrongestQuake = `Essential place or mag missing for strongest quake ${finalStrongestQuakeId}`;
+              console.error(fetchErrorForStrongestQuake);
+          }
         }
       }
+    } catch (fetchErr) {
+        fetchErrorForStrongestQuake = `Exception fetching strongest quake ${finalStrongestQuakeId}: ${fetchErr.message}`;
+        console.error(fetchErrorForStrongestQuake);
     }
-  } catch (fetchErr) {
-      fetchErrorForStrongestQuake = `Exception fetching strongest quake ${finalStrongestQuakeId}: ${fetchErr.message}`;
-      console.error(fetchErrorForStrongestQuake);
+  } else {
+    console.warn(`No strongestQuakeId found in D1 for slug: ${clusterSlug}. Cannot fetch USGS details for GeoCoords.`);
   }
 
-  const sqProps = strongestQuakeDetailsProperties; // shorthand
+  const sqProps = strongestQuakeDetailsProperties; // shorthand for properties
 
-  const finalLocationName = d1Response.locationName || (sqProps ? sqProps.place : null);
-  const effectiveLocationName = finalLocationName || "Unknown Location";
+  const finalLocationName = d1Response.locationName || (sqProps ? sqProps.place : "Unknown Location");
+  const effectiveLocationName = finalLocationName; // Already defaults to "Unknown Location" if needed
 
   const finalMaxMagnitude = (d1Response.maxMagnitude !== null && d1Response.maxMagnitude !== undefined)
                             ? d1Response.maxMagnitude
-                            : (sqProps ? sqProps.mag : null);
+                            : (sqProps ? sqProps.mag : null); // Use sqProps.mag
   const magForDisplay = (finalMaxMagnitude !== null && finalMaxMagnitude !== undefined && typeof finalMaxMagnitude === 'number')
                         ? parseFloat(finalMaxMagnitude).toFixed(1)
                         : "N/A";
@@ -202,8 +230,16 @@ export async function handlePrerenderCluster(context, clusterSlug) {
 </body>
 </html>`;
 
-  // Generate JSON-LD
-  const jsonLdObject = generateClusterJsonLd(pageTitleText, pageDescriptionText, canonicalUrl, effectiveLocationName, startDateIso, endDateIso);
+  // Generate JSON-LD, passing the extracted geo-coordinates
+  const jsonLdObject = generateClusterJsonLd(
+    pageTitleText,
+    pageDescriptionText,
+    canonicalUrl,
+    effectiveLocationName,
+    startDateIso,
+    endDateIso,
+    fetchedStrongestQuakeGeoCoords // Pass coordinates here
+  );
   const jsonLdString = JSON.stringify(jsonLdObject);
   const jsonLdScript = `<script type="application/ld+json">${jsonLdString}</script>`;
 
