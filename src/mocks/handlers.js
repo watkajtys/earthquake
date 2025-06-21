@@ -107,6 +107,26 @@ export const handlers = [
       return new HttpResponse("Not Found", { status: 404 });
     }
 
+    // Handler for usgs_event_jsonld_test (from prerender-quake.integration.test.js)
+    if (eventId === 'usgs_event_jsonld_test') {
+      const eventTime = new Date(Date.UTC(2025, 5, 20, 17, 49, 14)).getTime();
+      return HttpResponse.json(
+        {
+          properties: {
+            mag: 5.1,
+            place: "36 km SW of Semnan, Iran",
+            time: eventTime,
+            detail: `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=usgs_event_jsonld_test`,
+            title: `M 5.1 - 36 km SW of Semnan, Iran`,
+            url: `https://earthquake.usgs.gov/earthquakes/eventpage/usgs_event_jsonld_test`
+          },
+          geometry: { coordinates: [53.0699, 35.3758, 10] },
+          id: "usgs_event_jsonld_test"
+        },
+        { status: 200 }
+      );
+    }
+
     // Handlers for quake-detail.test.js
     const baseMockProperties = {
       mag: 5.8, place: '22 km ESE of Párga, Greece', time: 1672531200000, updated: 1672531500000, tz: null, // Adjusted time and place
