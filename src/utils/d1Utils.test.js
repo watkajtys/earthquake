@@ -14,11 +14,12 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
   beforeEach(() => {
     vi.clearAllMocks(); // Use vi for vitest
     mockStmt = {
-      bind: vi.fn().mockReturnThis(),
-      run: vi.fn().mockResolvedValue({ success: true, meta: { changes: 1, last_row_id: 1 } }), // Simulate successful run
+      bind: vi.fn().mockReturnThis(), // bind still returns the statement for chaining
+      // run is no longer called directly on the statement from the loop in upsertEarthquakeFeaturesToD1
     };
     mockDb = {
       prepare: vi.fn().mockReturnValue(mockStmt),
+      batch: vi.fn().mockResolvedValue([]), // Default successful batch execution
     };
   });
 
@@ -40,19 +41,29 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
 
     expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO EarthquakeEvents'));
     expect(mockStmt.bind).toHaveBeenCalledTimes(mockFeatures.length);
-    expect(mockStmt.run).toHaveBeenCalledTimes(mockFeatures.length);
+    // expect(mockStmt.run).toHaveBeenCalledTimes(mockFeatures.length); // run is no longer called per feature
+    expect(mockDb.batch).toHaveBeenCalledTimes(1); // batch is called once with all operations
 
-    // Check first feature binding
+    // Check that db.batch was called with an array of operations, and verify the first one
+    const batchOperations = mockDb.batch.mock.calls[0][0];
+    expect(Array.isArray(batchOperations)).toBe(true);
+    expect(batchOperations.length).toBe(mockFeatures.length);
+
+    // Check first feature binding (the mockStmt.bind calls are still valid as they prepare operations for batch)
+    // No direct way to check Nth call on the statement object passed to batch easily without more complex mocking.
+    // The fact that bind was called correctly N times and batch was called with N operations is a good indicator.
+    // We can still check the arguments of the bind calls on the mockStmt directly as before.
     expect(mockStmt.bind).toHaveBeenNthCalledWith(1,
       'quake1', 1678886400000, 20, 10, 5, 5.5, 'Location A', 'url_a', JSON.stringify(mockFeatures[0]), expect.any(Number)
     );
-    // Check second feature binding
     expect(mockStmt.bind).toHaveBeenNthCalledWith(2,
       'quake2', 1678887400000, 22, 12, 8, 4.3, 'Location B', 'url_b', JSON.stringify(mockFeatures[1]), expect.any(Number)
     );
 
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] Starting D1 upsert for ${mockFeatures.length} features.`));
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] D1 upsert processing complete. Success: ${mockFeatures.length}, Errors: 0`));
+    // The success log message changed slightly with batching
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] Batch upsert successful for ${mockFeatures.length} operations.`));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] D1 upsert processing complete. Attempted: ${mockFeatures.length}, Success: ${mockFeatures.length}, Errors: 0`));
     expect(result).toEqual({ successCount: mockFeatures.length, errorCount: 0 });
   });
 
@@ -92,31 +103,39 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
     expect(mockStmt.bind).toHaveBeenCalledWith(
       'valid1', 1678886400000, 20, 10, 5, 5.5, 'Valid Place', 'valid_url', JSON.stringify(validFeature), expect.any(Number)
     );
-    expect(mockStmt.run).toHaveBeenCalledTimes(1);
+    // expect(mockStmt.run).toHaveBeenCalledTimes(1); // run is no longer called per feature
+    expect(mockDb.batch).toHaveBeenCalledTimes(1); // batch is called once with the valid operations
+    const batchOpsInvalid = mockDb.batch.mock.calls[0][0];
+    expect(batchOpsInvalid.length).toBe(1); // Only one valid operation
 
     expect(console.warn).toHaveBeenCalledWith("[d1Utils-upsert] Skipping feature due to missing critical data:", "invalid1");
     expect(console.warn).toHaveBeenCalledWith("[d1Utils-upsert] Skipping feature invalid2 due to null value in one of the required fields.");
     expect(result).toEqual({ successCount: 1, errorCount: 2 });
   });
 
-  it('should handle D1 run errors for a feature and continue processing others', async () => {
+  it('should handle D1 batch errors and count all batched operations as errors', async () => {
     const features = [
       { id: 'q1', properties: { time: 1, mag: 1, place: 'P1', detail: 'u1' }, geometry: { coordinates: [1,1,1] } },
       { id: 'q2-error', properties: { time: 2, mag: 2, place: 'P2-error', detail: 'u2' }, geometry: { coordinates: [2,2,2] } },
       { id: 'q3', properties: { time: 3, mag: 3, place: 'P3', detail: 'u3' }, geometry: { coordinates: [3,3,3] } }
     ];
 
-    mockStmt.run
-      .mockResolvedValueOnce({ success: true }) // q1
-      .mockRejectedValueOnce(new Error('D1 execute error for q2')) // q2-error
-      .mockResolvedValueOnce({ success: true }); // q3
+    // Simulate the batch operation failing
+    const batchError = new Error('D1 batch execute error');
+    mockDb.batch.mockRejectedValueOnce(batchError);
 
     const result = await upsertEarthquakeFeaturesToD1(mockDb, features);
 
-    expect(mockStmt.bind).toHaveBeenCalledTimes(features.length);
-    expect(mockStmt.run).toHaveBeenCalledTimes(features.length); // Each feature's run is awaited individually now
-    expect(console.error).toHaveBeenCalledWith("[d1Utils-upsert] Error upserting feature q2-error: D1 execute error for q2", expect.any(Error));
-    expect(result).toEqual({ successCount: 2, errorCount: 1 });
+    expect(mockStmt.bind).toHaveBeenCalledTimes(features.length); // bind is still called for all valid features
+    expect(mockDb.batch).toHaveBeenCalledTimes(1); // batch is attempted once
+    const batchOperations = mockDb.batch.mock.calls[0][0];
+    expect(batchOperations.length).toBe(features.length); // All features were prepared for batching
+
+    expect(console.error).toHaveBeenCalledWith(`[d1Utils-upsert] Error during batch D1 upsert: ${batchError.message}`, batchError);
+    // If batch fails, all operations in it are counted as errors.
+    // successCount remains 0 (or its initial value if there were prior successful batches, not applicable here).
+    // errorCount becomes the number of operations attempted in the failed batch.
+    expect(result).toEqual({ successCount: 0, errorCount: features.length });
   });
 
   // More tests:
