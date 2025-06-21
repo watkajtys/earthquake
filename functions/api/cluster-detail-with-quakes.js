@@ -43,20 +43,43 @@ export async function onRequestGet(context) {
 
   try {
     // 1. Fetch Cluster Definition
+    // As per discussion, the 'clusterId' from the URL path is treated as the 'strongestQuakeId'.
+    // The 'strongestQuakeId' column is not unique, so we order by updatedAt DESC to get the most recent definition.
+    console.log(`Attempting to fetch cluster definition by strongestQuakeId: ${clusterId}`);
     const clusterStmt = env.DB.prepare(
       `SELECT id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
               maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
               radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore,
               version, createdAt, updatedAt
-       FROM ClusterDefinitions WHERE id = ?`
+       FROM ClusterDefinitions WHERE strongestQuakeId = ? ORDER BY updatedAt DESC LIMIT 1`
     ).bind(clusterId);
-    const clusterDefinition = await clusterStmt.first();
+    let clusterDefinition = await clusterStmt.first();
 
     if (!clusterDefinition) {
-      return new Response(JSON.stringify({ error: `Cluster definition for id ${clusterId} not found.` }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      // Fallback: For diagnostic purposes, or if some URLs might still use the canonical cluster 'id',
+      // let's check if the provided clusterId matches a canonical 'id'.
+      // This could be removed later if it's confirmed that all lookups should strictly be by strongestQuakeId.
+      console.log(`Cluster not found by strongestQuakeId: ${clusterId}. Checking by canonical id as a fallback.`);
+      const clusterByIdStmt = env.DB.prepare(
+        `SELECT id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
+                maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
+                radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore,
+                version, createdAt, updatedAt
+         FROM ClusterDefinitions WHERE id = ?`
+      ).bind(clusterId);
+      clusterDefinition = await clusterByIdStmt.first();
+
+      if (!clusterDefinition) {
+        console.log(`Cluster definition also not found by canonical id: ${clusterId}. Returning 404.`);
+        return new Response(JSON.stringify({ error: `Cluster definition for id ${clusterId} (interpreted as strongestQuakeId or canonical id) not found.` }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } else {
+        console.log(`Cluster definition found by canonical id: ${clusterId} after failing to find by strongestQuakeId.`);
+      }
+    } else {
+      console.log(`Cluster definition found by strongestQuakeId: ${clusterId}. ID of retrieved definition: ${clusterDefinition.id}, Slug: ${clusterDefinition.slug}`);
     }
 
     // Parse earthquakeIds from JSON string to an array
