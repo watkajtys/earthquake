@@ -40,10 +40,24 @@ const createMockContext = (request, env = {}, cf = {}) => {
       ...env,
     },
     params: {},
-    waitUntil: vi.fn((promise) => { waitUntilPromises.push(promise); }),
     next: vi.fn().mockResolvedValue(new Response("Fallback to env.ASSETS.fetch for static assets", { status: 200 })),
     cf,
-    _awaitWaitUntilPromises: async () => { await Promise.all(waitUntilPromises); }
+    executionContext: { // <<< executionContext should contain waitUntil
+      waitUntil: vi.fn((promise) => {
+        if (promise) {
+            waitUntilPromises.push(promise);
+        }
+      }),
+    },
+    _awaitWaitUntilPromises: async () => { // This helper will await promises pushed via executionContext.waitUntil
+      const results = await Promise.allSettled(waitUntilPromises);
+      results.forEach(result => {
+        if (result.status === 'rejected') {
+          console.error("Error in waitUntil promise (prerender-quake):", result.reason);
+        }
+      });
+      waitUntilPromises.length = 0; // Clear after awaiting
+    }
   };
 };
 
@@ -164,7 +178,7 @@ describe('Prerendering Handler: /quake/:id', () => {
         expect(jsonLdData.url).toBe(`https://earthquakeslive.com/quake/${quakeId}`); // Assuming slug construction remains simple like this
 
         // Check keywords
-        expect(jsonLdData.keywords).toBeString();
+        expect(typeof jsonLdData.keywords).toBe('string'); // Corrected type check
         expect(jsonLdData.keywords).toContain(mockQuakeData.properties.place.split(', ')[0].toLowerCase()); // e.g. "36 km sw of semnan"
         expect(jsonLdData.keywords).toContain(mockQuakeData.properties.place.split(', ')[1].toLowerCase()); // e.g. "iran"
         expect(jsonLdData.keywords).toContain(`m${mockQuakeData.properties.mag}`);

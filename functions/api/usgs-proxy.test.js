@@ -62,13 +62,15 @@ describe('handleUsgsProxy', () => {
         DB: undefined, // Default to no DB
         USGS_LAST_RESPONSE_KV: { get: vi.fn(), put: vi.fn() }, // Mock KV namespace binding
       },
-      waitUntil: vi.fn((promise) => { // Allow awaiting promises passed to waitUntil
-        // If the promise is undefined (e.g. setFeaturesToKV returns void), don't try to await it.
-        if (promise && typeof promise.then === 'function') {
-          return promise;
-        }
-        return Promise.resolve(); // Return a resolved promise for void returns
-      }),
+      executionContext: { // <<< Ensure executionContext and its waitUntil are provided
+        waitUntil: vi.fn((promise) => { // Allow awaiting promises passed to waitUntil
+          // If the promise is undefined (e.g. setFeaturesToKV returns void), don't try to await it.
+          if (promise && typeof promise.then === 'function') {
+            return promise;
+          }
+          return Promise.resolve(); // Return a resolved promise for void returns
+        }),
+      }
       // No next() needed for direct handler tests
     };
 
@@ -110,7 +112,7 @@ describe('handleUsgsProxy', () => {
     mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
 
     const response = await handleUsgsProxy(mockContext);
-    await mockContext.waitUntil.mock.calls[0]?.value; // Wait for cache.put and D1 upsert
+    await mockContext.executionContext.waitUntil.mock.calls[0]?.value; // Wait for cache.put and D1 upsert
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(mockApiResponseData);
@@ -152,7 +154,7 @@ describe('handleUsgsProxy', () => {
     mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
 
     const response = await handleUsgsProxy(mockContext);
-    await mockContext.waitUntil.mock.calls[0]?.value; // Wait for cache.put
+    await mockContext.executionContext.waitUntil.mock.calls[0]?.value; // Wait for cache.put
 
     expect(response.status).toBe(200);
     const putCallArgs = mockCache.put.mock.calls[0];
@@ -220,7 +222,7 @@ describe('handleUsgsProxy', () => {
 
       // MSW will use the default handler for 'https://external.api/d1_interaction'
       await handleUsgsProxy(mockContext);
-      await mockContext.waitUntil.mock.calls[0]?.value; // Wait for D1 upsert
+      await mockContext.executionContext.waitUntil.mock.calls[0]?.value; // Wait for D1 upsert
 
       expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockDb, mockFeatures);
     });
@@ -233,7 +235,7 @@ describe('handleUsgsProxy', () => {
       // If D1 is not configured, the specific promise for D1 shouldn't be added.
       // This requires looking into the implementation detail of how D1 promise is added to waitUntil.
       // For now, just check mock was not called.
-      await Promise.all(mockContext.waitUntil.mock.calls.map(c => c[0]));
+      await Promise.all(mockContext.executionContext.waitUntil.mock.calls.map(c => c[0]));
 
 
       expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
@@ -250,7 +252,7 @@ describe('handleUsgsProxy', () => {
         })
       );
       await handleUsgsProxy(mockContext);
-      await Promise.all(mockContext.waitUntil.mock.calls.map(c => c[0]));
+      await Promise.all(mockContext.executionContext.waitUntil.mock.calls.map(c => c[0]));
       expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
 
       upsertEarthquakeFeaturesToD1.mockClear();
@@ -263,7 +265,7 @@ describe('handleUsgsProxy', () => {
         })
       );
       await handleUsgsProxy(mockContext);
-      await Promise.all(mockContext.waitUntil.mock.calls.map(c => c[0]));
+      await Promise.all(mockContext.executionContext.waitUntil.mock.calls.map(c => c[0]));
       expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
     });
 
@@ -276,14 +278,15 @@ describe('handleUsgsProxy', () => {
 
       // MSW will use the default handler for 'https://external.api/d1_interaction'
       const response = await handleUsgsProxy(mockContext); // client response should be unaffected
-      await mockContext.waitUntil.mock.calls[0]?.value; // Wait for D1 upsert attempt
+      await mockContext.executionContext.waitUntil.mock.calls[0]?.value; // Wait for D1 upsert attempt
 
       expect(response.status).toBe(200); // Still successful for client
       expect(await response.json()).toEqual({ features: mockFeatures });
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        `[usgs-proxy] Error during D1 upsert:`, // Updated log message
-        d1Error.message, // Log now includes message and name separately
-        d1Error.name
+        `[usgs-proxy-d1] Error during D1 upsert operation:`, // Corrected log message
+        d1Error.message,
+        d1Error.name,
+        expect.any(String) // For the stack trace often included by console.error
       );
     });
   });
@@ -296,7 +299,7 @@ describe('handleUsgsProxy', () => {
     mockCache.put.mockRejectedValueOnce(cachePutError);
 
     const response = await handleUsgsProxy(mockContext);
-    await mockContext.waitUntil.mock.calls[0]?.value; // Wait for cache.put attempt
+    await mockContext.executionContext.waitUntil.mock.calls[0]?.value; // Wait for cache.put attempt
 
     expect(response.status).toBe(200); // Client response unaffected
     expect(await response.json()).toEqual(apiResponseData);
@@ -360,7 +363,9 @@ describe('handleUsgsProxy KV Logic', () => {
         DB: { prepare: vi.fn() }, // Mock D1
         USGS_LAST_RESPONSE_KV: { get: vi.fn(), put: vi.fn() }, // Mock KV namespace
       },
-      waitUntil: vi.fn(promise => promise ? promise.catch(e => console.error("WaitUntil error:", e)) : Promise.resolve()),
+      executionContext: { // <<< Ensure executionContext and its waitUntil are provided
+        waitUntil: vi.fn(promise => promise ? promise.catch(e => console.error("WaitUntil error:", e)) : Promise.resolve()),
+      }
     };
     mockCache.match.mockResolvedValue(undefined); // Default to cache miss
 
@@ -383,13 +388,13 @@ describe('handleUsgsProxy KV Logic', () => {
 
     await handleUsgsProxy(mockContext);
     // Ensure all waitUntil promises settle
-    for (const call of mockContext.waitUntil.mock.calls) {
+    for (const call of mockContext.executionContext.waitUntil.mock.calls) {
         if (call[0]) await call[0];
     }
 
     expect(getFeaturesFromKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY);
     expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, apiResponseFeatures);
-    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.waitUntil);
+    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.executionContext);
   });
 
   it('Scenario: No Change in Data - D1 and KV not updated', async () => {
@@ -398,7 +403,7 @@ describe('handleUsgsProxy KV Logic', () => {
     getFeaturesFromKV.mockResolvedValue(commonFeatures); // KV has same data
 
     await handleUsgsProxy(mockContext);
-    for (const call of mockContext.waitUntil.mock.calls) {
+    for (const call of mockContext.executionContext.waitUntil.mock.calls) {
         if (call[0]) await call[0];
     }
 
@@ -414,12 +419,12 @@ describe('handleUsgsProxy KV Logic', () => {
     getFeaturesFromKV.mockResolvedValue(kvFeatures);
 
     await handleUsgsProxy(mockContext);
-    for (const call of mockContext.waitUntil.mock.calls) {
+    for (const call of mockContext.executionContext.waitUntil.mock.calls) {
         if (call[0]) await call[0];
     }
 
     expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, [mockFeature2]);
-    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.waitUntil);
+    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.executionContext);
   });
 
   it('Scenario: Updated Earthquake - only updated feature to D1, KV updated with full set', async () => {
@@ -429,12 +434,12 @@ describe('handleUsgsProxy KV Logic', () => {
     getFeaturesFromKV.mockResolvedValue(kvFeatures);
 
     await handleUsgsProxy(mockContext);
-     for (const call of mockContext.waitUntil.mock.calls) {
+     for (const call of mockContext.executionContext.waitUntil.mock.calls) {
         if (call[0]) await call[0];
     }
 
     expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, [mockFeature1Updated]);
-    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.waitUntil);
+    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.executionContext);
   });
 
   it('Scenario: Earthquake Removed from API - D1 not called for removed, KV updated with current API (removed one gone)', async () => {
@@ -445,7 +450,7 @@ describe('handleUsgsProxy KV Logic', () => {
     upsertEarthquakeFeaturesToD1.mockResolvedValue({ successCount: 0, errorCount: 0 }); // Simulate no actual D1 changes needed for existing ones
 
     await handleUsgsProxy(mockContext);
-    for (const call of mockContext.waitUntil.mock.calls) {
+    for (const call of mockContext.executionContext.waitUntil.mock.calls) {
         if (call[0]) await call[0];
     }
 
@@ -463,7 +468,7 @@ describe('handleUsgsProxy KV Logic', () => {
     mockContext.env.USGS_LAST_RESPONSE_KV = undefined; // KV not configured
 
     await handleUsgsProxy(mockContext);
-    for (const call of mockContext.waitUntil.mock.calls) {
+    for (const call of mockContext.executionContext.waitUntil.mock.calls) {
         if (call[0]) await call[0];
     }
 
@@ -481,14 +486,14 @@ describe('handleUsgsProxy KV Logic', () => {
     getFeaturesFromKV.mockResolvedValue(null); // Simulate error or key not found leading to null
 
     await handleUsgsProxy(mockContext);
-     for (const call of mockContext.waitUntil.mock.calls) {
+     for (const call of mockContext.executionContext.waitUntil.mock.calls) {
         if (call[0]) await call[0];
     }
 
     expect(getFeaturesFromKV).toHaveBeenCalledTimes(1);
     expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, apiResponseFeatures);
     // If D1 upsert is successful, KV *should* be updated with the current features
-    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.waitUntil);
+    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.executionContext);
   });
 
   it('Scenario: D1 Upsert Fails - KV should not be updated', async () => {
@@ -503,7 +508,7 @@ describe('handleUsgsProxy KV Logic', () => {
     // This requires careful handling of waitUntil mock if it rethrows or swallows errors.
     // Assuming waitUntil allows promises to settle (resolve or reject).
     try {
-        for (const call of mockContext.waitUntil.mock.calls) {
+        for (const call of mockContext.executionContext.waitUntil.mock.calls) {
             if (call[0]) await call[0];
         }
     } catch (e) {
@@ -513,7 +518,12 @@ describe('handleUsgsProxy KV Logic', () => {
 
     expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, [mockFeature1Updated, mockFeature2]);
     expect(setFeaturesToKV).not.toHaveBeenCalled(); // Crucial: KV not updated if D1 fails
-    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("[usgs-proxy] Error during D1 upsert:"), "D1 Write Error", "Error");
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[usgs-proxy-d1] Error during D1 upsert operation:"), // Corrected prefix
+      "D1 Write Error",
+      "Error",
+      expect.any(String) // For stack trace
+    );
   });
 
   it('Scenario: D1 Upsert Reports No Successes (e.g. 0 rows affected but no error) - KV should not be updated', async () => {
@@ -525,13 +535,16 @@ describe('handleUsgsProxy KV Logic', () => {
     upsertEarthquakeFeaturesToD1.mockResolvedValue({ successCount: 0, errorCount: 0 });
 
     await handleUsgsProxy(mockContext);
-    for (const call of mockContext.waitUntil.mock.calls) {
+    for (const call of mockContext.executionContext.waitUntil.mock.calls) {
         if (call[0]) await call[0];
     }
 
     expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, [mockFeature1Updated, mockFeature2]);
     expect(setFeaturesToKV).not.toHaveBeenCalled();
-    expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("D1 upsert reported no successes for changed features. KV will not be updated with this dataset."));
+    // Updated to expect the more specific message, or a more general one
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/D1 upsert reported no successes for \d+ candidate features\. KV will NOT be updated with this dataset to prevent stale reference data\./)
+    );
   });
 
 });
