@@ -312,6 +312,11 @@ function App() {
     const [tectonicPlatesData, setTectonicPlatesData] = useState(null);
     const [areGeoJsonAssetsLoading, setAreGeoJsonAssetsLoading] = useState(true);
 
+    // Define localStorage keys for GeoJSON assets
+    const CACHE_KEY_COASTLINE = 'cachedNe110mCoastline';
+    const CACHE_KEY_TECTONIC = 'cachedTectonicPlates';
+    const GEOJSON_CACHE_VERSION = '1.0';
+
     // --- Data Fetching Callbacks ---
     // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
 
@@ -455,19 +460,111 @@ function App() {
     useEffect(() => {
       let isMounted = true;
       const loadGeoJsonAssets = async () => {
-        setAreGeoJsonAssetsLoading(true);
+        if (isMounted) {
+          setAreGeoJsonAssetsLoading(true);
+        }
+
+        let coastlineJson = null;
+        let tectonicJson = null;
+        let loadedFromCache = false;
+
         try {
-          const [coastline, tectonic] = await Promise.all([
+            const cachedCoastline = localStorage.getItem(CACHE_KEY_COASTLINE);
+            const cachedTectonic = localStorage.getItem(CACHE_KEY_TECTONIC);
+
+            if (cachedCoastline && cachedTectonic) {
+                console.log('GeoJSON assets found in localStorage. Attempting to parse and validate version...');
+                const parsedCoastlineWrapper = JSON.parse(cachedCoastline);
+                const parsedTectonicWrapper = JSON.parse(cachedTectonic);
+
+                if (parsedCoastlineWrapper && parsedCoastlineWrapper.version === GEOJSON_CACHE_VERSION && parsedCoastlineWrapper.data &&
+                    parsedTectonicWrapper && parsedTectonicWrapper.version === GEOJSON_CACHE_VERSION && parsedTectonicWrapper.data) {
+
+                    coastlineJson = parsedCoastlineWrapper.data;
+                    tectonicJson = parsedTectonicWrapper.data;
+
+                    // Basic validation of the actual data can remain if necessary
+                    if (typeof coastlineJson === 'object' && typeof tectonicJson === 'object') {
+                        if (isMounted) {
+                            setCoastlineData(coastlineJson);
+                            setTectonicPlatesData(tectonicJson);
+                            setAreGeoJsonAssetsLoading(false); // Crucial: set loading to false
+                            console.log('GeoJSON assets successfully loaded from localStorage (version match).');
+                        }
+                        loadedFromCache = true;
+                        // return; // This return was part of the previous subtask, ensure it's still here if logic relies on it.
+                    } else {
+                        console.warn('Cached GeoJSON data (within versioned object) is invalid/unexpected type. Fetching from source.');
+                        localStorage.removeItem(CACHE_KEY_COASTLINE);
+                        localStorage.removeItem(CACHE_KEY_TECTONIC);
+                    }
+                } else {
+                    // This handles version mismatch OR if the object doesn't have 'version'/'data' (e.g. old cache format)
+                    console.log('Cache version mismatch, old format, or data integrity issue. Invalidating cache and fetching from source.');
+                    localStorage.removeItem(CACHE_KEY_COASTLINE);
+                    localStorage.removeItem(CACHE_KEY_TECTONIC);
+                    // loadedFromCache remains false, so it will proceed to fetch from source
+                }
+            }
+        } catch (error) {
+            console.error("Error reading or parsing GeoJSON from localStorage:", error);
+            // Clear potentially corrupted cache items
+            try {
+                localStorage.removeItem(CACHE_KEY_COASTLINE);
+                localStorage.removeItem(CACHE_KEY_TECTONIC);
+            } catch (e) {
+                console.error("Error removing items from localStorage after parse failure:", e);
+            }
+        }
+
+        if (loadedFromCache) {
+            // If data was loaded from cache and states were set, ensure loading is false.
+            // The 'setAreGeoJsonAssetsLoading(false)' above handles this if parsing was successful.
+            // If isMounted became false during async parsing, this return prevents further work.
+            if (isMounted && !areGeoJsonAssetsLoading) {
+                 // This means it was set to false because cache loading was successful
+            } else if (isMounted) {
+                // This case might occur if parsing failed but component is still mounted
+                // setAreGeoJsonAssetsLoading(false); // Decided against this here, finally block handles it
+            }
+            return; // Exit if successfully loaded from cache
+        }
+
+        // Fetch and store if not in localStorage or if parsing failed
+        try {
+          const [coastlineModule, tectonicModule] = await Promise.all([
             import('../assets/ne_110m_coastline.json'),
             import('../assets/TectonicPlateBoundaries.json')
           ]);
+
+          const coastlineDataToStore = coastlineModule.default;
+          const tectonicDataToStore = tectonicModule.default;
+
+          // Create wrapper objects with version and data
+          const coastlineCacheObject = {
+              version: GEOJSON_CACHE_VERSION,
+              data: coastlineDataToStore
+          };
+          const tectonicCacheObject = {
+              version: GEOJSON_CACHE_VERSION,
+              data: tectonicDataToStore
+          };
+
           if (isMounted) {
-            setCoastlineData(coastline.default); // .default is needed for dynamic import of JSON
-            setTectonicPlatesData(tectonic.default);
+            setCoastlineData(coastlineDataToStore); // Set state with actual data, not the wrapper
+            setTectonicPlatesData(tectonicDataToStore);
+          }
+
+          try {
+            localStorage.setItem(CACHE_KEY_COASTLINE, JSON.stringify(coastlineCacheObject));
+            localStorage.setItem(CACHE_KEY_TECTONIC, JSON.stringify(tectonicCacheObject));
+            console.log('GeoJSON assets fetched and saved to localStorage with version.');
+          } catch (error) {
+            console.error("Error saving versioned GeoJSON to localStorage:", error);
           }
         } catch (error) {
-          console.error("Error loading GeoJSON assets:", error);
-          // Optionally, set error state here
+          console.error("Error loading GeoJSON assets from source:", error);
+          // Optionally, set error state here if needed
         } finally {
           if (isMounted) {
             setAreGeoJsonAssetsLoading(false);
