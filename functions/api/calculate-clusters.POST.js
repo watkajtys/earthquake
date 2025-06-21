@@ -82,24 +82,16 @@ function generateDescription(quakeCount, locationName, maxMagnitude, durationHou
 // It uses calculateDistance imported from '../utils/mathUtils.js' (synced from /common/mathUtils.js).
 // Algorithmic changes to core clustering logic should be synchronized with the frontend version where applicable.
 
-async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE) {
+async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUAKES_CONST, DEFINED_CLUSTER_MIN_MAGNITUDE_CONST) {
   if (!db || !clusters || clusters.length === 0) {
     console.log("storeClusterDefinitionsInBackground: DB not available or no clusters to process.");
     return;
   }
 
-  console.log(`storeClusterDefinitionsInBackground: Starting batch processing of ${clusters.length} clusters for definition storage.`);
-  const clusterDefinitionOperations = [];
-  const clusterDefinitionUpsertSql = `
-    INSERT OR REPLACE INTO ClusterDefinitions
-     (id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
-      maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
-      radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore, version,
-      createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-  const stmt = db.prepare(clusterDefinitionUpsertSql);
+  console.log(`storeClusterDefinitionsInBackground: Starting processing of ${clusters.length} clusters for potential definition storage.`);
   let significantClusterCount = 0;
+  let storedCount = 0;
+  let errorCount = 0;
 
   for (const calculatedCluster of clusters) {
     if (!calculatedCluster || calculatedCluster.length === 0) continue;
@@ -112,19 +104,18 @@ async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUA
 
     const clusterMaxMag = strongestQuakeInCalcCluster.properties.mag;
 
-    if (calculatedCluster.length >= CLUSTER_MIN_QUAKES && clusterMaxMag >= DEFINED_CLUSTER_MIN_MAGNITUDE) {
+    if (calculatedCluster.length >= CLUSTER_MIN_QUAKES_CONST && clusterMaxMag >= DEFINED_CLUSTER_MIN_MAGNITUDE_CONST) {
       significantClusterCount++;
-      const clusterId = randomUUID();
+      const clusterId = randomUUID(); // Generate a new UUID for this definition
       const quakeCount = calculatedCluster.length;
       const startTime = getStartTime(calculatedCluster);
       const endTime = getEndTime(calculatedCluster);
       const durationHours = (endTime > startTime) ? (endTime - startTime) / (1000 * 60 * 60) : 0;
       const locationName = strongestQuakeInCalcCluster.properties.place || "Unknown Location";
       const maxMagnitude = clusterMaxMag;
-      const updatedAt = Date.now(); // Set updatedAt timestamp
+      // Note: storeClusterDefinition utility will add its own `updatedAt`. `createdAt` is handled by DB default on new.
 
-      // Constructing the data object similar to what storeClusterDefinition expects/processes
-      const clusterDataToBind = {
+      const clusterDataForUtil = {
         id: clusterId,
         earthquakeIds: calculatedCluster.map(q => q.id),
         quakeCount: quakeCount,
@@ -138,60 +129,37 @@ async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUA
         locationName: locationName,
         centroidLat: strongestQuakeInCalcCluster.geometry.coordinates[1] || 0,
         centroidLon: strongestQuakeInCalcCluster.geometry.coordinates[0] || 0,
-        radiusKm: 0, // Placeholder
+        radiusKm: 0, // Placeholder, d1ClusterUtils might have a default or expect it
         depthRange: getDepthRangeString(calculatedCluster),
-        slug: generateSlug(quakeCount, locationName, maxMagnitude, clusterId),
+        slug: generateSlug(quakeCount, locationName, maxMagnitude, clusterId), // Use the new UUID for slug uniqueness
         title: generateTitle(quakeCount, locationName, maxMagnitude),
         description: generateDescription(quakeCount, locationName, maxMagnitude, durationHours),
         significanceScore: quakeCount > 0 ? maxMagnitude * Math.log10(quakeCount) : 0,
         version: 1, // Default version
-        createdAt: null, // Let DB handle default for createdAt on new records
-        updatedAt: updatedAt,
+        // createdAt and updatedAt will be handled by storeClusterDefinition or DB
       };
 
-      // Parameter binding logic replicated from d1ClusterUtils.js storeClusterDefinition
-      const params = [
-        clusterDataToBind.id,
-        clusterDataToBind.slug,
-        clusterDataToBind.strongestQuakeId,
-        JSON.stringify(clusterDataToBind.earthquakeIds || []),
-        clusterDataToBind.title === undefined ? null : clusterDataToBind.title,
-        clusterDataToBind.description === undefined ? null : clusterDataToBind.description,
-        clusterDataToBind.locationName === undefined ? null : clusterDataToBind.locationName,
-        clusterDataToBind.maxMagnitude,
-        clusterDataToBind.meanMagnitude === undefined ? null : clusterDataToBind.meanMagnitude,
-        clusterDataToBind.minMagnitude === undefined ? null : clusterDataToBind.minMagnitude,
-        clusterDataToBind.depthRange === undefined ? null : clusterDataToBind.depthRange,
-        clusterDataToBind.centroidLat === undefined ? null : clusterDataToBind.centroidLat,
-        clusterDataToBind.centroidLon === undefined ? null : clusterDataToBind.centroidLon,
-        clusterDataToBind.radiusKm === undefined ? null : clusterDataToBind.radiusKm,
-        clusterDataToBind.startTime,
-        clusterDataToBind.endTime,
-        clusterDataToBind.durationHours === undefined ? null : clusterDataToBind.durationHours,
-        clusterDataToBind.quakeCount,
-        clusterDataToBind.significanceScore === undefined ? null : clusterDataToBind.significanceScore,
-        clusterDataToBind.version === undefined ? null : clusterDataToBind.version,
-        clusterDataToBind.createdAt, // Will be null, DB handles default
-        clusterDataToBind.updatedAt
-      ];
-      clusterDefinitionOperations.push(stmt.bind(...params));
+      try {
+        // Call the imported utility function
+        const result = await storeClusterDefinition(db, clusterDataForUtil);
+        if (result.success) {
+          console.log(`storeClusterDefinitionsInBackground: Successfully stored definition for cluster ${clusterId}`);
+          storedCount++;
+        } else {
+          console.error(`storeClusterDefinitionsInBackground: Failed to store definition for cluster ${clusterId}: ${result.error}`);
+          errorCount++;
+        }
+      } catch (e) {
+        console.error(`storeClusterDefinitionsInBackground: Exception while storing definition for cluster ${clusterId}: ${e.message}`, e.stack);
+        errorCount++;
+      }
     }
   }
 
-  if (clusterDefinitionOperations.length > 0) {
-    console.log(`storeClusterDefinitionsInBackground: Attempting to batch store ${clusterDefinitionOperations.length} significant cluster definitions.`);
-    try {
-      await db.batch(clusterDefinitionOperations);
-      console.log(`storeClusterDefinitionsInBackground: Successfully batch stored ${clusterDefinitionOperations.length} cluster definitions.`);
-    } catch (e) {
-      console.error(`storeClusterDefinitionsInBackground: Error during batch storage of cluster definitions: ${e.message}`, e.stack);
-      // If batch fails, all operations within it are considered failed.
-      // Individual error reporting per cluster definition is lost with batching.
-    }
-  } else {
+  if (significantClusterCount === 0) {
     console.log("storeClusterDefinitionsInBackground: No significant clusters met criteria for definition storage.");
   }
-  console.log(`storeClusterDefinitionsInBackground: Finished processing. Found ${significantClusterCount} significant clusters, prepared ${clusterDefinitionOperations.length} for batch storage.`);
+  console.log(`storeClusterDefinitionsInBackground: Finished processing. Found ${significantClusterCount} significant clusters. Stored: ${storedCount}, Errors: ${errorCount}.`);
 }
 
 /**

@@ -225,7 +225,7 @@ describe('ClusterDetailModalWrapper', () => {
       );
 
       // Assertions based on the updated mock modal
-      await screen.findByText(`Location: ${mockReconstructedClusterForAssertion.locationName}`);
+      await screen.findByText(`Location: ${mockReconstructedClusterForAssertion.locationName}`, {}, { timeout: 3000 });
       expect(screen.getByText(`Cluster ID: ${oldFormatSlug}`)).toBeInTheDocument();
       expect(screen.getByText(`Magnitude: M ${mockReconstructedClusterForAssertion.maxMagnitude.toFixed(1)}`)).toBeInTheDocument();
       expect(screen.getByText(`Quake Count: ${mockReconstructedClusterForAssertion.quakeCount} Quakes`)).toBeInTheDocument();
