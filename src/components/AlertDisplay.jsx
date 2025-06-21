@@ -43,6 +43,12 @@ const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning, ALERT_LEVEL
     return null;
   }
 
+  /**
+   * Determines a numerical magnitude value for styling PAGER alerts based on alert level text.
+   * These magnitudes are then used with `getMagnitudeColorStyle` to get appropriate Tailwind classes.
+   * @param {string|undefined|null} alertLevelText - The text of the alert level (e.g., "GREEN", "YELLOW").
+   * @returns {number|null} A numerical magnitude to be used for styling, or null for default/unknown.
+   */
   const getPagerMagnitudeForStyling = (alertLevelText) => {
     switch (alertLevelText?.toUpperCase()) {
       case 'GREEN':
