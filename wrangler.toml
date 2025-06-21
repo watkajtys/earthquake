@@ -16,6 +16,14 @@ binding = "DB" # Binding name used in your Worker code
 database_name = "PrimaryDB" # Name of the D1 database (used in wrangler d1 commands)
 database_id = "8a0a26e9-ba3c-4984-9023-c1803f611a05" # Production D1 ID
 preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" # Preview D1 ID for `wrangler dev`
+migrations = [
+  { tag = "0001", dir = "./migrations" },
+  { tag = "0002", dir = "./migrations" },
+  { tag = "0003", dir = "./migrations" },
+  { tag = "0004", dir = "./migrations" },
+  { tag = "0005", dir = "./migrations" },
+  { tag = "0008", dir = "./migrations" } # New trigger migration, 0006 is removed
+]
 
 [assets]
 directory = "./dist"
