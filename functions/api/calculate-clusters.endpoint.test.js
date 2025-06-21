@@ -1,4 +1,4 @@
-import { onRequest } from './calculate-clusters';
+import { onRequestPost as onRequest } from './calculate-clusters.POST.js';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE } from '../../src/constants/appConstants.js';
 
@@ -19,6 +19,11 @@ const createMockContext = (requestBody, envOverrides = {}) => {
     run: vi.fn(),
   };
 
+  const waitUntilPromises = [];
+  const mockWaitUntilSpy = vi.fn((promise) => {
+    waitUntilPromises.push(promise);
+  });
+
   const mockContextBase = {
     request: {
       json: vi.fn().mockResolvedValue(requestBody),
@@ -28,15 +33,13 @@ const createMockContext = (requestBody, envOverrides = {}) => {
       DB: mockDbInstance,
       ...envOverrides,
     },
-    // Add waitUntil mock, ensuring it executes the passed promise
-    waitUntil: vi.fn(async (promise) => {
-      // In tests, we usually want to await the execution to assert results
-      if (typeof promise === 'function') { // If a function returning a promise is passed
-        await promise();
-      } else { // If a promise is directly passed
-        await promise;
-      }
-    }),
+    ctx: {
+      waitUntil: mockWaitUntilSpy,
+    },
+    waitUntil: mockWaitUntilSpy, // Ensure context.waitUntil is the same spy
+    _awaitWaitUntilPromises: async () => { // Helper to await all promises
+      await Promise.all(waitUntilPromises.map(p => typeof p === 'function' ? p() : p));
+    }
   };
   return mockContextBase;
 };
@@ -278,6 +281,7 @@ describe('onRequest in calculate-clusters.js', () => {
       context.env.DB.run.mockResolvedValueOnce({ success: true }); // Cache insert success
 
       const response = await onRequest(context); // Capture response to check X-Cache-Hit
+      await context._awaitWaitUntilPromises(); // Wait for all waitUntil tasks
 
       expect(response.headers.get('X-Cache-Hit')).toBe('false'); // Verify it was a cache miss path
       expect(context.waitUntil).toHaveBeenCalledTimes(1);
