@@ -309,7 +309,7 @@ export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
  * @returns {Promise<Response>} A `Response` object containing either the calculated cluster data (Array of arrays of earthquake objects)
  *   or an error response (405 for wrong method, 400 for bad request, 500 for internal server error).
  */
-export async function onRequest(context) {
+export async function onRequestPost(context) {
   // Method check removed as this file will be specifically routed for POST requests.
 
   try {
