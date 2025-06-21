@@ -45,11 +45,11 @@ export async function getFeaturesFromKV(kvNamespace, key) {
  * @param {object} kvNamespace - The Cloudflare KV namespace binding.
  * @param {string} key - The key under which to store the features.
  * @param {Array<object>} features - The array of feature objects to store.
- * @param {function} waitUntil - The context's waitUntil function to extend the lifetime for background tasks.
+ * @param {object} executionContext - The worker's execution context (e.g., `ctx` from `scheduled` or `context` from a Pages Function), used for `waitUntil`.
  * @returns {void} Does not return a direct promise for the KV put operation's completion,
- *                 as it's handled by waitUntil. Logs success or error.
+ *                 as it's handled by executionContext.waitUntil. Logs success or error.
  */
-export function setFeaturesToKV(kvNamespace, key, features, waitUntil) {
+export function setFeaturesToKV(kvNamespace, key, features, executionContext) {
   if (!kvNamespace) {
     console.error("[kvUtils-set] KV Namespace binding not provided.");
     return;
@@ -62,10 +62,10 @@ export function setFeaturesToKV(kvNamespace, key, features, waitUntil) {
     console.error("[kvUtils-set] Features data is invalid or not provided for KV storage.");
     return;
   }
-  if (typeof waitUntil !== 'function') {
-    console.error("[kvUtils-set] waitUntil function not provided. KV set will not be performed reliably in the background.");
-    // Optionally, you could proceed without waitUntil but it's not recommended for non-blocking operations.
-    // For this implementation, we will not proceed if waitUntil is missing to enforce best practices.
+  if (!executionContext || typeof executionContext.waitUntil !== 'function') {
+    console.error("[kvUtils-set] executionContext with a valid waitUntil function not provided. KV set will not be performed reliably in the background.");
+    // Optionally, you could proceed without executionContext.waitUntil but it's not recommended for non-blocking operations.
+    // For this implementation, we will not proceed if executionContext.waitUntil is missing to enforce best practices.
     return;
   }
 
@@ -78,10 +78,10 @@ export function setFeaturesToKV(kvNamespace, key, features, waitUntil) {
       .catch(error => {
         console.error(`[kvUtils-set] Error storing features for key "${key}" in KV:`, error.message, error.name);
       });
-    waitUntil(promise);
+    executionContext.waitUntil(promise);
   } catch (error) {
     // This catch block is for errors during JSON.stringify or initial setup before the async put.
     console.error(`[kvUtils-set] Error preparing data for KV storage (key "${key}"):`, error.message, error.name);
-    // No need to call waitUntil here as the put operation itself hasn't started.
+    // No need to call executionContext.waitUntil here as the put operation itself hasn't started.
   }
 }

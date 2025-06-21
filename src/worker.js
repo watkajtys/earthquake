@@ -475,10 +475,10 @@ export default {
       // The handler function `kvEnabledUsgsProxyHandler` expects an object similar to the Pages Function context.
       // We pass `ctx.waitUntil` for any background tasks the proxy needs to perform (like KV writes).
       ctx.waitUntil(
-        kvEnabledUsgsProxyHandler({
+        kvEnabledUsgsProxyHandler({ // This is handleUsgsProxy
           request: scheduledRequest,
           env: env,
-          waitUntil: ctx.waitUntil,
+          executionContext: ctx, // Pass the entire ctx object
           // 'params' and 'next' are not used by this specific handler, so not passed.
         })
         .then(response => {
