@@ -454,7 +454,7 @@ export default {
     }
 
     const USGS_FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson";
-    const proxyRequestUrl = `https://dummy-host/api/usgs-proxy?apiUrl=${encodeURIComponent(USGS_FEED_URL)}`;
+    const proxyRequestUrl = `https://dummy-host/api/usgs-proxy?apiUrl=${encodeURIComponent(USGS_FEED_URL)}&isCron=true`; // Added isCron=true
     // Note: 'dummy-host' is used because new Request() requires a full URL.
     // The host itself doesn't matter when calling the handler directly as below,
     // but the URL structure (pathname, searchParams) is important.
