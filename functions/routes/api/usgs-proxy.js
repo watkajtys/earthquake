@@ -26,6 +26,7 @@ export async function handleUsgsProxy(context) { // context contains { request, 
 
   const url = new URL(request.url);
   const { searchParams } = url;
+  const isCronRequest = searchParams.get("isCron") === "true";
 
   const apiUrl = searchParams.get("apiUrl");
   if (!apiUrl) {
@@ -40,10 +41,18 @@ export async function handleUsgsProxy(context) { // context contains { request, 
   let response;
 
   try {
-    response = await cache.match(request.url);
+    if (!isCronRequest) { // Only use cache if not a cron request
+      response = await cache.match(request.url);
+    } else {
+      console.log("[usgs-proxy] Cron request detected. Bypassing cache read.");
+    }
 
-    if (!response) {
-      console.log("Cache miss for (from handleUsgsProxy):", request.url);
+    if (!response) { // This block will now also be entered if isCronRequest is true and response is null
+      if (isCronRequest) {
+        console.log("Cache bypassed for cron request (from handleUsgsProxy):", request.url);
+      } else {
+        console.log("Cache miss for (from handleUsgsProxy):", request.url);
+      }
       const upstreamResponse = await fetch(apiUrl, {
         headers: { "User-Agent": "EarthquakesLive/1.0 (+https://earthquakeslive.com)" },
       });
@@ -63,19 +72,27 @@ export async function handleUsgsProxy(context) { // context contains { request, 
 
       const responseDataForLogic = await upstreamResponse.clone().json(); // Get data for logic
 
-      // Create the response to be returned to the client AND to be cached.
+      // Create the response to be returned to the client AND to be cached (if not cron).
       // Start with the original response's body and status.
       let finalResponseHeaders = new Headers(upstreamResponse.headers);
-
-      let cacheDuration = 600; // default
-      const configDuration = parseInt(env.WORKER_CACHE_DURATION_SECONDS, 10);
-      if (env.WORKER_CACHE_DURATION_SECONDS && (!isNaN(configDuration) && configDuration > 0)) {
-          cacheDuration = configDuration;
-      } else if (env.WORKER_CACHE_DURATION_SECONDS) {
-          console.warn(`Invalid WORKER_CACHE_DURATION_SECONDS value: "${env.WORKER_CACHE_DURATION_SECONDS}". Using default ${cacheDuration}s.`);
-      }
-      finalResponseHeaders.set("Cache-Control", `s-maxage=${cacheDuration}`);
       finalResponseHeaders.set("Content-Type", "application/json"); // Ensure correct content type
+
+      if (!isCronRequest) { // Only set Cache-Control for non-cron requests
+        let cacheDuration = 600; // default
+        const configDuration = parseInt(env.WORKER_CACHE_DURATION_SECONDS, 10);
+        if (env.WORKER_CACHE_DURATION_SECONDS && (!isNaN(configDuration) && configDuration > 0)) {
+            cacheDuration = configDuration;
+        } else if (env.WORKER_CACHE_DURATION_SECONDS) {
+            console.warn(`Invalid WORKER_CACHE_DURATION_SECONDS value: "${env.WORKER_CACHE_DURATION_SECONDS}". Using default ${cacheDuration}s.`);
+        }
+        finalResponseHeaders.set("Cache-Control", `s-maxage=${cacheDuration}`);
+      } else {
+        // For cron requests, we might not want any client-side caching if this response was directly viewable,
+        // but since it's a proxy call from another worker function, this is less critical.
+        // We mainly want to avoid server-side Cloudflare caching for the cron's specific URL.
+        finalResponseHeaders.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        console.log("[usgs-proxy] Cron request: Setting Cache-Control to no-store for the response.");
+      }
 
       // Use the already read responseDataForLogic to avoid re-parsing
       response = new Response(JSON.stringify(responseDataForLogic), {
@@ -84,12 +101,15 @@ export async function handleUsgsProxy(context) { // context contains { request, 
         headers: finalResponseHeaders
       });
 
-      const cachePromise = cache.put(request.url, response.clone())
-        .catch(cachePutError => {
-          console.error(`Failed to cache response for ${apiUrl}: ${cachePutError.name} - ${cachePutError.message}`, cachePutError);
-        });
-      executionContext.waitUntil(cachePromise); // Use executionContext.waitUntil
-
+      if (!isCronRequest) { // Only cache if not a cron request
+        const cachePromise = cache.put(request.url, response.clone())
+          .catch(cachePutError => {
+            console.error(`Failed to cache response for ${apiUrl}: ${cachePutError.name} - ${cachePutError.message}`, cachePutError);
+          });
+        executionContext.waitUntil(cachePromise); // Use executionContext.waitUntil
+      } else {
+        console.log("[usgs-proxy] Cron request: Bypassing cache.put().");
+      }
 
       // New KV and D1 logic
       const usgsKvNamespace = env.USGS_LAST_RESPONSE_KV;
