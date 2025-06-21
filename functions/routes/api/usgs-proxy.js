@@ -95,18 +95,27 @@ export async function handleUsgsProxy(context) {
 
       if (usgsKvNamespace) {
         try {
+          console.log(`[usgs-proxy-kv] Attempting to read from KV with key: ${USGS_LAST_RESPONSE_KEY}`);
           oldFeaturesFromKV = await getFeaturesFromKV(usgsKvNamespace, USGS_LAST_RESPONSE_KEY);
+          if (oldFeaturesFromKV) {
+            console.log(`[usgs-proxy-kv] Successfully read ${oldFeaturesFromKV.length} features from KV for key: ${USGS_LAST_RESPONSE_KEY}`);
+          } else {
+            console.log(`[usgs-proxy-kv] No data found in KV for key: ${USGS_LAST_RESPONSE_KEY} (or error in retrieval).`);
+          }
         } catch (kvError) {
-          console.error("[usgs-proxy] Error reading from KV store:", kvError.message, kvError.name);
+          console.error("[usgs-proxy-kv] Error reading from KV store:", kvError.message, kvError.name, kvError.stack);
           // Non-fatal, will proceed as if no old data
         }
       } else {
-        console.warn("[usgs-proxy] USGS_LAST_RESPONSE_KV namespace not configured. Proceeding without KV comparison.");
+        console.warn("[usgs-proxy-kv] USGS_LAST_RESPONSE_KV namespace not configured. Proceeding without KV comparison.");
       }
 
       let featuresToUpsert = responseDataForLogic.features || [];
+      const totalNewFeaturesFetched = featuresToUpsert.length;
+      console.log(`[usgs-proxy-kv] Total features fetched from USGS API: ${totalNewFeaturesFetched}`);
 
       if (oldFeaturesFromKV && Array.isArray(oldFeaturesFromKV)) {
+        console.log(`[usgs-proxy-kv] Comparing ${totalNewFeaturesFetched} new features against ${oldFeaturesFromKV.length} old features from KV.`);
         const newFeaturesMap = new Map(responseDataForLogic.features.map(f => [f.id, f]));
         const oldFeaturesMap = new Map(oldFeaturesFromKV.map(f => [f.id, f]));
 
@@ -117,50 +126,58 @@ export async function handleUsgsProxy(context) {
           }
           // Compare based on feature.properties.updated timestamp
           if (newFeature.properties && oldFeature.properties && newFeature.properties.updated > oldFeature.properties.updated) {
+            console.log(`[usgs-proxy-kv-diff] Feature ${newFeature.id} marked for upsert (updated). New time: ${newFeature.properties.updated}, Old time: ${oldFeature.properties.updated}`);
             return true; // Updated earthquake
           }
+          // console.log(`[usgs-proxy-kv-diff] Feature ${newFeature.id} not marked for upsert (no change or older).`);
           return false; // No change or older
         });
 
-        console.log(`[usgs-proxy] Comparison complete. New/updated features to process: ${featuresToUpsert.length}`);
-        if (featuresToUpsert.length === 0 && responseDataForLogic.features.length === oldFeaturesFromKV.length) {
+        console.log(`[usgs-proxy-kv] Comparison complete. Identified ${featuresToUpsert.length} new or updated features out of ${totalNewFeaturesFetched} fetched.`);
+        if (featuresToUpsert.length === 0 && totalNewFeaturesFetched === oldFeaturesFromKV.length) {
              // This check ensures that if counts are same and no new/updated, it means no change.
-            console.log("[usgs-proxy] No new or updated earthquake features detected after comparison with KV data.");
+            console.log("[usgs-proxy-kv] No new or updated earthquake features detected after comparison with KV data (counts match, no updates found).");
         }
 
       } else if (!usgsKvNamespace) {
         // Fallback: KV not configured, upsert all fetched features
-        console.log("[usgs-proxy] KV not configured, preparing to upsert all fetched features to D1.");
+        console.log("[usgs-proxy-kv] KV not configured. All " + totalNewFeaturesFetched + " fetched features will be considered for D1 upsert.");
         // featuresToUpsert is already all features
       } else {
-        // Fallback: KV is configured but no data found (e.g., first run)
-        console.log("[usgs-proxy] No previous data in KV, preparing to upsert all fetched features to D1.");
+        // Fallback: KV is configured but no data found (e.g., first run or error)
+        console.log("[usgs-proxy-kv] No previous data in KV (or error reading). All " + totalNewFeaturesFetched + " fetched features will be considered for D1 upsert.");
         // featuresToUpsert is already all features
       }
 
       if (env.DB && featuresToUpsert && featuresToUpsert.length > 0) {
-        console.log(`[usgs-proxy] Attempting to upsert ${featuresToUpsert.length} features to D1.`);
+        console.log(`[usgs-proxy-d1] Attempting to upsert ${featuresToUpsert.length} features to D1.`);
         try {
           const d1Result = await upsertEarthquakeFeaturesToD1(env.DB, featuresToUpsert);
-          console.log(`[usgs-proxy] D1 upsert result: Success: ${d1Result.successCount}, Errors: ${d1Result.errorCount}`);
+          console.log(`[usgs-proxy-d1] D1 upsert result: Success: ${d1Result.successCount}, Errors: ${d1Result.errorCount}`);
 
           // If D1 upsert was successful (or partially successful) and KV is configured,
           // update KV with the full current feature set from the API.
           if (d1Result.successCount > 0 && usgsKvNamespace) {
-            console.log("[usgs-proxy] D1 upsert successful, updating KV with the latest full feature set.");
+            console.log(`[usgs-proxy-kv] D1 upsert reported ${d1Result.successCount} successes. Updating KV key "${USGS_LAST_RESPONSE_KEY}" with the latest full feature set of ${totalNewFeaturesFetched} items.`);
             setFeaturesToKV(usgsKvNamespace, USGS_LAST_RESPONSE_KEY, responseDataForLogic.features, waitUntil);
           } else if (d1Result.successCount === 0 && featuresToUpsert.length > 0) {
-            console.warn("[usgs-proxy] D1 upsert reported no successes for changed features. KV will not be updated with this dataset.");
+            console.warn(`[usgs-proxy-kv] D1 upsert reported no successes for ${featuresToUpsert.length} candidate features. KV will NOT be updated with this dataset to prevent stale reference data.`);
           } else if (!usgsKvNamespace) {
-            console.log("[usgs-proxy] D1 upsert processed. KV not configured, so not updating KV.");
+            console.log("[usgs-proxy-kv] D1 upsert processed. KV not configured, so not updating KV.");
+          } else if (d1Result.successCount > 0 && !usgsKvNamespace) { // Should not happen based on outer if, but for completeness
+            console.log("[usgs-proxy-kv] D1 upsert successful, but KV namespace not configured. Cannot update KV.");
           }
         } catch (e) {
-          console.error("[usgs-proxy] Error during D1 upsert:", e.message, e.name);
+          console.error("[usgs-proxy-d1] Error during D1 upsert operation:", e.message, e.name, e.stack);
+          console.warn(`[usgs-proxy-kv] KV will NOT be updated due to D1 upsert error, to prevent stale reference data for key ${USGS_LAST_RESPONSE_KEY}.`);
           // If D1 fails, we probably don't want to update KV with a state that D1 doesn't reflect.
         }
       } else if (featuresToUpsert && featuresToUpsert.length === 0) {
-        console.log("[usgs-proxy] No features to upsert to D1. KV will not be updated.");
+        console.log("[usgs-proxy-d1] No features identified to upsert to D1. KV will not be updated as no D1 changes were made based on diff.");
+      } else if (!env.DB) {
+        console.warn("[usgs-proxy-d1] D1 Database (env.DB) not configured. Skipping D1 upsert and subsequent KV update.");
       }
+
 
       // Return the 'response' which has the correct body and headers (full API response)
       return response;
