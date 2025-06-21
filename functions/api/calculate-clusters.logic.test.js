@@ -1,4 +1,4 @@
-import { findActiveClusters } from './calculate-clusters';
+import { findActiveClusters } from './calculate-clusters.POST.js';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // Helper to create mock quake for findActiveClusters tests

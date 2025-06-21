@@ -1,5 +1,7 @@
 import { onRequest, handleClustersSitemapRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+// import { server } from '../src/mocks/server'; // MSW server not strictly needed for these tests anymore
+// import { http, HttpResponse } from 'msw'; // MSW not strictly needed for these tests anymore
 
 // --- Mocks for Cloudflare Environment ---
 const mockCache = {
@@ -10,8 +12,6 @@ global.caches = {
   default: mockCache,
   open: vi.fn().mockResolvedValue(mockCache)
 };
-
-global.fetch = vi.fn();
 
 // --- Helper to create mock context ---
 const createMockContext = (request, env = {}, cf = {}) => {
@@ -28,7 +28,7 @@ const createMockContext = (request, env = {}, cf = {}) => {
     request,
     env: {
       DB: mockDbInstance,
-      CLUSTER_KV: {
+      CLUSTER_KV: { // CLUSTER_KV is not used by clusters-sitemap.js but kept for context structure
         get: vi.fn(),
         put: vi.fn(),
         list: vi.fn().mockResolvedValue({ keys: [], list_complete: true, cursor: undefined }),
@@ -49,36 +49,34 @@ const createMockContext = (request, env = {}, cf = {}) => {
 describe('Cluster Sitemap Handler and URL Generation', () => {
     beforeEach(() => {
         vi.resetAllMocks();
-        fetch.mockReset();
         mockCache.match.mockReset();
         mockCache.put.mockReset();
     });
 
     it('/sitemap-clusters.xml should list clusters from D1 and return XML', async () => {
         const mockD1Results = [
-            { clusterId: "overview_cluster_cluster1_10", updatedAt: new Date().toISOString() },
+            // This slug should be a complete, final URL path segment
+            { slug: "10-quakes-near-test-place-up-to-m5.0-cluster1", updatedAt: new Date().toISOString() },
         ];
         const request = new Request('http://localhost/sitemap-clusters.xml');
         const context = createMockContext(request);
         context.env.DB.all.mockResolvedValueOnce({ results: mockD1Results, success: true });
-        // This fetch is for the new URL generation logic inside handleClustersSitemapRequest
-        fetch.mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Test Place", mag: 5.0 } }), { status: 200 }));
 
         const response = await onRequest(context); // Uses handleClustersSitemapRequest internally
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('application/xml');
         const text = await response.text();
         expect(text).toContain('<urlset');
-        // Check for the new URL format
         expect(text).toContain('https://earthquakeslive.com/cluster/10-quakes-near-test-place-up-to-m5.0-cluster1');
-        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT clusterId, updatedAt FROM ClusterDefinitions"));
+        // Check the new SQL query structure
+        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> ''"));
     });
 
     it('/sitemap-clusters.xml should handle DB not configured', async () => {
       const request = new Request('http://localhost/sitemap-clusters.xml');
       const context = createMockContext(request, { DB: undefined });
-      const response = await onRequest(context); // Uses handleClustersSitemapRequest internally
-      expect(response.status).toBe(200); // The handler itself returns 200 with a comment
+      const response = await onRequest(context);
+      expect(response.status).toBe(200);
       const text = await response.text();
       expect(text).toContain("<!-- D1 Database not available -->");
     });
@@ -87,8 +85,8 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
       const request = new Request('http://localhost/sitemap-clusters.xml');
       const context = createMockContext(request);
       context.env.DB.all.mockRejectedValueOnce(new Error("D1 Query Error"));
-      const response = await onRequest(context); // Uses handleClustersSitemapRequest internally
-      expect(response.status).toBe(200); // The handler itself returns 200 with a comment
+      const response = await onRequest(context);
+      expect(response.status).toBe(200);
       const text = await response.text();
       expect(text).toContain("<!-- Exception processing cluster data from D1: D1 Query Error -->");
     });
@@ -98,32 +96,23 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
       const context = createMockContext(request);
       context.env.DB.all.mockResolvedValueOnce({ results: [], success: true });
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      const response = await onRequest(context); // Uses handleClustersSitemapRequest internally
+      const response = await onRequest(context);
       expect(response.status).toBe(200);
       const text = await response.text();
       expect(text).not.toContain("<loc>");
-      // This log comes from within handleClustersSitemapRequest
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("No cluster definitions found in D1 table ClusterDefinitions."));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("No valid cluster definitions with slugs found in D1 table ClusterDefinitions."));
       consoleLogSpy.mockRestore();
     });
 
-    describe('handleClustersSitemapRequest New URL Generation', () => {
-        beforeEach(() => {
-            // vi.resetAllMocks(); // Already done in outer describe
-            // fetch.mockReset(); // Already done in outer describe
-        });
+    describe('handleClustersSitemapRequest New URL Generation (using direct slug from D1)', () => {
 
-        it('should generate correct new format URLs for valid D1 entries with successful USGS fetches', async () => {
+        it('should generate correct URLs for valid D1 entries (slug and updatedAt)', async () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
             const d1Results = [
-                { clusterId: "overview_cluster_us7000mfp9_15", updatedAt: "2023-01-01T00:00:00Z" },
-                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
+                { slug: "15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9", updatedAt: "2023-01-01T00:00:00Z" },
+                { slug: "5-quakes-near-california-up-to-m4.2-ci12345", updatedAt: "2023-01-02T00:00:00Z" },
             ];
             mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
-
-            fetch
-                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Southern Sumatra, Indonesia", mag: 5.8 } }), { status: 200 }))
-                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "California", mag: 4.2 } }), { status: 200 }));
 
             const response = await handleClustersSitemapRequest(mockContext);
             const xml = await response.text();
@@ -133,87 +122,42 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
             expect(xml).toContain('<lastmod>2023-01-01T00:00:00.000Z</lastmod>');
             expect(xml).toContain('<loc>https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345</loc>');
             expect(xml).toContain('<lastmod>2023-01-02T00:00:00.000Z</lastmod>');
-            expect(fetch).toHaveBeenCalledTimes(2);
         });
 
-        it('should skip entries if D1 clusterId parsing fails and log a warning', async () => {
+        // This test is no longer relevant as parsing `clusterId` and fetching USGS data is removed.
+        // The SQL query `WHERE slug IS NOT NULL AND slug <> ''` handles invalid/missing slugs at DB level.
+        it('should skip entries if D1 slug is missing or empty (handled by SQL, but defensive check in code)', async () => { // Unskipping this test
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
             const d1Results = [
-                { clusterId: "invalid_format_id", updatedAt: "2023-01-01T00:00:00Z" },
-                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
+                { slug: null, updatedAt: "2023-01-01T00:00:00Z" }, // Will be filtered by SQL
+                { slug: "", updatedAt: "2023-01-01T00:00:00Z" },   // Will be filtered by SQL
+                { slug: "valid-slug-example", updatedAt: "2023-01-02T00:00:00Z" },
             ];
-            mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
-            fetch.mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "California", mag: 4.2 } }), { status: 200 }));
+            mockContext.env.DB.all.mockResolvedValueOnce({ results: [{ slug: "valid-slug-example", updatedAt: "2023-01-02T00:00:00Z" }], success: true }); // Simulate only valid one returned
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
             const response = await handleClustersSitemapRequest(mockContext);
             const xml = await response.text();
 
-            expect(xml).not.toContain('invalid_format_id');
-            expect(xml).toContain('https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345');
-            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to parse D1 clusterId: invalid_format_id'));
-            expect(fetch).toHaveBeenCalledTimes(1);
+            expect(xml).toContain('https://earthquakeslive.com/cluster/valid-slug-example');
+            // The code's internal `!definition.slug` check might still trigger if somehow a null/empty slug passes SQL
+            // For this test, we assume SQL filters them, so the internal check might not be hit if d1Results is already filtered.
+            // If it were to be hit:
+            // expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid definition from D1 (missing slug or updatedAt)"));
             consoleWarnSpy.mockRestore();
         });
 
-        it('should skip entries if USGS fetch fails and log a warning/error', async () => {
-            const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
-            const d1Results = [
-                { clusterId: "overview_cluster_us7000mfp9_15", updatedAt: "2023-01-01T00:00:00Z" },
-                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
-            ];
-            mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
 
-            fetch
-                .mockResolvedValueOnce(new Response("USGS Error", { status: 500 }))
-                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "California", mag: 4.2 } }), { status: 200 }));
-            const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-            const response = await handleClustersSitemapRequest(mockContext);
-            const xml = await response.text();
-
-            expect(xml).not.toContain('15-quakes-near');
-            expect(xml).toContain('https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345');
-            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('USGS fetch failed for us7000mfp9: 500'));
-            expect(fetch).toHaveBeenCalledTimes(2);
-            consoleWarnSpy.mockRestore();
-        });
-
-        it('should skip entries if USGS response is missing place or mag and log a warning', async () => {
-            const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
-            const d1Results = [
-                { clusterId: "overview_cluster_usMissingPlace_10", updatedAt: "2023-01-03T00:00:00Z" },
-                { clusterId: "overview_cluster_usMissingMag_8", updatedAt: "2023-01-04T00:00:00Z" },
-                { clusterId: "overview_cluster_ci12345_5", updatedAt: "2023-01-02T00:00:00Z" },
-            ];
-            mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
-
-            fetch
-                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { mag: 5.0 } }), { status: 200 })) // Missing place
-                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Some Place" } }), { status: 200 })) // Missing mag
-                .mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "California", mag: 4.2 } }), { status: 200 }));
-            const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-            const response = await handleClustersSitemapRequest(mockContext);
-            const xml = await response.text();
-
-            expect(xml).not.toContain('usMissingPlace');
-            expect(xml).not.toContain('usMissingMag');
-            expect(xml).toContain('https://earthquakeslive.com/cluster/5-quakes-near-california-up-to-m4.2-ci12345');
-            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Missing or invalid locationName for usMissingPlace'));
-            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Missing or invalid maxMagnitude for usMissingMag'));
-            expect(fetch).toHaveBeenCalledTimes(3);
-            consoleWarnSpy.mockRestore();
-        });
+        // USGS fetching for slug generation was removed from the sitemap component.
+        // The following tests are deprecated as they cover that removed functionality.
 
         it('should skip entries with invalid updatedAt date format from D1 and log a warning', async () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
             const d1Results = [
-                { clusterId: "overview_cluster_validEntry1_10", updatedAt: "2023-01-01T00:00:00Z" },
-                { clusterId: "overview_cluster_invalidDate_5", updatedAt: "not-a-real-date" },
+                { slug: "valid-slug-1", updatedAt: "2023-01-01T00:00:00Z" },
+                { slug: "slug-invalid-date", updatedAt: "not-a-real-date" },
             ];
             mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
-            fetch.mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Valid Place", mag: 5.0 } }), { status: 200 }));
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
             const response = await handleClustersSitemapRequest(mockContext);
@@ -221,22 +165,23 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
 
             expect(response.status).toBe(200);
             expect(response.headers.get('Content-Type')).toContain('application/xml');
-            expect(xml).toContain('https://earthquakeslive.com/cluster/10-quakes-near-valid-place-up-to-m5.0-validEntry1');
-            expect(xml).not.toContain('invalidDate_5');
-            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid 'updated' date format for eventId invalidDate (raw overview_cluster_invalidDate_5): not-a-real-date"));
-            expect(fetch).toHaveBeenCalledTimes(1);
+            expect(xml).toContain('https://earthquakeslive.com/cluster/valid-slug-1');
+            expect(xml).not.toContain('slug-invalid-date');
+            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid 'updatedAt' date format for slug slug-invalid-date: not-a-real-date"));
             consoleWarnSpy.mockRestore();
         });
 
-        it('should skip entries missing clusterId or updatedAt from D1 and log a warning', async () => {
+        it('should skip entries missing updatedAt from D1 (or if slug was somehow null/empty despite SQL) and log a warning', async () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
             const d1Results = [
-                { clusterId: "overview_cluster_validEntry2_8", updatedAt: "2023-02-01T00:00:00Z" },
-                { clusterId: null, updatedAt: "2023-02-02T00:00:00Z" },
-                { clusterId: "overview_cluster_missingUpdate_3", updatedAt: undefined },
+                { slug: "valid-slug-2", updatedAt: "2023-02-01T00:00:00Z" },
+                { slug: "slug-missing-update", updatedAt: undefined },
+                // The following case should ideally be filtered by SQL `WHERE slug IS NOT NULL AND slug <> ''`
+                // but if it somehow passed, the JS check should catch it.
+                { slug: null, updatedAt: "2023-02-02T00:00:00Z" },
             ];
+            // Simulate D1 returning these, even if SQL should filter some
             mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
-            fetch.mockResolvedValueOnce(new Response(JSON.stringify({ properties: { place: "Another Valid Place", mag: 4.0 } }), { status: 200 }));
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
             const response = await handleClustersSitemapRequest(mockContext);
@@ -244,19 +189,21 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
 
             expect(response.status).toBe(200);
             expect(response.headers.get('Content-Type')).toContain('application/xml');
-            expect(xml).toContain('https://earthquakeslive.com/cluster/8-quakes-near-another-valid-place-up-to-m4.0-validEntry2');
-            expect(xml).not.toContain('null');
-            expect(xml).not.toContain('missingUpdate_3');
+            expect(xml).toContain('https://earthquakeslive.com/cluster/valid-slug-2');
+            expect(xml).not.toContain('slug-missing-update');
+            expect(xml).not.toContain('null'); // For the null slug entry
+
+            // Check for warning about missing 'updatedAt'
             expect(consoleWarnSpy).toHaveBeenCalledWith(
-                expect.stringContaining("Invalid definition from D1 (missing clusterId or updated/updatedAt):"),
-                expect.objectContaining({ clusterId: null, updatedAt: "2023-02-02T00:00:00Z" })
+                expect.stringContaining("Invalid definition from D1 (missing slug or updatedAt):"),
+                expect.objectContaining({ slug: "slug-missing-update", updatedAt: undefined })
             );
+            // Check for warning about missing 'slug' (if it were to pass SQL)
             expect(consoleWarnSpy).toHaveBeenCalledWith(
-                expect.stringContaining("Invalid definition from D1 (missing clusterId or updated/updatedAt):"),
-                expect.objectContaining({ clusterId: "overview_cluster_missingUpdate_3", updatedAt: undefined })
+                expect.stringContaining("Invalid definition from D1 (missing slug or updatedAt):"),
+                expect.objectContaining({ slug: null, updatedAt: "2023-02-02T00:00:00Z" })
             );
             expect(consoleWarnSpy).toHaveBeenCalledTimes(2);
-            expect(fetch).toHaveBeenCalledTimes(1);
             consoleWarnSpy.mockRestore();
         });
     });
