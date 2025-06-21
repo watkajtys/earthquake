@@ -23,6 +23,7 @@ const USGS_LAST_RESPONSE_KEY = "usgs_last_response_features"; // Define a consta
  */
 export async function handleUsgsProxy(context) { // context contains { request, env, executionContext }
   const { request, env, executionContext } = context; // executionContext is the original ctx from worker
+
   const url = new URL(request.url);
   const { searchParams } = url;
 
@@ -88,6 +89,7 @@ export async function handleUsgsProxy(context) { // context contains { request, 
           console.error(`Failed to cache response for ${apiUrl}: ${cachePutError.name} - ${cachePutError.message}`, cachePutError);
         });
       executionContext.waitUntil(cachePromise); // Use executionContext.waitUntil
+
 
       // New KV and D1 logic
       const usgsKvNamespace = env.USGS_LAST_RESPONSE_KV;
@@ -161,6 +163,7 @@ export async function handleUsgsProxy(context) { // context contains { request, 
             console.log(`[usgs-proxy-kv] D1 upsert reported ${d1Result.successCount} successes. Updating KV key "${USGS_LAST_RESPONSE_KEY}" with the latest full feature set of ${totalNewFeaturesFetched} items.`);
             // Pass the full 'executionContext' object to setFeaturesToKV.
             setFeaturesToKV(usgsKvNamespace, USGS_LAST_RESPONSE_KEY, responseDataForLogic.features, executionContext);
+
           } else if (d1Result.successCount === 0 && featuresToUpsert.length > 0) {
             console.warn(`[usgs-proxy-kv] D1 upsert reported no successes for ${featuresToUpsert.length} candidate features. KV will NOT be updated with this dataset to prevent stale reference data.`);
           } else if (!usgsKvNamespace) {
