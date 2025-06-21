@@ -473,6 +473,7 @@ function ClusterDetailModalWrapper({
                                     hasFetchedOrReconstructedClusterRef.current = true;
                                     setFetchStatus('success');
                                     console.log("[DEBUG] 'fetchingD1': Set fetchStatus to 'success'.");
+                                    return; // <<<<<<< ADDED RETURN HERE
                                 }
                             } else {
                                 // This is a data integrity issue: the cluster definition's strongestQuakeId
