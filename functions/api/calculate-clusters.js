@@ -131,7 +131,7 @@ export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
  * @returns {Promise<Response>} A `Response` object containing either the calculated cluster data (Array of arrays of earthquake objects)
  *   or a JSON error object with appropriate HTTP status codes (400 for bad request, 500 for internal server error).
  */
-export async function onRequestPost(context) {
+export async function onRequest(context) {
   try {
     const { env } = context;
     const { earthquakes, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours } = await context.request.json();
