@@ -21,8 +21,8 @@ const USGS_LAST_RESPONSE_KEY = "usgs_last_response_features"; // Define a consta
  * @returns {Promise<Response>} A promise that resolves to a Response object, either from the cache or fetched from the USGS API.
  * Error responses are returned as JSON with appropriate status codes.
  */
-export async function handleUsgsProxy(context) {
-  const { request, env, waitUntil } = context;
+export async function handleUsgsProxy(context) { // context contains { request, env, executionContext }
+  const { request, env, executionContext } = context; // executionContext is the original ctx from worker
   const url = new URL(request.url);
   const { searchParams } = url;
 
@@ -87,7 +87,7 @@ export async function handleUsgsProxy(context) {
         .catch(cachePutError => {
           console.error(`Failed to cache response for ${apiUrl}: ${cachePutError.name} - ${cachePutError.message}`, cachePutError);
         });
-      waitUntil(cachePromise);
+      executionContext.waitUntil(cachePromise); // Use executionContext.waitUntil
 
       // New KV and D1 logic
       const usgsKvNamespace = env.USGS_LAST_RESPONSE_KV;
@@ -159,7 +159,8 @@ export async function handleUsgsProxy(context) {
           // update KV with the full current feature set from the API.
           if (d1Result.successCount > 0 && usgsKvNamespace) {
             console.log(`[usgs-proxy-kv] D1 upsert reported ${d1Result.successCount} successes. Updating KV key "${USGS_LAST_RESPONSE_KEY}" with the latest full feature set of ${totalNewFeaturesFetched} items.`);
-            setFeaturesToKV(usgsKvNamespace, USGS_LAST_RESPONSE_KEY, responseDataForLogic.features, waitUntil);
+            // Pass the full 'executionContext' object to setFeaturesToKV.
+            setFeaturesToKV(usgsKvNamespace, USGS_LAST_RESPONSE_KEY, responseDataForLogic.features, executionContext);
           } else if (d1Result.successCount === 0 && featuresToUpsert.length > 0) {
             console.warn(`[usgs-proxy-kv] D1 upsert reported no successes for ${featuresToUpsert.length} candidate features. KV will NOT be updated with this dataset to prevent stale reference data.`);
           } else if (!usgsKvNamespace) {
