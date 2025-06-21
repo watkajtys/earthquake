@@ -22,7 +22,7 @@ migrations = [
   { tag = "0003", dir = "./migrations" },
   { tag = "0004", dir = "./migrations" },
   { tag = "0005", dir = "./migrations" },
-  { tag = "0006", dir = "./migrations" }
+  { tag = "0008", dir = "./migrations" } # New trigger migration, 0006 is removed
 ]
 
 [assets]
