@@ -6,8 +6,18 @@ import { http, HttpResponse } from 'msw';
 
 // Mock d1Utils.js
 vi.mock('../../src/utils/d1Utils.js', () => ({
-  upsertEarthquakeFeaturesToD1: vi.fn(),
+  upsertEarthquakeFeaturesToD1: vi.fn().mockResolvedValue({ successCount: 0, errorCount: 0 }), // Default to success
 }));
+
+// Mock kvUtils.js
+vi.mock('../../src/utils/kvUtils.js', () => ({
+  getFeaturesFromKV: vi.fn(),
+  setFeaturesToKV: vi.fn(),
+}));
+
+// Import the mocked functions for use in tests
+import { getFeaturesFromKV, setFeaturesToKV } from '../../src/utils/kvUtils.js';
+
 
 // Mock Cloudflare Workers globals
 
@@ -35,8 +45,11 @@ describe('handleUsgsProxy', () => {
   let currentTestApiUrl; // To set specific API URLs per test
 
   beforeEach(() => {
-    vi.clearAllMocks(); // Clears all mocks, including fetch, cache, and d1Utils
-    upsertEarthquakeFeaturesToD1.mockClear(); // Explicitly clear for good measure
+    vi.clearAllMocks(); // Clears all mocks, including fetch, cache, d1Utils, and kvUtils
+    upsertEarthquakeFeaturesToD1.mockClear().mockResolvedValue({ successCount: 0, errorCount: 0 }); // Reset and re-apply default mock
+    getFeaturesFromKV.mockClear();
+    setFeaturesToKV.mockClear();
+
 
     // Default currentTestApiUrl, can be overridden in tests
     currentTestApiUrl = 'https://default.example.com/api';
@@ -47,9 +60,14 @@ describe('handleUsgsProxy', () => {
       env: {
         WORKER_CACHE_DURATION_SECONDS: String(DEFAULT_CACHE_DURATION_SECONDS), // Ensure it's a string like env vars
         DB: undefined, // Default to no DB
+        USGS_LAST_RESPONSE_KV: { get: vi.fn(), put: vi.fn() }, // Mock KV namespace binding
       },
       waitUntil: vi.fn((promise) => { // Allow awaiting promises passed to waitUntil
-        return promise;
+        // If the promise is undefined (e.g. setFeaturesToKV returns void), don't try to await it.
+        if (promise && typeof promise.then === 'function') {
+          return promise;
+        }
+        return Promise.resolve(); // Return a resolved promise for void returns
       }),
       // No next() needed for direct handler tests
     };
@@ -311,4 +329,209 @@ describe('handleUsgsProxy', () => {
     );
     expect(mockCache.put).not.toHaveBeenCalled();
   });
+});
+
+const USGS_LAST_RESPONSE_KEY = "usgs_last_response_features"; // Re-define for test scope if not exported
+
+describe('handleUsgsProxy KV Logic', () => {
+  let consoleLogSpy;
+  let consoleErrorSpy;
+  let consoleWarnSpy;
+  let currentTestApiUrl;
+  let mockContext;
+
+  const mockFeature1 = { id: 'eq1', properties: { time: 1000, updated: 1100, place: 'Location A', mag: 5.0 }, geometry: { coordinates: [1,2,3] } };
+  const mockFeature1Updated = { id: 'eq1', properties: { time: 1000, updated: 1200, place: 'Location A Updated', mag: 5.1 }, geometry: { coordinates: [1,2,3] } };
+  const mockFeature2 = { id: 'eq2', properties: { time: 2000, updated: 2100, place: 'Location B', mag: 6.0 }, geometry: { coordinates: [4,5,6] } };
+  const mockFeature3 = { id: 'eq3', properties: { time: 3000, updated: 3100, place: 'Location C', mag: 7.0 }, geometry: { coordinates: [7,8,9] } };
+
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    upsertEarthquakeFeaturesToD1.mockClear().mockResolvedValue({ successCount: 1, errorCount: 0 }); // Default to 1 success for KV update
+    getFeaturesFromKV.mockClear();
+    setFeaturesToKV.mockClear();
+
+    currentTestApiUrl = 'https://external.api/kv_test_data';
+    mockContext = {
+      request: new Request(`${PROXY_ENDPOINT_BASE}?apiUrl=${encodeURIComponent(currentTestApiUrl)}`),
+      env: {
+        WORKER_CACHE_DURATION_SECONDS: String(DEFAULT_CACHE_DURATION_SECONDS),
+        DB: { prepare: vi.fn() }, // Mock D1
+        USGS_LAST_RESPONSE_KV: { get: vi.fn(), put: vi.fn() }, // Mock KV namespace
+      },
+      waitUntil: vi.fn(promise => promise ? promise.catch(e => console.error("WaitUntil error:", e)) : Promise.resolve()),
+    };
+    mockCache.match.mockResolvedValue(undefined); // Default to cache miss
+
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
+    server.resetHandlers(); // Reset MSW handlers
+  });
+
+  it('Scenario: Initial Run (Empty KV) - upserts all API features to D1, updates KV', async () => {
+    const apiResponseFeatures = [mockFeature1, mockFeature2];
+    server.use(http.get(currentTestApiUrl, () => HttpResponse.json({ features: apiResponseFeatures })));
+    getFeaturesFromKV.mockResolvedValue(null); // KV is empty
+
+    await handleUsgsProxy(mockContext);
+    // Ensure all waitUntil promises settle
+    for (const call of mockContext.waitUntil.mock.calls) {
+        if (call[0]) await call[0];
+    }
+
+    expect(getFeaturesFromKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY);
+    expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, apiResponseFeatures);
+    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.waitUntil);
+  });
+
+  it('Scenario: No Change in Data - D1 and KV not updated', async () => {
+    const commonFeatures = [mockFeature1, mockFeature2];
+    server.use(http.get(currentTestApiUrl, () => HttpResponse.json({ features: commonFeatures })));
+    getFeaturesFromKV.mockResolvedValue(commonFeatures); // KV has same data
+
+    await handleUsgsProxy(mockContext);
+    for (const call of mockContext.waitUntil.mock.calls) {
+        if (call[0]) await call[0];
+    }
+
+    expect(getFeaturesFromKV).toHaveBeenCalledTimes(1);
+    expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
+    expect(setFeaturesToKV).not.toHaveBeenCalled();
+  });
+
+  it('Scenario: New Earthquake - only new feature to D1, KV updated with full set', async () => {
+    const kvFeatures = [mockFeature1];
+    const apiResponseFeatures = [mockFeature1, mockFeature2]; // mockFeature2 is new
+    server.use(http.get(currentTestApiUrl, () => HttpResponse.json({ features: apiResponseFeatures })));
+    getFeaturesFromKV.mockResolvedValue(kvFeatures);
+
+    await handleUsgsProxy(mockContext);
+    for (const call of mockContext.waitUntil.mock.calls) {
+        if (call[0]) await call[0];
+    }
+
+    expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, [mockFeature2]);
+    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.waitUntil);
+  });
+
+  it('Scenario: Updated Earthquake - only updated feature to D1, KV updated with full set', async () => {
+    const kvFeatures = [mockFeature1, mockFeature2]; // old version of mockFeature1
+    const apiResponseFeatures = [mockFeature1Updated, mockFeature2]; // mockFeature1Updated is newer
+    server.use(http.get(currentTestApiUrl, () => HttpResponse.json({ features: apiResponseFeatures })));
+    getFeaturesFromKV.mockResolvedValue(kvFeatures);
+
+    await handleUsgsProxy(mockContext);
+     for (const call of mockContext.waitUntil.mock.calls) {
+        if (call[0]) await call[0];
+    }
+
+    expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, [mockFeature1Updated]);
+    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.waitUntil);
+  });
+
+  it('Scenario: Earthquake Removed from API - D1 not called for removed, KV updated with current API (removed one gone)', async () => {
+    const kvFeatures = [mockFeature1, mockFeature2, mockFeature3]; // feature3 will be removed from API
+    const apiResponseFeatures = [mockFeature1, mockFeature2];
+    server.use(http.get(currentTestApiUrl, () => HttpResponse.json({ features: apiResponseFeatures })));
+    getFeaturesFromKV.mockResolvedValue(kvFeatures);
+    upsertEarthquakeFeaturesToD1.mockResolvedValue({ successCount: 0, errorCount: 0 }); // Simulate no actual D1 changes needed for existing ones
+
+    await handleUsgsProxy(mockContext);
+    for (const call of mockContext.waitUntil.mock.calls) {
+        if (call[0]) await call[0];
+    }
+
+    // D1 should not be called if no features were identified as new or updated.
+    // In this case, feature3 was removed, feature1 & feature2 are unchanged by content.
+    expect(upsertEarthquakeFeaturesToD1).not.toHaveBeenCalled();
+    // KV is not updated because no new/updated features were successfully upserted to D1 / D1 not called.
+    expect(setFeaturesToKV).not.toHaveBeenCalled();
+  });
+
+
+  it('Scenario: KV Binding Not Present - fallback to upserting all to D1, no KV set', async () => {
+    const apiResponseFeatures = [mockFeature1, mockFeature2];
+    server.use(http.get(currentTestApiUrl, () => HttpResponse.json({ features: apiResponseFeatures })));
+    mockContext.env.USGS_LAST_RESPONSE_KV = undefined; // KV not configured
+
+    await handleUsgsProxy(mockContext);
+    for (const call of mockContext.waitUntil.mock.calls) {
+        if (call[0]) await call[0];
+    }
+
+    expect(getFeaturesFromKV).not.toHaveBeenCalled(); // Should not attempt if binding missing
+    expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, apiResponseFeatures);
+    expect(setFeaturesToKV).not.toHaveBeenCalled();
+    expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("USGS_LAST_RESPONSE_KV namespace not configured"));
+  });
+
+  it('Scenario: getFeaturesFromKV returns error (simulated by null) - fallback to upserting all to D1, no KV set initially', async () => {
+    const apiResponseFeatures = [mockFeature1, mockFeature2];
+    server.use(http.get(currentTestApiUrl, () => HttpResponse.json({ features: apiResponseFeatures })));
+    // getFeaturesFromKV is already mocked to return undefined by default if not specified, which becomes null after await
+    // For explicitness:
+    getFeaturesFromKV.mockResolvedValue(null); // Simulate error or key not found leading to null
+
+    await handleUsgsProxy(mockContext);
+     for (const call of mockContext.waitUntil.mock.calls) {
+        if (call[0]) await call[0];
+    }
+
+    expect(getFeaturesFromKV).toHaveBeenCalledTimes(1);
+    expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, apiResponseFeatures);
+    // If D1 upsert is successful, KV *should* be updated with the current features
+    expect(setFeaturesToKV).toHaveBeenCalledWith(mockContext.env.USGS_LAST_RESPONSE_KV, USGS_LAST_RESPONSE_KEY, apiResponseFeatures, mockContext.waitUntil);
+  });
+
+  it('Scenario: D1 Upsert Fails - KV should not be updated', async () => {
+    const kvFeatures = [mockFeature1];
+    const apiResponseFeatures = [mockFeature1Updated, mockFeature2]; // mockFeature1Updated is new/updated
+    server.use(http.get(currentTestApiUrl, () => HttpResponse.json({ features: apiResponseFeatures })));
+    getFeaturesFromKV.mockResolvedValue(kvFeatures);
+    upsertEarthquakeFeaturesToD1.mockRejectedValueOnce(new Error("D1 Write Error"));
+
+    await handleUsgsProxy(mockContext);
+    // Wait for all promises in waitUntil, including the potentially rejected D1 promise
+    // This requires careful handling of waitUntil mock if it rethrows or swallows errors.
+    // Assuming waitUntil allows promises to settle (resolve or reject).
+    try {
+        for (const call of mockContext.waitUntil.mock.calls) {
+            if (call[0]) await call[0];
+        }
+    } catch (e) {
+        // Expected if D1 error propagates through waitUntil
+    }
+
+
+    expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, [mockFeature1Updated, mockFeature2]);
+    expect(setFeaturesToKV).not.toHaveBeenCalled(); // Crucial: KV not updated if D1 fails
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("[usgs-proxy] Error during D1 upsert:"), "D1 Write Error", "Error");
+  });
+
+  it('Scenario: D1 Upsert Reports No Successes (e.g. 0 rows affected but no error) - KV should not be updated', async () => {
+    const kvFeatures = [mockFeature1];
+    const apiResponseFeatures = [mockFeature1Updated, mockFeature2];
+    server.use(http.get(currentTestApiUrl, () => HttpResponse.json({ features: apiResponseFeatures })));
+    getFeaturesFromKV.mockResolvedValue(kvFeatures);
+    // Simulate D1 upserting 0 features successfully, even though it was called with features
+    upsertEarthquakeFeaturesToD1.mockResolvedValue({ successCount: 0, errorCount: 0 });
+
+    await handleUsgsProxy(mockContext);
+    for (const call of mockContext.waitUntil.mock.calls) {
+        if (call[0]) await call[0];
+    }
+
+    expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, [mockFeature1Updated, mockFeature2]);
+    expect(setFeaturesToKV).not.toHaveBeenCalled();
+    expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("D1 upsert reported no successes for changed features. KV will not be updated with this dataset."));
+  });
+
 });
