@@ -42,11 +42,6 @@ import { isValidGeoJson, isValidFeatureArray } from '../utils/geoJsonUtils.js'; 
  */
 
 /**
- * @typedef {object} EarthquakeDataProviderProps
- * @property {React.ReactNode} children - The child components that will have access to the earthquake data context.
- */
-
-/**
  * Provides earthquake data to its child components through context.
  * It fetches, processes, and manages earthquake data, prioritizing a D1 database source
  * via the `/api/get-earthquakes` endpoint, and falling back to the USGS API (via `usgsApiService`)
@@ -99,6 +94,7 @@ export const EarthquakeDataProvider = ({ children }) => {
      * This function is typically called on initial application load and on a set refresh interval.
      * @async
      * @param {boolean} [isInitialFetch=false] - Indicates if this is the first data fetch attempt.
+     * @returns {Promise<void>} A promise that resolves when the data fetch and processing are complete.
      */
     const performDataFetch = useCallback(async (isInitialFetch = false) => {
         dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingDaily: true, isLoadingWeekly: true } });
@@ -249,6 +245,7 @@ export const EarthquakeDataProvider = ({ children }) => {
      * Sets loading flags during the fetch operation.
      * This function is typically called on demand by user interaction.
      * @async
+     * @returns {Promise<void>} A promise that resolves when the monthly data fetch and processing are complete.
      */
     const loadMonthlyData = useCallback(async () => {
         dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: true, hasAttemptedMonthlyLoad: true } });

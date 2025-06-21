@@ -18,33 +18,63 @@ import { CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE } from '../../src/con
 // const MIN_MAG_FOR_DEFINITION = 3.0; // No longer needed, using DEFINED_CLUSTER_MIN_MAGNITUDE from appConstants
 
 // Helper Functions for Cluster Definition
+/**
+ * Gets the quake with the highest magnitude from a cluster.
+ * @param {Array<Object>} cluster - An array of earthquake objects.
+ * @returns {Object|null} The earthquake object with the highest magnitude, or null if cluster is empty.
+ */
 function getStrongestQuake(cluster) {
   if (!cluster || cluster.length === 0) return null;
   return cluster.reduce((maxQuake, currentQuake) =>
     (currentQuake.properties.mag > maxQuake.properties.mag) ? currentQuake : maxQuake, cluster[0]);
 }
 
+/**
+ * Gets the minimum magnitude from a cluster of earthquakes.
+ * @param {Array<Object>} cluster - An array of earthquake objects.
+ * @returns {number|null} The minimum magnitude, or null if cluster is empty.
+ */
 function getMinMagnitude(cluster) {
   if (!cluster || cluster.length === 0) return null;
   return cluster.reduce((min, q) => Math.min(min, q.properties.mag), cluster[0].properties.mag);
 }
 
+/**
+ * Calculates the mean (average) magnitude of earthquakes in a cluster.
+ * @param {Array<Object>} cluster - An array of earthquake objects.
+ * @returns {number|null} The mean magnitude, or null if cluster is empty.
+ */
 function getMeanMagnitude(cluster) {
   if (!cluster || cluster.length === 0) return null;
   const sum = cluster.reduce((acc, q) => acc + q.properties.mag, 0);
   return sum / cluster.length;
 }
 
+/**
+ * Gets the earliest start time from a cluster of earthquakes.
+ * @param {Array<Object>} cluster - An array of earthquake objects.
+ * @returns {number|null} The earliest timestamp (milliseconds), or null if cluster is empty.
+ */
 function getStartTime(cluster) {
   if (!cluster || cluster.length === 0) return null;
   return cluster.reduce((min, q) => Math.min(min, q.properties.time), cluster[0].properties.time);
 }
 
+/**
+ * Gets the latest end time from a cluster of earthquakes.
+ * @param {Array<Object>} cluster - An array of earthquake objects.
+ * @returns {number|null} The latest timestamp (milliseconds), or null if cluster is empty.
+ */
 function getEndTime(cluster) {
   if (!cluster || cluster.length === 0) return null;
   return cluster.reduce((max, q) => Math.max(max, q.properties.time), cluster[0].properties.time);
 }
 
+/**
+ * Calculates and formats the depth range of earthquakes in a cluster.
+ * @param {Array<Object>} cluster - An array of earthquake objects.
+ * @returns {string} A string representing the depth range (e.g., "10.0-25.5km"), or "Unknown".
+ */
 function getDepthRangeString(cluster) {
   if (!cluster || cluster.length === 0) return "Unknown";
   const depths = cluster
@@ -56,6 +86,14 @@ function getDepthRangeString(cluster) {
   return `${minDepth.toFixed(1)}-${maxDepth.toFixed(1)}km`;
 }
 
+/**
+ * Generates a URL-friendly slug for a cluster.
+ * @param {number} quakeCount - Number of earthquakes in the cluster.
+ * @param {string} locationName - Name of the location of the cluster.
+ * @param {number} maxMagnitude - Maximum magnitude in the cluster.
+ * @param {string} id - Unique ID of the cluster.
+ * @returns {string} A URL-friendly slug string.
+ */
 function generateSlug(quakeCount, locationName, maxMagnitude, id) {
   const safeLocation = (locationName || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const magStr = maxMagnitude.toFixed(1);
@@ -63,11 +101,26 @@ function generateSlug(quakeCount, locationName, maxMagnitude, id) {
   return `${quakeCount}-quakes-near-${safeLocation.slice(0, 50)}-m${magStr}-${idStr}`;
 }
 
+/**
+ * Generates a title for a cluster.
+ * @param {number} quakeCount - Number of earthquakes in the cluster.
+ * @param {string} locationName - Name of the location of the cluster.
+ * @param {number} maxMagnitude - Maximum magnitude in the cluster.
+ * @returns {string} A title string for the cluster.
+ */
 function generateTitle(quakeCount, locationName, maxMagnitude) {
   const safeLocation = locationName || "Unknown Location";
   return `Cluster: ${quakeCount} events near ${safeLocation}, max M${maxMagnitude.toFixed(1)}`;
 }
 
+/**
+ * Generates a description for a cluster.
+ * @param {number} quakeCount - Number of earthquakes in the cluster.
+ * @param {string} locationName - Name of the location of the cluster.
+ * @param {number} maxMagnitude - Maximum magnitude in the cluster.
+ * @param {number} durationHours - Duration of the cluster in hours.
+ * @returns {string} A description string for the cluster.
+ */
 function generateDescription(quakeCount, locationName, maxMagnitude, durationHours) {
   const safeLocation = locationName || "Unknown Location";
   const durationStr = durationHours > 0 ? `approx ${durationHours.toFixed(1)} hours` : "a short period";
@@ -82,6 +135,27 @@ function generateDescription(quakeCount, locationName, maxMagnitude, durationHou
 // It uses calculateDistance imported from '../utils/mathUtils.js' (synced from /common/mathUtils.js).
 // Algorithmic changes to core clustering logic should be synchronized with the frontend version where applicable.
 
+/**
+ * Asynchronously stores definitions for significant earthquake clusters in the D1 database.
+ * This function is intended to be run in the background (e.g., using `ctx.waitUntil`)
+ * so it doesn't block the main response flow.
+ *
+ * A cluster is considered "significant" if it meets criteria defined by
+ * `CLUSTER_MIN_QUAKES_CONST` and `DEFINED_CLUSTER_MIN_MAGNITUDE_CONST`.
+ * For each significant cluster, it generates metadata (ID, slug, title, description, etc.)
+ * and then calls `storeClusterDefinition` to persist it.
+ *
+ * Logs information about the process, including counts of significant clusters,
+ * successfully stored definitions, and any errors encountered.
+ *
+ * @async
+ * @param {object} db - The D1 database instance (e.g., `env.DB`).
+ * @param {Array<Array<Object>>} clusters - An array of calculated clusters. Each cluster is an array of earthquake objects.
+ * @param {number} CLUSTER_MIN_QUAKES_CONST - The minimum number of quakes for a cluster to be considered for definition.
+ * @param {number} DEFINED_CLUSTER_MIN_MAGNITUDE_CONST - The minimum magnitude of the strongest quake in a cluster
+ *                                                     for it to be considered for definition.
+ * @returns {Promise<void>} A promise that resolves when all processing is complete.
+ */
 async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUAKES_CONST, DEFINED_CLUSTER_MIN_MAGNITUDE_CONST) {
   if (!db || !clusters || clusters.length === 0) {
     console.log("storeClusterDefinitionsInBackground: DB not available or no clusters to process.");
