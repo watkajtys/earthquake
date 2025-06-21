@@ -148,17 +148,8 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
         });
 
 
-        // USGS fetching is removed, so these tests are no longer applicable.
-        // However, to ensure the test runner picks them up if they were to be reactivated,
-        // I'll leave them as active but expecting them to fail or be properly skipped by component logic if it existed.
-        // For now, the sitemap generator doesn't do USGS fetches, so these specific conditions aren't tested by it.
-        // These tests would fail if unskipped without further changes to mocks or component.
-        // To reflect current reality, they should remain skipped or be removed if the functionality is confirmed gone.
-        // For the purpose of "updating tests to match current logic", and current logic *doesn't* do this,
-        // these tests as written are for a different logic. I'll keep them skipped as per previous reasoning.
-        it.skip('should skip entries if USGS fetch fails and log a warning/error', async () => {});
-        it.skip('should skip entries if USGS response is missing place or mag and log a warning', async () => {});
-
+        // USGS fetching for slug generation was removed from the sitemap component.
+        // The following tests are deprecated as they cover that removed functionality.
 
         it('should skip entries with invalid updatedAt date format from D1 and log a warning', async () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
