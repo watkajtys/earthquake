@@ -114,6 +114,7 @@ export async function onRequestGet(context) {
       headers: {
         "Content-Type": "application/json",
         "X-Data-Source": "D1",
+        "Cache-Control": "public, s-maxage=60", // Added Cache-Control header
       },
     });
 
@@ -123,6 +124,7 @@ export async function onRequestGet(context) {
       status: 500,
       headers: {
         "X-Data-Source": "D1",
+        // No Cache-Control for error responses, or a short one like "public, s-maxage=5" if preferred
       },
     });
   }
