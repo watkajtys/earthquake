@@ -81,6 +81,108 @@ describe('Prerendering Handler: /quake/:id', () => {
         expect(text).toContain(`<title>M 5.0 - Test Place`);
     });
 
+    it('/quake/test-event-jsonld should correctly populate JSON-LD for crawler', async () => {
+        const quakeId = "usgs_event_jsonld_test";
+        // Specific time: June 20, 2025 17:49:14 UTC
+        const eventTime = new Date(Date.UTC(2025, 5, 20, 17, 49, 14)).getTime();
+        const expectedIsoTime = new Date(eventTime).toISOString();
+        const expectedKeywordDate = "june 20 2025";
+
+        // Mock data for this specific test
+        // This would typically be handled by MSW handlers, but for direct onRequest testing,
+        // we'd need to ensure the global fetch mock inside createMockContext or via MSW
+        // is set up to return this for "usgs_event_jsonld_test"
+        // For now, assuming MSW is configured elsewhere (e.g. in setupTests.js or a specific handler for this ID)
+        // to return the following structure when `https://earthquake.usgs.gov/.../usgs_event_jsonld_test` is fetched.
+        // If not, this test would need more direct fetch mocking.
+
+        const mockQuakeData = {
+            properties: {
+                mag: 5.1,
+                place: "36 km SW of Semnan, Iran",
+                time: eventTime,
+                detail: `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`,
+                title: `M 5.1 - 36 km SW of Semnan, Iran`,
+                url: `https://earthquake.usgs.gov/earthquakes/eventpage/${quakeId}` // sameAs if detail is not specific enough
+            },
+            geometry: { coordinates: [53.0699, 35.3758, 10] }, // lon, lat, depth
+            id: quakeId
+        };
+
+        // Simulate that MSW (or a global fetch mock) will return mockQuakeData for this quakeId
+        // This is a conceptual setup for the test. Actual MSW setup would be in mock server handlers.
+        // For this test structure, we assume fetch is already mocked to provide mockQuakeData for this ID.
+
+        const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' } });
+        const context = createMockContext(request); // Assumes createMockContext's fetch is or will be MSW-intercepted
+
+        const response = await onRequest(context);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('Content-Type')).toContain('text/html');
+
+        const html = await response.text();
+
+        // Extract JSON-LD
+        const jsonLdScriptRegex = /<script type="application\/ld\+json">(.*?)<\/script>/s;
+        const match = html.match(jsonLdScriptRegex);
+        expect(match).toBeTruthy();
+        expect(match[1]).toBeTruthy();
+
+        let jsonLdData;
+        try {
+            jsonLdData = JSON.parse(match[1]);
+        } catch (e) {
+            throw new Error("Failed to parse JSON-LD: " + e.message);
+        }
+
+        // Assertions for JSON-LD content
+        expect(jsonLdData['@context']).toBe('https://schema.org');
+        expect(jsonLdData['@type']).toBe('Event');
+        expect(jsonLdData.name).toBe(`M ${mockQuakeData.properties.mag} - ${mockQuakeData.properties.place}`);
+        expect(jsonLdData.startDate).toBe(expectedIsoTime);
+        expect(jsonLdData.endDate).toBe(expectedIsoTime); // As per plan
+        expect(jsonLdData.eventStatus).toBe('https://schema.org/EventHappened');
+        expect(jsonLdData.eventAttendanceMode).toBe('https://schema.org/OfflineEventAttendanceMode');
+
+        expect(jsonLdData.location).toBeDefined();
+        expect(jsonLdData.location['@type']).toBe('Place');
+        expect(jsonLdData.location.name).toBe(mockQuakeData.properties.place);
+        expect(jsonLdData.location.geo).toBeDefined();
+        expect(jsonLdData.location.geo['@type']).toBe('GeoCoordinates');
+        expect(jsonLdData.location.geo.latitude).toBe(mockQuakeData.geometry.coordinates[1]);
+        expect(jsonLdData.location.geo.longitude).toBe(mockQuakeData.geometry.coordinates[0]);
+        expect(jsonLdData.location.geo.elevation).toBe(-mockQuakeData.geometry.coordinates[2] * 1000);
+
+        expect(jsonLdData.image).toEqual(['https://earthquakeslive.com/social-default-earthquake.png']);
+
+        expect(jsonLdData.organizer).toBeDefined();
+        expect(jsonLdData.organizer['@type']).toBe('Organization');
+        expect(jsonLdData.organizer.name).toBe('Earthquakes Live');
+        expect(jsonLdData.organizer.url).toBe('https://earthquakeslive.com');
+
+        expect(jsonLdData.identifier).toBe(quakeId);
+        expect(jsonLdData.url).toBe(`https://earthquakeslive.com/quake/${quakeId}`); // Assuming slug construction remains simple like this
+
+        // Check keywords
+        expect(jsonLdData.keywords).toBeString();
+        expect(jsonLdData.keywords).toContain(mockQuakeData.properties.place.split(', ')[0].toLowerCase()); // e.g. "36 km sw of semnan"
+        expect(jsonLdData.keywords).toContain(mockQuakeData.properties.place.split(', ')[1].toLowerCase()); // e.g. "iran"
+        expect(jsonLdData.keywords).toContain(`m${mockQuakeData.properties.mag}`);
+        expect(jsonLdData.keywords).toContain("earthquake");
+        expect(jsonLdData.keywords).toContain("seismic event");
+        expect(jsonLdData.keywords).toContain("earthquake report");
+        expect(jsonLdData.keywords).toContain(expectedKeywordDate);
+
+        expect(jsonLdData.offers).toBeUndefined(); // As per plan
+
+        // Check sameAs if detail URL was present
+        if (mockQuakeData.properties.url) {
+            expect(jsonLdData.sameAs).toBe(mockQuakeData.properties.url);
+        } else if (mockQuakeData.properties.detail) {
+            expect(jsonLdData.sameAs).toBe(mockQuakeData.properties.detail);
+        }
+    });
+
     it('/quake/some-quake-id should handle fetch error during prerender', async () => {
         const quakeId = "q_error";
         const request = new Request(`http://localhost/quake/${quakeId}`, { headers: { 'User-Agent': 'Googlebot' }});
