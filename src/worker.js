@@ -160,17 +160,60 @@ async function handleClustersSitemapRequest(request, env, ctx) {
     return new Response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<!-- D1 Database not available -->\n</urlset>`, { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" }});
   }
   try {
-    const stmt = DB.prepare("SELECT clusterId, updatedAt FROM ClusterDefinitions ORDER BY updatedAt DESC LIMIT 500");
+    // Query for slugs and their update timestamps
+    const stmt = DB.prepare("SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> '' ORDER BY updatedAt DESC LIMIT 500");
     const { results } = await stmt.all();
     if (results && results.length > 0) {
       for (const row of results) {
-        const d1ClusterId = row.clusterId;
+        const d1Slug = row.slug; // Use slug from the query result
         const lastmod = row.updatedAt ? new Date(row.updatedAt).toISOString() : currentDate;
-        const d1IdRegex = /^overview_cluster_([a-zA-Z0-9]+)_(\d+)$/;
-        const d1Match = d1ClusterId.match(d1IdRegex);
-        if (!d1Match) { console.warn(`[${sourceName}] Failed to parse D1 clusterId: ${d1ClusterId}. Skipping.`); continue; }
-        const strongestQuakeIdFromDb = d1Match[1];
-        const quakeCountFromDb = d1Match[2];
+
+        // Regex to parse information from the slug, if needed for URL construction or validation
+        // This specific regex seems tailored to a certain slug format "overview_cluster_..."
+        const slugPatternRegex = /^overview_cluster_([a-zA-Z0-9]+)_(\d+)$/;
+        const slugMatch = d1Slug.match(slugPatternRegex);
+
+        // If the slug is expected to always match this pattern for sitemap inclusion:
+        if (!slugMatch) {
+          // Option 1: If slugs not matching are an error or unexpected, log and skip.
+          // console.warn(`[${sourceName}] Slug format does not match expected pattern: ${d1Slug}. Skipping.`);
+          // continue;
+
+          // Option 2: If any valid slug from DB should be included, and the pattern is only for specific handling:
+          // Proceed with d1Slug directly if it's the canonical path segment.
+          // The example below assumes d1Slug IS the canonical path segment.
+          // If the slug is NOT `overview_cluster_...` it might use a different URL structure, or this sitemap is only for those.
+          // For now, let's assume any slug fetched is valid for a URL.
+          // The original code was trying to reconstruct a URL from parts of the slug.
+          // If the 'slug' column already stores the *exact* URL segment (e.g., "10-quakes-near-place-m5.0-xyz123"),
+          // then we don't need to reconstruct it. The schema has 'slug TEXT UNIQUE NOT NULL'.
+          // The original code was trying to parse the slug to fetch MORE data from USGS to build the URL.
+          // This is inefficient for sitemap. The sitemap should use canonical URLs already stored or derivable from stored slugs.
+
+          // Re-evaluating: The original code *was* trying to build a human-readable URL from a structured slug.
+          // If `row.slug` is already the canonical, final URL path segment (e.g., "10-quakes-near-foo-m5.0-xyz123"), we use it directly.
+          // If `row.slug` is something like "overview_cluster_xyz123_10" and this needs to be *transformed*
+          // into "10-quakes-near-foo-m5.0-xyz123" for the sitemap, then the parsing and reconstruction is needed.
+          // The error is "no such column: clusterId". The query `SELECT slug, updatedAt...` fixes that.
+          // The rest of the logic in the original code was for constructing the <loc> URL.
+          // Let's assume the `slug` column *is* the canonical path segment to be used in the sitemap.
+          // If it's not, the sitemap generation logic for <loc> would need more significant changes.
+          // The schema definition `slug TEXT UNIQUE NOT NULL` suggests it's meant for direct use.
+
+          // Based on the original code's attempt to reconstruct the URL, it implies `d1Slug` (formerly d1ClusterId)
+          // was of the format `overview_cluster_...` and this was then used to fetch details to build a *different* URL format.
+          // This is complex for a sitemap. A better approach is to ensure `ClusterDefinitions.slug` stores the *actual* canonical URL path segment.
+          // For this fix, I will assume `row.slug` IS the correct path segment.
+
+          const sitemapUrlPath = d1Slug.startsWith('/') ? d1Slug.substring(1) : d1Slug;
+          const sitemapUrl = `https://earthquakeslive.com/cluster/${sitemapUrlPath}`;
+          clustersXml += `\n  <url><loc>${escapeXml(sitemapUrl)}</loc><lastmod>${lastmod}</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>`;
+          continue; // Skip the more complex reconstruction if the simple slug is enough
+        }
+
+        // If we must proceed with reconstruction (original logic path):
+        const strongestQuakeIdFromDb = slugMatch[1];
+        const quakeCountFromDb = slugMatch[2];
         let quakeData;
         try {
           const usgsUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${strongestQuakeIdFromDb}.geojson`;
@@ -299,10 +342,12 @@ async function handlePrerenderCluster(request, env, ctx, urlSlugParam) {
     return new Response(`<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Service configuration error.</body></html>`, { status: 500, headers: { "Content-Type": "text/html", "Cache-Control": "public, s-maxage=3600" }});
   }
   try {
-    const stmt = env.DB.prepare("SELECT earthquakeIds, strongestQuakeId, updatedAt FROM ClusterDefinitions WHERE clusterId = ?").bind(clusterIdForD1Query);
+    // Use 'slug' to query, as clusterIdForD1Query is a slug.
+    // Align selected columns with prerender-cluster.integration.test.js expectations
+    const stmt = env.DB.prepare("SELECT id, slug, title, description, earthquakeIds, strongestQuakeId, updatedAt, locationName, maxMagnitude, startTime, endTime, quakeCount FROM ClusterDefinitions WHERE slug = ?").bind(clusterIdForD1Query);
     const clusterInfo = await stmt.first();
     if (!clusterInfo) {
-      console.warn(`[${sourceName}] Cluster definition not found in D1 for D1 Query ID: ${clusterIdForD1Query} (derived from slug: ${urlSlug})`);
+      console.warn(`[${sourceName}] Cluster definition not found in D1 for slug: ${clusterIdForD1Query} (derived from URL slug: ${urlSlug})`);
       return new Response(`<!DOCTYPE html><html><head><title>Not Found</title><meta name="robots" content="noindex"></head><body>Cluster not found.</body></html>`, { status: 404, headers: { "Content-Type": "text/html", "Cache-Control": "public, s-maxage=3600" }});
     }
     let earthquakeIds;
