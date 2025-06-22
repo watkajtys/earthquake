@@ -23,6 +23,7 @@ const USGS_LAST_RESPONSE_KEY = "usgs_last_response_features"; // Define a consta
  */
 export async function handleUsgsProxy(context) { // context contains { request, env, executionContext }
   const { request, env, executionContext } = context; // executionContext is the original ctx from worker
+  console.log(`[usgs-proxy] handleUsgsProxy invoked for URL: ${request.url}`); // ITEM 2: Log invocation
 
   const url = new URL(request.url);
   const { searchParams } = url;
@@ -58,15 +59,33 @@ export async function handleUsgsProxy(context) { // context contains { request, 
       });
 
       if (!upstreamResponse.ok) {
-        const upstreamResponseText = await upstreamResponse.text();
+        const upstreamResponseText = await upstreamResponse.text(); // Get text for error message
         const errorData = {
-            message: `Error fetching data from USGS API: ${upstreamResponse.status}${upstreamResponseText ? ` - ${upstreamResponseText.substring(0,100)}` : ''}`,
+            message: `Error fetching data from USGS API: ${upstreamResponse.status} ${upstreamResponse.statusText}${upstreamResponseText ? ` - Body: ${upstreamResponseText.substring(0,150)}` : ''}`,
             source: "usgs-proxy-handler",
             upstream_status: upstreamResponse.status,
         };
+        console.error(`[usgs-proxy] Upstream error from USGS: ${upstreamResponse.status}`, errorData.message);
         return new Response(JSON.stringify(errorData), {
-            status: upstreamResponse.status,
+            status: upstreamResponse.status > 0 ? upstreamResponse.status : 502, // Ensure valid status
             headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      // ITEM 1: Check Content-Type from upstream if response is OK
+      const upstreamContentType = upstreamResponse.headers.get("Content-Type");
+      if (!upstreamContentType || !upstreamContentType.includes("application/json")) {
+        const upstreamResponseTextSample = await upstreamResponse.text(); // Read some text for context
+        const errorData = {
+          message: `USGS API returned OK status but with unexpected Content-Type: ${upstreamContentType}. Expected application/json. Response text sample: ${upstreamResponseTextSample.substring(0, 200)}`,
+          source: "usgs-proxy-handler",
+          upstream_status: upstreamResponse.status,
+          upstream_content_type: upstreamContentType
+        };
+        console.warn(`[usgs-proxy] Unexpected Content-Type from USGS: ${upstreamContentType}. URL: ${apiUrl}`);
+        return new Response(JSON.stringify(errorData), {
+          status: 502, // Bad Gateway, as upstream sent something unexpected
+          headers: { "Content-Type": "application/json" }
         });
       }
 
