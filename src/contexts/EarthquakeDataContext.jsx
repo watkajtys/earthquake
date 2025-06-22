@@ -1,5 +1,5 @@
 // src/contexts/EarthquakeDataContext.jsx
-import React, { useContext, useEffect, useCallback, useMemo, useReducer } from 'react'; // Removed createContext
+import React, { useContext, useEffect, useCallback, useMemo, useReducer, useRef } from 'react'; // Removed createContext, Added useRef
 import { fetchUsgsData } from '../services/usgsApiService';
 import {
     USGS_API_URL_DAY,
@@ -54,6 +54,7 @@ import { isValidGeoJson, isValidFeatureArray } from '../utils/geoJsonUtils.js'; 
  */
 export const EarthquakeDataProvider = ({ children }) => {
     const [state, dispatch] = useReducer(earthquakeReducer, initialState);
+    const dataCacheRef = useRef({}); // Initialize cache
 
     /**
      * Helper function to fetch earthquake data from the D1 database via the internal API.
@@ -102,82 +103,123 @@ export const EarthquakeDataProvider = ({ children }) => {
             dispatch({ type: actionTypes.SET_ERROR, payload: { error: null } });
         }
 
-        const nowForFiltering = Date.now();
+        const nowForFiltering = Date.now(); // Timestamp for data processing logic (e.g. filtering by time)
+        const currentTimestamp = Date.now(); // Timestamp for cache entry validity
+
         let dailyErrorMsg = null, weeklyErrorMsg = null;
         let dailyDataSource = null, weeklyDataSource = null;
+        let dailyDataSkippedDueToCache = false;
+        let weeklyDataSkippedDueToCache = false;
+
+        const CACHE_KEY_DAILY = 'day';
+        const CACHE_KEY_WEEKLY = 'week';
 
         // --- Daily Data Fetching ---
-        const d1DailyResponse = await fetchFromD1('day');
-        if (d1DailyResponse.source === 'D1') {
-            // console.log("Successfully fetched daily data from D1");
+        if (dataCacheRef.current[CACHE_KEY_DAILY] && (currentTimestamp - dataCacheRef.current[CACHE_KEY_DAILY].timestamp < REFRESH_INTERVAL_MS)) {
+            // console.log("Serving daily data from cache");
+            const cachedEntry = dataCacheRef.current[CACHE_KEY_DAILY];
             dispatch({
                 type: actionTypes.DAILY_DATA_PROCESSED,
-                payload: { features: d1DailyResponse.data, metadata: null, fetchTime: nowForFiltering, dataSource: 'D1' }
+                payload: { ...cachedEntry.data, fetchTime: cachedEntry.data.fetchTime }
             });
-            dailyDataSource = 'D1';
+            dailyDataSource = cachedEntry.data.dataSource;
+            dailyDataSkippedDueToCache = true;
         } else {
-            // console.warn("Failed to fetch daily data from D1, falling back to USGS.", d1DailyResponse.error);
-            dailyErrorMsg = `D1 Error (Daily): ${d1DailyResponse.error || 'Unknown D1 error'}. `;
-            try {
-                const usgsDailyRes = await fetchUsgsData(USGS_API_URL_DAY);
-                if (usgsDailyRes.error || !isValidGeoJson(usgsDailyRes)) { // Assuming fetchUsgsData returns GeoJSON structure
-                    dailyErrorMsg += `USGS Error (Daily): ${usgsDailyRes?.error?.message || 'Daily USGS data features missing or invalid.'}`;
-                } else {
-                    dispatch({
-                        type: actionTypes.DAILY_DATA_PROCESSED,
-                        payload: { features: usgsDailyRes.features, metadata: usgsDailyRes.metadata, fetchTime: nowForFiltering, dataSource: 'USGS' }
-                    });
-                    dailyDataSource = 'USGS';
-                    dailyErrorMsg = null; // Clear D1 error if USGS succeeds
+            const d1DailyResponse = await fetchFromD1('day');
+            if (d1DailyResponse.source === 'D1') {
+                // console.log("Successfully fetched daily data from D1");
+                const processedData = { features: d1DailyResponse.data, metadata: null, fetchTime: nowForFiltering, dataSource: 'D1' };
+                dispatch({ type: actionTypes.DAILY_DATA_PROCESSED, payload: processedData });
+                dataCacheRef.current[CACHE_KEY_DAILY] = { data: processedData, timestamp: currentTimestamp };
+                dailyDataSource = 'D1';
+            } else {
+                // console.warn("Failed to fetch daily data from D1, falling back to USGS.", d1DailyResponse.error);
+                dailyErrorMsg = `D1 Error (Daily): ${d1DailyResponse.error || 'Unknown D1 error'}. `;
+                try {
+                    const usgsDailyRes = await fetchUsgsData(USGS_API_URL_DAY);
+                    if (usgsDailyRes.error || !isValidGeoJson(usgsDailyRes)) {
+                        dailyErrorMsg += `USGS Error (Daily): ${usgsDailyRes?.error?.message || 'Daily USGS data features missing or invalid.'}`;
+                    } else {
+                        const processedData = { features: usgsDailyRes.features, metadata: usgsDailyRes.metadata, fetchTime: nowForFiltering, dataSource: 'USGS' };
+                        dispatch({ type: actionTypes.DAILY_DATA_PROCESSED, payload: processedData });
+                        dataCacheRef.current[CACHE_KEY_DAILY] = { data: processedData, timestamp: currentTimestamp };
+                        dailyDataSource = 'USGS';
+                        dailyErrorMsg = null;
+                    }
+                } catch (e) {
+                    dailyErrorMsg += `USGS Fetch Error (Daily): ${e.message || 'Error fetching daily USGS data.'}`;
                 }
-            } catch (e) {
-                dailyErrorMsg += `USGS Fetch Error (Daily): ${e.message || 'Error fetching daily USGS data.'}`;
             }
         }
         dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingDaily: false } });
 
         // --- Weekly Data Fetching ---
-        const d1WeeklyResponse = await fetchFromD1('week');
-        if (d1WeeklyResponse.source === 'D1') {
-            // console.log("Successfully fetched weekly data from D1");
+        if (dataCacheRef.current[CACHE_KEY_WEEKLY] && (currentTimestamp - dataCacheRef.current[CACHE_KEY_WEEKLY].timestamp < REFRESH_INTERVAL_MS)) {
+            // console.log("Serving weekly data from cache");
+            const cachedEntry = dataCacheRef.current[CACHE_KEY_WEEKLY];
             dispatch({
                 type: actionTypes.WEEKLY_DATA_PROCESSED,
-                payload: { features: d1WeeklyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' }
+                payload: { ...cachedEntry.data, fetchTime: cachedEntry.data.fetchTime }
             });
-            weeklyDataSource = 'D1';
+            weeklyDataSource = cachedEntry.data.dataSource;
+            weeklyDataSkippedDueToCache = true;
         } else {
-            // console.warn("Failed to fetch weekly data from D1, falling back to USGS.", d1WeeklyResponse.error);
-            weeklyErrorMsg = `D1 Error (Weekly): ${d1WeeklyResponse.error || 'Unknown D1 error'}. `;
-            try {
-                const usgsWeeklyRes = await fetchUsgsData(USGS_API_URL_WEEK);
-                if (usgsWeeklyRes.error || !isValidGeoJson(usgsWeeklyRes)) {
-                    weeklyErrorMsg += `USGS Error (Weekly): ${usgsWeeklyRes?.error?.message || 'Weekly USGS data features missing or invalid.'}`;
-                } else {
-                    dispatch({
-                        type: actionTypes.WEEKLY_DATA_PROCESSED,
-                        payload: { features: usgsWeeklyRes.features, fetchTime: nowForFiltering, dataSource: 'USGS' }
-                    });
-                    weeklyDataSource = 'USGS';
-                    weeklyErrorMsg = null; // Clear D1 error if USGS succeeds
+            const d1WeeklyResponse = await fetchFromD1('week');
+            if (d1WeeklyResponse.source === 'D1') {
+                // console.log("Successfully fetched weekly data from D1");
+                const processedData = { features: d1WeeklyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' };
+                dispatch({ type: actionTypes.WEEKLY_DATA_PROCESSED, payload: processedData });
+                dataCacheRef.current[CACHE_KEY_WEEKLY] = { data: processedData, timestamp: currentTimestamp };
+                weeklyDataSource = 'D1';
+            } else {
+                // console.warn("Failed to fetch weekly data from D1, falling back to USGS.", d1WeeklyResponse.error);
+                weeklyErrorMsg = `D1 Error (Weekly): ${d1WeeklyResponse.error || 'Unknown D1 error'}. `;
+                try {
+                    const usgsWeeklyRes = await fetchUsgsData(USGS_API_URL_WEEK);
+                    if (usgsWeeklyRes.error || !isValidGeoJson(usgsWeeklyRes)) {
+                        weeklyErrorMsg += `USGS Error (Weekly): ${usgsWeeklyRes?.error?.message || 'Weekly USGS data features missing or invalid.'}`;
+                    } else {
+                        const processedData = { features: usgsWeeklyRes.features, fetchTime: nowForFiltering, dataSource: 'USGS' };
+                        dispatch({ type: actionTypes.WEEKLY_DATA_PROCESSED, payload: processedData });
+                        dataCacheRef.current[CACHE_KEY_WEEKLY] = { data: processedData, timestamp: currentTimestamp };
+                        weeklyDataSource = 'USGS';
+                        weeklyErrorMsg = null;
+                    }
+                } catch (e) {
+                    weeklyErrorMsg += `USGS Fetch Error (Weekly): ${e.message || 'Error fetching weekly USGS data.'}`;
                 }
-            } catch (e) {
-                weeklyErrorMsg += `USGS Fetch Error (Weekly): ${e.message || 'Error fetching weekly USGS data.'}`;
             }
         }
         dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingWeekly: false } });
 
         // --- Error Aggregation ---
-        let finalErrorMsg = null;
-        if (dailyErrorMsg && weeklyErrorMsg) finalErrorMsg = `Daily & Weekly Data Errors: ${dailyErrorMsg} ${weeklyErrorMsg}`;
-        else if (dailyErrorMsg && !dailyDataSource) finalErrorMsg = `Daily Data Error: ${dailyErrorMsg}`; // Only show if no daily data was successfully processed
-        else if (weeklyErrorMsg && !weeklyDataSource) finalErrorMsg = `Weekly Data Error: ${weeklyErrorMsg}`; // Only show if no weekly data was successfully processed
-
-        if (finalErrorMsg) {
-            dispatch({ type: actionTypes.SET_ERROR, payload: { error: finalErrorMsg.trim() } });
-        } else if (!dailyDataSource && !weeklyDataSource) {
-             // Case where no errors were explicitly set, but no data was loaded either (e.g. invalid non-error responses)
-            dispatch({ type: actionTypes.SET_ERROR, payload: { error: "Failed to load any daily or weekly data." } });
+        // Ensure errors are only reported if data wasn't successfully loaded from cache or fetch
+        let aggregatedErrorMsg = null;
+        if (dailyErrorMsg && !dailyDataSource) { // Error occurred and no daily data obtained
+            aggregatedErrorMsg = dailyErrorMsg;
         }
+        if (weeklyErrorMsg && !weeklyDataSource) { // Error occurred and no weekly data obtained
+            if (aggregatedErrorMsg) {
+                aggregatedErrorMsg = `Daily & Weekly Data Errors: ${dailyErrorMsg} ${weeklyErrorMsg}`;
+            } else {
+                aggregatedErrorMsg = weeklyErrorMsg;
+            }
+        }
+
+        if (aggregatedErrorMsg) {
+            dispatch({ type: actionTypes.SET_ERROR, payload: { error: aggregatedErrorMsg.trim() } });
+        } else if (!dailyDataSource && !weeklyDataSource && !dailyDataSkippedDueToCache && !weeklyDataSkippedDueToCache) {
+            // This case means no data from fetch (and D1 didn't fail in a way that sets an error string) AND no data from cache.
+            // It implies something went wrong, like an empty but valid response from APIs.
+            dispatch({ type: actionTypes.SET_ERROR, payload: { error: "Failed to load any daily or weekly data, and cache was not used." } });
+        } else if (!dailyDataSource && !dailyDataSkippedDueToCache) {
+            // No daily data from fetch or cache, but weekly might be okay.
+            dispatch({ type: actionTypes.SET_ERROR, payload: { error: "Failed to load daily data." } });
+        } else if (!weeklyDataSource && !weeklyDataSkippedDueToCache) {
+            // No weekly data from fetch or cache, but daily might be okay.
+            dispatch({ type: actionTypes.SET_ERROR, payload: { error: "Failed to load weekly data." } });
+        }
+
 
     }, [dispatch]); // dispatch is stable
 
@@ -248,20 +290,41 @@ export const EarthquakeDataProvider = ({ children }) => {
      * @returns {Promise<void>} A promise that resolves when the monthly data fetch and processing are complete.
      */
     const loadMonthlyData = useCallback(async () => {
+        const CACHE_KEY_MONTH = 'month';
+        const now = Date.now();
+
+        // Check cache first
+        if (dataCacheRef.current[CACHE_KEY_MONTH]) {
+            const cachedEntry = dataCacheRef.current[CACHE_KEY_MONTH];
+            // Cache is valid if fetched within REFRESH_INTERVAL_MS
+            if (now - cachedEntry.timestamp < REFRESH_INTERVAL_MS) {
+                // console.log("Serving monthly data from cache");
+                dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: true, hasAttemptedMonthlyLoad: true } });
+                dispatch({
+                    type: actionTypes.MONTHLY_DATA_PROCESSED,
+                    payload: { ...cachedEntry.data, fetchTime: cachedEntry.data.fetchTime } // Use cached fetchTime for consistency
+                });
+                dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false } });
+                return;
+            }
+        }
+
         dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: true, hasAttemptedMonthlyLoad: true } });
         dispatch({ type: actionTypes.SET_ERROR, payload: { monthlyError: null } });
 
-        const nowForFiltering = Date.now();
+        const nowForFiltering = Date.now(); // This is for data processing, not cache timestamp
         let monthlyFetchError = null;
         let monthlyDataSource = null;
 
         const d1MonthlyResponse = await fetchFromD1('month');
         if (d1MonthlyResponse.source === 'D1') {
             // console.log("Successfully fetched monthly data from D1");
+            const processedData = { features: d1MonthlyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' };
             dispatch({
                 type: actionTypes.MONTHLY_DATA_PROCESSED,
-                payload: { features: d1MonthlyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' }
+                payload: processedData
             });
+            dataCacheRef.current[CACHE_KEY_MONTH] = { data: processedData, timestamp: Date.now() };
             monthlyDataSource = 'D1';
         } else {
             // console.warn("Failed to fetch monthly data from D1, falling back to USGS.", d1MonthlyResponse.error);
@@ -272,11 +335,12 @@ export const EarthquakeDataProvider = ({ children }) => {
                 if (usgsMonthlyRes.error || !isValidGeoJson(usgsMonthlyRes)) {
                     monthlyFetchError += `USGS Error (Monthly): ${usgsMonthlyRes?.error?.message || 'Monthly USGS data features missing or invalid.'}`;
                 } else {
-                    const payload = { features: usgsMonthlyRes.features, fetchTime: nowForFiltering, dataSource: 'USGS' };
+                    const processedData = { features: usgsMonthlyRes.features, fetchTime: nowForFiltering, dataSource: 'USGS' };
                     dispatch({
                         type: actionTypes.MONTHLY_DATA_PROCESSED,
-                        payload: payload
+                        payload: processedData
                     });
+                    dataCacheRef.current[CACHE_KEY_MONTH] = { data: processedData, timestamp: Date.now() };
                     monthlyDataSource = 'USGS';
                     monthlyFetchError = null; // Clear D1 error if USGS succeeds
                 }
