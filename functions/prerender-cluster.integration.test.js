@@ -100,8 +100,8 @@ describe('Prerendering Handler: /cluster/:id', () => {
           urlSlug: 'direct-15-quakes-near-southern-sumatra-m5.8-us7000mfp9',
           expectedStrongestQuakeId: 'us7000mfp9',
         };
-        // Corrected expectedD1Query to include quakeCount
-        const expectedD1Query = "SELECT id, slug, title, description, strongestQuakeId, locationName, maxMagnitude, earthquakeIds, startTime, endTime, quakeCount FROM ClusterDefinitions WHERE slug = ?";
+        // Updated expectedD1Query to include 'updatedAt' and match the order in worker.js
+        const expectedD1Query = "SELECT id, slug, title, description, earthquakeIds, strongestQuakeId, updatedAt, locationName, maxMagnitude, startTime, endTime, quakeCount FROM ClusterDefinitions WHERE slug = ?";
 
         it(`should query D1 with slug and generate HTML for: ${validSlugTestCase.description}`, async () => {
           const { urlSlug, expectedStrongestQuakeId } = validSlugTestCase;
@@ -118,6 +118,7 @@ describe('Prerendering Handler: /cluster/:id', () => {
             quakeCount: 15, // Added quakeCount
             startTime: Date.now() - (2 * 60 * 60 * 1000),
             endTime: Date.now() - (1 * 60 * 60 * 1000),
+            updatedAt: new Date().toISOString(), // Added updatedAt for consistency
           };
           mockContext.env.DB.first.mockResolvedValueOnce(mockD1ClusterData);
           // MSW for USGS 'us7000mfp9' should be active
@@ -153,6 +154,7 @@ describe('Prerendering Handler: /cluster/:id', () => {
             quakeCount: 12,
             startTime: Date.now() - (3 * 60 * 60 * 1000),
             endTime: Date.now() - (2 * 60 * 60 * 1000),
+            updatedAt: new Date().toISOString(), // Added updatedAt for consistency
           };
           mockContext.env.DB.first.mockResolvedValueOnce(mockD1ClusterDataMinimal);
           // Ensure MSW is set for 'usTestId123' to provide { properties: { mag: 5.5, place: 'Test Region, Test Location' } }

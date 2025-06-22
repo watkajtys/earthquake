@@ -343,7 +343,8 @@ async function handlePrerenderCluster(request, env, ctx, urlSlugParam) {
   }
   try {
     // Use 'slug' to query, as clusterIdForD1Query is a slug.
-    const stmt = env.DB.prepare("SELECT id, slug, earthquakeIds, strongestQuakeId, updatedAt, title, description, locationName FROM ClusterDefinitions WHERE slug = ?").bind(clusterIdForD1Query);
+    // Align selected columns with prerender-cluster.integration.test.js expectations
+    const stmt = env.DB.prepare("SELECT id, slug, title, description, earthquakeIds, strongestQuakeId, updatedAt, locationName, maxMagnitude, startTime, endTime, quakeCount FROM ClusterDefinitions WHERE slug = ?").bind(clusterIdForD1Query);
     const clusterInfo = await stmt.first();
     if (!clusterInfo) {
       console.warn(`[${sourceName}] Cluster definition not found in D1 for slug: ${clusterIdForD1Query} (derived from URL slug: ${urlSlug})`);
