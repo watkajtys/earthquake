@@ -145,7 +145,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
             console.log('EarthquakeDetailView: Triggering monthly data load.');
             handleLoadMonthlyData();
         }
-    }, [detailUrl, hasAttemptedMonthlyLoad, isLoadingMonthly, handleLoadMonthlyData]); // Dependencies for the effect
+    }, [detailUrl, hasAttemptedMonthlyLoad, isLoadingMonthly]); // Dependencies for the effect - handleLoadMonthlyData REMOVED
 
     useEffect(() => {
         if (!detailUrl) {
