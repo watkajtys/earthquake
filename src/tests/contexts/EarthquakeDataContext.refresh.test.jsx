@@ -112,24 +112,29 @@ describe('EarthquakeDataProvider Data Refresh', () => {
     expect(fetchUsgsData).toHaveBeenCalledTimes(2); // Initial daily and weekly
 
     fetchUsgsData.mockClear(); // Clear for the refresh call
-    const refreshFetchTime = Date.now() + 5000;
-    const refreshedDailyQuakeTime = refreshFetchTime - 1000;
 
-    fetchUsgsData.mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_refresh_daily', properties: {time: refreshedDailyQuakeTime, mag: 2, place: 'Refreshed Daily Place'}}], metadata: {generated: refreshFetchTime, title: 'Refreshed Daily Feed'} })
-                   .mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_refresh_weekly', properties: {time: refreshedDailyQuakeTime - 2000, mag: 2, place: 'Refreshed Weekly Place'}}], metadata: {generated: refreshFetchTime, title: 'Refreshed Weekly Feed'} });
+    // Get the timestamp that was actually used for caching during the initial load
+    const initialCacheTimestamp = result.current.dataFetchTime || initialDailyTime;
 
-    const dateNowSpy = vi.spyOn(global.Date, 'now').mockReturnValueOnce(refreshFetchTime);
+    // Ensure the mocked Date.now() for refresh makes the cache stale
+    const refreshMockedNow = initialCacheTimestamp + REFRESH_INTERVAL_MS + 5000; // 5s after cache should expire
+    const refreshedDailyQuakeTime = refreshMockedNow - 1000; // Arbitrary time for the quake itself
+
+    fetchUsgsData.mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_refresh_daily', properties: {time: refreshedDailyQuakeTime, mag: 2, place: 'Refreshed Daily Place'}}], metadata: {generated: refreshMockedNow, title: 'Refreshed Daily Feed'} })
+                   .mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_refresh_weekly', properties: {time: refreshedDailyQuakeTime - 2000, mag: 2, place: 'Refreshed Weekly Place'}}], metadata: {generated: refreshMockedNow, title: 'Refreshed Weekly Feed'} });
+
+    const dateNowSpy = vi.spyOn(global.Date, 'now').mockReturnValue(refreshMockedNow); // Mock all Date.now() calls during refresh phase
 
     await act(async () => {
         await runIntervals('refresh', 1); // Run only the refresh interval
-        // Allow refresh fetches to complete
-        await Promise.resolve();
-        await Promise.resolve();
+        // Allow refresh fetches to complete by flushing promises
+        await Promise.resolve(); // For performDataFetch async operations
+        await Promise.resolve(); // Additional promise cycle if needed
     });
 
     dateNowSpy.mockRestore();
 
-    expect(fetchUsgsData).toHaveBeenCalledTimes(2); // Daily and weekly for refresh
+    expect(fetchUsgsData).toHaveBeenCalledTimes(2); // Daily and weekly for refresh, D1 is mocked to fail
     expect(result.current.earthquakesLastHour.some(q => q.id === 'q_refresh_daily')).toBe(true);
   }, 10000);
 });
