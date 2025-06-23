@@ -193,103 +193,37 @@ export const EarthquakeDataProvider = ({ children }) => {
         dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingWeekly: false } });
 
         // --- Error Aggregation ---
-        // Ensure errors are only reported if data wasn't successfully loaded from cache or fetch
-        let aggregatedErrorMsg = null;
-        if (dailyErrorMsg && !dailyDataSource) { // Error occurred and no daily data obtained
-            aggregatedErrorMsg = dailyErrorMsg;
-        }
-        if (weeklyErrorMsg && !weeklyDataSource) { // Error occurred and no weekly data obtained
-            if (aggregatedErrorMsg) {
-                aggregatedErrorMsg = `Daily & Weekly Data Errors: ${dailyErrorMsg} ${weeklyErrorMsg}`;
-            } else {
-                aggregatedErrorMsg = weeklyErrorMsg;
-            }
+        // --- Error Aggregation ---
+        let finalErrorMsg = null;
+        // Check if data was successfully obtained, considering cache usage
+        const dailyDataTrulyMissing = !dailyDataSource && !dailyDataSkippedDueToCache;
+        const weeklyDataTrulyMissing = !weeklyDataSource && !weeklyDataSkippedDueToCache;
+
+        if (dailyErrorMsg && dailyDataTrulyMissing && weeklyErrorMsg && weeklyDataTrulyMissing) {
+            finalErrorMsg = `Daily & Weekly Data Errors: ${dailyErrorMsg} ${weeklyErrorMsg}`;
+        } else if (dailyErrorMsg && dailyDataTrulyMissing) {
+            finalErrorMsg = `Daily Data Error: ${dailyErrorMsg}`; // Added prefix
+        } else if (weeklyErrorMsg && weeklyDataTrulyMissing) {
+            finalErrorMsg = `Weekly Data Error: ${weeklyErrorMsg}`; // Added prefix
         }
 
-        if (aggregatedErrorMsg) {
-            dispatch({ type: actionTypes.SET_ERROR, payload: { error: aggregatedErrorMsg.trim() } });
-        } else if (!dailyDataSource && !weeklyDataSource && !dailyDataSkippedDueToCache && !weeklyDataSkippedDueToCache) {
-            // This case means no data from fetch (and D1 didn't fail in a way that sets an error string) AND no data from cache.
-            // It implies something went wrong, like an empty but valid response from APIs.
+        if (finalErrorMsg) {
+            dispatch({ type: actionTypes.SET_ERROR, payload: { error: finalErrorMsg.trim() } });
+        } else if (dailyDataTrulyMissing && weeklyDataTrulyMissing) {
+            // This case implies no specific error messages were generated, but data is still missing.
             dispatch({ type: actionTypes.SET_ERROR, payload: { error: "Failed to load any daily or weekly data, and cache was not used." } });
-        } else if (!dailyDataSource && !dailyDataSkippedDueToCache) {
-            // No daily data from fetch or cache, but weekly might be okay.
+        } else if (dailyDataTrulyMissing) {
             dispatch({ type: actionTypes.SET_ERROR, payload: { error: "Failed to load daily data." } });
-        } else if (!weeklyDataSource && !weeklyDataSkippedDueToCache) {
-            // No weekly data from fetch or cache, but daily might be okay.
+        } else if (weeklyDataTrulyMissing) {
             dispatch({ type: actionTypes.SET_ERROR, payload: { error: "Failed to load weekly data." } });
         }
 
 
     }, [dispatch]); // dispatch is stable
 
-    useEffect(() => {
-        let isMounted = true;
-        const initialLoadSequence = async () => {
-            if (!isMounted) {
-              return;
-            }
-            // INITIAL_LOADING_MESSAGES is part of initialState from utils, so no need to dispatch SET_LOADING_MESSAGES here
-            // if it's correctly set in the imported initialState.
-            // dispatch({ type: actionTypes.SET_LOADING_MESSAGES, payload: INITIAL_LOADING_MESSAGES }); // This might be redundant
-            dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
-            await performDataFetch(true);
-
-            if (isMounted) {
-                dispatch({ type: actionTypes.SET_INITIAL_LOAD_COMPLETE });
-            }
-        };
-
-        if (state.isInitialAppLoad) {
-            initialLoadSequence();
-        }
-        return () => { isMounted = false; };
-    }, [state.isInitialAppLoad, dispatch, performDataFetch]); // Added dispatch and performDataFetch
-
-    useEffect(() => {
-        if (state.isInitialAppLoad) {
-            return;
-        }
-
-        let isMounted = true;
-        const intervalCallback = () => {
-            if (isMounted) {
-                performDataFetch(false);
-            }
-        };
-
-        const intervalId = setInterval(intervalCallback, REFRESH_INTERVAL_MS);
-
-        return () => {
-            isMounted = false;
-            clearInterval(intervalId);
-        };
-    }, [state.isInitialAppLoad, performDataFetch]); // Added performDataFetch
-
-    useEffect(() => {
-        let messageInterval;
-        if (state.isInitialAppLoad && (state.isLoadingDaily || state.isLoadingWeekly)) {
-            messageInterval = setInterval(() => {
-                dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
-            }, LOADING_MESSAGE_INTERVAL_MS);
-        }
-        return () => clearInterval(messageInterval);
-    }, [state.isInitialAppLoad, state.isLoadingDaily, state.isLoadingWeekly, dispatch]); // Added dispatch
-
-    /**
-     * Fetches and processes monthly earthquake data.
-     * It first attempts to fetch data from the D1 database via the `/api/get-earthquakes?timeWindow=month` endpoint.
-     * If the D1 fetch is successful, `monthlyDataSource` is set to 'D1'.
-     * If the D1 fetch fails or returns an invalid response, it falls back to fetching data
-     * from the USGS API (using `USGS_API_URL_MONTH`) via `fetchUsgsData`. In this case,
-     * `monthlyDataSource` is set to 'USGS'.
-     * Updates the state with the fetched data or an error message if fetches from both sources fail.
-     * Sets loading flags during the fetch operation.
-     * This function is typically called on demand by user interaction.
-     * @async
-     * @returns {Promise<void>} A promise that resolves when the monthly data fetch and processing are complete.
-     */
-    const loadMonthlyData = useCallback(async () => {
+    // --- Monthly Data Fetching Logic ---
+    // Renamed from loadMonthlyData to fetchMonthlyDataInternal - MOVED EARLIER
+    const fetchMonthlyDataInternal = useCallback(async () => {
         const CACHE_KEY_MONTH = 'month';
         const now = Date.now();
 
@@ -358,8 +292,85 @@ export const EarthquakeDataProvider = ({ children }) => {
         dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false } });
     }, [dispatch]); // Added dispatch
 
+    // This is the function that will be exposed to context consumers - MOVED EARLIER
+    const loadMonthlyData = useCallback(() => {
+        dispatch({ type: actionTypes.REQUEST_MONTHLY_DATA_LOAD });
+    }, [dispatch]);
+
+    // --- useEffect Hooks for Data Fetching and State Management ---
+
+    // Effect for initiating initial daily/weekly fetch (Replaces part of original L146 effect)
+    useEffect(() => {
+        if (state.isInitialAppLoad) {
+            // Update loading message index at the beginning of the load sequence
+            dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
+            performDataFetch(true); // true indicates initial fetch
+        }
+    }, [state.isInitialAppLoad, performDataFetch, dispatch]);
+
+    // Effect for handling initial load completion (Replaces part of original L146 effect)
+    useEffect(() => {
+        // Only proceed if it's the initial app load and daily/weekly loading has finished.
+        // And also ensure that isInitialAppLoad is still true, meaning SET_INITIAL_LOAD_COMPLETE hasn't been dispatched yet by this effect.
+        if (state.isInitialAppLoad && !state.isLoadingDaily && !state.isLoadingWeekly) {
+            // Check if loading flags were previously true or if data sources are now set,
+            // to ensure this runs after data has actually been loaded or attempted.
+            // This check might be overly complex if isLoadingDaily/Weekly are reliably true during load.
+            // Assuming that isLoadingDaily and isLoadingWeekly transition from true to false once loaded.
+            dispatch({ type: actionTypes.SET_INITIAL_LOAD_COMPLETE });
+        }
+    }, [state.isInitialAppLoad, state.isLoadingDaily, state.isLoadingWeekly, dispatch]);
+
+    // Original useEffect at L146-163 is now replaced by the two above effects.
+
+    useEffect(() => {
+        if (state.isInitialAppLoad) {
+            return;
+        }
+
+        let isMounted = true;
+        const intervalCallback = () => {
+            if (isMounted) {
+                performDataFetch(false);
+            }
+        };
+
+        const intervalId = setInterval(intervalCallback, REFRESH_INTERVAL_MS);
+
+        return () => {
+            isMounted = false;
+            clearInterval(intervalId);
+        };
+    }, [state.isInitialAppLoad, performDataFetch]); // Added performDataFetch
+
+    useEffect(() => {
+        let messageInterval;
+        if (state.isInitialAppLoad && (state.isLoadingDaily || state.isLoadingWeekly)) {
+            messageInterval = setInterval(() => {
+                dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
+            }, LOADING_MESSAGE_INTERVAL_MS);
+        }
+        return () => clearInterval(messageInterval);
+    }, [state.isInitialAppLoad, state.isLoadingDaily, state.isLoadingWeekly, dispatch]); // Added dispatch
+
+    // Effect to handle fetching monthly data when requested
+    useEffect(() => {
+        if (state.shouldFetchMonthlyData) {
+            fetchMonthlyDataInternal();
+            dispatch({ type: actionTypes.MONTHLY_DATA_LOAD_HANDLED });
+        }
+    }, [state.shouldFetchMonthlyData, fetchMonthlyDataInternal, dispatch]);
+
+    // The original loadMonthlyData function (with full fetch logic) was here.
+    // It has been replaced by fetchMonthlyDataInternal (defined below, containing the same logic)
+    // and the new loadMonthlyData (also below, which just dispatches an action).
+    // This comment block replaces the old function to prevent duplicate declarations.
+
     const isLoadingInitialData = useMemo(() => (state.isLoadingDaily || state.isLoadingWeekly) && state.isInitialAppLoad, [state.isLoadingDaily, state.isLoadingWeekly, state.isInitialAppLoad]);
     const currentLoadingMessage = useMemo(() => state.currentLoadingMessages[state.loadingMessageIndex], [state.currentLoadingMessages, state.loadingMessageIndex]);
+
+    // Definitions of fetchMonthlyDataInternal and loadMonthlyData were moved before useEffects.
+    // This section is now empty as those definitions are placed earlier.
 
     const feelableQuakes7Days_ctx = useMemo(() => state.earthquakesLast7Days?.filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD) || [], [state.earthquakesLast7Days]);
     const significantQuakes7Days_ctx = useMemo(() => state.earthquakesLast7Days?.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD) || [], [state.earthquakesLast7Days]);
