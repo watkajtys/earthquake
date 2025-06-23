@@ -143,7 +143,11 @@ const GlobeLayout = (props) => {
             <div className="text-xs sm:text-sm">Last Hour: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.lastHourCount}</span></div>
             <div className="text-xs sm:text-sm">24h Total: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.count24h}</span></div>
             <div className="text-xs sm:text-sm">72h Total: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.count72h}</span></div>
-            <div className="text-xs sm:text-sm">24h Strongest: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.strongest24h}</span></div>
+            <div className="text-xs sm:text-sm">
+                24h Strongest: <span className="font-bold text-sm sm:text-base" style={{ color: getMagnitudeColor(keyStatsForGlobe.strongest24hRawMagnitude) }}>
+                    {keyStatsForGlobe.strongest24hDisplayString}
+                </span>
+            </div>
             <div className="text-xs sm:text-sm">
                 72h Strongest: <span className="font-bold text-sm sm:text-base" style={{ color: getMagnitudeColor(keyStatsForGlobe.strongest72hRawMagnitude) }}>
                     {keyStatsForGlobe.strongest72hDisplayString}
@@ -651,7 +655,8 @@ function App() {
                 lastHourCount: <SkeletonText width="w-6" height="h-6" className="inline-block bg-slate-600" />,
                 count24h: <SkeletonText width="w-8" height="h-6" className="inline-block bg-slate-600" />,
                 count72h: <SkeletonText width="w-8" height="h-6" className="inline-block bg-slate-600" />,
-                strongest24h: <SkeletonText width="w-12" height="h-6" className="inline-block bg-slate-600" />,
+                strongest24hDisplayString: <SkeletonText width="w-12" height="h-6" className="inline-block bg-slate-600" />,
+                strongest24hRawMagnitude: null,
                 strongest72hDisplayString: <SkeletonText width="w-12" height="h-6" className="inline-block bg-slate-600" />,
                 strongest72hRawMagnitude: null,
             };
@@ -662,7 +667,8 @@ function App() {
             lastHourCount: earthquakesLastHour?.length || 0,
             count24h: stats24h.totalEarthquakes,
             count72h: stats72h.totalEarthquakes,
-            strongest24h: stats24h.strongestMagnitude, // Already formatted "M X.X" or "N/A"
+            strongest24hDisplayString: stats24h.strongestMagnitude, // Already formatted "M X.X" or "N/A"
+            strongest24hRawMagnitude: stats24h.strongestMagnitudeRaw, // Raw number or null
             strongest72hDisplayString: stats72h.strongestMagnitude, // Already formatted "M X.X" or "N/A"
             strongest72hRawMagnitude: stats72h.strongestMagnitudeRaw, // Raw number or null
         };
