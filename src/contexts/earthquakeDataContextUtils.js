@@ -222,6 +222,7 @@ export const initialState = {
     dailyDataSource: null,
     weeklyDataSource: null,
     monthlyDataSource: null,
+    shouldFetchMonthlyData: false,
 };
 
 // --- Context Object ---
@@ -250,6 +251,8 @@ export const actionTypes = {
     SET_INITIAL_LOAD_COMPLETE: 'SET_INITIAL_LOAD_COMPLETE',
     UPDATE_LOADING_MESSAGE_INDEX: 'UPDATE_LOADING_MESSAGE_INDEX',
     SET_LOADING_MESSAGES: 'SET_LOADING_MESSAGES',
+    REQUEST_MONTHLY_DATA_LOAD: 'REQUEST_MONTHLY_DATA_LOAD',
+    MONTHLY_DATA_LOAD_HANDLED: 'MONTHLY_DATA_LOAD_HANDLED',
 };
 
 /**
@@ -421,6 +424,12 @@ export function earthquakeReducer(state = initialState, action) {
             break;
         case actionTypes.SET_LOADING_MESSAGES:
             newState = { ...state, currentLoadingMessages: action.payload, loadingMessageIndex: 0 };
+            break;
+        case actionTypes.REQUEST_MONTHLY_DATA_LOAD:
+            newState = { ...state, shouldFetchMonthlyData: true };
+            break;
+        case actionTypes.MONTHLY_DATA_LOAD_HANDLED:
+            newState = { ...state, shouldFetchMonthlyData: false };
             break;
         default:
             newState = state; // No change for unknown actions
