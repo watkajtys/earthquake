@@ -576,7 +576,7 @@ function ClusterDetailModalWrapper({
 
     }, [
         fetchStatus, // Primary driver
-        fullSlugFromParams, // For SEO and initial parsing trigger
+        // fullSlugFromParams, // For SEO and initial parsing trigger - REMOVED as per task
         effectiveQuakeId, // Core ID for fetching
         isOldFormat,      // Affects logic paths
         overviewClusters,
