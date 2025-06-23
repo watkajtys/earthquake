@@ -32,16 +32,16 @@ describe('getMagnitudeColor', () => {
     expect(getMagnitudeColor(5.0)).toBe('#FB923C');
   });
 
-  it('should return orange-500 for magnitude 6.0', () => {
-    expect(getMagnitudeColor(6.0)).toBe('#F97316');
+  it('should return red-400 for magnitude 6.0', () => {
+    expect(getMagnitudeColor(6.0)).toBe('#F87171'); // Changed from red-500
   });
 
-  it('should return red-500 for magnitude 7.0', () => {
-    expect(getMagnitudeColor(7.0)).toBe('#EF4444');
+  it('should return slate-800 for magnitude 7.0', () => {
+    expect(getMagnitudeColor(7.0)).toBe('#1E293B'); // Changed from red-500
   });
 
-  it('should return red-700 for magnitude 8.0', () => {
-    expect(getMagnitudeColor(8.0)).toBe('#B91C1C');
+  it('should return slate-800 for magnitude 8.0', () => {
+    expect(getMagnitudeColor(8.0)).toBe('#1E293B'); // Changed from red-700
   });
 
   // Test with magnitudes within each color category
@@ -65,17 +65,17 @@ describe('getMagnitudeColor', () => {
     expect(getMagnitudeColor(5.5)).toBe('#FB923C');
   });
 
-  it('should return orange-500 for magnitude 6.5', () => {
-    expect(getMagnitudeColor(6.5)).toBe('#F97316');
+  it('should return red-400 for magnitude 6.5', () => {
+    expect(getMagnitudeColor(6.5)).toBe('#F87171'); // Changed from red-500
   });
 
-  it('should return red-500 for magnitude 7.5', () => {
-    expect(getMagnitudeColor(7.5)).toBe('#EF4444');
+  it('should return slate-800 for magnitude 7.5', () => {
+    expect(getMagnitudeColor(7.5)).toBe('#1E293B'); // Changed from red-500
   });
 
   // Test with a very high magnitude (>= 8.0)
-  it('should return red-700 for magnitude 9.0 (very high)', () => {
-    expect(getMagnitudeColor(9.0)).toBe('#B91C1C');
+  it('should return slate-800 for magnitude 9.0 (very high)', () => {
+    expect(getMagnitudeColor(9.0)).toBe('#1E293B'); // Changed from red-700
   });
 
   // Test with negative magnitudes
