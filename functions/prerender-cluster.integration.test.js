@@ -100,8 +100,8 @@ describe('Prerendering Handler: /cluster/:id', () => {
           urlSlug: 'direct-15-quakes-near-southern-sumatra-m5.8-us7000mfp9',
           expectedStrongestQuakeId: 'us7000mfp9',
         };
-        // Updated expectedD1Query to include 'updatedAt' and match the order in worker.js
-        const expectedD1Query = "SELECT id, slug, title, description, earthquakeIds, strongestQuakeId, updatedAt, locationName, maxMagnitude, startTime, endTime, quakeCount FROM ClusterDefinitions WHERE slug = ?";
+        // Updated expectedD1Query to match the actual query in cluster-detail.js
+        const expectedD1Query = "SELECT id, slug, title, description, strongestQuakeId, locationName, maxMagnitude, earthquakeIds, startTime, endTime, quakeCount FROM ClusterDefinitions WHERE slug = ?";
 
         it(`should query D1 with slug and generate HTML for: ${validSlugTestCase.description}`, async () => {
           const { urlSlug, expectedStrongestQuakeId } = validSlugTestCase;
