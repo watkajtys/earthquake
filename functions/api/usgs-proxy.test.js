@@ -316,19 +316,22 @@ describe('handleUsgsProxy', () => {
 
     const response = await handleUsgsProxy(mockContext);
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(502); // CHANGED from 500
     const jsonResponse = await response.json();
-    expect(jsonResponse.message).toBe("USGS API fetch failed: Unexpected token '<', \"<html><bod\"... is not valid JSON");
+    // UPDATED expected message to match the new specific error
+    expect(jsonResponse.message).toBe(`USGS API returned OK status but with unexpected Content-Type: text/html. Expected application/json. Response text sample: ${htmlBody.substring(0, 200)}`);
     expect(jsonResponse.source).toBe('usgs-proxy-handler');
-    // upstream_status is not set in this specific error path in the handler
-    // expect(jsonResponse.upstream_status).toBe(200);
+    expect(jsonResponse.upstream_status).toBe(200); // Now this is part of the errorData
+    expect(jsonResponse.upstream_content_type).toBe('text/html'); // Also part of errorData
     expect(response.headers.get('Content-Type')).toBe('application/json');
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining(`[usgs-proxy] Outer catch block: Fetch, JSON parse, or other error for ${currentTestApiUrl}:`),
-      "Unexpected token '<', \"<html><bod\"... is not valid JSON",
-      "SyntaxError",
-      expect.any(String) // For the stack trace
+    // This specific console.error from the outer catch block will NOT be called.
+    // Instead, a console.warn will be called from the new block.
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining(`[usgs-proxy] Outer catch block:`)
+    );
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      `[usgs-proxy] Unexpected Content-Type from USGS: text/html. URL: ${currentTestApiUrl}`
     );
     expect(mockCache.put).not.toHaveBeenCalled();
   });
