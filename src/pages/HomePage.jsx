@@ -144,6 +144,11 @@ const GlobeLayout = (props) => {
             <div className="text-xs sm:text-sm">24h Total: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.count24h}</span></div>
             <div className="text-xs sm:text-sm">72h Total: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.count72h}</span></div>
             <div className="text-xs sm:text-sm">24h Strongest: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.strongest24h}</span></div>
+            <div className="text-xs sm:text-sm">
+                72h Strongest: <span className="font-bold text-sm sm:text-base" style={{ color: getMagnitudeColor(keyStatsForGlobe.strongest72hRawMagnitude) }}>
+                    {keyStatsForGlobe.strongest72hDisplayString}
+                </span>
+            </div>
         </div>
       </div>
 
@@ -283,7 +288,7 @@ function App() {
      *   Returns base statistics with 'N/A' or 0 for values if input is empty or invalid.
      */
     const calculateStats = useCallback((earthquakes) => {
-        const baseStats = { totalEarthquakes: 0, averageMagnitude: 'N/A', strongestMagnitude: 'N/A', significantEarthquakes: 0, feelableEarthquakes: 0, averageDepth: 'N/A', deepestEarthquake: 'N/A', averageSignificance: 'N/A', highestAlertLevel: null };
+        const baseStats = { totalEarthquakes: 0, averageMagnitude: 'N/A', strongestMagnitude: 'N/A', strongestMagnitudeRaw: null, significantEarthquakes: 0, feelableEarthquakes: 0, averageDepth: 'N/A', deepestEarthquake: 'N/A', averageSignificance: 'N/A', highestAlertLevel: null };
         if (!earthquakes || earthquakes.length === 0) return baseStats;
         const totalEarthquakes = earthquakes.length;
         const mags = earthquakes.map(q => q.properties.mag).filter(m => m !== null && typeof m === 'number');
@@ -298,7 +303,7 @@ function App() {
         const avgSig = sigs.length > 0 ? Math.round(sigs.reduce((a, b) => a + b, 0) / sigs.length) : null;
         const alerts = earthquakes.map(q => q.properties.alert).filter(a => a && a !== 'green');
         const highAlert = alerts.length > 0 ? alerts.sort((a,b) => { const order = { 'red':0, 'orange':1, 'yellow':2 }; return order[a] - order[b]; })[0] : null;
-        return { totalEarthquakes, averageMagnitude: avgMag?.toFixed(2) || "N/A", strongestMagnitude: strongMag?.toFixed(1) || "N/A", significantEarthquakes: sigQuakes, feelableEarthquakes: feelQuakes, averageDepth: avgDepth?.toFixed(1) || "N/A", deepestEarthquake: deepQuake?.toFixed(1) || "N/A", averageSignificance: avgSig || "N/A", highestAlertLevel: highAlert };
+        return { totalEarthquakes, averageMagnitude: avgMag?.toFixed(2) || "N/A", strongestMagnitude: strongMag !== null ? `M ${strongMag.toFixed(1)}` : "N/A", strongestMagnitudeRaw: strongMag, significantEarthquakes: sigQuakes, feelableEarthquakes: feelQuakes, averageDepth: avgDepth?.toFixed(1) || "N/A", deepestEarthquake: deepQuake?.toFixed(1) || "N/A", averageSignificance: avgSig || "N/A", highestAlertLevel: highAlert };
     }, []);
 
     // --- State Hooks ---
@@ -647,6 +652,8 @@ function App() {
                 count24h: <SkeletonText width="w-8" height="h-6" className="inline-block bg-slate-600" />,
                 count72h: <SkeletonText width="w-8" height="h-6" className="inline-block bg-slate-600" />,
                 strongest24h: <SkeletonText width="w-12" height="h-6" className="inline-block bg-slate-600" />,
+                strongest72hDisplayString: <SkeletonText width="w-12" height="h-6" className="inline-block bg-slate-600" />,
+                strongest72hRawMagnitude: null,
             };
         }
         const stats24h = calculateStats(earthquakesLast24Hours);
@@ -655,7 +662,9 @@ function App() {
             lastHourCount: earthquakesLastHour?.length || 0,
             count24h: stats24h.totalEarthquakes,
             count72h: stats72h.totalEarthquakes,
-            strongest24h: stats24h.strongestMagnitude !== 'N/A' ? `M ${stats24h.strongestMagnitude}` : 'N/A',
+            strongest24h: stats24h.strongestMagnitude, // Already formatted "M X.X" or "N/A"
+            strongest72hDisplayString: stats72h.strongestMagnitude, // Already formatted "M X.X" or "N/A"
+            strongest72hRawMagnitude: stats72h.strongestMagnitudeRaw, // Raw number or null
         };
     }, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, isLoadingDaily, isLoadingWeekly, calculateStats]);
 
