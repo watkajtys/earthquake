@@ -109,8 +109,8 @@ const GlobeLayout = (props) => {
   return (
     <div className="flex flex-col h-full w-full">
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
-        {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
-           <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
+        {(areGeoJsonAssetsLoading) ? ( // DEBUG: Temporarily changed condition
+           <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data... (Debug: Waiting for areGeoJsonAssetsLoading=false)</div>
         ) : (
           <InteractiveGlobeView
             defaultFocusLat={20}
@@ -322,9 +322,9 @@ function App() {
     const [areGeoJsonAssetsLoading, setAreGeoJsonAssetsLoading] = useState(true);
 
     // Define localStorage keys for GeoJSON assets
-    // const CACHE_KEY_COASTLINE = 'cachedNe110mCoastline'; // Commented for debug
-    // const CACHE_KEY_TECTONIC = 'cachedTectonicPlates'; // Commented for debug
-    // const GEOJSON_CACHE_VERSION = '1.0'; // Commented for debug
+    const CACHE_KEY_COASTLINE = 'cachedNe110mCoastline';
+    const CACHE_KEY_TECTONIC = 'cachedTectonicPlates';
+    const GEOJSON_CACHE_VERSION = '1.0';
 
     // --- Data Fetching Callbacks ---
     // fetchDataCb is removed as it's now centralized in EarthquakeDataContext
