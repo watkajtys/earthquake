@@ -444,31 +444,31 @@ function App() {
 
     // Old handleLoadMonthlyData is removed. `loadMonthlyData` from the hook is used instead.
 
-    // Effect to fetch active clusters from the API
-    useEffect(() => {
-        if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
-            fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
-                .then(clusters => {
-                    setCalculatedClusters(clusters);
-                })
-                .catch(error => {
-                    console.error("Error fetching active clusters:", error);
-                    setCalculatedClusters([]);
-                });
-        } else {
-            setCalculatedClusters([]);
-        }
-    }, [earthquakesLast7Days]); // Dependency: earthquakesLast7Days
+    // // Effect to fetch active clusters from the API
+    // useEffect(() => {
+    //     if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
+    //         fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
+    //             .then(clusters => {
+    //                 setCalculatedClusters(clusters);
+    //             })
+    //             .catch(error => {
+    //                 console.error("Error fetching active clusters:", error);
+    //                 setCalculatedClusters([]);
+    //             });
+    //     } else {
+    //         setCalculatedClusters([]);
+    //     }
+    // }, [earthquakesLast7Days]); // Dependency: earthquakesLast7Days
 
     // Use calculatedClusters for the activeClusters memo
     const activeClusters = useMemo(() => {
         return calculatedClusters;
     }, [calculatedClusters]);
 
-    // Effect to load GeoJSON assets
-    useEffect(() => {
-      let isMounted = true;
-      const loadGeoJsonAssets = async () => {
+    // // Effect to load GeoJSON assets
+    // useEffect(() => {
+    //   let isMounted = true;
+    //   const loadGeoJsonAssets = async () => {
         if (isMounted) {
           setAreGeoJsonAssetsLoading(true);
         }
@@ -583,28 +583,28 @@ function App() {
 
       loadGeoJsonAssets();
 
-      return () => {
-        isMounted = false;
-      };
-    }, []); // Empty dependency array to run once on mount
+    //   return () => {
+    //     isMounted = false;
+    //   };
+    // }, []); // Empty dependency array to run once on mount
 
-    useEffect(() => {
-        const timerId = setInterval(() => setAppCurrentTime(Date.now()), HEADER_TIME_UPDATE_INTERVAL_MS);
-        return () => clearInterval(timerId);
-    }, []);
+    // useEffect(() => {
+    //     const timerId = setInterval(() => setAppCurrentTime(Date.now()), HEADER_TIME_UPDATE_INTERVAL_MS);
+    //     return () => clearInterval(timerId);
+    // }, []);
 
-    useEffect(() => {
-        if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.geometry.coordinates && lastMajorQuake.geometry.coordinates.length >= 2) {
-            const lng = lastMajorQuake.geometry.coordinates[0];
-            if (typeof lng === 'number' && !isNaN(lng)) {
-                setGlobeFocusLng(lng); // Use setter from UIStateContext
-            }
-        }
-        // If lastMajorQuake is null, we could reset to defaults here, e.g.:
-        // else {
-        //   setGlobeFocusLng(0);  // Default longitude
-        // }
-    }, [lastMajorQuake, setGlobeFocusLng]); // Added setGlobeFocusLng to dependencies
+    // useEffect(() => {
+    //     if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.geometry.coordinates && lastMajorQuake.geometry.coordinates.length >= 2) {
+    //         const lng = lastMajorQuake.geometry.coordinates[0];
+    //         if (typeof lng === 'number' && !isNaN(lng)) {
+    //             setGlobeFocusLng(lng); // Use setter from UIStateContext
+    //         }
+    //     }
+    //     // If lastMajorQuake is null, we could reset to defaults here, e.g.:
+    //     // else {
+    //     //   setGlobeFocusLng(0);  // Default longitude
+    //     // }
+    // }, [lastMajorQuake, setGlobeFocusLng]); // Added setGlobeFocusLng to dependencies
 
     // --- UI Calculations & Memos ---
     // showFullScreenLoader now uses isLoadingInitialData from the hook
@@ -1011,7 +1011,7 @@ function App() {
                                       locale="en_US"
                                       type="website"
                                     />
-                                    <GlobeLayout
+                                    {/* <GlobeLayout
                                       globeFocusLng={globeFocusLng}
                                       handleQuakeClick={handleQuakeClick}
                                       getMagnitudeColor={getMagnitudeColor}
@@ -1025,7 +1025,10 @@ function App() {
                                       handleNotableQuakeSelect={handleNotableQuakeSelect}
                                       keyStatsForGlobe={keyStatsForGlobe}
                                       // areClustersLoading prop removed
-                                    />
+                                    /> */}
+                                    <div className="h-full w-full bg-blue-500 flex items-center justify-center text-white text-2xl">
+                                      Simplified View Test
+                                    </div>
                                   </>
                                 }
                               >
