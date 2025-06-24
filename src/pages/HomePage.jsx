@@ -107,7 +107,7 @@ const GlobeLayout = (props) => {
   } = props;
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full max-w-full">
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
         {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
            <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
@@ -911,7 +911,7 @@ function App() {
                 {/* MAIN CONTENT AREA - This will now adapt based on activeMobileView */}
                 {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
                 {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
-                <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto min-w-0 min-h-0 overflow-x-hidden">
+                <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto min-w-0 min-h-0 overflow-x-hidden max-w-full">
                     <ErrorBoundary>
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <Routes>
