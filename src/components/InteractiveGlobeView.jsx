@@ -583,7 +583,7 @@ const InteractiveGlobeView = ({
 
                     enablePointerInteraction={true}
                 />
-            )}
+            {/* Stray characters removed here */}
         </div>
     );
 };
