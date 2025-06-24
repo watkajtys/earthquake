@@ -989,12 +989,12 @@ function App() {
             </header>
 
             {/* This main flex container now has padding-bottom for mobile to avoid overlap with BottomNav */}
-            <div className="flex flex-1 overflow-hidden pb-16 lg:pb-0">
+            <div className="flex flex-1 overflow-hidden overflow-x-hidden pb-16 lg:pb-0">
 
                 {/* MAIN CONTENT AREA - This will now adapt based on activeMobileView */}
                 {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
                 {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
-                <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto min-w-0 min-h-0">
+                <main className="flex-1 relative bg-slate-900 lg:bg-black w-full overflow-y-auto min-w-0 min-h-0 overflow-x-hidden">
                     <ErrorBoundary>
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <Routes>
