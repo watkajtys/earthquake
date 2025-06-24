@@ -108,95 +108,106 @@ const InteractiveGlobeView = ({
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
     const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
-    const [isContainerMeasured, setIsContainerMeasured] = useState(false); // New state
+    const [isContainerMeasured, setIsContainerMeasured] = useState(false);
+    const [globeKey, setGlobeKey] = useState(1); // New state for forcing re-render
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
-    // windowLoadedRef and initialLayoutComplete are removed as their logic is being revised.
     const [ringsData, setRingsData] = useState([]);
 
-    const debounce = (func, delay) => {
-        let timeout;
-        const debouncedFunc = (...args) => {
-            clearTimeout(timeout);
-            debouncedFunc.timeout = setTimeout(() => func.apply(this, args), delay);
-        };
-        debouncedFunc.timeout = null;
-        return debouncedFunc;
-    };
-
+    // Simplified useEffect for initial dimension calculation with logging
     useEffect(() => {
-        const currentContainerRef = containerRef.current;
-        if (!currentContainerRef) return;
+        const CR = containerRef.current;
+        if (!CR) {
+            console.log('[GlobeLog] Initial Mount: Container ref is null.');
+            return;
+        }
 
-        const updateDimensions = () => {
-            requestAnimationFrame(() => { // Wrap in requestAnimationFrame
-                const currentContainerRefActual = containerRef.current;
-                if (!currentContainerRefActual || currentContainerRefActual.scrollHeight <= 50) { // Check scrollHeight
-                    // Optionally, schedule a retry if not yet measured and dimensions are invalid
-                    if (!isContainerMeasured) {
-                        // console.warn("Container not ready for measurement, will retry if observing.");
+        console.log('[GlobeLog] Initial Mount: Container ref exists.', CR);
+        console.log(`[GlobeLog] Initial Mount CR Props: offsetWidth=${CR.offsetWidth}, offsetHeight=${CR.offsetHeight}, scrollHeight=${CR.scrollHeight}, clientHeight=${CR.clientHeight}`);
+        if (CR.parentElement) {
+            console.log(`[GlobeLog] Initial Mount Parent Props: offsetWidth=${CR.parentElement.offsetWidth}, offsetHeight=${CR.parentElement.offsetHeight}, scrollHeight=${CR.parentElement.scrollHeight}, clientHeight=${CR.parentElement.clientHeight}`);
+        }
+
+        const attemptSizing = (attemptName) => {
+            if (!containerRef.current) {
+                console.log(`[GlobeLog] ${attemptName}: Container ref is null.`);
+                return false;
+            }
+            const currentWidth = containerRef.current.offsetWidth;
+            const currentHeight = containerRef.current.offsetHeight;
+            console.log(`[GlobeLog] ${attemptName}: offsetWidth=${currentWidth}, offsetHeight=${currentHeight}, scrollHeight=${containerRef.current.scrollHeight}`);
+
+            if (currentWidth > 50 && currentHeight > 50) {
+                console.log(`[GlobeLog] ${attemptName}: Setting dimensions: ${currentWidth}x${currentHeight}`);
+                setGlobeDimensions(prevDims => {
+                    // Check if dimensions have significantly changed after initial measurement
+                    if (isContainerMeasured && (Math.abs(prevDims.width - currentWidth) > 5 || Math.abs(prevDims.height - currentHeight) > 5)) {
+                        console.log(`[GlobeLog] ${attemptName}: Significant dimension change detected after initial measurement. Incrementing globeKey.`);
+                        setGlobeKey(prevKey => prevKey + 1);
                     }
-                    return;
+                    return { width: currentWidth, height: currentHeight };
+                });
+                if (!isContainerMeasured) {
+                    setIsContainerMeasured(true);
                 }
-
-                const newWidth = currentContainerRefActual.offsetWidth;
-                const newHeight = currentContainerRefActual.offsetHeight;
-
-                if (newWidth > 10 && newHeight > 10) {
-                    setGlobeDimensions(prev => {
-                        if (prev.width !== newWidth || prev.height !== newHeight) {
-                            return { width: newWidth, height: newHeight };
-                        }
-                        return prev;
-                    });
-                    if (!isContainerMeasured) {
-                        setIsContainerMeasured(true); // Set measured state
-                    }
-                } else if (!isContainerMeasured) {
-                     // console.warn(`Initial dimensions too small (w:${newWidth},h:${newHeight}), will rely on ResizeObserver or subsequent calls.`);
-                }
-            });
+                return true;
+            }
+            console.log(`[GlobeLog] ${attemptName}: Dimensions still too small or invalid.`);
+            return false;
         };
 
-        // Debounced version for ResizeObserver
-        const debouncedUpdateDimensions = debounce(updateDimensions, 150); // Reduced debounce time
+        // Attempt 1: After a short delay from mount
+        const timeout1Id = setTimeout(() => attemptSizing("Timeout 250ms"), 250);
+        // Attempt 2: After a longer delay
+        const timeout2Id = setTimeout(() => {
+            if (!isContainerMeasured) { // Only if not already measured
+                attemptSizing("Timeout 750ms");
+            }
+        }, 750);
 
-        // Initial attempt to set dimensions
-        updateDimensions();
-
-        // Fallback for scenarios where ResizeObserver might not fire or initial conditions are tricky
-        const loadHandler = () => {
-            updateDimensions(); // Try updating dimensions on window load
-            // Additional check after a short delay post-load for very tricky layouts
-            setTimeout(updateDimensions, 250);
+        // Attempt 3: On window load, if not already measured
+        const handleWindowLoad = () => {
+            console.log("[GlobeLog] Window Load Event Fired.");
+            if (!isContainerMeasured) {
+                attemptSizing("Window Load");
+            }
+            window.removeEventListener('load', handleWindowLoad); // Clean up
         };
 
         if (document.readyState === 'complete') {
-            loadHandler();
+            if (!isContainerMeasured) {
+                attemptSizing("Document Complete Sync");
+            }
         } else {
-            window.addEventListener('load', loadHandler);
+            window.addEventListener('load', handleWindowLoad);
         }
 
+        // ResizeObserver for dynamic changes after initial load
         const resizeObserver = new ResizeObserver(entries => {
-            // We are already debouncing updateDimensions,
-            // but ResizeObserver can fire rapidly.
-            // The main updateDimensions call will handle the debouncing logic.
             for (let entry of entries) {
-                if (entry.target === currentContainerRef) {
-                    debouncedUpdateDimensions();
+                if (entry.target === containerRef.current) {
+                    console.log("[GlobeLog] ResizeObserver Fired.");
+                    attemptSizing("ResizeObserver");
                 }
             }
         });
 
-        resizeObserver.observe(currentContainerRef);
+        if (containerRef.current) {
+            resizeObserver.observe(containerRef.current);
+            console.log("[GlobeLog] ResizeObserver observing containerRef.current");
+        }
 
         return () => {
-            window.removeEventListener('load', loadHandler);
-            resizeObserver.unobserve(currentContainerRef);
-            if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
+            console.log("[GlobeLog] Cleanup: Clearing timeouts and ResizeObserver.");
+            clearTimeout(timeout1Id);
+            clearTimeout(timeout2Id);
+            window.removeEventListener('load', handleWindowLoad);
+            if (containerRef.current) {
+                resizeObserver.unobserve(containerRef.current);
+            }
         };
-    }, [isContainerMeasured]); // isContainerMeasured is added to re-evaluate if needed, though primary updates are event-driven.
+    }, [isContainerMeasured]); // isContainerMeasured ensures this setup runs to get the first measurement.
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
