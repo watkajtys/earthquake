@@ -464,7 +464,7 @@ const InteractiveGlobeView = ({
     return (
         <div
             ref={containerRef}
-            className="w-full h-full flex-1"
+            className="w-full h-full" // Removed flex-1
             style={{
                 position: 'relative',
                 overflow: 'hidden', // Added overflow: hidden
