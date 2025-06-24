@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Ensure box-sizing is border-box, which Tailwind's Preflight should handle,
+   but being explicit can sometimes help depending on overrides.
+   html { box-sizing: border-box; }
+   *, *:before, *:after { box-sizing: inherit; }
+*/
+
 /* This is for the DivIcon itself, to ensure no default styles interfere */
 .custom-pulsing-icon {
   background: none !important;
