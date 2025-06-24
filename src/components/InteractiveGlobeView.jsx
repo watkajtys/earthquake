@@ -453,7 +453,7 @@ const InteractiveGlobeView = ({
         return (
             <div
                 ref={containerRef}
-                className="w-full h-full flex-1 flex items-center justify-center text-slate-500"
+                className="w-full h-full flex items-center justify-center text-slate-500" // Removed flex-1
                 style={{ opacity: 0 }} // Initially hidden but measurable
             >
                 Initializing Interactive Globe...
