@@ -137,7 +137,7 @@ const InteractiveGlobeView = ({
                                 if (readinessTimeoutId) clearTimeout(readinessTimeoutId);
                                 readinessTimeoutId = setTimeout(() => {
                                     setIsGlobeReadyToDisplay(true);
-                                }, 0); // Minimal delay
+                                }, 250); // Increased delay
                             }
                             return { width: newWidth, height: newHeight };
                         }
@@ -467,6 +467,7 @@ const InteractiveGlobeView = ({
             className="w-full h-full flex-1"
             style={{
                 position: 'relative',
+                overflow: 'hidden', // Added overflow: hidden
                 cursor: 'default',
                 opacity: isGlobeReadyToDisplay ? 1 : 0,
                 transition: 'opacity 0.2s ease-in-out'
