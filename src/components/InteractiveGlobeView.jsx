@@ -108,52 +108,54 @@ const InteractiveGlobeView = ({
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
     const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
-    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false); // Added
+    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false);
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
-    const windowLoadedRef = useRef(false); // To track if window.load has fired
+    // windowLoadedRef is no longer used with the new dimension logic
     const [ringsData, setRingsData] = useState([]);
-
-    // Removed debounce function as ResizeObserver handles debouncing implicitly or can be configured if needed.
+    const [isGlobeReadyToDisplay, setIsGlobeReadyToDisplay] = useState(false); // New state
 
     useEffect(() => {
         const currentContainerRef = containerRef.current;
         if (!currentContainerRef) return;
 
         let animationFrameId;
+        let readinessTimeoutId;
 
         const updateDimensions = () => {
-            if (containerRef.current) { // Re-check ref inside closure
+            if (containerRef.current) {
                 const newWidth = containerRef.current.offsetWidth;
                 const newHeight = containerRef.current.offsetHeight;
 
                 if (newWidth > 10 && newHeight > 10) {
                     setGlobeDimensions(prev => {
                         if (prev.width !== newWidth || prev.height !== newHeight) {
+                            // When valid dimensions are first set, or if they change significantly.
+                            if (!initialLayoutComplete || prev.width !== newWidth || prev.height !== newHeight) {
+                                // Clear any pending readiness timeout before setting a new one
+                                if (readinessTimeoutId) clearTimeout(readinessTimeoutId);
+                                readinessTimeoutId = setTimeout(() => {
+                                    setIsGlobeReadyToDisplay(true);
+                                }, 0); // Minimal delay
+                            }
                             return { width: newWidth, height: newHeight };
                         }
                         return prev;
                     });
                     if (!initialLayoutComplete) {
-                        setInitialLayoutComplete(true); // Mark initial layout as complete once valid dimensions are set
+                        setInitialLayoutComplete(true);
                     }
                 } else if (!initialLayoutComplete) {
-                    // If dimensions are not valid on the first attempt, try again on the next frame
-                    // This helps if the container is still sizing up.
                     animationFrameId = requestAnimationFrame(updateDimensions);
                 }
             }
         };
 
-        // Initial dimension setting
         animationFrameId = requestAnimationFrame(updateDimensions);
 
-        // Use ResizeObserver for subsequent changes
         const resizeObserver = new ResizeObserver(() => {
-            // We can simplify this; ResizeObserver usually calls back with entries,
-            // but just re-running updateDimensions is fine.
-            requestAnimationFrame(updateDimensions); // Ensure updates are smooth
+            requestAnimationFrame(updateDimensions);
         });
 
         resizeObserver.observe(currentContainerRef);
@@ -162,10 +164,12 @@ const InteractiveGlobeView = ({
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
             }
+            if (readinessTimeoutId) {
+                clearTimeout(readinessTimeoutId);
+            }
             resizeObserver.unobserve(currentContainerRef);
-            // No specific cleanup for debouncedUpdateDimensions needed as it's removed.
         };
-    }, [initialLayoutComplete]); // initialLayoutComplete is kept to ensure setInitialLayoutComplete(true) is called only once effectively
+    }, [initialLayoutComplete]);
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
@@ -514,27 +518,40 @@ const InteractiveGlobeView = ({
              setRingsData(newRings);
         }
 
-    }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]); // Update dependency array, added getMagnitudeColorFunc as it's used in color callbacks
+    }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]);
 
 
-
-    if (globeDimensions.width === null || globeDimensions.height === null) {
-        return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe...</div>;
+    // Condition for rendering the globe or the placeholder
+    if (!globeDimensions.width || !globeDimensions.height || !isGlobeReadyToDisplay) {
+        // Apply ref and necessary classes to the placeholder for initial measurement
+        return (
+            <div
+                ref={containerRef}
+                className="w-full h-full flex-1 flex items-center justify-center text-slate-500"
+                style={{ opacity: 0 }} // Initially hidden but measurable
+            >
+                Initializing Interactive Globe...
+            </div>
+        );
     }
-
 
     return (
         <div
             ref={containerRef}
-            className="w-full h-full"
-            style={{ position: 'relative', cursor: 'default' }}
+            className="w-full h-full flex-1"
+            style={{
+                position: 'relative',
+                cursor: 'default',
+                opacity: isGlobeReadyToDisplay ? 1 : 0,
+                transition: 'opacity 0.2s ease-in-out'
+            }}
             onMouseMove={handleContainerMouseMove}
             onMouseLeave={handleContainerMouseLeave}
         >
-            {globeDimensions.width > 0 && globeDimensions.height > 0 && (
-                <Globe
-                    ref={globeRef}
-                    width={globeDimensions.width}
+            {/* No need to check globeDimensions here again as it's handled by the if block above */}
+            <Globe
+                ref={globeRef}
+                width={globeDimensions.width}
                     height={globeDimensions.height}
                     globeImageUrl={null}
                     bumpImageUrl={null}
