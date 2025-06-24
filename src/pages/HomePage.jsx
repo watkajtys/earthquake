@@ -109,8 +109,8 @@ const GlobeLayout = (props) => {
   return (
     <div className="flex flex-col h-full w-full">
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
-        {(areGeoJsonAssetsLoading) ? ( // DEBUG: Temporarily changed condition
-           <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data... (Debug: Waiting for areGeoJsonAssetsLoading=false)</div>
+        {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
+           <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
         ) : (
           <InteractiveGlobeView
             defaultFocusLat={20}
