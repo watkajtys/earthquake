@@ -190,7 +190,7 @@ function App() {
     const {
         activeSidebarView, setActiveSidebarView,
         // activeFeedPeriod, // Unused variable removed
-        globeFocusLng, setGlobeFocusLng, // Removed setGlobeFocusLng as it's commented out below
+        globeFocusLng, setGlobeFocusLng,
         setFocusedNotableQuake
     } = useUIState();
 
@@ -379,167 +379,167 @@ function App() {
     }, [earthquakesLast24Hours]);
 
 
-    // // Effect to fetch active clusters from the API
-    // useEffect(() => {
-    //     if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
-    //         fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
-    //             .then(clusters => {
-    //                 setCalculatedClusters(clusters);
-    //             })
-    //             .catch(error => {
-    //                 console.error("Error fetching active clusters:", error);
-    //                 setCalculatedClusters([]);
-    //             });
-    //     } else {
-    //         setCalculatedClusters([]);
-    //     }
-    // }, [earthquakesLast7Days]); // Dependency: earthquakesLast7Days
+    // Effect to fetch active clusters from the API
+    useEffect(() => {
+        if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
+            fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
+                .then(clusters => {
+                    setCalculatedClusters(clusters);
+                })
+                .catch(error => {
+                    console.error("Error fetching active clusters:", error);
+                    setCalculatedClusters([]);
+                });
+        } else {
+            setCalculatedClusters([]);
+        }
+    }, [earthquakesLast7Days]); // Dependency: earthquakesLast7Days
 
     // Use calculatedClusters for the activeClusters memo
     const activeClusters = useMemo(() => {
         return calculatedClusters;
     }, [calculatedClusters]);
 
-    // // Effect to load GeoJSON assets - ENTIRE BLOCK IS COMMENTED FOR DEBUGGING
-    // useEffect(() => {
-    //   let isMounted = true;
-    //   const loadGeoJsonAssets = async () => {
-    //     if (isMounted) {
-    //       setAreGeoJsonAssetsLoading(true);
-    //     }
+    // Effect to load GeoJSON assets
+    useEffect(() => {
+      let isMounted = true;
+      const loadGeoJsonAssets = async () => {
+        if (isMounted) {
+          setAreGeoJsonAssetsLoading(true);
+        }
 
-    //     let coastlineJson = null;
-    //     let tectonicJson = null;
-    //     let loadedFromCache = false;
+        let coastlineJson = null;
+        let tectonicJson = null;
+        let loadedFromCache = false;
 
-    //     try {
-    //         const cachedCoastline = localStorage.getItem(CACHE_KEY_COASTLINE);
-    //         const cachedTectonic = localStorage.getItem(CACHE_KEY_TECTONIC);
+        try {
+            const cachedCoastline = localStorage.getItem(CACHE_KEY_COASTLINE);
+            const cachedTectonic = localStorage.getItem(CACHE_KEY_TECTONIC);
 
-    //         if (cachedCoastline && cachedTectonic) {
-    //             console.log('GeoJSON assets found in localStorage. Attempting to parse and validate version...');
-    //             const parsedCoastlineWrapper = JSON.parse(cachedCoastline);
-    //             const parsedTectonicWrapper = JSON.parse(cachedTectonic);
+            if (cachedCoastline && cachedTectonic) {
+                console.log('GeoJSON assets found in localStorage. Attempting to parse and validate version...');
+                const parsedCoastlineWrapper = JSON.parse(cachedCoastline);
+                const parsedTectonicWrapper = JSON.parse(cachedTectonic);
 
-    //             if (parsedCoastlineWrapper && parsedCoastlineWrapper.version === GEOJSON_CACHE_VERSION && parsedCoastlineWrapper.data &&
-    //                 parsedTectonicWrapper && parsedTectonicWrapper.version === GEOJSON_CACHE_VERSION && parsedTectonicWrapper.data) {
+                if (parsedCoastlineWrapper && parsedCoastlineWrapper.version === GEOJSON_CACHE_VERSION && parsedCoastlineWrapper.data &&
+                    parsedTectonicWrapper && parsedTectonicWrapper.version === GEOJSON_CACHE_VERSION && parsedTectonicWrapper.data) {
 
-    //                 coastlineJson = parsedCoastlineWrapper.data;
-    //                 tectonicJson = parsedTectonicWrapper.data;
+                    coastlineJson = parsedCoastlineWrapper.data;
+                    tectonicJson = parsedTectonicWrapper.data;
 
-    //                 // Basic validation of the actual data can remain if necessary
-    //                 if (typeof coastlineJson === 'object' && typeof tectonicJson === 'object') {
-    //                     if (isMounted) {
-    //                         setCoastlineData(coastlineJson);
-    //                         setTectonicPlatesData(tectonicJson);
-    //                         setAreGeoJsonAssetsLoading(false); // Crucial: set loading to false
-    //                         console.log('GeoJSON assets successfully loaded from localStorage (version match).');
-    //                     }
-    //                     loadedFromCache = true;
-    //                     // return; // This return was part of the previous subtask, ensure it's still here if logic relies on it.
-    //                 } else {
-    //                     console.warn('Cached GeoJSON data (within versioned object) is invalid/unexpected type. Fetching from source.');
-    //                     localStorage.removeItem(CACHE_KEY_COASTLINE);
-    //                     localStorage.removeItem(CACHE_KEY_TECTONIC);
-    //                 }
-    //             } else {
-    //                 // This handles version mismatch OR if the object doesn't have 'version'/'data' (e.g. old cache format)
-    //                 console.log('Cache version mismatch, old format, or data integrity issue. Invalidating cache and fetching from source.');
-    //                 localStorage.removeItem(CACHE_KEY_COASTLINE);
-    //                 localStorage.removeItem(CACHE_KEY_TECTONIC);
-    //                 // loadedFromCache remains false, so it will proceed to fetch from source
-    //             }
-    //         }
-    //     } catch (error) {
-    //         console.error("Error reading or parsing GeoJSON from localStorage:", error);
-    //         // Clear potentially corrupted cache items
-    //         try {
-    //             localStorage.removeItem(CACHE_KEY_COASTLINE);
-    //             localStorage.removeItem(CACHE_KEY_TECTONIC);
-    //         } catch (e) {
-    //             console.error("Error removing items from localStorage after parse failure:", e);
-    //         }
-    //     }
+                    // Basic validation of the actual data can remain if necessary
+                    if (typeof coastlineJson === 'object' && typeof tectonicJson === 'object') {
+                        if (isMounted) {
+                            setCoastlineData(coastlineJson);
+                            setTectonicPlatesData(tectonicJson);
+                            setAreGeoJsonAssetsLoading(false); // Crucial: set loading to false
+                            console.log('GeoJSON assets successfully loaded from localStorage (version match).');
+                        }
+                        loadedFromCache = true;
+                        // return; // This return was part of the previous subtask, ensure it's still here if logic relies on it.
+                    } else {
+                        console.warn('Cached GeoJSON data (within versioned object) is invalid/unexpected type. Fetching from source.');
+                        localStorage.removeItem(CACHE_KEY_COASTLINE);
+                        localStorage.removeItem(CACHE_KEY_TECTONIC);
+                    }
+                } else {
+                    // This handles version mismatch OR if the object doesn't have 'version'/'data' (e.g. old cache format)
+                    console.log('Cache version mismatch, old format, or data integrity issue. Invalidating cache and fetching from source.');
+                    localStorage.removeItem(CACHE_KEY_COASTLINE);
+                    localStorage.removeItem(CACHE_KEY_TECTONIC);
+                    // loadedFromCache remains false, so it will proceed to fetch from source
+                }
+            }
+        } catch (error) {
+            console.error("Error reading or parsing GeoJSON from localStorage:", error);
+            // Clear potentially corrupted cache items
+            try {
+                localStorage.removeItem(CACHE_KEY_COASTLINE);
+                localStorage.removeItem(CACHE_KEY_TECTONIC);
+            } catch (e) {
+                console.error("Error removing items from localStorage after parse failure:", e);
+            }
+        }
 
-    //     if (loadedFromCache) {
-    //         // If data was loaded from cache and states were set, ensure loading is false.
-    //         // The 'setAreGeoJsonAssetsLoading(false)' above handles this if parsing was successful.
-    //         // If isMounted became false during async parsing, this return prevents further work.
-    //         if (isMounted && !areGeoJsonAssetsLoading) {
-    //              // This means it was set to false because cache loading was successful
-    //         } else if (isMounted) {
-    //             // This case might occur if parsing failed but component is still mounted
-    //             // setAreGeoJsonAssetsLoading(false); // Decided against this here, finally block handles it
-    //         }
-    //         return; // Exit if successfully loaded from cache
-    //     }
+        if (loadedFromCache) {
+            // If data was loaded from cache and states were set, ensure loading is false.
+            // The 'setAreGeoJsonAssetsLoading(false)' above handles this if parsing was successful.
+            // If isMounted became false during async parsing, this return prevents further work.
+            if (isMounted && !areGeoJsonAssetsLoading) {
+                 // This means it was set to false because cache loading was successful
+            } else if (isMounted) {
+                // This case might occur if parsing failed but component is still mounted
+                // setAreGeoJsonAssetsLoading(false); // Decided against this here, finally block handles it
+            }
+            return; // Exit if successfully loaded from cache
+        }
 
-    //     // Fetch and store if not in localStorage or if parsing failed
-    //     // try {
-    //     //   const [coastlineModule, tectonicModule] = await Promise.all([
-    //     //     import('../assets/ne_110m_coastline.json'),
-    //     //     import('../assets/TectonicPlateBoundaries.json')
-    //     //   ]);
+        // Fetch and store if not in localStorage or if parsing failed
+        try {
+          const [coastlineModule, tectonicModule] = await Promise.all([
+            import('../assets/ne_110m_coastline.json'),
+            import('../assets/TectonicPlateBoundaries.json')
+          ]);
 
-    //     //   const coastlineDataToStore = coastlineModule.default;
-    //     //   const tectonicDataToStore = tectonicModule.default;
+          const coastlineDataToStore = coastlineModule.default;
+          const tectonicDataToStore = tectonicModule.default;
 
-    //     //   // Create wrapper objects with version and data
-    //     //   const coastlineCacheObject = {
-    //     //       version: GEOJSON_CACHE_VERSION,
-    //     //       data: coastlineDataToStore
-    //     //   };
-    //     //   const tectonicCacheObject = {
-    //     //       version: GEOJSON_CACHE_VERSION,
-    //     //       data: tectonicDataToStore
-    //     //   };
+          // Create wrapper objects with version and data
+          const coastlineCacheObject = {
+              version: GEOJSON_CACHE_VERSION,
+              data: coastlineDataToStore
+          };
+          const tectonicCacheObject = {
+              version: GEOJSON_CACHE_VERSION,
+              data: tectonicDataToStore
+          };
 
-    //     //   if (isMounted) {
-    //     //     setCoastlineData(coastlineDataToStore); // Set state with actual data, not the wrapper
-    //     //     setTectonicPlatesData(tectonicDataToStore);
-    //     //   }
+          if (isMounted) {
+            setCoastlineData(coastlineDataToStore); // Set state with actual data, not the wrapper
+            setTectonicPlatesData(tectonicDataToStore);
+          }
 
-    //     //   try {
-    //     //     localStorage.setItem(CACHE_KEY_COASTLINE, JSON.stringify(coastlineCacheObject));
-    //     //     localStorage.setItem(CACHE_KEY_TECTONIC, JSON.stringify(tectonicCacheObject));
-    //     //     console.log('GeoJSON assets fetched and saved to localStorage with version.');
-    //     //   } catch (error) {
-    //     //     console.error("Error saving versioned GeoJSON to localStorage:", error);
-    //     //   }
-    //     // } catch (error) {
-    //     //   console.error("Error loading GeoJSON assets from source:", error);
-    //     //   // Optionally, set error state here if needed
-    //     // } finally {
-    //     //   if (isMounted) {
-    //     //     setAreGeoJsonAssetsLoading(false);
-    //     //   }
-    //     // }
-    //   };
+          try {
+            localStorage.setItem(CACHE_KEY_COASTLINE, JSON.stringify(coastlineCacheObject));
+            localStorage.setItem(CACHE_KEY_TECTONIC, JSON.stringify(tectonicCacheObject));
+            console.log('GeoJSON assets fetched and saved to localStorage with version.');
+          } catch (error) {
+            console.error("Error saving versioned GeoJSON to localStorage:", error);
+          }
+        } catch (error) {
+          console.error("Error loading GeoJSON assets from source:", error);
+          // Optionally, set error state here if needed
+        } finally {
+          if (isMounted) {
+            setAreGeoJsonAssetsLoading(false);
+          }
+        }
+      };
 
-    //   loadGeoJsonAssets();
+      loadGeoJsonAssets();
 
-    //   return () => {
-    //     isMounted = false;
-    //   };
-    // }, []); // Empty dependency array to run once on mount
+      return () => {
+        isMounted = false;
+      };
+    }, []); // Empty dependency array to run once on mount
 
-    // useEffect(() => {
-    //     const timerId = setInterval(() => setAppCurrentTime(Date.now()), HEADER_TIME_UPDATE_INTERVAL_MS);
-    //     return () => clearInterval(timerId);
-    // }, []);
+    useEffect(() => {
+        const timerId = setInterval(() => setAppCurrentTime(Date.now()), HEADER_TIME_UPDATE_INTERVAL_MS);
+        return () => clearInterval(timerId);
+    }, []);
 
-    // useEffect(() => {
-    //     if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.geometry.coordinates && lastMajorQuake.geometry.coordinates.length >= 2) {
-    //         const lng = lastMajorQuake.geometry.coordinates[0];
-    //         if (typeof lng === 'number' && !isNaN(lng)) {
-    //             setGlobeFocusLng(lng); // Use setter from UIStateContext
-    //         }
-    //     }
-    //     // If lastMajorQuake is null, we could reset to defaults here, e.g.:
-    //     // else {
-    //     //   setGlobeFocusLng(0);  // Default longitude
-    //     // }
-    // }, [lastMajorQuake, setGlobeFocusLng]); // Added setGlobeFocusLng to dependencies
+    useEffect(() => {
+        if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.geometry.coordinates && lastMajorQuake.geometry.coordinates.length >= 2) {
+            const lng = lastMajorQuake.geometry.coordinates[0];
+            if (typeof lng === 'number' && !isNaN(lng)) {
+                setGlobeFocusLng(lng); // Use setter from UIStateContext
+            }
+        }
+        // If lastMajorQuake is null, we could reset to defaults here, e.g.:
+        // else {
+        //   setGlobeFocusLng(0);  // Default longitude
+        // }
+    }, [lastMajorQuake, setGlobeFocusLng]); // Added setGlobeFocusLng to dependencies
 
     // --- UI Calculations & Memos ---
     // showFullScreenLoader now uses isLoadingInitialData from the hook
@@ -573,10 +573,10 @@ function App() {
         if (!dataFetchTime) {
             return <span role="status" aria-live="polite">{awaitingMsg}</span>;
         }
-        // const timeSinceFetch = appCurrentTime - dataFetchTime; // appCurrentTime is not updated if useEffect is commented
-        const timeSinceFetch = Date.now() - dataFetchTime; // Use Date.now() directly for debugging
+        const timeSinceFetch = appCurrentTime - dataFetchTime; // appCurrentTime is now updated
+        // const timeSinceFetch = Date.now() - dataFetchTime; // Use Date.now() directly for debugging
         return `Live Data (7-day): ${timeSinceFetch < 30000 ? 'just now' : formatTimeAgo(timeSinceFetch)} | USGS Feed Updated: ${lastUpdated || 'N/A'}`;
-    }, [isLoadingDaily, isLoadingWeekly, dataFetchTime, /*appCurrentTime,*/ lastUpdated, isInitialAppLoad, formatTimeAgo]);
+    }, [isLoadingDaily, isLoadingWeekly, dataFetchTime, appCurrentTime, lastUpdated, isInitialAppLoad, formatTimeAgo]);
 
 
     const currentAlertConfig = useMemo(() => {
@@ -928,7 +928,7 @@ function App() {
                                       locale="en_US"
                                       type="website"
                                     />
-                                    {/* <GlobeLayout
+                                    <GlobeLayout
                                       globeFocusLng={globeFocusLng}
                                       handleQuakeClick={handleQuakeClick}
                                       getMagnitudeColor={getMagnitudeColor}
@@ -942,10 +942,10 @@ function App() {
                                       handleNotableQuakeSelect={handleNotableQuakeSelect}
                                       keyStatsForGlobe={keyStatsForGlobe}
                                       // areClustersLoading prop removed
-                                    /> */}
-                                    <div className="h-full w-full bg-blue-500 flex items-center justify-center text-white text-2xl">
+                                    />
+                                    {/* <div className="h-full w-full bg-blue-500 flex items-center justify-center text-white text-2xl">
                                       Simplified View Test
-                                    </div>
+                                    </div> */}
                                   </>
                                 }
                               >
