@@ -159,8 +159,8 @@ const InteractiveGlobeView = ({
             }
         };
 
-        // Call it once initially
-        updateDimensions();
+        // Call it once initially after a short delay
+        initialCheckTimeout = setTimeout(updateDimensions, 50); // Always delay first attempt slightly
 
         const debouncedUpdateDimensions = debounce(updateDimensions, 150); // Debounce ResizeObserver updates
 
