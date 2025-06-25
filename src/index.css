@@ -14,3 +14,12 @@
   outline-offset: 2px;
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2); /* Softer outer glow */
 }
+
+/* Aggressive CSS override for react-globe.gl canvas */
+.interactive-globe-container canvas {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important; /* Ensure it respects the container width */
+    max-height: 100% !important;/* Ensure it respects the container height */
+}
