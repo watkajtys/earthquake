@@ -1,5 +1,5 @@
 // src/pages/HomePage.jsx
-import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime, removed useRef
+import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState, useRef } from 'react'; // Added useRef
 import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
@@ -977,21 +977,23 @@ function App() {
         );
     }
 
+    const appRootRef = useRef(null); // Create a ref for the root div
+
     // --- Main Render ---
 
     useEffect(() => {
-        const appRoot = document.getElementById('app-root-container');
-        if (!appRoot) return;
+        const currentAppRoot = appRootRef.current; // Get the current element from the ref
+        if (!currentAppRoot) return;
 
         const setRootHeight = () => {
-            appRoot.style.height = `${window.innerHeight}px`;
+            // Check if the ref still points to an element (it should, but defensive)
+            if (appRootRef.current) {
+                appRootRef.current.style.height = `${window.innerHeight}px`;
+            }
         };
 
         setRootHeight(); // Set initial height
 
-        // Optionally, update on resize, though this might not be strictly necessary
-        // if child flex components handle resizing well once the parent has a fixed pixel height.
-        // Consider the performance implications if there are many resize events.
         window.addEventListener('resize', setRootHeight);
 
         return () => {
@@ -1001,7 +1003,7 @@ function App() {
 
 
     return (
-        <div id="app-root-container" className="flex flex-col font-sans bg-slate-900 text-slate-100 antialiased" style={{ overflow: 'hidden' }}> {/* Removed h-screen, added overflow: hidden */}
+        <div ref={appRootRef} className="flex flex-col font-sans bg-slate-900 text-slate-100 antialiased" style={{ overflow: 'hidden' }}> {/* Use ref, removed id and h-screen */}
             <header className="bg-slate-800 text-white pt-2 sm:pt-4 pb-1 sm:pb-2 px-2 shadow-lg z-40 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-base sm:text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
