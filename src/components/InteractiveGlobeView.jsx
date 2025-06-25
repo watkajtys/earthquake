@@ -521,6 +521,7 @@ const InteractiveGlobeView = ({
         >
             {globeDimensions.width > 0 && globeDimensions.height > 0 && (
                 <Globe
+                    key={`${globeDimensions.width}x${globeDimensions.height}`} // Added key prop
                     ref={globeRef}
                     width={globeDimensions.width}
                     height={globeDimensions.height}
