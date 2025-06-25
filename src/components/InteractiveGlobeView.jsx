@@ -525,12 +525,7 @@ const InteractiveGlobeView = ({
 
     }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]); // Update dependency array, added getMagnitudeColorFunc as it's used in color callbacks
 
-
-
-    if (globeDimensions.width === null || globeDimensions.height === null) {
-        return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe...</div>;
-    }
-
+    const showGlobe = globeDimensions.width !== null && globeDimensions.height !== null && globeDimensions.width > 0 && globeDimensions.height > 0;
 
     return (
         <div
@@ -540,7 +535,12 @@ const InteractiveGlobeView = ({
             onMouseMove={handleContainerMouseMove}
             onMouseLeave={handleContainerMouseLeave}
         >
-            {globeDimensions.width > 0 && globeDimensions.height > 0 && (
+            {!showGlobe && (
+                <div className="w-full h-full flex items-center justify-center text-slate-500">
+                    Initializing Interactive Globe...
+                </div>
+            )}
+            {showGlobe && (
                 <Globe
                     ref={globeRef}
                     width={globeDimensions.width}
