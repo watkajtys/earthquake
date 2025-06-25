@@ -108,101 +108,71 @@ const InteractiveGlobeView = ({
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
     const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
-    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false); // Added
+    // const [initialLayoutComplete, setInitialLayoutComplete] = useState(false); // REMOVED
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
-    const windowLoadedRef = useRef(false); // To track if window.load has fired
+    // const windowLoadedRef = useRef(false); // REMOVED
     const [ringsData, setRingsData] = useState([]);
 
-    const debounce = (func, delay) => {
-        let timeout;
-        const debouncedFunc = (...args) => {
-            clearTimeout(timeout);
-            debouncedFunc.timeout = setTimeout(() => func.apply(this, args), delay);
-        };
-        debouncedFunc.timeout = null;
-        return debouncedFunc;
-    };
-
+    // useEffect for dimensions
     useEffect(() => {
         const currentContainerRef = containerRef.current;
         if (!currentContainerRef) return;
 
+        let animationFrameId = null;
+
+        // Debounce function for ResizeObserver if rapid updates become an issue
+        // const debounce = (func, delay) => {
+        //     let timeout;
+        //     return (...args) => {
+        //         clearTimeout(timeout);
+        //         timeout = setTimeout(() => func.apply(this, args), delay);
+        //     };
+        // };
+
         const updateDimensions = () => {
-            // Don't run if window.load hasn't fired yet, unless it's a resize event (implicitly initialLayoutComplete is true)
-            if (!initialLayoutComplete && !windowLoadedRef.current) return;
-
-            const currentContainerRefActual = containerRef.current; // Re-read ref
-            if (!currentContainerRefActual) return;
-
-            const newWidth = currentContainerRefActual.offsetWidth;
-            const newHeight = currentContainerRefActual.offsetHeight;
-
-            if (newWidth > 10 && newHeight > 10) {
-                 setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
-            }
-        };
-
-        // Debounced version for ResizeObserver
-        const debouncedUpdateDimensions = debounce(updateDimensions, 200);
-
-        if (document.readyState === 'complete') {
-            windowLoadedRef.current = true;
-            setInitialLayoutComplete(true);
-            // Call updateDimensions directly here to ensure it runs with initialLayoutComplete = true
-            if (containerRef.current) {
+            if (containerRef.current) { // Re-check ref in case it got unmounted
                 const newWidth = containerRef.current.offsetWidth;
                 const newHeight = containerRef.current.offsetHeight;
-                if (newWidth > 10 && newHeight > 10) { // Check for valid dimensions
-                    setGlobeDimensions({ width: newWidth, height: newHeight });
+
+                if (newWidth > 10 && newHeight > 10) {
+                    setGlobeDimensions(prev => {
+                        if (prev.width !== newWidth || prev.height !== newHeight) {
+                            // console.log(`IGV Dimensions Updated: W ${newWidth}, H ${newHeight}`);
+                            return { width: newWidth, height: newHeight };
+                        }
+                        return prev;
+                    });
                 }
             }
-        } else {
-            const handleWindowLoad = () => {
-                windowLoadedRef.current = true;
-                setInitialLayoutComplete(true);
-                // Explicitly call updateDimensions after setting initialLayoutComplete to true
-                // and window has loaded.
-                if (containerRef.current) {
-                    const newWidth = containerRef.current.offsetWidth;
-                    const newHeight = containerRef.current.offsetHeight;
-                    if (newWidth > 10 && newHeight > 10) {
-                         setGlobeDimensions({ width: newWidth, height: newHeight });
-                    } else {
-                        // Fallback or retry if dimensions are still not good
-                        setTimeout(() => {
-                            if (containerRef.current) {
-                                const w = containerRef.current.offsetWidth;
-                                const h = containerRef.current.offsetHeight;
-                                if (w > 10 && h > 10) {
-                                    setGlobeDimensions({ width: w, height: h });
-                                }
-                            }
-                        }, 150); // A short delay for a retry
-                    }
-                }
-                window.removeEventListener('load', handleWindowLoad); // Clean up listener
-            };
-            window.addEventListener('load', handleWindowLoad);
-        }
+        };
 
-        const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
-        if (currentContainerRef) { // Ensure ref is still valid before observing
-            resizeObserver.observe(currentContainerRef);
-        }
+        // Initial attempt to set dimensions
+        updateDimensions();
+
+        // Schedule a second update after a short delay and rAF to allow layout to settle
+        const handleDelayedUpdate = () => {
+            animationFrameId = requestAnimationFrame(updateDimensions);
+        };
+
+        const timeoutId = setTimeout(handleDelayedUpdate, 60); // Increased delay slightly to 60ms
+
+        // const debouncedUpdateDimensions = debounce(updateDimensions, 150); // Example if debouncing is needed
+        const resizeObserver = new ResizeObserver(updateDimensions); // Using direct updateDimensions for now
+        resizeObserver.observe(currentContainerRef);
 
         return () => {
-            // Note: handleWindowLoad cleanup is inside the handler itself upon execution.
-            // If the component unmounts before 'load', the listener might remain.
-            // To be fully robust, it would need to be removed here too if it was assigned to a variable accessible here.
-            // For this specific subtask, the provided snippet's cleanup is followed.
-            if (currentContainerRef) {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            clearTimeout(timeoutId);
+            if (currentContainerRef) { // Ensure ref is still valid on cleanup
                 resizeObserver.unobserve(currentContainerRef);
             }
-            if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
         };
-    }, [initialLayoutComplete]); // Add initialLayoutComplete to dependency array.
+    }, []); // Empty dependency array, runs once on mount. ResizeObserver handles subsequent changes.
+
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
@@ -556,38 +526,53 @@ const InteractiveGlobeView = ({
 
 
     if (globeDimensions.width === null || globeDimensions.height === null) {
-        // Ensure containerRef is attached here as well so initial dimensions can be read
-        return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe (Simplified)...</div>;
+        return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe...</div>;
     }
 
-    // Temporarily replace Globe with a simple div for debugging
+
     return (
         <div
             ref={containerRef}
             className="w-full h-full"
             style={{ position: 'relative', cursor: 'default' }}
-            // onMouseMove={handleContainerMouseMove} // Can be commented out for now
-            // onMouseLeave={handleContainerMouseLeave} // Can be commented out for now
+            onMouseMove={handleContainerMouseMove}
+            onMouseLeave={handleContainerMouseLeave}
         >
-            {globeDimensions.width > 0 && globeDimensions.height > 0 ? (
-                <div
-                    style={{
-                        width: `${globeDimensions.width}px`,
-                        height: `${globeDimensions.height}px`,
-                        backgroundColor: 'rgba(255, 0, 0, 0.3)', // Red semi-transparent
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: '2px dashed red'
-                    }}
-                >
-                    <p>Simplified View</p>
-                    <p>W: {globeDimensions.width} H: {globeDimensions.height}</p>
-                </div>
-            ) : (
-                <div className="w-full h-full flex items-center justify-center text-slate-300">
-                    Globe dimensions not set or invalid. W: {String(globeDimensions.width)} H: {String(globeDimensions.height)}
-                </div>
+            {globeDimensions.width > 0 && globeDimensions.height > 0 && (
+                <Globe
+                    ref={globeRef}
+                    width={globeDimensions.width}
+                    height={globeDimensions.height}
+                    globeImageUrl={null}
+                    bumpImageUrl={null}
+                    backgroundImageUrl={null}
+                    backgroundColor="rgba(0,0,0,0)"
+                    atmosphereColor={atmosphereColor}
+                    atmosphereAltitude={0.15}
+
+                    pointsData={points}
+                    pointLat="lat" pointLng="lng" pointAltitude="altitude"
+                    pointRadius="radius" pointColor="color" pointLabel="label"
+                    pointsMerge={false} pointsTransitionDuration={0}
+                    onPointClick={handlePointClick}
+
+                    pathsData={paths}
+                    pathPoints="coords" pathPointLat={p => p[1]} pathPointLng={p => p[0]}
+                    pathColor={path => path.color} pathStroke={path => path.stroke}
+                    pathLabel={path => path.label} pathTransitionDuration={0}
+
+                    ringsData={ringsData}
+                    ringLat="lat"
+                    ringLng="lng"
+                    ringAltitude="altitude"
+                    ringColor="color"
+                    ringMaxRadius="maxR"
+                    ringPropagationSpeed="propagationSpeed"
+                    ringRepeatPeriod="repeatPeriod"
+                    ringResolution={128}
+
+                    enablePointerInteraction={true}
+                />
             )}
         </div>
     );
