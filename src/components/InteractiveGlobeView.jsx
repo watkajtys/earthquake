@@ -47,7 +47,7 @@ const InteractiveGlobeView = ({
     const globeRef = useRef();
     const containerRef = useRef(null); // For measuring the container
 
-    const [size, setSize] = useState(null); // Will be { width, height } or null
+    const [size, setSize] = useState({ width: 320, height: 480 }); // Initialize with small, mobile-friendly dimensions
 
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
