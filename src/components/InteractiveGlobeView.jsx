@@ -556,53 +556,38 @@ const InteractiveGlobeView = ({
 
 
     if (globeDimensions.width === null || globeDimensions.height === null) {
-        return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe...</div>;
+        // Ensure containerRef is attached here as well so initial dimensions can be read
+        return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe (Simplified)...</div>;
     }
 
-
+    // Temporarily replace Globe with a simple div for debugging
     return (
         <div
             ref={containerRef}
             className="w-full h-full"
             style={{ position: 'relative', cursor: 'default' }}
-            onMouseMove={handleContainerMouseMove}
-            onMouseLeave={handleContainerMouseLeave}
+            // onMouseMove={handleContainerMouseMove} // Can be commented out for now
+            // onMouseLeave={handleContainerMouseLeave} // Can be commented out for now
         >
-            {globeDimensions.width > 0 && globeDimensions.height > 0 && (
-                <Globe
-                    ref={globeRef}
-                    width={globeDimensions.width}
-                    height={globeDimensions.height}
-                    globeImageUrl={null}
-                    bumpImageUrl={null}
-                    backgroundImageUrl={null}
-                    backgroundColor="rgba(0,0,0,0)"
-                    atmosphereColor={atmosphereColor}
-                    atmosphereAltitude={0.15}
-
-                    pointsData={points}
-                    pointLat="lat" pointLng="lng" pointAltitude="altitude"
-                    pointRadius="radius" pointColor="color" pointLabel="label"
-                    pointsMerge={false} pointsTransitionDuration={0}
-                    onPointClick={handlePointClick}
-
-                    pathsData={paths}
-                    pathPoints="coords" pathPointLat={p => p[1]} pathPointLng={p => p[0]}
-                    pathColor={path => path.color} pathStroke={path => path.stroke}
-                    pathLabel={path => path.label} pathTransitionDuration={0}
-
-                    ringsData={ringsData}
-                    ringLat="lat"
-                    ringLng="lng"
-                    ringAltitude="altitude"
-                    ringColor="color"
-                    ringMaxRadius="maxR"
-                    ringPropagationSpeed="propagationSpeed"
-                    ringRepeatPeriod="repeatPeriod"
-                    ringResolution={128}
-
-                    enablePointerInteraction={true}
-                />
+            {globeDimensions.width > 0 && globeDimensions.height > 0 ? (
+                <div
+                    style={{
+                        width: `${globeDimensions.width}px`,
+                        height: `${globeDimensions.height}px`,
+                        backgroundColor: 'rgba(255, 0, 0, 0.3)', // Red semi-transparent
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px dashed red'
+                    }}
+                >
+                    <p>Simplified View</p>
+                    <p>W: {globeDimensions.width} H: {globeDimensions.height}</p>
+                </div>
+            ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-300">
+                    Globe dimensions not set or invalid. W: {String(globeDimensions.width)} H: {String(globeDimensions.height)}
+                </div>
             )}
         </div>
     );
