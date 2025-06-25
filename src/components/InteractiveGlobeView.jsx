@@ -129,80 +129,79 @@ const InteractiveGlobeView = ({
         const currentContainerRef = containerRef.current;
         if (!currentContainerRef) return;
 
-        const updateDimensions = () => {
-            // Don't run if window.load hasn't fired yet, unless it's a resize event (implicitly initialLayoutComplete is true)
-            if (!initialLayoutComplete && !windowLoadedRef.current) return;
+        let rafId;
+        let timeoutId;
+        // initialLayoutComplete is still useful for other effects or logic that depend on the globe being sized.
+        // It will be set by tryUpdateDimensions.
 
-            const currentContainerRefActual = containerRef.current; // Re-read ref
-            if (!currentContainerRefActual) return;
+        const tryUpdateDimensions = (source = "unknown") => {
+            if (!containerRef.current) return false;
+            const newWidth = containerRef.current.offsetWidth;
+            const newHeight = containerRef.current.offsetHeight;
 
-            const newWidth = currentContainerRefActual.offsetWidth;
-            const newHeight = currentContainerRefActual.offsetHeight;
+            // console.log(`[Refined from ${source}] Checking dimensions: W=${newWidth}, H=${newHeight}`); // Uncomment for debugging
 
-            if (newWidth > 10 && newHeight > 10) {
-                 setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
+            if (newWidth > 10 && newHeight > 10) { // Check for sensible dimensions
+                setGlobeDimensions(prev => {
+                    if (prev.width !== newWidth || prev.height !== newHeight) {
+                        // console.log(`[Refined from ${source}] SETTING dimensions: W=${newWidth}, H=${newHeight}`); // Uncomment for debugging
+                        return { width: newWidth, height: newHeight };
+                    }
+                    return prev;
+                });
+                // Ensure initialLayoutComplete is set only once after the first successful dimension update.
+                // This prevents other dependent useEffects from running prematurely or too often.
+                if (!initialLayoutComplete) {
+                    setInitialLayoutComplete(true);
+                }
+                return true; // Indicate success
             }
+            return false; // Indicate failure to get good dimensions
         };
 
-        // Debounced version for ResizeObserver
-        const debouncedUpdateDimensions = debounce(updateDimensions, 200);
-
-        if (document.readyState === 'complete') {
-            windowLoadedRef.current = true;
-            setInitialLayoutComplete(true);
-            // Call updateDimensions directly here to ensure it runs with initialLayoutComplete = true
-            if (containerRef.current) {
-                const newWidth = containerRef.current.offsetWidth;
-                const newHeight = containerRef.current.offsetHeight;
-                if (newWidth > 10 && newHeight > 10) { // Check for valid dimensions
-                    setGlobeDimensions({ width: newWidth, height: newHeight });
-                }
+        // Attempt 1: Via requestAnimationFrame (preferred for waiting for layout/paint)
+        rafId = requestAnimationFrame(() => {
+            // console.log("[Refined] Attempting dimension update via rAF."); // Uncomment for debugging
+            if (tryUpdateDimensions("rAF")) {
+                return; // Dimensions set, no need for timeout fallback
             }
-        } else {
-            const handleWindowLoad = () => {
-                windowLoadedRef.current = true;
-                setInitialLayoutComplete(true);
-                // Explicitly call updateDimensions after setting initialLayoutComplete to true
-                // and window has loaded.
-                if (containerRef.current) {
-                    const newWidth = containerRef.current.offsetWidth;
-                    const newHeight = containerRef.current.offsetHeight;
-                    if (newWidth > 10 && newHeight > 10) {
-                         setGlobeDimensions({ width: newWidth, height: newHeight });
-                    } else {
-                        // Fallback or retry if dimensions are still not good
-                        setTimeout(() => {
-                            if (containerRef.current) {
-                                const w = containerRef.current.offsetWidth;
-                                const h = containerRef.current.offsetHeight;
-                                if (w > 10 && h > 10) {
-                                    setGlobeDimensions({ width: w, height: h });
-                                }
-                            }
-                        }, 150); // A short delay for a retry
-                    }
-                }
-                window.removeEventListener('load', handleWindowLoad); // Clean up listener
-            };
-            window.addEventListener('load', handleWindowLoad);
-        }
 
-        const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
-        if (currentContainerRef) { // Ensure ref is still valid before observing
+            // Attempt 2: Short timeout fallback if rAF didn't yield good dimensions
+            // This handles cases where layout might take a fraction longer.
+            timeoutId = setTimeout(() => {
+                // console.log("[Refined] Attempting dimension update via fallback_timeout."); // Uncomment for debugging
+                tryUpdateDimensions("fallback_timeout");
+            }, 100); // Short delay (e.g., 100ms)
+        });
+
+        // Debounced version for ResizeObserver - keep using the existing debounce utility
+        const debouncedTryUpdateDimensions = debounce(() => tryUpdateDimensions("resize_observer"), 200);
+
+        const resizeObserver = new ResizeObserver(debouncedTryUpdateDimensions);
+
+        if (currentContainerRef) {
             resizeObserver.observe(currentContainerRef);
         }
 
         return () => {
-            // Note: handleWindowLoad cleanup is inside the handler itself upon execution.
-            // If the component unmounts before 'load', the listener might remain.
-            // To be fully robust, it would need to be removed here too if it was assigned to a variable accessible here.
-            // For this specific subtask, the provided snippet's cleanup is followed.
+            cancelAnimationFrame(rafId);
+            clearTimeout(timeoutId);
             if (currentContainerRef) {
                 resizeObserver.unobserve(currentContainerRef);
             }
-            if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
+            // Clear debounce timer if it's active
+            if (debouncedTryUpdateDimensions.timeout) {
+                clearTimeout(debouncedTryUpdateDimensions.timeout);
+            }
         };
-    }, [initialLayoutComplete]); // Add initialLayoutComplete to dependency array.
+    }, [initialLayoutComplete]); // Keep initialLayoutComplete in dep array.
+                                 // tryUpdateDimensions sets it, which might re-trigger this effect.
+                                 // However, the core logic (rAF, setTimeout) only runs effectively once due to their nature.
+                                 // ResizeObserver is the main thing that will keep working.
+                                 // If !initialLayoutComplete, it will try to set dimensions and set initialLayoutComplete=true.
+                                 // If initialLayoutComplete is already true, it will still try to update dimensions if they changed.
+                                 // This seems acceptable. Alternative is an empty dep array [] and managing initialLayoutComplete carefully.
+                                 // For now, keeping it to ensure setInitialLayoutComplete propagation is handled.
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
