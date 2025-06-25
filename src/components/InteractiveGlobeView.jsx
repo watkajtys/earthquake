@@ -1,7 +1,8 @@
 // src/InteractiveGlobeView.jsx
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react'; // Removed unused 'memo'
 import Globe from 'react-globe.gl';
-import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
+// Re-enable necessary imports, ensure useEarthquakeDataState is present if used by uncommented code.
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
 
 /**
  * Utility function to take a color string (hex or rgba) and return a new rgba string
@@ -101,19 +102,19 @@ const InteractiveGlobeView = ({
     enableAutoRotation = true,
     globeAutoRotateSpeed = 0.1
 }) => {
-    const { globeEarthquakes, lastMajorQuake, previousMajorQuake } = useEarthquakeDataState(); // Get data from context
+    const { globeEarthquakes, lastMajorQuake, previousMajorQuake } = useEarthquakeDataState(); // Re-enable context
 
-    const globeRef = useRef();
+    const globeRef = useRef(); // Re-enable for Globe component
     const containerRef = useRef(null);
-    const [points, setPoints] = useState([]);
-    const [paths, setPaths] = useState([]);
+    const [points, setPoints] = useState([]); // Re-enable for globe data
+    const [paths, setPaths] = useState([]); // Re-enable for globe data
     const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
-    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false); // Added
-    const [isGlobeHovered, setIsGlobeHovered] = useState(false);
-    const [isDragging, setIsDragging] = useState(false);
-    const mouseMoveTimeoutRef = useRef(null);
-    const windowLoadedRef = useRef(false); // To track if window.load has fired
-    const [ringsData, setRingsData] = useState([]);
+    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false);
+    const [isGlobeHovered, setIsGlobeHovered] = useState(false); // Re-enable for interactions
+    const [isDragging, setIsDragging] = useState(false); // Re-enable for interactions
+    const mouseMoveTimeoutRef = useRef(null); // Re-enable for hover detection
+    const windowLoadedRef = useRef(false);
+    const [ringsData, setRingsData] = useState([]); // Re-enable for globe data
 
     const debounce = (func, delay) => {
         let timeout;
@@ -129,81 +130,80 @@ const InteractiveGlobeView = ({
         const currentContainerRef = containerRef.current;
         if (!currentContainerRef) return;
 
-        const updateDimensions = () => {
-            // Don't run if window.load hasn't fired yet, unless it's a resize event (implicitly initialLayoutComplete is true)
-            if (!initialLayoutComplete && !windowLoadedRef.current) return;
-
-            const currentContainerRefActual = containerRef.current; // Re-read ref
+        // This function will now be the core logic for updating dimensions.
+        const performDimensionUpdate = () => {
+            const currentContainerRefActual = containerRef.current;
             if (!currentContainerRefActual) return;
 
             const newWidth = currentContainerRefActual.offsetWidth;
             const newHeight = currentContainerRefActual.offsetHeight;
 
             if (newWidth > 10 && newHeight > 10) {
-                 setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
+                setGlobeDimensions(prev => {
+                    if (prev.width !== newWidth || prev.height !== newHeight) {
+                        // console.log(`Updating dimensions: W=${newWidth}, H=${newHeight}`); // Removed log
+                        return { width: newWidth, height: newHeight };
+                    }
+                    return prev;
+                });
+            } else {
+                 // console.log(`Skipping dimension update due to invalid size: W=${newWidth}, H=${newHeight}`); // Removed log
             }
         };
 
-        // Debounced version for ResizeObserver
-        const debouncedUpdateDimensions = debounce(updateDimensions, 200);
+        // Debounced version for ResizeObserver - this remains the same
+        const debouncedPerformDimensionUpdate = debounce(performDimensionUpdate, 200);
+
+        const initialDimensionRead = () => {
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    // console.log("Attempting initial dimension read via rAF + setTimeout"); // Removed log
+                    performDimensionUpdate();
+                }, 0); // A timeout of 0 ms defers execution
+            });
+        };
 
         if (document.readyState === 'complete') {
             windowLoadedRef.current = true;
-            setInitialLayoutComplete(true);
-            // Call updateDimensions directly here to ensure it runs with initialLayoutComplete = true
-            if (containerRef.current) {
-                const newWidth = containerRef.current.offsetWidth;
-                const newHeight = containerRef.current.offsetHeight;
-                if (newWidth > 10 && newHeight > 10) { // Check for valid dimensions
-                    setGlobeDimensions({ width: newWidth, height: newHeight });
-                }
+            if (!initialLayoutComplete) { // Ensure this only runs once if initialLayoutComplete wasn't set yet
+                setInitialLayoutComplete(true);
+                // console.log("Document already complete. Scheduling initial dimension read."); // Removed log
+                initialDimensionRead();
             }
         } else {
             const handleWindowLoad = () => {
+                window.removeEventListener('load', handleWindowLoad); // Clean up listener early
                 windowLoadedRef.current = true;
-                setInitialLayoutComplete(true);
-                // Explicitly call updateDimensions after setting initialLayoutComplete to true
-                // and window has loaded.
-                if (containerRef.current) {
-                    const newWidth = containerRef.current.offsetWidth;
-                    const newHeight = containerRef.current.offsetHeight;
-                    if (newWidth > 10 && newHeight > 10) {
-                         setGlobeDimensions({ width: newWidth, height: newHeight });
-                    } else {
-                        // Fallback or retry if dimensions are still not good
-                        setTimeout(() => {
-                            if (containerRef.current) {
-                                const w = containerRef.current.offsetWidth;
-                                const h = containerRef.current.offsetHeight;
-                                if (w > 10 && h > 10) {
-                                    setGlobeDimensions({ width: w, height: h });
-                                }
-                            }
-                        }, 150); // A short delay for a retry
-                    }
+                if (!initialLayoutComplete) { // Check ensures it only runs once
+                    setInitialLayoutComplete(true);
+                    // console.log("Window loaded. Scheduling initial dimension read."); // Removed log
+                    initialDimensionRead();
                 }
-                window.removeEventListener('load', handleWindowLoad); // Clean up listener
             };
             window.addEventListener('load', handleWindowLoad);
         }
 
-        const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
-        if (currentContainerRef) { // Ensure ref is still valid before observing
+        const resizeObserver = new ResizeObserver(debouncedPerformDimensionUpdate);
+        if (currentContainerRef) {
             resizeObserver.observe(currentContainerRef);
         }
 
+        // Cleanup
         return () => {
-            // Note: handleWindowLoad cleanup is inside the handler itself upon execution.
+            // The window.load listener is removed by itself in handleWindowLoad.
             // If the component unmounts before 'load', the listener might remain.
-            // To be fully robust, it would need to be removed here too if it was assigned to a variable accessible here.
-            // For this specific subtask, the provided snippet's cleanup is followed.
+            // To be fully robust, it would need to be assignable and removable here.
+            // For now, let's assume it usually fires or the component stays mounted.
             if (currentContainerRef) {
                 resizeObserver.unobserve(currentContainerRef);
             }
-            if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
+            if (debouncedPerformDimensionUpdate.timeout) {
+                clearTimeout(debouncedPerformDimensionUpdate.timeout);
+            }
         };
-    }, [initialLayoutComplete]); // Add initialLayoutComplete to dependency array.
+    }, [initialLayoutComplete]);
 
+    // Re-enable useEffects for globe data (points, paths, rings)
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
             const isHighlighted = quake.id === highlightedQuakeId;
@@ -236,19 +236,18 @@ const InteractiveGlobeView = ({
             allPointsData = allPointsData.map(p => {
                 if (p.quakeData.id === previousMajorQuake.id) {
                     foundAndUpdated = true;
-                    // If previousMajorQuake is also the highlightedQuakeId, let highlighted style take precedence mostly
                     if (p.quakeData.id === highlightedQuakeId) {
                         return {
-                            ...p, // Keep most of highlighted style
-                            label: `LATEST & PREVIOUS SIG: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`, // Special label
+                            ...p,
+                            label: `LATEST & PREVIOUS SIG: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
                             type: 'highlighted_previous_significant_quake'
                         };
                     }
                     return {
                         ...p,
-                        radius: Math.max(0.55, (prevMagValue / 7) + 0.35), // Slightly smaller than latest highlighted
+                        radius: Math.max(0.55, (prevMagValue / 7) + 0.35),
                         color: getMagnitudeColorFunc(prevMagValue),
-                        altitude: 0.025, // Slightly different altitude
+                        altitude: 0.025,
                         label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
                         type: 'previous_major_quake'
                     };
@@ -257,7 +256,6 @@ const InteractiveGlobeView = ({
             });
 
             if (!foundAndUpdated) {
-                 // Ensure previousMajorQuake is not also the current highlighted one before adding separately
                 if (previousMajorQuake.id !== highlightedQuakeId) {
                     allPointsData.push({
                         lat: previousMajorQuake.geometry.coordinates[1],
@@ -272,82 +270,9 @@ const InteractiveGlobeView = ({
                 }
             }
         }
-
-        // --- NEW: Process activeClusters ---
-        // if (activeClusters && activeClusters.length > 0) {
-        //     activeClusters.forEach((cluster, index) => {
-        //         if (cluster.length === 0) return;
-
-        //         let sumLat = 0, sumLng = 0, maxMag = 0;
-        //         let quakesInClusterDetails = [];
-
-        //         cluster.forEach(quake => {
-        //             sumLat += quake.geometry.coordinates[1];
-        //             sumLng += quake.geometry.coordinates[0];
-        //             if (quake.properties.mag > maxMag) {
-        //                 maxMag = quake.properties.mag;
-        //             }
-        //             quakesInClusterDetails.push({
-        //                 id: quake.id,
-        //                 mag: quake.properties.mag,
-        //                 place: quake.properties.place,
-        //                 time: quake.properties.time
-        //             });
-        //         });
-
-        //         const centroidLat = sumLat / cluster.length;
-        //         const centroidLng = sumLng / cluster.length;
-
-        //         allPointsData.push({
-        //             lat: centroidLat,
-        //             lng: centroidLng,
-        //             altitude: 0.02, // Slightly elevated to distinguish, if needed
-        //             radius: 0.5 + (cluster.length / 10), // Radius based on cluster size, adjust as needed
-        //             color: 'rgba(255, 255, 0, 0.75)', // Bright yellow for clusters, with some transparency
-        //             label: `Cluster: ${cluster.length} quakes (Max Mag: ${maxMag.toFixed(1)})`,
-        //             type: 'cluster_center',
-        //             // Store the original cluster data for potential interaction
-        //             clusterData: {
-        //                 id: `cluster_${index}_${Date.now()}`, // Create a unique ID for the cluster point
-        //                 quakes: quakesInClusterDetails,
-        //                 centroidLat,
-        //                 centroidLng,
-        //                 numQuakes: cluster.length,
-        //                 maxMag
-        //             },
-        //             // To make it clickable and identifiable by onQuakeClick,
-        //             // we can mock a minimal 'quakeData' structure for clusters.
-        //             // App.jsx's onQuakeClick expects properties.detail or properties.url.
-        //             // We'll need to handle 'cluster_center' type clicks differently there, or adapt this.
-        //             // For now, this structure helps avoid errors in existing onPointClick if it tries to access quakeData.properties.detail
-        //             quakeData: {
-        //                 id: `cluster_vis_${index}_${Date.now()}`, // Unique ID for this visual point
-        //                 properties: {
-        //                     place: `Cluster of ${cluster.length} earthquakes`,
-        //                     mag: maxMag,
-        //                     // No 'detail' or 'url' for clusters in the same way as individual quakes
-        //                 },
-        //                 geometry: {
-        //                     type: "Point",
-        //                     coordinates: [centroidLng, centroidLat, 0] // Mock geometry
-        //                 },
-        //                 isCluster: true, // Custom flag
-        //                 clusterDetails: { // Pass actual detailed quake list
-        //                     quakes: cluster.map(q => ({ // Map to avoid passing huge objects if not needed directly by globe label
-        //                         id: q.id,
-        //                         mag: q.properties.mag,
-        //                         place: q.properties.place,
-        //                         time: q.properties.time,
-        //                         detail: q.properties.detail || q.properties.url // Keep detail for individual quakes within cluster
-        //                     }))
-        //                 }
-        //             }
-        //         });
-        //     });
-        // }
-        // --- END NEW ---
+        // Active clusters logic can be re-enabled here if needed, currently commented out in original
         setPoints(allPointsData);
-    }, [globeEarthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]); // Update dependency array
+    }, [globeEarthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]);
 
     useEffect(() => {
         let processedPaths = [];
@@ -369,241 +294,169 @@ const InteractiveGlobeView = ({
     }, [coastlineGeoJson, tectonicPlatesGeoJson]);
 
     useEffect(() => {
-        if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {
-            const targetLatitude = (typeof defaultFocusLat === 'number' && !isNaN(defaultFocusLat)) ? defaultFocusLat : 20;
-            const targetLongitude = (typeof defaultFocusLng === 'number' && !isNaN(defaultFocusLng)) ? defaultFocusLng : 0;
-            // Assuming defaultFocusAltitude is generally reliable or has a suitable default in its definition
-            globeRef.current.pointOfView({ lat: targetLatitude, lng: targetLongitude, altitude: defaultFocusAltitude }, 0);
-        }
-    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions]);
-
-    // CONSOLIDATED Effect to manage globe controls and drag listeners
-    useEffect(() => {
-        const globeInstance = globeRef.current;
-        if (!globeInstance?.controls || typeof globeInstance.controls !== 'function' || !globeDimensions.width || !globeDimensions.height) {
-            return;
-        }
-
-        const controls = globeInstance.controls();
-        if (!controls) {
-            console.warn("Globe controls not available when trying to set properties or listeners.");
-            return;
-        }
-
-        // 1. Set user interaction capabilities based on props
-        // This is the most direct way to enable/disable user drag rotation
-        controls.enableRotate = allowUserDragRotation;
-        controls.enablePan = allowUserDragRotation; // Usually linked with enableRotate
-        controls.enableZoom = allowUserDragRotation; // Usually linked
-
-        // 2. Manage auto-rotation logic
-        if (enableAutoRotation) {
-            if (isGlobeHovered || isDragging) {
-                // Pause auto-rotation if hovered or actively dragging
-                if (controls.autoRotate !== false) {
-                    controls.autoRotate = false;
-                }
-            } else {
-                // If not hovered AND not dragging, enable auto-rotation
-                if (controls.autoRotate !== true) {
-                    controls.autoRotate = true;
-                }
-                // Set speed only if auto-rotation is active or being activated
-                // The negative sign determines direction, adjust as needed.
-                const targetSpeed = -Math.abs(globeAutoRotateSpeed * 20); // Example: * 20 for a perceptible speed
-                if (controls.autoRotateSpeed !== targetSpeed) {
-                    controls.autoRotateSpeed = targetSpeed;
-                }
-            }
-        } else {
-            // If auto-rotation is globally disabled by the prop, ensure it's off.
-            if (controls.autoRotate !== false) {
-                controls.autoRotate = false;
-            }
-            if (controls.autoRotateSpeed !== 0) {
-                controls.autoRotateSpeed = 0;
-            }
-        }
-
-        // 3. Add event listeners for drag state to the controls object
-        const handleDragStart = () => setIsDragging(true);
-        const handleDragEnd = () => setIsDragging(false);
-
-        controls.addEventListener('start', handleDragStart); // User starts interacting
-        controls.addEventListener('end', handleDragEnd);     // User stops interacting
-
-        // Cleanup function for this effect
-        return () => {
-            if (globeInstance.controls()) { // Check if controls still exist (might be destroyed on unmount)
-                globeInstance.controls().removeEventListener('start', handleDragStart);
-                globeInstance.controls().removeEventListener('end', handleDragEnd);
-            }
-        };
-
-    }, [
-        allowUserDragRotation,
-        enableAutoRotation,
-        globeAutoRotateSpeed,
-        globeDimensions,    // Globe might be re-created if dimensions change.
-        isGlobeHovered,
-        isDragging,
-        // setIsDragging is stable, no need to include it.
-    ]);
-
-
-    const handlePointClick = useCallback((point) => {
-        if (point?.quakeData) onQuakeClick(point.quakeData);
-    }, [onQuakeClick]);
-
-    // Mouse hover detection (slightly simplified from your original for clarity here)
-    // Your existing mouseMoveTimeoutRef logic is fine.
-    const handleContainerMouseMove = useCallback((event) => {
-        if (!globeRef.current || !containerRef.current || typeof globeRef.current.toGlobeCoords !== 'function') {
-            return;
-        }
-        if (mouseMoveTimeoutRef.current) {
-            clearTimeout(mouseMoveTimeoutRef.current);
-        }
-        mouseMoveTimeoutRef.current = setTimeout(() => {
-            if (!containerRef.current) return; // Check if containerRef is still valid
-            const rect = containerRef.current.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-
-            // Check if the globe instance and toGlobeCoords method are available
-            if (globeRef.current && typeof globeRef.current.toGlobeCoords === 'function') {
-                const globeCoords = globeRef.current.toGlobeCoords(x, y);
-                const currentlyOverGlobe = !!globeCoords;
-                if (currentlyOverGlobe !== isGlobeHovered) {
-                    setIsGlobeHovered(currentlyOverGlobe);
-                }
-            } else {
-                // If globe is not ready, assume not hovered.
-                if (isGlobeHovered) setIsGlobeHovered(false);
-            }
-
-        }, 30); // 30ms delay is reasonable
-    }, [isGlobeHovered, setIsGlobeHovered]); // Dependencies
-
-    const handleContainerMouseLeave = useCallback(() => {
-        if (mouseMoveTimeoutRef.current) {
-            clearTimeout(mouseMoveTimeoutRef.current);
-        }
-        if (isGlobeHovered) {
-            setIsGlobeHovered(false);
-        }
-    }, [isGlobeHovered, setIsGlobeHovered]);
-
-    // useEffect for Rings Data
-    useEffect(() => {
         const newRings = [];
-
-        // Ring for lastMajorQuake (from context, previously latestMajorQuakeForRing)
-        if (lastMajorQuake &&
-            lastMajorQuake.geometry &&
-            Array.isArray(lastMajorQuake.geometry.coordinates) &&
-            lastMajorQuake.geometry.coordinates.length >= 2 &&
-            typeof lastMajorQuake.geometry.coordinates[1] === 'number' &&
-            typeof lastMajorQuake.geometry.coordinates[0] === 'number' &&
-            lastMajorQuake.properties &&
-            typeof lastMajorQuake.properties.mag === 'number'
-        ) {
+        if (lastMajorQuake && lastMajorQuake.geometry && Array.isArray(lastMajorQuake.geometry.coordinates) && lastMajorQuake.geometry.coordinates.length >= 2 && typeof lastMajorQuake.geometry.coordinates[1] === 'number' && typeof lastMajorQuake.geometry.coordinates[0] === 'number' && lastMajorQuake.properties && typeof lastMajorQuake.properties.mag === 'number') {
             const coords = lastMajorQuake.geometry.coordinates;
             const mag = parseFloat(lastMajorQuake.properties.mag);
             newRings.push({
                 id: `major_quake_ring_latest_${lastMajorQuake.id}_${lastMajorQuake.properties.time}_${Date.now()}`,
-                lat: coords[1],
-                lng: coords[0],
-                altitude: 0.02,
+                lat: coords[1], lng: coords[0], altitude: 0.02,
                 color: () => getMagnitudeColorFunc(mag),
                 maxR: Math.max(6, mag * 2.2),
                 propagationSpeed: Math.max(2, mag * 0.5),
                 repeatPeriod: 1800,
             });
         }
-
-        // Ring for previousMajorQuake (from context)
-        if (previousMajorQuake && // This is now from context
-            previousMajorQuake.geometry &&
-            Array.isArray(previousMajorQuake.geometry.coordinates) &&
-            previousMajorQuake.geometry.coordinates.length >= 2 &&
-            typeof previousMajorQuake.geometry.coordinates[1] === 'number' &&
-            typeof previousMajorQuake.geometry.coordinates[0] === 'number' &&
-            previousMajorQuake.properties &&
-            typeof previousMajorQuake.properties.mag === 'number'
-        ) {
+        if (previousMajorQuake && previousMajorQuake.geometry && Array.isArray(previousMajorQuake.geometry.coordinates) && previousMajorQuake.geometry.coordinates.length >= 2 && typeof previousMajorQuake.geometry.coordinates[1] === 'number' && typeof previousMajorQuake.geometry.coordinates[0] === 'number' && previousMajorQuake.properties && typeof previousMajorQuake.properties.mag === 'number') {
             const coords = previousMajorQuake.geometry.coordinates;
             const mag = parseFloat(previousMajorQuake.properties.mag);
             const baseColor = getMagnitudeColorFunc(mag);
             newRings.push({
                 id: `major_quake_ring_prev_${previousMajorQuake.id}_${previousMajorQuake.properties.time}_${Date.now()}`,
-                lat: coords[1],
-                lng: coords[0],
-                altitude: 0.018, // Slightly different altitude
+                lat: coords[1], lng: coords[0], altitude: 0.018,
                 color: () => makeColorDuller(baseColor, 0.7),
                 maxR: Math.max(5, mag * 2.0),
                 propagationSpeed: Math.max(1.8, mag * 0.45),
-                repeatPeriod: 1900, // Slightly different period
+                repeatPeriod: 1900,
             });
         }
-        
-        if (newRings.length > 0 || ringsData.length > 0) { // Update only if there's a change or existing rings to clear
+        if (newRings.length > 0 || ringsData.length > 0) {
              setRingsData(newRings);
         }
-
-    }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]); // Update dependency array, added getMagnitudeColorFunc as it's used in color callbacks
-
+    }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]);
 
 
-    if (globeDimensions.width === null || globeDimensions.height === null) {
-        return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe...</div>;
+    // Re-enable globe interaction useEffects
+    useEffect(() => {
+        if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {
+            const targetLatitude = (typeof defaultFocusLat === 'number' && !isNaN(defaultFocusLat)) ? defaultFocusLat : 20;
+            const targetLongitude = (typeof defaultFocusLng === 'number' && !isNaN(defaultFocusLng)) ? defaultFocusLng : 0;
+            globeRef.current.pointOfView({ lat: targetLatitude, lng: targetLongitude, altitude: defaultFocusAltitude }, 0);
+        }
+    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions]);
+
+    useEffect(() => {
+        const globeInstance = globeRef.current;
+        if (!globeInstance?.controls || typeof globeInstance.controls !== 'function' || !globeDimensions.width || !globeDimensions.height) {
+            return;
+        }
+        const controls = globeInstance.controls();
+        if (!controls) {
+            console.warn("Globe controls not available when trying to set properties or listeners.");
+            return;
+        }
+        controls.enableRotate = allowUserDragRotation;
+        controls.enablePan = allowUserDragRotation;
+        controls.enableZoom = allowUserDragRotation;
+        if (enableAutoRotation) {
+            if (isGlobeHovered || isDragging) {
+                if (controls.autoRotate !== false) controls.autoRotate = false;
+            } else {
+                if (controls.autoRotate !== true) controls.autoRotate = true;
+                const targetSpeed = -Math.abs(globeAutoRotateSpeed * 20);
+                if (controls.autoRotateSpeed !== targetSpeed) controls.autoRotateSpeed = targetSpeed;
+            }
+        } else {
+            if (controls.autoRotate !== false) controls.autoRotate = false;
+            if (controls.autoRotateSpeed !== 0) controls.autoRotateSpeed = 0;
+        }
+        const handleDragStart = () => setIsDragging(true);
+        const handleDragEnd = () => setIsDragging(false);
+        controls.addEventListener('start', handleDragStart);
+        controls.addEventListener('end', handleDragEnd);
+        return () => {
+            if (globeInstance.controls()) {
+                globeInstance.controls().removeEventListener('start', handleDragStart);
+                globeInstance.controls().removeEventListener('end', handleDragEnd);
+            }
+        };
+    }, [allowUserDragRotation, enableAutoRotation, globeAutoRotateSpeed, globeDimensions, isGlobeHovered, isDragging]);
+
+    const handlePointClick = useCallback((point) => {
+        if (point?.quakeData) onQuakeClick(point.quakeData);
+    }, [onQuakeClick]);
+
+    const handleContainerMouseMove = useCallback((event) => {
+        if (!globeRef.current || !containerRef.current || typeof globeRef.current.toGlobeCoords !== 'function') return;
+        if (mouseMoveTimeoutRef.current) clearTimeout(mouseMoveTimeoutRef.current);
+        mouseMoveTimeoutRef.current = setTimeout(() => {
+            if (!containerRef.current) return;
+            const rect = containerRef.current.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            if (globeRef.current && typeof globeRef.current.toGlobeCoords === 'function') {
+                const globeCoords = globeRef.current.toGlobeCoords(x, y);
+                const currentlyOverGlobe = !!globeCoords;
+                if (currentlyOverGlobe !== isGlobeHovered) setIsGlobeHovered(currentlyOverGlobe);
+            } else {
+                if (isGlobeHovered) setIsGlobeHovered(false);
+            }
+        }, 30);
+    }, [isGlobeHovered, setIsGlobeHovered]); // Removed setIsDragging from deps as it's not used here
+
+    const handleContainerMouseLeave = useCallback(() => {
+        if (mouseMoveTimeoutRef.current) clearTimeout(mouseMoveTimeoutRef.current);
+        if (isGlobeHovered) setIsGlobeHovered(false);
+    }, [isGlobeHovered, setIsGlobeHovered]);
+
+
+    // Conditional Rendering Logic:
+    // Only render the main content (debug div or eventually the globe)
+    // if dimensions are positive and seem valid.
+    // The outer containerRef div MUST always render to allow dimension calculation.
+    if (!globeDimensions.width || !globeDimensions.height || globeDimensions.height <= 10 || globeDimensions.width <=10 ) {
+        // This div is essential for `containerRef.current.offsetHeight` to be measurable.
+        // It should occupy the space the globe would, so `w-full h-full` is important.
+        return (
+            <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500 text-xs">
+                Initializing or Awaiting Valid Dimensions... (Current W: {String(globeDimensions.width)}, H: {String(globeDimensions.height)})
+            </div>
+        );
     }
 
-
+    // If dimensions are valid, render the actual Globe component
     return (
         <div
-            ref={containerRef}
-            className="w-full h-full"
-            style={{ position: 'relative', cursor: 'default' }}
-            onMouseMove={handleContainerMouseMove}
-            onMouseLeave={handleContainerMouseLeave}
+            ref={containerRef} // This ref is still attached for ResizeObserver.
+            className="w-full h-full" // This div establishes the space based on parent constraints.
+            style={{ position: 'relative', cursor: isGlobeHovered ? 'grab' : 'default' }}
+            onMouseMove={handleContainerMouseMove} // Re-enable hover detection
+            onMouseLeave={handleContainerMouseLeave} // Re-enable hover detection
         >
-            {globeDimensions.width > 0 && globeDimensions.height > 0 && (
-                <Globe
-                    ref={globeRef}
-                    width={globeDimensions.width}
-                    height={globeDimensions.height}
-                    globeImageUrl={null}
-                    bumpImageUrl={null}
-                    backgroundImageUrl={null}
-                    backgroundColor="rgba(0,0,0,0)"
-                    atmosphereColor={atmosphereColor}
-                    atmosphereAltitude={0.15}
+            <Globe
+                ref={globeRef}
+                width={globeDimensions.width} // Pass calculated dimensions
+                height={globeDimensions.height} // Pass calculated dimensions
+                globeImageUrl={null}
+                bumpImageUrl={null}
+                backgroundImageUrl={null}
+                backgroundColor="rgba(0,0,0,0)"
+                atmosphereColor={atmosphereColor} // Use prop
+                atmosphereAltitude={0.15}
 
-                    pointsData={points}
-                    pointLat="lat" pointLng="lng" pointAltitude="altitude"
-                    pointRadius="radius" pointColor="color" pointLabel="label"
-                    pointsMerge={false} pointsTransitionDuration={0}
-                    onPointClick={handlePointClick}
+                pointsData={points}
+                pointLat="lat" pointLng="lng" pointAltitude="altitude"
+                pointRadius="radius" pointColor="color" pointLabel="label"
+                pointsMerge={false} pointsTransitionDuration={0}
+                onPointClick={handlePointClick}
 
-                    pathsData={paths}
-                    pathPoints="coords" pathPointLat={p => p[1]} pathPointLng={p => p[0]}
-                    pathColor={path => path.color} pathStroke={path => path.stroke}
-                    pathLabel={path => path.label} pathTransitionDuration={0}
+                pathsData={paths}
+                pathPoints="coords" pathPointLat={p => p[1]} pathPointLng={p => p[0]}
+                pathColor={path => path.color} pathStroke={path => path.stroke}
+                pathLabel={path => path.label} pathTransitionDuration={0}
 
-                    ringsData={ringsData}
-                    ringLat="lat"
-                    ringLng="lng"
-                    ringAltitude="altitude"
-                    ringColor="color"
-                    ringMaxRadius="maxR"
-                    ringPropagationSpeed="propagationSpeed"
-                    ringRepeatPeriod="repeatPeriod"
-                    ringResolution={128}
+                ringsData={ringsData}
+                ringLat="lat"
+                ringLng="lng"
+                ringAltitude="altitude"
+                ringColor="color"
+                ringMaxRadius="maxR"
+                ringPropagationSpeed="propagationSpeed"
+                ringRepeatPeriod="repeatPeriod"
+                ringResolution={128}
 
-                    enablePointerInteraction={true}
-                />
-            )}
+                enablePointerInteraction={true} // Keep interactions enabled
+            />
         </div>
     );
 };
