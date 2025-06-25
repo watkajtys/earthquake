@@ -108,101 +108,52 @@ const InteractiveGlobeView = ({
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
     const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
-    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false); // Added
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
-    const windowLoadedRef = useRef(false); // To track if window.load has fired
     const [ringsData, setRingsData] = useState([]);
 
-    const debounce = (func, delay) => {
-        let timeout;
-        const debouncedFunc = (...args) => {
-            clearTimeout(timeout);
-            debouncedFunc.timeout = setTimeout(() => func.apply(this, args), delay);
-        };
-        debouncedFunc.timeout = null;
-        return debouncedFunc;
-    };
-
     useEffect(() => {
-        const currentContainerRef = containerRef.current;
-        if (!currentContainerRef) return;
+        const currentContainerRefVal = containerRef.current; // Capture value for cleanup
+        if (!currentContainerRefVal) {
+            return;
+        }
 
         const updateDimensions = () => {
-            // Don't run if window.load hasn't fired yet, unless it's a resize event (implicitly initialLayoutComplete is true)
-            if (!initialLayoutComplete && !windowLoadedRef.current) return;
-
-            const currentContainerRefActual = containerRef.current; // Re-read ref
-            if (!currentContainerRefActual) return;
-
-            const newWidth = currentContainerRefActual.offsetWidth;
-            const newHeight = currentContainerRefActual.offsetHeight;
+            // Ensure ref is still valid inside the closure
+            if (!containerRef.current) return;
+            const newWidth = containerRef.current.offsetWidth;
+            const newHeight = containerRef.current.offsetHeight;
 
             if (newWidth > 10 && newHeight > 10) {
-                 setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
+                setGlobeDimensions(prev => {
+                    if (prev.width !== newWidth || prev.height !== newHeight) {
+                        return { width: newWidth, height: newHeight };
+                    }
+                    return prev;
+                });
             }
         };
 
-        // Debounced version for ResizeObserver
-        const debouncedUpdateDimensions = debounce(updateDimensions, 200);
+        const resizeObserver = new ResizeObserver(() => {
+            updateDimensions();
+        });
 
-        if (document.readyState === 'complete') {
-            windowLoadedRef.current = true;
-            setInitialLayoutComplete(true);
-            // Call updateDimensions directly here to ensure it runs with initialLayoutComplete = true
-            if (containerRef.current) {
-                const newWidth = containerRef.current.offsetWidth;
-                const newHeight = containerRef.current.offsetHeight;
-                if (newWidth > 10 && newHeight > 10) { // Check for valid dimensions
-                    setGlobeDimensions({ width: newWidth, height: newHeight });
-                }
-            }
-        } else {
-            const handleWindowLoad = () => {
-                windowLoadedRef.current = true;
-                setInitialLayoutComplete(true);
-                // Explicitly call updateDimensions after setting initialLayoutComplete to true
-                // and window has loaded.
-                if (containerRef.current) {
-                    const newWidth = containerRef.current.offsetWidth;
-                    const newHeight = containerRef.current.offsetHeight;
-                    if (newWidth > 10 && newHeight > 10) {
-                         setGlobeDimensions({ width: newWidth, height: newHeight });
-                    } else {
-                        // Fallback or retry if dimensions are still not good
-                        setTimeout(() => {
-                            if (containerRef.current) {
-                                const w = containerRef.current.offsetWidth;
-                                const h = containerRef.current.offsetHeight;
-                                if (w > 10 && h > 10) {
-                                    setGlobeDimensions({ width: w, height: h });
-                                }
-                            }
-                        }, 150); // A short delay for a retry
-                    }
-                }
-                window.removeEventListener('load', handleWindowLoad); // Clean up listener
-            };
-            window.addEventListener('load', handleWindowLoad);
-        }
+        resizeObserver.observe(currentContainerRefVal);
 
-        const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
-        if (currentContainerRef) { // Ensure ref is still valid before observing
-            resizeObserver.observe(currentContainerRef);
-        }
+        // Perform an initial dimension update shortly after mount,
+        // allowing the browser a moment to stabilize layout.
+        const initialCheckTimeout = setTimeout(updateDimensions, 100);
 
         return () => {
-            // Note: handleWindowLoad cleanup is inside the handler itself upon execution.
-            // If the component unmounts before 'load', the listener might remain.
-            // To be fully robust, it would need to be removed here too if it was assigned to a variable accessible here.
-            // For this specific subtask, the provided snippet's cleanup is followed.
-            if (currentContainerRef) {
-                resizeObserver.unobserve(currentContainerRef);
+            // Use the captured value in cleanup, as containerRef.current might be nullified
+            // by the time this cleanup runs if the component unmounts quickly.
+            if (currentContainerRefVal) {
+              resizeObserver.unobserve(currentContainerRefVal);
             }
-            if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
+            clearTimeout(initialCheckTimeout);
         };
-    }, [initialLayoutComplete]); // Add initialLayoutComplete to dependency array.
+    }, []); // Runs once on mount
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
