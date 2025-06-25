@@ -107,7 +107,7 @@ const GlobeLayout = (props) => {
   } = props;
 
   return (
-    <div className="block h-full w-full">
+    <div className="block h-full w-full relative overflow-hidden"> {/* MODIFIED: Added relative and overflow-hidden */}
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
         {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
            <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
