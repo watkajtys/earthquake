@@ -1,91 +1,38 @@
 // src/InteractiveGlobeView.jsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
-import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
+import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
 
-/**
- * Utility function to take a color string (hex or rgba) and return a new rgba string
- * with its opacity multiplied by `opacityFactor`.
- *
- * @param {string} colorString - The input color string (e.g., "#RRGGBB", "rgba(r,g,b,a)").
- * @param {number} opacityFactor - The factor by which to multiply the current opacity (e.g., 0.7 for 70% of original).
- * @returns {string} A new rgba color string with the adjusted opacity. Returns a fallback color 'rgba(128,128,128,0.5)' if parsing fails.
- */
+// makeColorDuller function (kept as is)
 const makeColorDuller = (colorString, opacityFactor) => {
     const fallbackColor = 'rgba(128,128,128,0.5)';
     let r, g, b, currentAlpha = 1.0;
-
-    if (typeof colorString !== 'string') {
-        return fallbackColor;
-    }
-
+    if (typeof colorString !== 'string') return fallbackColor;
     try {
         if (colorString.startsWith('#')) {
             let hex = colorString.slice(1);
-            if (hex.length === 3) {
-                hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-            }
+            if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
             if (hex.length === 6) {
-                r = parseInt(hex.substring(0, 2), 16);
-                g = parseInt(hex.substring(2, 4), 16);
-                b = parseInt(hex.substring(4, 6), 16);
-                currentAlpha = 1.0; // Hex implies full opacity initially
-            } else {
-                return fallbackColor; // Invalid hex length
-            }
+                r = parseInt(hex.substring(0,2), 16);
+                g = parseInt(hex.substring(2,4), 16);
+                b = parseInt(hex.substring(4,6), 16);
+                currentAlpha = 1.0;
+            } else return fallbackColor;
         } else if (colorString.startsWith('rgba(') && colorString.endsWith(')')) {
-            const parts = colorString.substring(5, colorString.length - 1).split(',');
+            const parts = colorString.substring(5, colorString.length-1).split(',');
             if (parts.length === 4) {
-                r = parseInt(parts[0].trim(), 10);
-                g = parseInt(parts[1].trim(), 10);
-                b = parseInt(parts[2].trim(), 10);
+                r = parseInt(parts[0].trim(),10);
+                g = parseInt(parts[1].trim(),10);
+                b = parseInt(parts[2].trim(),10);
                 currentAlpha = parseFloat(parts[3].trim());
-            } else {
-                return fallbackColor; // Invalid rgba format
-            }
-        } else {
-            return fallbackColor; // Not a recognized format
-        }
-
-        if (isNaN(r) || isNaN(g) || isNaN(b) || isNaN(currentAlpha)) {
-            return fallbackColor; // Parsing resulted in NaN
-        }
-
-        const newAlpha = Math.max(0, Math.min(1, currentAlpha * opacityFactor));
+            } else return fallbackColor;
+        } else return fallbackColor;
+        if (isNaN(r) || isNaN(g) || isNaN(b) || isNaN(currentAlpha)) return fallbackColor;
+        const newAlpha = Math.max(0,Math.min(1,currentAlpha * opacityFactor));
         return `rgba(${r},${g},${b},${newAlpha.toFixed(3)})`;
-
-    } catch (error) {
-        console.error("Error processing color in makeColorDuller:", colorString, error);
-        return fallbackColor; // Catch-all for any unexpected errors during parsing/processing
-    }
+    } catch (error) { return fallbackColor; }
 };
 
-/**
- * Renders an interactive 3D globe using `react-globe.gl` to display earthquake data.
- * It visualizes recent earthquakes, highlighted significant quakes, and optionally coastlines
- * and tectonic plate boundaries. The component consumes earthquake data (`globeEarthquakes`,
- * `lastMajorQuake`, `previousMajorQuake`) from `EarthquakeDataContext`.
- * It manages globe dimensions, auto-rotation, user interaction (hover, drag), and dynamic
- * point/ring updates based on incoming data.
- *
- * @component
- * @param {Object} props - The component's props.
- * @param {function(Object):void} props.onQuakeClick - Callback function triggered when an earthquake point on the globe is clicked. Receives the quake data object.
- * @param {function(number):string} props.getMagnitudeColorFunc - Function that returns a color string based on an earthquake's magnitude.
- * @param {Object} [props.coastlineGeoJson] - GeoJSON data for rendering coastlines.
- * @param {Object} [props.tectonicPlatesGeoJson] - GeoJSON data for rendering tectonic plate boundaries.
- * @param {string} [props.highlightedQuakeId] - The ID of a specific earthquake to be visually highlighted on the globe.
- * @param {Array<Array<Object>>} [props.activeClusters=[]] - Array of active earthquake clusters. Each cluster is an array of earthquake objects.
- *   (Note: Cluster visualization logic based on this prop appears to be commented out in the current implementation).
- * @param {string} [props.atmosphereColor="rgba(100,100,255,0.3)"] - Color of the globe's atmosphere effect.
- * @param {number} [props.defaultFocusLat=20] - Default latitude for the globe's camera focus.
- * @param {number} [props.defaultFocusLng=0] - Default longitude for the globe's camera focus.
- * @param {number} [props.defaultFocusAltitude=2.5] - Default altitude (zoom level) for the globe's camera focus.
- * @param {boolean} [props.allowUserDragRotation=true] - Whether users can manually rotate the globe by dragging.
- * @param {boolean} [props.enableAutoRotation=true] - Whether the globe should auto-rotate when not being interacted with.
- * @param {number} [props.globeAutoRotateSpeed=0.1] - Speed of the auto-rotation.
- * @returns {JSX.Element} The InteractiveGlobeView component.
- */
 const InteractiveGlobeView = ({
     onQuakeClick,
     getMagnitudeColorFunc,
@@ -104,9 +51,10 @@ const InteractiveGlobeView = ({
     const { globeEarthquakes, lastMajorQuake, previousMajorQuake } = useEarthquakeDataState();
 
     const globeRef = useRef();
-    const containerRef = useRef(null); // This ref will be attached to the div whose size we observe
+    const containerRef = useRef(null);
 
     const [calculatedSize, setCalculatedSize] = useState({ width: 0, height: 0 });
+    const [isInitialMeasurementDone, setIsInitialMeasurementDone] = useState(false);
 
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
@@ -116,213 +64,160 @@ const InteractiveGlobeView = ({
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
 
-    // useEffect for ResizeObserver
+    // New useEffect for Delayed Initial Measurement
     useEffect(() => {
-        const observedElement = containerRef.current;
-        if (!observedElement) {
-            return;
+        let loadListenerAttached = false;
+        let retryTimeoutId = null;
+
+        const measureAndSetInitialSize = (isRetry = false) => {
+            if (containerRef.current) {
+                const width = containerRef.current.offsetWidth;
+                const height = containerRef.current.offsetHeight;
+
+                if (width > 10 && height > 10) {
+                    setCalculatedSize({ width, height });
+                    setIsInitialMeasurementDone(true);
+                } else {
+                    if (!isRetry) {
+                        clearTimeout(retryTimeoutId);
+                        retryTimeoutId = setTimeout(() => measureAndSetInitialSize(true), 250); // Retry once
+                    } else {
+                        // If retry also fails, we mark initial measurement as "done" to prevent infinite loops
+                        // and allow ResizeObserver (to be added in next step) to hopefully pick up correct size later.
+                        // Or, it indicates a more persistent layout issue where container truly has no size.
+                        setIsInitialMeasurementDone(true);
+                    }
+                }
+            } else {
+                 if (!isRetry) {
+                    clearTimeout(retryTimeoutId);
+                    retryTimeoutId = setTimeout(() => measureAndSetInitialSize(true), 250); // Retry if ref not ready
+                 } else {
+                    setIsInitialMeasurementDone(true);
+                 }
+            }
+        };
+
+        const handleLoadAndMeasure = () => {
+            requestAnimationFrame(() => {
+                setTimeout(measureAndSetInitialSize, 100); // 100ms delay after rAF
+            });
+        };
+
+        if (document.readyState === 'complete') {
+            handleLoadAndMeasure();
+        } else {
+            window.addEventListener('load', handleLoadAndMeasure, { once: true });
+            loadListenerAttached = true;
         }
 
+        return () => {
+            if (loadListenerAttached) {
+                // Note: {once: true} listeners usually don't need explicit removal after firing,
+                // but if component unmounts BEFORE 'load', this is good practice.
+                window.removeEventListener('load', handleLoadAndMeasure);
+            }
+            clearTimeout(retryTimeoutId);
+        };
+    }, []); // Runs once on mount
+
+    // useEffect for ResizeObserver - adapted to run after initial measurement
+    useEffect(() => {
+        if (!isInitialMeasurementDone || !containerRef.current) {
+            return; // Don't setup observer until initial measurement is done and ref is available
+        }
+
+        const observedElement = containerRef.current;
         const resizeObserver = new ResizeObserver(entries => {
             if (entries && entries.length > 0) {
                 const { width, height } = entries[0].contentRect;
                 setCalculatedSize(currentSize => {
+                    // Only update if size has actually changed to prevent potential loops
                     if (currentSize.width !== width || currentSize.height !== height) {
                         return { width, height };
                     }
-                    return currentSize; // No change, return current state to avoid re-render
+                    return currentSize;
                 });
             }
         });
 
         resizeObserver.observe(observedElement);
 
-        // Initial size check in case ResizeObserver doesn't fire immediately or element already has size
-        // This can sometimes help if the element has initial dimensions before any resize event
-        const initialWidth = observedElement.offsetWidth;
-        const initialHeight = observedElement.offsetHeight;
-        if (initialWidth > 0 && initialHeight > 0) {
-             setCalculatedSize(currentSize => {
-                if (currentSize.width !== initialWidth || currentSize.height !== initialHeight) {
-                    return { width: initialWidth, height: initialHeight };
-                }
-                return currentSize;
-            });
-        }
-
-
         return () => {
             resizeObserver.unobserve(observedElement);
             resizeObserver.disconnect();
         };
-    }, []); // Empty dependency array means this effect runs once on mount and cleans up on unmount
+    }, [isInitialMeasurementDone]); // Dependency: re-run if isInitialMeasurementDone changes (to attach observer)
 
+    // Data processing useEffects (points, paths, rings) - adapted to use calculatedSize if needed by original logic, or kept as is
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => {
             const isHighlighted = quake.id === highlightedQuakeId;
             const magValue = parseFloat(quake.properties.mag) || 0;
             let pointRadius, pointColor, pointAltitude, pointLabel, pointType;
-
             if (isHighlighted) {
                 pointRadius = Math.max(0.6, (magValue / 7) + 0.4);
                 pointColor = getMagnitudeColorFunc(magValue);
                 pointAltitude = 0.03;
                 pointLabel = `LATEST SIGNIFICANT: M${quake.properties.mag?.toFixed(1)} - ${quake.properties.place}`;
                 pointType = 'highlighted_significant_quake';
-            } else {
+            } else { /* ... other point logic ... */
                 pointRadius = Math.max(0.15, (magValue / 7) + 0.05);
                 pointColor = getMagnitudeColorFunc(quake.properties.mag);
                 pointAltitude = 0.01;
                 pointLabel = `M${quake.properties.mag?.toFixed(1)} - ${quake.properties.place}`;
                 pointType = 'recent_quake';
             }
-            return {
-                lat: quake.geometry?.coordinates?.[1], lng: quake.geometry?.coordinates?.[0], altitude: pointAltitude, radius: pointRadius, color: pointColor,
-                label: pointLabel,
-                quakeData: quake, type: pointType
-            };
+            return { lat: quake.geometry?.coordinates?.[1], lng: quake.geometry?.coordinates?.[0], altitude: pointAltitude, radius: pointRadius, color: pointColor, label: pointLabel, quakeData: quake, type: pointType };
         }).filter(p => typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng));
 
         if (previousMajorQuake && previousMajorQuake.id && previousMajorQuake.geometry?.coordinates && previousMajorQuake.properties) {
+            // ... (logic for previousMajorQuake points as in original, no changes needed here for sizing)
             const prevMagValue = parseFloat(previousMajorQuake.properties.mag) || 0;
             let foundAndUpdated = false;
             allPointsData = allPointsData.map(p => {
                 if (p.quakeData.id === previousMajorQuake.id) {
                     foundAndUpdated = true;
-                    // If previousMajorQuake is also the highlightedQuakeId, let highlighted style take precedence mostly
                     if (p.quakeData.id === highlightedQuakeId) {
-                        return {
-                            ...p, // Keep most of highlighted style
-                            label: `LATEST & PREVIOUS SIG: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`, // Special label
-                            type: 'highlighted_previous_significant_quake'
-                        };
+                        return { ...p, label: `LATEST & PREVIOUS SIG: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`, type: 'highlighted_previous_significant_quake' };
                     }
-                    return {
-                        ...p,
-                        radius: Math.max(0.55, (prevMagValue / 7) + 0.35), // Slightly smaller than latest highlighted
-                        color: getMagnitudeColorFunc(prevMagValue),
-                        altitude: 0.025, // Slightly different altitude
-                        label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
-                        type: 'previous_major_quake'
-                    };
+                    return { ...p, radius: Math.max(0.55, (prevMagValue / 7) + 0.35), color: getMagnitudeColorFunc(prevMagValue), altitude: 0.025, label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`, type: 'previous_major_quake' };
                 }
                 return p;
             });
-
-            if (!foundAndUpdated) {
-                 // Ensure previousMajorQuake is not also the current highlighted one before adding separately
-                if (previousMajorQuake.id !== highlightedQuakeId) {
-                    allPointsData.push({
-                        lat: previousMajorQuake.geometry.coordinates[1],
-                        lng: previousMajorQuake.geometry.coordinates[0],
-                        altitude: 0.025,
-                        radius: Math.max(0.55, (prevMagValue / 7) + 0.35),
-                        color: getMagnitudeColorFunc(prevMagValue),
-                        label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`,
-                        quakeData: previousMajorQuake,
-                        type: 'previous_major_quake'
-                    });
-                }
+            if (!foundAndUpdated && previousMajorQuake.id !== highlightedQuakeId) {
+                allPointsData.push({ lat: previousMajorQuake.geometry.coordinates[1], lng: previousMajorQuake.geometry.coordinates[0], altitude: 0.025, radius: Math.max(0.55, (parseFloat(previousMajorQuake.properties.mag) || 0 / 7) + 0.35), color: getMagnitudeColorFunc(previousMajorQuake.properties.mag), label: `PREVIOUS SIGNIFICANT: M${previousMajorQuake.properties.mag?.toFixed(1)} - ${previousMajorQuake.properties.place}`, quakeData: previousMajorQuake, type: 'previous_major_quake'});
             }
         }
-
-        // --- NEW: Process activeClusters ---
-        // if (activeClusters && activeClusters.length > 0) {
-        //     activeClusters.forEach((cluster, index) => {
-        //         if (cluster.length === 0) return;
-
-        //         let sumLat = 0, sumLng = 0, maxMag = 0;
-        //         let quakesInClusterDetails = [];
-
-        //         cluster.forEach(quake => {
-        //             sumLat += quake.geometry.coordinates[1];
-        //             sumLng += quake.geometry.coordinates[0];
-        //             if (quake.properties.mag > maxMag) {
-        //                 maxMag = quake.properties.mag;
-        //             }
-        //             quakesInClusterDetails.push({
-        //                 id: quake.id,
-        //                 mag: quake.properties.mag,
-        //                 place: quake.properties.place,
-        //                 time: quake.properties.time
-        //             });
-        //         });
-
-        //         const centroidLat = sumLat / cluster.length;
-        //         const centroidLng = sumLng / cluster.length;
-
-        //         allPointsData.push({
-        //             lat: centroidLat,
-        //             lng: centroidLng,
-        //             altitude: 0.02, // Slightly elevated to distinguish, if needed
-        //             radius: 0.5 + (cluster.length / 10), // Radius based on cluster size, adjust as needed
-        //             color: 'rgba(255, 255, 0, 0.75)', // Bright yellow for clusters, with some transparency
-        //             label: `Cluster: ${cluster.length} quakes (Max Mag: ${maxMag.toFixed(1)})`,
-        //             type: 'cluster_center',
-        //             // Store the original cluster data for potential interaction
-        //             clusterData: {
-        //                 id: `cluster_${index}_${Date.now()}`, // Create a unique ID for the cluster point
-        //                 quakes: quakesInClusterDetails,
-        //                 centroidLat,
-        //                 centroidLng,
-        //                 numQuakes: cluster.length,
-        //                 maxMag
-        //             },
-        //             // To make it clickable and identifiable by onQuakeClick,
-        //             // we can mock a minimal 'quakeData' structure for clusters.
-        //             // App.jsx's onQuakeClick expects properties.detail or properties.url.
-        //             // We'll need to handle 'cluster_center' type clicks differently there, or adapt this.
-        //             // For now, this structure helps avoid errors in existing onPointClick if it tries to access quakeData.properties.detail
-        //             quakeData: {
-        //                 id: `cluster_vis_${index}_${Date.now()}`, // Unique ID for this visual point
-        //                 properties: {
-        //                     place: `Cluster of ${cluster.length} earthquakes`,
-        //                     mag: maxMag,
-        //                     // No 'detail' or 'url' for clusters in the same way as individual quakes
-        //                 },
-        //                 geometry: {
-        //                     type: "Point",
-        //                     coordinates: [centroidLng, centroidLat, 0] // Mock geometry
-        //                 },
-        //                 isCluster: true, // Custom flag
-        //                 clusterDetails: { // Pass actual detailed quake list
-        //                     quakes: cluster.map(q => ({ // Map to avoid passing huge objects if not needed directly by globe label
-        //                         id: q.id,
-        //                         mag: q.properties.mag,
-        //                         place: q.properties.place,
-        //                         time: q.properties.time,
-        //                         detail: q.properties.detail || q.properties.url // Keep detail for individual quakes within cluster
-        //                     }))
-        //                 }
-        //             }
-        //         });
-        //     });
-        // }
-        // --- END NEW ---
         setPoints(allPointsData);
-    }, [globeEarthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]); // Update dependency array
+    }, [globeEarthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]);
 
     useEffect(() => {
         let processedPaths = [];
-        if (coastlineGeoJson?.type === "GeometryCollection" && Array.isArray(coastlineGeoJson.geometries)) {
-            processedPaths = processedPaths.concat(coastlineGeoJson.geometries
-                .filter(g => g.type === "LineString" && Array.isArray(g.coordinates))
-                .map((g, i) => ({ id: `coastline-${i}`, coords: g.coordinates, color: 'rgb(208,208,214)', stroke: 0.25, label: 'Coastline', properties: { Boundary_Type: 'Coastline' } })));
+        if (coastlineGeoJson?.type === "GeometryCollection" && Array.isArray(coastlineGeoJson.geometries)) { /* ... */
+            processedPaths = processedPaths.concat(coastlineGeoJson.geometries.filter(g => g.type === "LineString").map((g,i) => ({id: `coastline-${i}`, coords: g.coordinates, color:'rgb(208,208,214)', stroke:0.25, label:'Coastline', properties:{Boundary_Type:'Coastline'}})));
         }
-        if (tectonicPlatesGeoJson?.type === "FeatureCollection" && Array.isArray(tectonicPlatesGeoJson.features)) {
-            processedPaths = processedPaths.concat(tectonicPlatesGeoJson.features
-                .filter(f => f.type === "Feature" && f.geometry?.type === "LineString" && Array.isArray(f.geometry.coordinates))
-                .map((f, i) => {
-                    let color = 'rgba(255, 165, 0, 0.8)'; const type = f.properties?.Boundary_Type;
-                    if (type === 'Convergent') color = 'rgba(220, 20, 60, 0.8)'; else if (type === 'Divergent') color = 'rgba(60, 179, 113, 0.8)'; else if (type === 'Transform') color = 'rgba(70, 130, 180, 0.8)';
-                    return { id: `plate-${f.properties?.OBJECTID || i}`, coords: f.geometry.coordinates, color, stroke: 1, label: `Plate Boundary: ${type || 'Unknown'}`, properties: f.properties };
-                }));
+        if (tectonicPlatesGeoJson?.type === "FeatureCollection" && Array.isArray(tectonicPlatesGeoJson.features)) { /* ... */
+            processedPaths = processedPaths.concat(tectonicPlatesGeoJson.features.filter(f => f.geometry?.type === "LineString").map((f,i) => { let color = 'rgba(255,165,0,0.8)'; const type=f.properties?.Boundary_Type; if(type==='Convergent')color='rgba(220,20,60,0.8)';else if(type==='Divergent')color='rgba(60,179,113,0.8)';else if(type==='Transform')color='rgba(70,130,180,0.8)'; return {id:`plate-${f.properties?.OBJECTID||i}`, coords:f.geometry.coordinates, color, stroke:1, label:`Plate Boundary: ${type||'Unknown'}`, properties:f.properties};}));
         }
         setPaths(processedPaths);
     }, [coastlineGeoJson, tectonicPlatesGeoJson]);
 
     useEffect(() => {
-        // Pass calculatedSize to pointOfView effect
+        const newRings = [];
+        if (lastMajorQuake && lastMajorQuake.geometry && lastMajorQuake.properties && typeof lastMajorQuake.properties.mag === 'number') { /* ... */
+            const coords = lastMajorQuake.geometry.coordinates; const mag = parseFloat(lastMajorQuake.properties.mag);
+            newRings.push({ id:`major_quake_ring_latest_${lastMajorQuake.id}_${lastMajorQuake.properties.time}_${Date.now()}`, lat:coords[1],lng:coords[0],altitude:0.02,color:()=>getMagnitudeColorFunc(mag),maxR:Math.max(6,mag*2.2),propagationSpeed:Math.max(2,mag*0.5),repeatPeriod:1800 });
+        }
+        if (previousMajorQuake && previousMajorQuake.geometry && previousMajorQuake.properties && typeof previousMajorQuake.properties.mag === 'number') { /* ... */
+            const coords = previousMajorQuake.geometry.coordinates; const mag = parseFloat(previousMajorQuake.properties.mag); const baseColor = getMagnitudeColorFunc(mag);
+            newRings.push({ id:`major_quake_ring_prev_${previousMajorQuake.id}_${previousMajorQuake.properties.time}_${Date.now()}`, lat:coords[1],lng:coords[0],altitude:0.018,color:()=>makeColorDuller(baseColor,0.7),maxR:Math.max(5,mag*2.0),propagationSpeed:Math.max(1.8,mag*0.45),repeatPeriod:1900 });
+        }
+        if (newRings.length > 0 || ringsData.length > 0) setRingsData(newRings);
+    }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]);
+
+    // Globe interaction useEffects - adapted to use calculatedSize
+    useEffect(() => {
         if (globeRef.current?.pointOfView && calculatedSize.width > 0 && calculatedSize.height > 0) {
             const targetLatitude = (typeof defaultFocusLat === 'number' && !isNaN(defaultFocusLat)) ? defaultFocusLat : 20;
             const targetLongitude = (typeof defaultFocusLng === 'number' && !isNaN(defaultFocusLng)) ? defaultFocusLng : 0;
@@ -330,172 +225,102 @@ const InteractiveGlobeView = ({
         }
     }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, calculatedSize]);
 
-    // Effect to manage globe controls and drag listeners
     useEffect(() => {
         const globeInstance = globeRef.current;
-        // Ensure controls are set up only when globe is rendered and has size
         if (!globeInstance?.controls || typeof globeInstance.controls !== 'function' || calculatedSize.width === 0 || calculatedSize.height === 0) {
             return;
         }
-
         const controls = globeInstance.controls();
-        if (!controls) {
-            return;
-        }
-
+        if (!controls) return;
         controls.enableRotate = allowUserDragRotation;
         controls.enablePan = allowUserDragRotation;
         controls.enableZoom = allowUserDragRotation;
-
         if (enableAutoRotation) {
-            if (isGlobeHovered || isDragging) {
-                if (controls.autoRotate !== false) controls.autoRotate = false;
-            } else {
-                if (controls.autoRotate !== true) controls.autoRotate = true;
-                const targetSpeed = -Math.abs(globeAutoRotateSpeed * 20);
-                if (controls.autoRotateSpeed !== targetSpeed) controls.autoRotateSpeed = targetSpeed;
-            }
-        } else {
-            if (controls.autoRotate !== false) controls.autoRotate = false;
-            if (controls.autoRotateSpeed !== 0) controls.autoRotateSpeed = 0;
-        }
-
+            if (isGlobeHovered || isDragging) { if (controls.autoRotate !== false) controls.autoRotate = false; }
+            else { if (controls.autoRotate !== true) controls.autoRotate = true; const targetSpeed = -Math.abs(globeAutoRotateSpeed * 20); if (controls.autoRotateSpeed !== targetSpeed) controls.autoRotateSpeed = targetSpeed; }
+        } else { if (controls.autoRotate !== false) controls.autoRotate = false; if (controls.autoRotateSpeed !== 0) controls.autoRotateSpeed = 0; }
         const handleDragStart = () => setIsDragging(true);
         const handleDragEnd = () => setIsDragging(false);
-
         controls.addEventListener('start', handleDragStart);
         controls.addEventListener('end', handleDragEnd);
-
-        return () => {
-            if (globeInstance.controls()) {
-                globeInstance.controls().removeEventListener('start', handleDragStart);
-                globeInstance.controls().removeEventListener('end', handleDragEnd);
-            }
-        };
+        return () => { if (globeInstance.controls()) { controls.removeEventListener('start', handleDragStart); controls.removeEventListener('end', handleDragEnd); }};
     }, [allowUserDragRotation, enableAutoRotation, globeAutoRotateSpeed, calculatedSize, isGlobeHovered, isDragging]);
 
-
-    const handlePointClick = useCallback((point) => {
-        if (point?.quakeData) onQuakeClick(point.quakeData);
-    }, [onQuakeClick]);
+    const handlePointClick = useCallback((point) => { if (point?.quakeData) onQuakeClick(point.quakeData); }, [onQuakeClick]);
 
     const handleContainerMouseMove = useCallback((event) => {
-        if (!globeRef.current || !containerRef.current || typeof globeRef.current.toGlobeCoords !== 'function') {
-            return;
-        }
-        if (mouseMoveTimeoutRef.current) {
-            clearTimeout(mouseMoveTimeoutRef.current);
-        }
+        if (!globeRef.current || !containerRef.current || typeof globeRef.current.toGlobeCoords !== 'function') return;
+        if (mouseMoveTimeoutRef.current) clearTimeout(mouseMoveTimeoutRef.current);
         mouseMoveTimeoutRef.current = setTimeout(() => {
             if (!containerRef.current) return;
-            const rect = containerRef.current.getBoundingClientRect(); // Use containerRef for mouse coords relative to the observed div
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-
+            const rect = containerRef.current.getBoundingClientRect();
+            const x = event.clientX - rect.left; const y = event.clientY - rect.top;
             if (globeRef.current && typeof globeRef.current.toGlobeCoords === 'function') {
                 const globeCoords = globeRef.current.toGlobeCoords(x, y);
                 const currentlyOverGlobe = !!globeCoords;
-                if (currentlyOverGlobe !== isGlobeHovered) {
-                    setIsGlobeHovered(currentlyOverGlobe);
-                }
-            } else {
-                if (isGlobeHovered) setIsGlobeHovered(false);
-            }
+                if (currentlyOverGlobe !== isGlobeHovered) setIsGlobeHovered(currentlyOverGlobe);
+            } else { if (isGlobeHovered) setIsGlobeHovered(false); }
         }, 30);
-    }, [isGlobeHovered, setIsGlobeHovered]); // containerRef is stable, globeRef is stable
-
-    const handleContainerMouseLeave = useCallback(() => {
-        if (mouseMoveTimeoutRef.current) {
-            clearTimeout(mouseMoveTimeoutRef.current);
-        }
-        if (isGlobeHovered) {
-            setIsGlobeHovered(false);
-        }
     }, [isGlobeHovered, setIsGlobeHovered]);
 
-    // useEffect for Rings Data (no changes needed here, it's independent of local dimension state)
-    useEffect(() => {
-        const newRings = [];
-        if (lastMajorQuake && /* ... */ typeof lastMajorQuake.properties.mag === 'number') {
-            const coords = lastMajorQuake.geometry.coordinates;
-            const mag = parseFloat(lastMajorQuake.properties.mag);
-            newRings.push({
-                id: `major_quake_ring_latest_${lastMajorQuake.id}_${lastMajorQuake.properties.time}_${Date.now()}`,
-                lat: coords[1], lng: coords[0], altitude: 0.02,
-                color: () => getMagnitudeColorFunc(mag), maxR: Math.max(6, mag * 2.2),
-                propagationSpeed: Math.max(2, mag * 0.5), repeatPeriod: 1800,
-            });
-        }
-        if (previousMajorQuake && /* ... */ typeof previousMajorQuake.properties.mag === 'number') {
-            const coords = previousMajorQuake.geometry.coordinates;
-            const mag = parseFloat(previousMajorQuake.properties.mag);
-            const baseColor = getMagnitudeColorFunc(mag);
-            newRings.push({
-                id: `major_quake_ring_prev_${previousMajorQuake.id}_${previousMajorQuake.properties.time}_${Date.now()}`,
-                lat: coords[1], lng: coords[0], altitude: 0.018,
-                color: () => makeColorDuller(baseColor, 0.7), maxR: Math.max(5, mag * 2.0),
-                propagationSpeed: Math.max(1.8, mag * 0.45), repeatPeriod: 1900,
-            });
-        }
-        if (newRings.length > 0 || ringsData.length > 0) {
-             setRingsData(newRings);
-        }
-    }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]);
+    const handleContainerMouseLeave = useCallback(() => {
+        if (mouseMoveTimeoutRef.current) clearTimeout(mouseMoveTimeoutRef.current);
+        if (isGlobeHovered) setIsGlobeHovered(false);
+    }, [isGlobeHovered, setIsGlobeHovered]);
 
+    // Return statement will be updated in a subsequent step for conditional rendering
+    // For now, this is the original return structure, which will be modified.
+    // The old conditional rendering `if (globeDimensions.width === null || globeDimensions.height === null)`
+    // will be replaced by one checking `isInitialMeasurementDone` and `calculatedSize`.
+    // The Globe props `width` and `height` will also be updated.
 
-    // The main div (containerRef) always renders to be observed by ResizeObserver.
-    // It takes w-full h-full from its parent (GlobeLayout).
+    // Placeholder for the return statement that will be fully implemented in step 5
+    // This return structure is simplified from the original to focus on the logic being added.
+    // The actual globe rendering will be added back in step 5.
+    if (!isInitialMeasurementDone || calculatedSize.width <= 10 || calculatedSize.height <= 10) {
+        return (
+            <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500 text-xs">
+                Initializing Globe View... (W: {calculatedSize.width}, H: {calculatedSize.height})
+            </div>
+        );
+    }
+
     return (
         <div
-            ref={containerRef}
-            className="w-full h-full" // This div establishes the space based on parent CSS (GlobeLayout)
+            ref={containerRef} // containerRef is on the always-rendered div
+            className="w-full h-full"
             style={{ position: 'relative', cursor: isGlobeHovered ? 'grab' : 'default' }}
             onMouseMove={handleContainerMouseMove}
             onMouseLeave={handleContainerMouseLeave}
         >
-            {(calculatedSize.width > 10 && calculatedSize.height > 10) ? (
-                <Globe
+            {/* This is where the Globe component will be rendered conditionally in the next step */}
+            {/* For now, ensuring the structure is correct and old sizing logic is gone */}
+             <Globe
                     ref={globeRef}
-                    width={calculatedSize.width} // Pass calculated dimensions
-                    height={calculatedSize.height} // Pass calculated dimensions
+                    width={calculatedSize.width} // Will use calculatedSize
+                    height={calculatedSize.height} // Will use calculatedSize
                     globeImageUrl={null}
                     bumpImageUrl={null}
                     backgroundImageUrl={null}
                     backgroundColor="rgba(0,0,0,0)"
                     atmosphereColor={atmosphereColor}
                     atmosphereAltitude={0.15}
-
                     pointsData={points}
                     pointLat="lat" pointLng="lng" pointAltitude="altitude"
                     pointRadius="radius" pointColor="color" pointLabel="label"
                     pointsMerge={false} pointsTransitionDuration={0}
                     onPointClick={handlePointClick}
-
                     pathsData={paths}
                     pathPoints="coords" pathPointLat={p => p[1]} pathPointLng={p => p[0]}
                     pathColor={path => path.color} pathStroke={path => path.stroke}
                     pathLabel={path => path.label} pathTransitionDuration={0}
-
                     ringsData={ringsData}
-                    ringLat="lat"
-                    ringLng="lng"
-                    ringAltitude="altitude"
-                    ringColor="color"
-                    ringMaxRadius="maxR"
-                    ringPropagationSpeed="propagationSpeed"
-                    ringRepeatPeriod="repeatPeriod"
+                    ringLat="lat" ringLng="lng" ringAltitude="altitude"
+                    ringColor="color" ringMaxRadius="maxR"
+                    ringPropagationSpeed="propagationSpeed" ringRepeatPeriod="repeatPeriod"
                     ringResolution={128}
-
                     enablePointerInteraction={true}
                 />
-            ) : (
-                // Optional: Render a minimal placeholder if you want to signify loading/initializing
-                // If null, the div above will just be empty until Globe renders.
-                // For this specific bug, ensuring Globe doesn't render with 0x0 is key.
-                <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs">
-                    Initializing Globe...
-                </div>
-            )}
         </div>
     );
 };
