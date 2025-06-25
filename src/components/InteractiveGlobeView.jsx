@@ -289,9 +289,8 @@ const InteractiveGlobeView = ({
                     enablePointerInteraction={true}
                 />
             ) : (
-                <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs">
-                    Initializing Globe View...
-                    {/* Optional: Display current size for debugging if needed: (W: {size?.width || 0}, H: {size?.height || 0}) */}
+                <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs" data-testid="globe-placeholder">
+                    Initializing Globe View... (W: {size?.width || 0}px, H: {size?.height || 0}px)
                 </div>
             )}
         </div>
