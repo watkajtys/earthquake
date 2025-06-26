@@ -4,6 +4,7 @@ import { vi } from 'vitest'; // Import vi for Vitest mocks
 import '@testing-library/jest-dom';
 import EarthquakeSequenceChart from './EarthquakeSequenceChart';
 import { getMagnitudeColor, formatDate, formatNumber } from '../utils/utils'; // Corrected path
+vi.mock('react-use', () => ({ useWindowSize: () => ({ width: 800, height: 350 }) }));
 
 // import { scaleSqrt } from 'd3-scale'; // Unused variable
 
@@ -162,7 +163,11 @@ const countMovetoCommands = (pathD) => {
 describe('EarthquakeSequenceChart', () => {
     // Suppress console.error for d3-scale errors when width/height is 0 during initial test render
     let originalError;
+    let originalTZ;
+
     beforeAll(() => {
+        originalTZ = process.env.TZ;
+        process.env.TZ = 'UTC';
         originalError = console.error;
         console.error = (...args) => {
             if (typeof args[0] === 'string' && /Error: <rect> attribute width: Expected length, "NaN"/.test(args[0])) {
@@ -182,6 +187,7 @@ describe('EarthquakeSequenceChart', () => {
     });
 
     afterAll(() => {
+        process.env.TZ = originalTZ;
         console.error = originalError;
         vi.restoreAllMocks(); // Changed to vi.restoreAllMocks()
     });
