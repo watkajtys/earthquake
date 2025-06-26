@@ -114,21 +114,22 @@ const InteractiveGlobeView = ({
     const [ringsData, setRingsData] = useState([]);
 
     useEffect(() => {
-        const currentContainerRefVal = containerRef.current; // Capture value for cleanup
+        const currentContainerRefVal = containerRef.current;
         if (!currentContainerRefVal) {
             return;
         }
 
         const updateDimensions = () => {
-            // Ensure ref is still valid inside the closure
             if (!containerRef.current) return;
             const newWidth = containerRef.current.offsetWidth;
             const newHeight = containerRef.current.offsetHeight;
 
-            // Increased threshold for sanity check
-            if (newWidth > 50 && newHeight > 50) { // Changed from > 10 to > 50
+            // console.log(`UpdateDimensions attempt: ${newWidth}x${newHeight}`); // For debugging
+
+            if (newWidth > 50 && newHeight > 50) {
                 setGlobeDimensions(prev => {
                     if (prev.width !== newWidth || prev.height !== newHeight) {
+                        // console.log(`Setting dimensions to: ${newWidth}x${newHeight}`); // For debugging
                         return { width: newWidth, height: newHeight };
                     }
                     return prev;
@@ -136,34 +137,21 @@ const InteractiveGlobeView = ({
             }
         };
 
-        const resizeObserver = new ResizeObserver(() => {
-            updateDimensions();
-        });
-
+        const resizeObserver = new ResizeObserver(updateDimensions);
         resizeObserver.observe(currentContainerRefVal);
 
-        // Use requestAnimationFrame for initial measurement
-        let rafId1, rafId2;
-        rafId1 = requestAnimationFrame(() => {
-            rafId2 = requestAnimationFrame(() => {
-                updateDimensions();
-            });
-        });
-
-        // Fallback timeout, slightly longer, in case rAF doesn't fire or is too quick
-        const initialCheckTimeout = setTimeout(updateDimensions, 250);
+        // Initial attempts to capture dimensions after page layout might have settled
+        const timeoutId1 = setTimeout(updateDimensions, 300); // First attempt
+        const timeoutId2 = setTimeout(updateDimensions, 700); // Second attempt, as a further fallback
 
         return () => {
-            // Use the captured value in cleanup, as containerRef.current might be nullified
-            // by the time this cleanup runs if the component unmounts quickly.
             if (currentContainerRefVal) {
-              resizeObserver.unobserve(currentContainerRefVal);
+                resizeObserver.unobserve(currentContainerRefVal);
             }
-            cancelAnimationFrame(rafId1);
-            cancelAnimationFrame(rafId2);
-            clearTimeout(initialCheckTimeout);
+            clearTimeout(timeoutId1);
+            clearTimeout(timeoutId2);
         };
-    }, []); // Runs once on mount
+    }, []); // Empty dependency array, runs once on mount
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
