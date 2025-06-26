@@ -41,6 +41,7 @@
   overflow-y: auto; /* Allow main content (like pages) to scroll if they exceed available height */
   display: flex; /* Make it a flex container so GlobeLayout can fill it */
   flex-direction: column; /* Stack children vertically */
+  background-color: blue; /* DEBUG: To visualize its actual size */
 }
 
 .app-desktop-sidebar {

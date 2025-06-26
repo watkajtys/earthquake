@@ -66,8 +66,8 @@ const GlobeLayout = (props) => {
     // This div is the .globe-wrapper, its ref is used for measuring
     <div ref={globeContainerRef} className="globe-wrapper">
       {/* Debug Dimensions Display */}
-      <div style={{ position: 'absolute', top: '10px', left: '10px', backgroundColor: 'rgba(0,0,0,0.7)', color: 'white', padding: '5px', zIndex: 10000, fontSize: '12px', pointerEvents: 'none'}}>
-        Container: {debugDimensions.width}w x {debugDimensions.height}h
+      <div style={{ position: 'absolute', top: '30px', left: '10px', backgroundColor: 'rgba(0,0,0,0.7)', color: 'lime', padding: '5px', zIndex: 10000, fontSize: '12px', pointerEvents: 'none'}}>
+        Wrapper: {debugDimensions.width}w x {debugDimensions.height}h {/* Changed text color and label for clarity */}
       </div>
 
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
