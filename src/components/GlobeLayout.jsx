@@ -21,11 +21,66 @@ const GlobeLayout = (props) => {
     areGeoJsonAssetsLoading
   } = props;
 
-  const globeContainerRef = useRef(null); // Create a ref for the globe container
+import React, { Suspense, useRef, useState, useEffect } from 'react'; // Added useState, useEffect
+import { Outlet } from 'react-router-dom';
+import NotableQuakeFeature from './NotableQuakeFeature';
+import PreviousNotableQuakeFeature from './PreviousNotableQuakeFeature';
+import GlobalLastMajorQuakeTimer from "./GlobalLastMajorQuakeTimer.jsx";
+import InteractiveGlobeView from './InteractiveGlobeView';
+
+const GlobeLayout = (props) => {
+  const {
+    globeFocusLng,
+    handleQuakeClick,
+    getMagnitudeColor,
+    activeClusters,
+    lastMajorQuake,
+    formatTimeDuration,
+    handleNotableQuakeSelect,
+    keyStatsForGlobe,
+    coastlineData,
+    tectonicPlatesData,
+    areGeoJsonAssetsLoading
+  } = props;
+
+  const globeContainerRef = useRef(null);
+  const [debugDimensions, setDebugDimensions] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const updateDebugDimensions = () => {
+      if (globeContainerRef.current) {
+        setDebugDimensions({
+          width: globeContainerRef.current.clientWidth,
+          height: globeContainerRef.current.clientHeight,
+        });
+      }
+    };
+
+    // Initial dimensions
+    updateDebugDimensions();
+
+    // Observe for changes
+    const resizeObserver = new ResizeObserver(updateDebugDimensions);
+    if (globeContainerRef.current) {
+      resizeObserver.observe(globeContainerRef.current);
+    }
+
+    return () => {
+      if (globeContainerRef.current) {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        resizeObserver.unobserve(globeContainerRef.current);
+      }
+    };
+  }, []); // Empty dependency array, runs once on mount and cleanup on unmount
 
   return (
-    // Applied .globe-wrapper class, added ref
+    // This div is the .globe-wrapper, its ref is used for measuring
     <div ref={globeContainerRef} className="globe-wrapper">
+      {/* Debug Dimensions Display */}
+      <div style={{ position: 'absolute', top: '10px', left: '10px', backgroundColor: 'rgba(0,0,0,0.7)', color: 'white', padding: '5px', zIndex: 10000, fontSize: '12px', pointerEvents: 'none'}}>
+        Container: {debugDimensions.width}w x {debugDimensions.height}h
+      </div>
+
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
         {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
            <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
