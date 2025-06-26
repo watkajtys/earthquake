@@ -147,48 +147,47 @@ const InteractiveGlobeView = ({
         // Debounced version for ResizeObserver
         const debouncedUpdateDimensions = debounce(updateDimensions, 200);
 
-        if (document.readyState === 'complete') {
-            windowLoadedRef.current = true;
-            setInitialLayoutComplete(true);
-            // Call updateDimensions directly here to ensure it runs with initialLayoutComplete = true
+        const measureAndSetDimensions = () => {
             if (containerRef.current) {
                 const newWidth = containerRef.current.offsetWidth;
                 const newHeight = containerRef.current.offsetHeight;
-                if (newWidth > 10 && newHeight > 10) { // Check for valid dimensions
+                if (newWidth > 10 && newHeight > 10) {
                     setGlobeDimensions({ width: newWidth, height: newHeight });
+                } else {
+                    // Fallback retry if dimensions are still not good after the initial attempt
+                    // This is a secondary fallback, the main delay is before this function is called.
+                    setTimeout(() => {
+                        if (containerRef.current) {
+                            const w = containerRef.current.offsetWidth;
+                            const h = containerRef.current.offsetHeight;
+                            if (w > 10 && h > 10) {
+                                setGlobeDimensions({ width: w, height: h });
+                            }
+                        }
+                    }, 250); // Increased delay for this specific fallback
                 }
             }
+        };
+
+        if (document.readyState === 'complete') {
+            windowLoadedRef.current = true;
+            setInitialLayoutComplete(true);
+            // Delay measurement slightly to allow browser layout to stabilize
+            setTimeout(measureAndSetDimensions, 150); // Apply a 150ms delay
         } else {
             const handleWindowLoad = () => {
                 windowLoadedRef.current = true;
                 setInitialLayoutComplete(true);
-                // Explicitly call updateDimensions after setting initialLayoutComplete to true
-                // and window has loaded.
-                if (containerRef.current) {
-                    const newWidth = containerRef.current.offsetWidth;
-                    const newHeight = containerRef.current.offsetHeight;
-                    if (newWidth > 10 && newHeight > 10) {
-                         setGlobeDimensions({ width: newWidth, height: newHeight });
-                    } else {
-                        // Fallback or retry if dimensions are still not good
-                        setTimeout(() => {
-                            if (containerRef.current) {
-                                const w = containerRef.current.offsetWidth;
-                                const h = containerRef.current.offsetHeight;
-                                if (w > 10 && h > 10) {
-                                    setGlobeDimensions({ width: w, height: h });
-                                }
-                            }
-                        }, 150); // A short delay for a retry
-                    }
-                }
+                // Delay measurement slightly to allow browser layout to stabilize
+                setTimeout(measureAndSetDimensions, 150); // Apply a 150ms delay
                 window.removeEventListener('load', handleWindowLoad); // Clean up listener
             };
             window.addEventListener('load', handleWindowLoad);
         }
 
         const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
-        if (currentContainerRef) { // Ensure ref is still valid before observing
+        // Only observe if the ref is current. The effect cleanup will unobserve.
+        if (currentContainerRef) {
             resizeObserver.observe(currentContainerRef);
         }
 
@@ -196,11 +195,11 @@ const InteractiveGlobeView = ({
             // Note: handleWindowLoad cleanup is inside the handler itself upon execution.
             // If the component unmounts before 'load', the listener might remain.
             // To be fully robust, it would need to be removed here too if it was assigned to a variable accessible here.
-            // For this specific subtask, the provided snippet's cleanup is followed.
+            // However, since handleWindowLoad removes itself, this should be fine.
             if (currentContainerRef) {
                 resizeObserver.unobserve(currentContainerRef);
             }
-            if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
+            clearTimeout(debouncedUpdateDimensions.timeout); // Clear any pending debounced updates
         };
     }, [initialLayoutComplete]); // Add initialLayoutComplete to dependency array.
 
