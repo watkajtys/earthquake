@@ -61,6 +61,7 @@ const LearnPage = lazy(() => import('./LearnPage'));
 const MagnitudeVsIntensityPage = lazy(() => import('./learn/MagnitudeVsIntensityPage'));
 const MeasuringEarthquakesPage = lazy(() => import('./learn/MeasuringEarthquakesPage'));
 const PlateTectonicsPage = lazy(() => import('./learn/PlateTectonicsPage'));
+const GlobeTestPage = lazy(() => import('./GlobeTestPage')); // Import for the new test page
 
 // Lazy load other heavy/conditional components for the sidebar
 const RegionalDistributionList = lazy(() => import('../components/RegionalDistributionList'));
@@ -1083,6 +1084,9 @@ function App() {
                               <Route path="/learn/magnitude-vs-intensity" element={<MagnitudeVsIntensityPage />} />
                               <Route path="/learn/measuring-earthquakes" element={<MeasuringEarthquakesPage />} />
                               <Route path="/learn/plate-tectonics" element={<PlateTectonicsPage />} />
+
+                              {/* Diagnostic Test Route for Globe Sizing */}
+                              <Route path="/globe-test-diagnostic" element={<GlobeTestPage />} />
 
                             </Routes>
                 </Suspense>
