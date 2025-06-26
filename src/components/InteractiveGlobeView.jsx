@@ -1,5 +1,6 @@
 // src/InteractiveGlobeView.jsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import ReactDOM from 'react-dom'; // Import ReactDOM
 // import { useWindowSize } from 'react-use'; // No longer using useWindowSize
 import Globe from 'react-globe.gl';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
@@ -122,9 +123,11 @@ const InteractiveGlobeView = ({
         const updateDimensions = () => {
             if (containerRef.current) {
                 console.log('[InteractiveGlobeView] Updating dimensions. Container clientWidth:', containerRef.current.clientWidth, 'clientHeight:', containerRef.current.clientHeight);
-                setDimensions({
-                    width: containerRef.current.clientWidth,
-                    height: containerRef.current.clientHeight,
+                ReactDOM.flushSync(() => {
+                    setDimensions({
+                        width: containerRef.current.clientWidth,
+                        height: containerRef.current.clientHeight,
+                    });
                 });
             }
         };

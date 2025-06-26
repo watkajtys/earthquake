@@ -1,5 +1,6 @@
 
-import React, { Suspense, useRef, useState, useEffect } from 'react'; // Added useState, useEffect
+import React, { Suspense, useRef, useState, useEffect } from 'react';
+import ReactDOM from 'react-dom'; // Import ReactDOM
 import { Outlet } from 'react-router-dom';
 import NotableQuakeFeature from './NotableQuakeFeature';
 import PreviousNotableQuakeFeature from './PreviousNotableQuakeFeature';
@@ -31,9 +32,11 @@ const GlobeLayout = (props) => {
 
     const updateDebugDimensions = () => {
       if (globeContainerRef.current) {
-        setDebugDimensions({
-          width: globeContainerRef.current.clientWidth,
-          height: globeContainerRef.current.clientHeight,
+        ReactDOM.flushSync(() => {
+          setDebugDimensions({
+            width: globeContainerRef.current.clientWidth,
+            height: globeContainerRef.current.clientHeight,
+          });
         });
       }
     };
