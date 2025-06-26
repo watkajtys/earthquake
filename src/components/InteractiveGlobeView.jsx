@@ -99,72 +99,23 @@ const InteractiveGlobeView = ({
     defaultFocusAltitude = 2.5,
     allowUserDragRotation = true,
     enableAutoRotation = true,
-    globeAutoRotateSpeed = 0.1
+    globeAutoRotateSpeed = 0.1,
+    width, // Expect width as a prop
+    height // Expect height as a prop
 }) => {
     const { globeEarthquakes, lastMajorQuake, previousMajorQuake } = useEarthquakeDataState(); // Get data from context
 
     const globeRef = useRef();
-    const containerRef = useRef(null);
+    // const containerRef = useRef(null); // No longer needed for self-measurement
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
-    const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
+    // const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null }); // Dimensions come from props
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
     const [ringsData, setRingsData] = useState([]);
 
-    useEffect(() => {
-        const currentContainerRefVal = containerRef.current;
-        if (!currentContainerRefVal) {
-            return;
-        }
-
-        const updateDimensions = () => {
-            if (!containerRef.current) return;
-            const newWidth = containerRef.current.offsetWidth;
-            const newHeight = containerRef.current.offsetHeight;
-
-            // console.log(`UpdateDimensions attempt: ${newWidth}x${newHeight}`); // For debugging
-
-            if (newWidth > 50 && newHeight > 50) {
-                setGlobeDimensions(prev => {
-                    if (prev.width !== newWidth || prev.height !== newHeight) {
-                        // console.log(`Setting dimensions to: ${newWidth}x${newHeight}`); // For debugging
-                        return { width: newWidth, height: newHeight };
-                    }
-                    return prev;
-                });
-            }
-        };
-
-        const resizeObserver = new ResizeObserver(updateDimensions);
-        resizeObserver.observe(currentContainerRefVal);
-
-        // Handler for the pageshow event
-        const handlePageShow = (event) => {
-            // The event object for 'pageshow' has a 'persisted' property.
-            // If event.persisted is true, the page is being loaded from a cache (like bfcache).
-            // We typically want to update dimensions in either case (fresh load or from cache).
-            // console.log('pageshow event fired, persisted:', event.persisted); // For debugging
-            updateDimensions();
-        };
-
-        window.addEventListener('pageshow', handlePageShow);
-
-        // Also attempt an update shortly after mount, as pageshow might be delayed
-        // or not fire consistently in all scenarios (e.g. if page was already visible).
-        // This provides a balance.
-        const initialDelayTimeoutId = setTimeout(updateDimensions, 300);
-
-
-        return () => {
-            if (currentContainerRefVal) {
-                resizeObserver.unobserve(currentContainerRefVal);
-            }
-            window.removeEventListener('pageshow', handlePageShow);
-            clearTimeout(initialDelayTimeoutId);
-        };
-    }, []); // Empty dependency array, runs once on mount
+    // Removed useEffect for dimension measurement
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
@@ -331,18 +282,20 @@ const InteractiveGlobeView = ({
     }, [coastlineGeoJson, tectonicPlatesGeoJson]);
 
     useEffect(() => {
-        if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {
+        // Ensure width and height props are valid before trying to set point of view
+        if (globeRef.current?.pointOfView && width && height && width > 0 && height > 0) {
             const targetLatitude = (typeof defaultFocusLat === 'number' && !isNaN(defaultFocusLat)) ? defaultFocusLat : 20;
             const targetLongitude = (typeof defaultFocusLng === 'number' && !isNaN(defaultFocusLng)) ? defaultFocusLng : 0;
             // Assuming defaultFocusAltitude is generally reliable or has a suitable default in its definition
             globeRef.current.pointOfView({ lat: targetLatitude, lng: targetLongitude, altitude: defaultFocusAltitude }, 0);
         }
-    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions]);
+    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, width, height]); // Depend on width and height from props
 
     // CONSOLIDATED Effect to manage globe controls and drag listeners
     useEffect(() => {
         const globeInstance = globeRef.current;
-        if (!globeInstance?.controls || typeof globeInstance.controls !== 'function' || !globeDimensions.width || !globeDimensions.height) {
+        // Ensure width and height props are valid before accessing controls
+        if (!globeInstance?.controls || typeof globeInstance.controls !== 'function' || !width || !height || width <= 0 || height <= 0) {
             return;
         }
 
@@ -406,7 +359,8 @@ const InteractiveGlobeView = ({
         allowUserDragRotation,
         enableAutoRotation,
         globeAutoRotateSpeed,
-        globeDimensions,    // Globe might be re-created if dimensions change.
+        width, // Depend on width and height from props
+        height,
         isGlobeHovered,
         isDragging,
         // setIsDragging is stable, no need to include it.
@@ -515,29 +469,35 @@ const InteractiveGlobeView = ({
 
     }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]); // Update dependency array, added getMagnitudeColorFunc as it's used in color callbacks
 
-
-
-    if (globeDimensions.width === null || globeDimensions.height === null) {
-        return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe...</div>;
+    // Conditional rendering based on width and height props
+    if (!width || !height || width <= 50 || height <= 50) {
+        // Parent needs to provide valid dimensions.
+        // The outer div still needs to exist for parent layout (e.g. if parent uses flex/grid on this component's root)
+        // but we show a message instead of the globe.
+        // The className="w-full h-full" is still useful for the parent to style this placeholder.
+        return (
+            <div className="w-full h-full flex items-center justify-center text-slate-500">
+                Waiting for valid dimensions...
+            </div>
+        );
     }
 
-
+    // At this point, width and height are valid numbers > 50
     return (
         <div
-            ref={containerRef}
-            className="w-full h-full"
+            // ref={containerRef} // No longer needed for self-measurement
+            className="w-full h-full" // This div takes up the space allocated by parent
             style={{ position: 'relative', cursor: 'default' }}
             onMouseMove={handleContainerMouseMove}
             onMouseLeave={handleContainerMouseLeave}
         >
-            {globeDimensions.width > 0 && globeDimensions.height > 0 && (
-                <Globe
-                    key={`${globeDimensions.width}x${globeDimensions.height}`} // Added key prop
-                    ref={globeRef}
-                    width={globeDimensions.width}
-                    height={globeDimensions.height}
-                    globeImageUrl={null}
-                    bumpImageUrl={null}
+            <Globe
+                key={`${width}x${height}`} // Key uses width and height from props
+                ref={globeRef}
+                width={width} // Use width from props
+                height={height} // Use height from props
+                globeImageUrl={null}
+                bumpImageUrl={null}
                     backgroundImageUrl={null}
                     backgroundColor="rgba(0,0,0,0)"
                     atmosphereColor={atmosphereColor}

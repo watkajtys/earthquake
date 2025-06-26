@@ -106,13 +106,56 @@ const GlobeLayout = (props) => {
     // areClustersLoading // Prop removed from destructuring
   } = props;
 
+  const [globeContainerSize, setGlobeContainerSize] = useState({ width: 0, height: 0 });
+  const globeContainerRef = useRef(null);
+
+  useEffect(() => {
+    const container = globeContainerRef.current;
+    if (!container) return;
+
+    const updateDimensions = () => {
+      if (globeContainerRef.current) {
+        const newWidth = globeContainerRef.current.offsetWidth;
+        const newHeight = globeContainerRef.current.offsetHeight;
+        if (newWidth > 50 && newHeight > 50) {
+          setGlobeContainerSize(prevSize => {
+            if (prevSize.width !== newWidth || prevSize.height !== newHeight) {
+              return { width: newWidth, height: newHeight };
+            }
+            return prevSize;
+          });
+        }
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    resizeObserver.observe(container);
+
+    // Initial measurement attempts
+    const timeoutId1 = setTimeout(updateDimensions, 300);
+    const timeoutId2 = setTimeout(updateDimensions, 700);
+
+    // Optional: pageshow listener for very late measurement
+    // const handlePageShow = () => updateDimensions();
+    // window.addEventListener('pageshow', handlePageShow);
+
+    return () => {
+      resizeObserver.unobserve(container);
+      clearTimeout(timeoutId1);
+      clearTimeout(timeoutId2);
+      // window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, []); // Empty dependency array, runs once on mount
+
   return (
-    <div className="block h-full w-full">
+    <div ref={globeContainerRef} className="block h-full w-full">
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
         {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
            <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
-        ) : (
+        ) : (globeContainerSize.width > 50 && globeContainerSize.height > 50) ? (
           <InteractiveGlobeView
+            width={globeContainerSize.width}
+            height={globeContainerSize.height}
             defaultFocusLat={20}
             defaultFocusLng={globeFocusLng}
             onQuakeClick={handleQuakeClick}
