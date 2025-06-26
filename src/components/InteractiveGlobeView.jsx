@@ -125,7 +125,8 @@ const InteractiveGlobeView = ({
             const newWidth = containerRef.current.offsetWidth;
             const newHeight = containerRef.current.offsetHeight;
 
-            if (newWidth > 10 && newHeight > 10) {
+            // Increased threshold for sanity check
+            if (newWidth > 50 && newHeight > 50) { // Changed from > 10 to > 50
                 setGlobeDimensions(prev => {
                     if (prev.width !== newWidth || prev.height !== newHeight) {
                         return { width: newWidth, height: newHeight };
@@ -141,9 +142,16 @@ const InteractiveGlobeView = ({
 
         resizeObserver.observe(currentContainerRefVal);
 
-        // Perform an initial dimension update shortly after mount,
-        // allowing the browser a moment to stabilize layout.
-        const initialCheckTimeout = setTimeout(updateDimensions, 100);
+        // Use requestAnimationFrame for initial measurement
+        let rafId1, rafId2;
+        rafId1 = requestAnimationFrame(() => {
+            rafId2 = requestAnimationFrame(() => {
+                updateDimensions();
+            });
+        });
+
+        // Fallback timeout, slightly longer, in case rAF doesn't fire or is too quick
+        const initialCheckTimeout = setTimeout(updateDimensions, 250);
 
         return () => {
             // Use the captured value in cleanup, as containerRef.current might be nullified
@@ -151,6 +159,8 @@ const InteractiveGlobeView = ({
             if (currentContainerRefVal) {
               resizeObserver.unobserve(currentContainerRefVal);
             }
+            cancelAnimationFrame(rafId1);
+            cancelAnimationFrame(rafId2);
             clearTimeout(initialCheckTimeout);
         };
     }, []); // Runs once on mount
