@@ -23,10 +23,12 @@ const mockOnQuakeClick = (quake) => {
 
 function GlobeTestPage() {
     const wrapperRef = useRef(null);
-    // Dimensions from ResizeObserver on the wrapper element
-    const [roDimensions, setRoDimensions] = useState({ width: null, height: null });
-    // Dimensions from window.visualViewport API
-    const [visualViewportDims, setVisualViewportDims] = useState({ vvWidth: null, vvHeight: null });
+    // Dimensions from ResizeObserver on the wrapper element, initialized to 0 for safety with toFixed
+    const [roDimensions, setRoDimensions] = useState({ width: 0, height: 0 });
+    // Dimensions from window.visualViewport API, initialized to 0
+    const [visualViewportDims, setVisualViewportDims] = useState({ vvWidth: 0, vvHeight: 0 });
+    const [isVisualViewportAPISupported, setIsVisualViewportAPISupported] = useState(true);
+
 
     // Effect for ResizeObserver on the main wrapper (100vw/100svh element)
     useEffect(() => {
@@ -36,6 +38,7 @@ function GlobeTestPage() {
         const resizeObserver = new ResizeObserver(entries => {
             for (let entry of entries) {
                 const { width, height } = entry.contentRect;
+                // Ensure we only set positive dimensions
                 if (width > 0 && height > 0) {
                     setRoDimensions({ width, height });
                 }
@@ -44,62 +47,80 @@ function GlobeTestPage() {
 
         resizeObserver.observe(currentWrapperRef);
 
+        // Eager initial check
         const initialWidth = currentWrapperRef.offsetWidth;
         const initialHeight = currentWrapperRef.offsetHeight;
-        if (initialWidth > 0 && initialHeight > 0 && (roDimensions.width !== initialWidth || roDimensions.height !== initialHeight)) {
+        if (initialWidth > 0 && initialHeight > 0) {
              setRoDimensions({ width: initialWidth, height: initialHeight });
         }
 
         return () => {
-            if (currentWrapperRef) {
-                resizeObserver.unobserve(currentWrapperRef);
-            }
+            // No need to check currentWrapperRef here as it's captured by closure.
+            // If it was null at observe time, this effect wouldn't run to this point.
+            // However, good practice to ensure it was observed before trying to unobserve.
+            // For simplicity, if resizeObserver was created, currentWrapperRef was valid.
+            resizeObserver.unobserve(currentWrapperRef);
         };
-    }, []); // roDimensions.width, roDimensions.height removed from deps as they cause loop
+    }, []); // Empty dependency array means this runs once on mount and cleans up on unmount.
 
     // Effect for window.visualViewport
     useEffect(() => {
+        // Check for visualViewport API support
+        if (!window.visualViewport) {
+            setIsVisualViewportAPISupported(false);
+            return;
+        }
+        setIsVisualViewportAPISupported(true);
+
         const vv = window.visualViewport;
-        if (!vv) return; // visualViewport API not supported
 
         const updateVisualViewport = () => {
-            setVisualViewportDims({ vvWidth: vv.width, vvHeight: vv.height });
+            // Ensure vv still exists and properties are numbers before setting
+            if (vv && typeof vv.width === 'number' && typeof vv.height === 'number') {
+                setVisualViewportDims({ vvWidth: vv.width, vvHeight: vv.height });
+            }
         };
 
         updateVisualViewport(); // Initial read
+
         vv.addEventListener('resize', updateVisualViewport);
-        vv.addEventListener('scroll', updateVisualViewport); // Also listen to scroll as it can affect viewport on some mobiles
+        vv.addEventListener('scroll', updateVisualViewport);
 
         return () => {
+            // vv captured in closure, still exists here if addEventListener was called
             vv.removeEventListener('resize', updateVisualViewport);
             vv.removeEventListener('scroll', updateVisualViewport);
         };
-    }, []);
+    }, []); // Empty: runs once on mount, cleans up on unmount.
 
     // Determine final dimensions to pass to InteractiveGlobeView
-    let finalWidth = null;
-    let finalHeight = null;
+    let finalWidth = 0;
+    let finalHeight = 0; // Default to 0 for safety with toFixed & explicit prop expectations
     let dimensionSource = "Not set";
+    const ANOMALOUS_HEIGHT_THRESHOLD = 950; // If RO height is above this and wider than aspect ratio, suspect.
+    const ANOMALOUS_ASPECT_RATIO_MULTIPLIER = 1.5; // e.g. height > width * 1.5
 
-    if (visualViewportDims.vvWidth && visualViewportDims.vvHeight && visualViewportDims.vvWidth > 0 && visualViewportDims.vvHeight > 0) {
+    // Prioritize VisualViewport if its dimensions are valid (greater than 0)
+    if (visualViewportDims.vvWidth > 0 && visualViewportDims.vvHeight > 0) {
         finalWidth = visualViewportDims.vvWidth;
         finalHeight = visualViewportDims.vvHeight;
         dimensionSource = "VisualViewport";
-    } else if (roDimensions.width && roDimensions.height && roDimensions.width > 0 && roDimensions.height > 0) {
-        // Skepticism for ResizeObserver height if it's anomalously large
-        // (e.g., >900px, or much larger than width for portrait)
-        // This is a simple heuristic, might need refinement.
-        const MAX_PLAUSIBLE_SVH_HEIGHT = 950; // Adjust as needed
-        if (roDimensions.height > MAX_PLAUSIBLE_SVH_HEIGHT && roDimensions.height > roDimensions.width * 1.5) { // Heuristic for portrait anomaly
-            // Don't use this anomalous RO height yet, wait for VV or RO to stabilize.
-            // Keep finalHeight as null, Globe will show its internal loader.
+    }
+    // Fallback to ResizeObserver dimensions if they are valid
+    else if (roDimensions.width > 0 && roDimensions.height > 0) {
+        // Check for anomalous RO height
+        if (roDimensions.height > ANOMALOUS_HEIGHT_THRESHOLD &&
+            (roDimensions.width === 0 || roDimensions.height > roDimensions.width * ANOMALOUS_ASPECT_RATIO_MULTIPLIER) // check width is not 0 before division
+        ) {
             dimensionSource = "RO (anomalous - waiting)";
+            // Keep finalWidth and finalHeight as 0, so globe shows its internal loader or doesn't render with bad dimensions
         } else {
             finalWidth = roDimensions.width;
             finalHeight = roDimensions.height;
             dimensionSource = "ResizeObserver";
         }
     }
+    // If neither is valid, finalWidth and finalHeight remain 0.
 
     const globeViewProps = {
         onQuakeClick: mockOnQuakeClick,
@@ -149,11 +170,11 @@ function GlobeTestPage() {
                 lineHeight: '1.4'
             }}>
                 RO Dimensions: <br />
-                W: {roDimensions.width ? roDimensions.width.toFixed(2) + 'px' : 'null'}, H: {roDimensions.height ? roDimensions.height.toFixed(2) + 'px' : 'null'} <br />
-                VV Dimensions: <br />
-                W: {visualViewportDims.vvWidth ? visualViewportDims.vvWidth.toFixed(2) + 'px' : 'null'}, H: {visualViewportDims.vvHeight ? visualViewportDims.vvHeight.toFixed(2) + 'px' : 'null'} <br />
+                W: {roDimensions.width > 0 ? roDimensions.width.toFixed(2) + 'px' : String(roDimensions.width)}, H: {roDimensions.height > 0 ? roDimensions.height.toFixed(2) + 'px' : String(roDimensions.height)} <br />
+                VV Dimensions (Supported: {isVisualViewportAPISupported ? 'Yes' : 'No'}): <br />
+                W: {visualViewportDims.vvWidth > 0 ? visualViewportDims.vvWidth.toFixed(2) + 'px' : String(visualViewportDims.vvWidth)}, H: {visualViewportDims.vvHeight > 0 ? visualViewportDims.vvHeight.toFixed(2) + 'px' : String(visualViewportDims.vvHeight)} <br />
                 Final Dimensions Used: <br />
-                W: {finalWidth ? finalWidth.toFixed(2) + 'px' : 'null'}, H: {finalHeight ? finalHeight.toFixed(2) + 'px' : 'null'} (Source: {dimensionSource})
+                W: {finalWidth > 0 ? finalWidth.toFixed(2) + 'px' : String(finalWidth)}, H: {finalHeight > 0 ? finalHeight.toFixed(2) + 'px' : String(finalHeight)} (Source: {dimensionSource})
             </div>
 
             {/* No more Suspense for InteractiveGlobeView here, as it's imported directly */}
