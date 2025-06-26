@@ -608,7 +608,9 @@ function App() {
 
     // --- UI Calculations & Memos ---
     // showFullScreenLoader now uses isLoadingInitialData from the hook
-    const showFullScreenLoader = useMemo(() => isLoadingInitialData, [isLoadingInitialData]);
+    // const showFullScreenLoader = useMemo(() => isLoadingInitialData, [isLoadingInitialData]);
+    // Always false to remove the initial loading screen as per user request.
+    const showFullScreenLoader = false;
 
     // Fallback UI for Suspense
     const RouteLoadingFallback = () => (
