@@ -1,5 +1,5 @@
 // src/pages/GlobeTestPage.jsx
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useRef, useState, useEffect } from 'react';
 
 // Lazy load InteractiveGlobeView to mimic the main app's behavior partly
 const InteractiveGlobeView = lazy(() => import('../components/InteractiveGlobeView'));
@@ -22,13 +22,46 @@ const mockOnQuakeClick = (quake) => {
 // so InteractiveGlobeView should receive its necessary context.
 
 function GlobeTestPage() {
+    const wrapperRef = useRef(null);
+    const [dimensions, setDimensions] = useState({ width: null, height: null });
+
+    useEffect(() => {
+        const currentWrapperRef = wrapperRef.current;
+        if (!currentWrapperRef) return;
+
+        const resizeObserver = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                const { width, height } = entry.contentRect;
+                if (width > 0 && height > 0) {
+                    setDimensions({ width, height });
+                }
+            }
+        });
+
+        resizeObserver.observe(currentWrapperRef);
+
+        // Initial check, as ResizeObserver might not fire if size is already set by CSS
+        // and matches initial state (though unlikely with null initial state)
+        const initialWidth = currentWrapperRef.offsetWidth;
+        const initialHeight = currentWrapperRef.offsetHeight;
+        if (initialWidth > 0 && initialHeight > 0 && (dimensions.width !== initialWidth || dimensions.height !== initialHeight)) {
+             setDimensions({ width: initialWidth, height: initialHeight });
+        }
+
+
+        return () => {
+            if (currentWrapperRef) {
+                resizeObserver.unobserve(currentWrapperRef);
+            }
+        };
+    }, []); // Empty dependency array to run once on mount and clean up on unmount
+
     // These props are to ensure InteractiveGlobeView can render.
-    // Data like actual earthquakes will come from the (likely empty or default) context.
-    const essentialGlobeProps = {
+    const globeViewProps = {
         onQuakeClick: mockOnQuakeClick,
         getMagnitudeColorFunc: mockGetMagnitudeColor,
-        coastlineGeoJson: null, // Keep it minimal
-        tectonicPlatesGeoJson: null, // Keep it minimal
+        coastlineGeoJson: null,
+        tectonicPlatesGeoJson: null,
         highlightedQuakeId: null,
         activeClusters: [],
         atmosphereColor: "rgba(100,100,255,0.3)",
@@ -37,11 +70,15 @@ function GlobeTestPage() {
         defaultFocusAltitude: 2.5,
         allowUserDragRotation: true,
         enableAutoRotation: false,
-        globeAutoRotateSpeed: 0.1
+        globeAutoRotateSpeed: 0.1,
+        // Pass explicit dimensions if available
+        explicitWidth: dimensions.width,
+        explicitHeight: dimensions.height,
     };
 
     return (
         <div
+            ref={wrapperRef}
             style={{
                 position: 'fixed',
                 top: '0',
@@ -50,26 +87,26 @@ function GlobeTestPage() {
                 height: '100svh', // Using svh as per diagnostic goal
                 backgroundColor: 'rgba(0, 0, 25, 1)', // Dark blue background
                 zIndex: 9999, // Ensure it's on top
-                display: 'flex', // Added for centering fallback if needed
-                alignItems: 'center', // Added for centering fallback
-                justifyContent: 'center' // Added for centering fallback
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
             }}
-            id="globe-test-page-wrapper" // For easier selection in devtools
+            id="globe-test-page-wrapper"
         >
             <Suspense
                 fallback={
                     <div style={{ color: 'white', fontSize: '2em', textAlign: 'center' }}>
-                        Loading Globe for Diagnostic Test...
+                        Loading Globe Component...
                     </div>
                 }
             >
-                {/*
-                  The InteractiveGlobeView's own container has w-full and h-full.
-                  So it will try to expand to the size of this blue fixed div.
-                  Its internal dimension calculation logic (using ResizeObserver etc.)
-                  is what we are testing against the 100vw/100svh viewport.
-                */}
-                <InteractiveGlobeView {...essentialGlobeProps} />
+                {(dimensions.width && dimensions.height && dimensions.width > 0 && dimensions.height > 0) ? (
+                    <InteractiveGlobeView {...globeViewProps} />
+                ) : (
+                    <div style={{ color: 'white', fontSize: '1.5em', textAlign: 'center' }}>
+                        Determining container size...
+                    </div>
+                )}
             </Suspense>
         </div>
     );

@@ -99,21 +99,31 @@ const InteractiveGlobeView = ({
     defaultFocusAltitude = 2.5,
     allowUserDragRotation = true,
     enableAutoRotation = true,
-    globeAutoRotateSpeed = 0.1
+    globeAutoRotateSpeed = 0.1,
+    explicitWidth = null, // New prop
+    explicitHeight = null // New prop
 }) => {
     const { globeEarthquakes, lastMajorQuake, previousMajorQuake } = useEarthquakeDataState(); // Get data from context
 
     const globeRef = useRef();
-    const containerRef = useRef(null);
+    const containerRef = useRef(null); // Still needed for fallback and mouse events
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
-    const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
-    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false); // Added
+    // Internal dimensions, used if explicit ones are not provided
+    const [internalGlobeDimensions, setInternalGlobeDimensions] = useState({ width: null, height: null });
+    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false);
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
     const windowLoadedRef = useRef(false); // To track if window.load has fired
     const [ringsData, setRingsData] = useState([]);
+
+    // Determine dimensions to use: explicit or internal
+    const useExplicitDimensions = typeof explicitWidth === 'number' && explicitWidth > 0 &&
+                                typeof explicitHeight === 'number' && explicitHeight > 0;
+
+    const displayWidth = useExplicitDimensions ? explicitWidth : internalGlobeDimensions.width;
+    const displayHeight = useExplicitDimensions ? explicitHeight : internalGlobeDimensions.height;
 
     const debounce = (func, delay) => {
         let timeout;
@@ -125,36 +135,39 @@ const InteractiveGlobeView = ({
         return debouncedFunc;
     };
 
+    // This useEffect handles internal dimension calculation ONLY if explicit dimensions are not provided
     useEffect(() => {
+        if (useExplicitDimensions) {
+            // If using explicit dimensions, no need to run internal calculations or observers
+            return;
+        }
+
         const currentContainerRef = containerRef.current;
         if (!currentContainerRef) return;
 
         const updateDimensions = () => {
-            // Don't run if window.load hasn't fired yet, unless it's a resize event (implicitly initialLayoutComplete is true)
             if (!initialLayoutComplete && !windowLoadedRef.current) return;
 
-            const currentContainerRefActual = containerRef.current; // Re-read ref
+            const currentContainerRefActual = containerRef.current;
             if (!currentContainerRefActual) return;
 
             const newWidth = currentContainerRefActual.offsetWidth;
             const newHeight = currentContainerRefActual.offsetHeight;
 
             if (newWidth > 10 && newHeight > 10) {
-                 setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
+                setInternalGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
             }
         };
 
-        // Debounced version for ResizeObserver
         const debouncedUpdateDimensions = debounce(updateDimensions, 200);
 
         if (document.readyState === 'complete') {
             windowLoadedRef.current = true;
             setInitialLayoutComplete(true);
-            // Call updateDimensions directly here to ensure it runs with initialLayoutComplete = true
             if (containerRef.current) {
                 const newWidth = containerRef.current.offsetWidth;
                 const newHeight = containerRef.current.offsetHeight;
-                if (newWidth > 10 && newHeight > 10) { // Check for valid dimensions
+                if (newWidth > 10 && newHeight > 10) {
                     setGlobeDimensions({ width: newWidth, height: newHeight });
                 }
             }
@@ -162,15 +175,12 @@ const InteractiveGlobeView = ({
             const handleWindowLoad = () => {
                 windowLoadedRef.current = true;
                 setInitialLayoutComplete(true);
-                // Explicitly call updateDimensions after setting initialLayoutComplete to true
-                // and window has loaded.
                 if (containerRef.current) {
                     const newWidth = containerRef.current.offsetWidth;
                     const newHeight = containerRef.current.offsetHeight;
                     if (newWidth > 10 && newHeight > 10) {
-                         setGlobeDimensions({ width: newWidth, height: newHeight });
+                        setInternalGlobeDimensions({ width: newWidth, height: newHeight });
                     } else {
-                        // Fallback or retry if dimensions are still not good
                         setTimeout(() => {
                             if (containerRef.current) {
                                 const w = containerRef.current.offsetWidth;
@@ -179,30 +189,27 @@ const InteractiveGlobeView = ({
                                     setGlobeDimensions({ width: w, height: h });
                                 }
                             }
-                        }, 150); // A short delay for a retry
+                        }, 150);
                     }
                 }
-                window.removeEventListener('load', handleWindowLoad); // Clean up listener
+                window.removeEventListener('load', handleWindowLoad);
             };
             window.addEventListener('load', handleWindowLoad);
         }
 
         const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
-        if (currentContainerRef) { // Ensure ref is still valid before observing
-            resizeObserver.observe(currentContainerRef);
-        }
+        resizeObserver.observe(currentContainerRef);
 
         return () => {
-            // Note: handleWindowLoad cleanup is inside the handler itself upon execution.
-            // If the component unmounts before 'load', the listener might remain.
-            // To be fully robust, it would need to be removed here too if it was assigned to a variable accessible here.
-            // For this specific subtask, the provided snippet's cleanup is followed.
-            if (currentContainerRef) {
-                resizeObserver.unobserve(currentContainerRef);
-            }
+            resizeObserver.unobserve(currentContainerRef);
             if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
+            // It's good practice to also remove the window.load listener if the component unmounts before it fires,
+            // though in typical React lifecycles where this effect runs after mount, this might be less critical
+            // if handleWindowLoad always cleans itself up. However, to be safe:
+            // window.removeEventListener('load', handleWindowLoad); // This line would need handleWindowLoad to be defined in a way it's accessible here.
+            // The current structure where handleWindowLoad removes itself is generally okay.
         };
-    }, [initialLayoutComplete]); // Add initialLayoutComplete to dependency array.
+    }, [useExplicitDimensions, initialLayoutComplete]); // Effect now depends on useExplicitDimensions and initialLayoutComplete
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
@@ -369,18 +376,20 @@ const InteractiveGlobeView = ({
     }, [coastlineGeoJson, tectonicPlatesGeoJson]);
 
     useEffect(() => {
-        if (globeRef.current?.pointOfView && globeDimensions.width && globeDimensions.height) {
+        // This effect should use the actual display dimensions
+        if (globeRef.current?.pointOfView && displayWidth && displayHeight) {
             const targetLatitude = (typeof defaultFocusLat === 'number' && !isNaN(defaultFocusLat)) ? defaultFocusLat : 20;
             const targetLongitude = (typeof defaultFocusLng === 'number' && !isNaN(defaultFocusLng)) ? defaultFocusLng : 0;
             // Assuming defaultFocusAltitude is generally reliable or has a suitable default in its definition
             globeRef.current.pointOfView({ lat: targetLatitude, lng: targetLongitude, altitude: defaultFocusAltitude }, 0);
         }
-    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, globeDimensions]);
+    }, [defaultFocusLat, defaultFocusLng, defaultFocusAltitude, displayWidth, displayHeight]);
 
     // CONSOLIDATED Effect to manage globe controls and drag listeners
     useEffect(() => {
         const globeInstance = globeRef.current;
-        if (!globeInstance?.controls || typeof globeInstance.controls !== 'function' || !globeDimensions.width || !globeDimensions.height) {
+        // This effect should also use the actual display dimensions for its guard condition
+        if (!globeInstance?.controls || typeof globeInstance.controls !== 'function' || !displayWidth || !displayHeight) {
             return;
         }
 
@@ -444,7 +453,8 @@ const InteractiveGlobeView = ({
         allowUserDragRotation,
         enableAutoRotation,
         globeAutoRotateSpeed,
-        globeDimensions,    // Globe might be re-created if dimensions change.
+        displayWidth,
+        displayHeight,
         isGlobeHovered,
         isDragging,
         // setIsDragging is stable, no need to include it.
@@ -554,27 +564,32 @@ const InteractiveGlobeView = ({
     }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]); // Update dependency array, added getMagnitudeColorFunc as it's used in color callbacks
 
 
-
-    if (globeDimensions.width === null || globeDimensions.height === null) {
-        return <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">Initializing Interactive Globe...</div>;
+    // Conditional rendering based on whether dimensions are determined (either explicit or internal)
+    if (!displayWidth || !displayHeight || displayWidth <= 0 || displayHeight <= 0) {
+        // If using explicit dimensions, containerRef might not be strictly necessary here for sizing,
+        // but it's kept for mouse events and if internal sizing logic needs to run as a fallback.
+        return (
+            <div ref={containerRef} className="w-full h-full flex items-center justify-center text-slate-500">
+                Initializing Interactive Globe... (Waiting for dimensions)
+            </div>
+        );
     }
-
 
     return (
         <div
-            ref={containerRef}
+            ref={containerRef} // Keep ref for mouse events and fallback internal sizing
             className="w-full h-full"
             style={{ position: 'relative', cursor: 'default' }}
             onMouseMove={handleContainerMouseMove}
             onMouseLeave={handleContainerMouseLeave}
         >
-            {globeDimensions.width > 0 && globeDimensions.height > 0 && (
-                <Globe
-                    ref={globeRef}
-                    width={globeDimensions.width}
-                    height={globeDimensions.height}
-                    globeImageUrl={null}
-                    bumpImageUrl={null}
+            {/* Render Globe with the determined displayWidth and displayHeight */}
+            <Globe
+                ref={globeRef}
+                width={displayWidth}
+                height={displayHeight}
+                globeImageUrl={null}
+                bumpImageUrl={null}
                     backgroundImageUrl={null}
                     backgroundColor="rgba(0,0,0,0)"
                     atmosphereColor={atmosphereColor}
