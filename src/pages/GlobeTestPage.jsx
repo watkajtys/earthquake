@@ -93,6 +93,21 @@ function GlobeTestPage() {
             }}
             id="globe-test-page-wrapper"
         >
+            <div style={{
+                position: 'absolute',
+                top: '10px',
+                left: '10px',
+                padding: '5px',
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                color: 'white',
+                fontSize: '14px',
+                zIndex: 10000, // Above the globe-test-page-wrapper's zIndex + 1
+                fontFamily: 'monospace'
+            }}>
+                Observed Dimensions: <br />
+                Width: {dimensions.width ? dimensions.width.toFixed(2) + 'px' : 'null'} <br />
+                Height: {dimensions.height ? dimensions.height.toFixed(2) + 'px' : 'null'}
+            </div>
             <Suspense
                 fallback={
                     <div style={{ color: 'white', fontSize: '2em', textAlign: 'center' }}>
