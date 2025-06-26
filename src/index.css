@@ -20,7 +20,7 @@
   display: grid;
   grid-template-rows: auto 1fr auto; /* Header, Main content (stretches), Footer (BottomNav) */
   grid-template-columns: 1fr; /* Single column layout by default */
-  height: 100vh; /* Consider 100svh for mobile viewport consistency if 100vh causes issues */
+  height: 100dvh; /* Changed from 100vh to 100dvh for better mobile viewport handling */
   overflow: hidden; /* Prevent the entire page from scrolling due to oversized children */
 }
 
