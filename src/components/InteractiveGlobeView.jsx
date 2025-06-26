@@ -118,8 +118,10 @@ const InteractiveGlobeView = ({
     
     // Effect to observe container size and update dimensions
     useEffect(() => {
+        let innerRafId = null; // For cleanup of nested RAF
         const updateDimensions = () => {
             if (containerRef.current) {
+                console.log('[InteractiveGlobeView] Updating dimensions. Container clientWidth:', containerRef.current.clientWidth, 'clientHeight:', containerRef.current.clientHeight);
                 setDimensions({
                     width: containerRef.current.clientWidth,
                     height: containerRef.current.clientHeight,
@@ -127,8 +129,11 @@ const InteractiveGlobeView = ({
             }
         };
 
-        // Initial dimensions set
-        updateDimensions();
+        // Initial dimensions set - with a slight delay to allow browser layout to settle
+        // Using nested requestAnimationFrame to wait for next paint cycles
+        let rafId = requestAnimationFrame(() => {
+            innerRafId = requestAnimationFrame(updateDimensions);
+        });
 
         // Use ResizeObserver to handle container resize
         const resizeObserver = new ResizeObserver(updateDimensions);
@@ -138,9 +143,13 @@ const InteractiveGlobeView = ({
 
         // Cleanup observer on component unmount
         return () => {
+            cancelAnimationFrame(rafId);
+            if (innerRafId) { // Check if innerRafId was set before trying to cancel
+                cancelAnimationFrame(innerRafId);
+            }
             if (containerRef.current) {
                 // eslint-disable-next-line react-hooks/exhaustive-deps
-                resizeObserver.unobserve(containerRef.current);
+                resizeObserver.unobserve(containerRef.current); // Make sure to unobserve the correct element
             }
         };
     }, [containerRef]); // Rerun if containerRef changes (should be stable)
