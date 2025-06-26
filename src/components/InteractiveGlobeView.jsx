@@ -140,16 +140,29 @@ const InteractiveGlobeView = ({
         const resizeObserver = new ResizeObserver(updateDimensions);
         resizeObserver.observe(currentContainerRefVal);
 
-        // Initial attempts to capture dimensions after page layout might have settled
-        const timeoutId1 = setTimeout(updateDimensions, 300); // First attempt
-        const timeoutId2 = setTimeout(updateDimensions, 700); // Second attempt, as a further fallback
+        // Handler for the pageshow event
+        const handlePageShow = (event) => {
+            // The event object for 'pageshow' has a 'persisted' property.
+            // If event.persisted is true, the page is being loaded from a cache (like bfcache).
+            // We typically want to update dimensions in either case (fresh load or from cache).
+            // console.log('pageshow event fired, persisted:', event.persisted); // For debugging
+            updateDimensions();
+        };
+
+        window.addEventListener('pageshow', handlePageShow);
+
+        // Also attempt an update shortly after mount, as pageshow might be delayed
+        // or not fire consistently in all scenarios (e.g. if page was already visible).
+        // This provides a balance.
+        const initialDelayTimeoutId = setTimeout(updateDimensions, 300);
+
 
         return () => {
             if (currentContainerRefVal) {
                 resizeObserver.unobserve(currentContainerRefVal);
             }
-            clearTimeout(timeoutId1);
-            clearTimeout(timeoutId2);
+            window.removeEventListener('pageshow', handlePageShow);
+            clearTimeout(initialDelayTimeoutId);
         };
     }, []); // Empty dependency array, runs once on mount
 
