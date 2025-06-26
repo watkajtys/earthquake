@@ -1,26 +1,4 @@
 
-import React, { Suspense, useRef } from 'react'; // Added useRef
-import { Outlet } from 'react-router-dom';
-import NotableQuakeFeature from './NotableQuakeFeature';
-import PreviousNotableQuakeFeature from './PreviousNotableQuakeFeature';
-import GlobalLastMajorQuakeTimer from "./GlobalLastMajorQuakeTimer.jsx";
-import InteractiveGlobeView from './InteractiveGlobeView';
-
-const GlobeLayout = (props) => {
-  const {
-    globeFocusLng,
-    handleQuakeClick,
-    getMagnitudeColor,
-    activeClusters,
-    lastMajorQuake,
-    formatTimeDuration,
-    handleNotableQuakeSelect,
-    keyStatsForGlobe,
-    coastlineData,
-    tectonicPlatesData,
-    areGeoJsonAssetsLoading
-  } = props;
-
 import React, { Suspense, useRef, useState, useEffect } from 'react'; // Added useState, useEffect
 import { Outlet } from 'react-router-dom';
 import NotableQuakeFeature from './NotableQuakeFeature';
@@ -47,6 +25,10 @@ const GlobeLayout = (props) => {
   const [debugDimensions, setDebugDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
+    // Store IDs for cleanup
+    let rafId1 = null;
+    let rafId2 = null;
+
     const updateDebugDimensions = () => {
       if (globeContainerRef.current) {
         setDebugDimensions({
@@ -56,8 +38,10 @@ const GlobeLayout = (props) => {
       }
     };
 
-    // Initial dimensions
-    updateDebugDimensions();
+    // Initial dimensions - use nested rAF for safety
+    rafId1 = requestAnimationFrame(() => {
+        rafId2 = requestAnimationFrame(updateDebugDimensions);
+    });
 
     // Observe for changes
     const resizeObserver = new ResizeObserver(updateDebugDimensions);
@@ -66,6 +50,8 @@ const GlobeLayout = (props) => {
     }
 
     return () => {
+      if (rafId1) cancelAnimationFrame(rafId1);
+      if (rafId2) cancelAnimationFrame(rafId2);
       if (globeContainerRef.current) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         resizeObserver.unobserve(globeContainerRef.current);
