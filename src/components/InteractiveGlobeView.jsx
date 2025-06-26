@@ -1,6 +1,6 @@
 // src/InteractiveGlobeView.jsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { useWindowSize } from 'react-use';
+// import { useWindowSize } from 'react-use'; // No longer using useWindowSize
 import Globe from 'react-globe.gl';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 
@@ -76,6 +76,7 @@ const makeColorDuller = (colorString, opacityFactor) => {
  * @param {Object} [props.coastlineGeoJson] - GeoJSON data for rendering coastlines.
  * @param {Object} [props.tectonicPlatesGeoJson] - GeoJSON data for rendering tectonic plate boundaries.
  * @param {string} [props.highlightedQuakeId] - The ID of a specific earthquake to be visually highlighted on the globe.
+ * @param {React.RefObject} props.containerRef - Ref to the container element whose dimensions will be used for the globe.
  * @param {Array<Array<Object>>} [props.activeClusters=[]] - Array of active earthquake clusters. Each cluster is an array of earthquake objects.
  *   (Note: Cluster visualization logic based on this prop appears to be commented out in the current implementation).
  * @param {string} [props.atmosphereColor="rgba(100,100,255,0.3)"] - Color of the globe's atmosphere effect.
@@ -93,6 +94,7 @@ const InteractiveGlobeView = ({
     coastlineGeoJson,
     tectonicPlatesGeoJson,
     highlightedQuakeId,
+    containerRef, // Added containerRef prop
     activeClusters = [],
     atmosphereColor = "rgb(100,100,255)",
     defaultFocusLat = 20,
@@ -105,16 +107,44 @@ const InteractiveGlobeView = ({
     const { globeEarthquakes, lastMajorQuake, previousMajorQuake } = useEarthquakeDataState(); // Get data from context
 
     const globeRef = useRef();
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 }); // State for dimensions
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
-    const mouseMoveTimeoutRef = useRef(null);
-    const windowLoadedRef = useRef(false); // To track if window.load has fired
+    // const mouseMoveTimeoutRef = useRef(null); // Seemingly unused, consider removing if confirmed
+    // const windowLoadedRef = useRef(false); // Seemingly unused, consider removing if confirmed
     const [ringsData, setRingsData] = useState([]);
     
+    // Effect to observe container size and update dimensions
+    useEffect(() => {
+        const updateDimensions = () => {
+            if (containerRef.current) {
+                setDimensions({
+                    width: containerRef.current.clientWidth,
+                    height: containerRef.current.clientHeight,
+                });
+            }
+        };
 
-    const { width, height } = useWindowSize();
+        // Initial dimensions set
+        updateDimensions();
+
+        // Use ResizeObserver to handle container resize
+        const resizeObserver = new ResizeObserver(updateDimensions);
+        if (containerRef.current) {
+            resizeObserver.observe(containerRef.current);
+        }
+
+        // Cleanup observer on component unmount
+        return () => {
+            if (containerRef.current) {
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+                resizeObserver.unobserve(containerRef.current);
+            }
+        };
+    }, [containerRef]); // Rerun if containerRef changes (should be stable)
+
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
@@ -424,8 +454,8 @@ const InteractiveGlobeView = ({
     return (
         <Globe
             ref={globeRef}
-            width={width}
-            height={height}
+            width={dimensions.width}
+            height={dimensions.height}
             globeImageUrl={null}
             bumpImageUrl={null}
             backgroundImageUrl={null}

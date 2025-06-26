@@ -21,13 +21,39 @@ const GlobeLayout = (props) => {
     areGeoJsonAssetsLoading
   } = props;
 
+import React, { Suspense, useRef } from 'react'; // Added useRef
+import { Outlet } from 'react-router-dom';
+import NotableQuakeFeature from './NotableQuakeFeature';
+import PreviousNotableQuakeFeature from './PreviousNotableQuakeFeature';
+import GlobalLastMajorQuakeTimer from "./GlobalLastMajorQuakeTimer.jsx";
+import InteractiveGlobeView from './InteractiveGlobeView';
+
+const GlobeLayout = (props) => {
+  const {
+    globeFocusLng,
+    handleQuakeClick,
+    getMagnitudeColor,
+    activeClusters,
+    lastMajorQuake,
+    formatTimeDuration,
+    handleNotableQuakeSelect,
+    keyStatsForGlobe,
+    coastlineData,
+    tectonicPlatesData,
+    areGeoJsonAssetsLoading
+  } = props;
+
+  const globeContainerRef = useRef(null); // Create a ref for the globe container
+
   return (
-    <div className="block h-full w-full">
+    // This div is the .globe-wrapper, its ref is passed to InteractiveGlobeView
+    <div ref={globeContainerRef} className="globe-wrapper">
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
         {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
            <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
         ) : (
           <InteractiveGlobeView
+            containerRef={globeContainerRef} // Pass the ref
             defaultFocusLat={20}
             defaultFocusLng={globeFocusLng}
             onQuakeClick={handleQuakeClick}

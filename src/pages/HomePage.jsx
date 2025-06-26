@@ -906,21 +906,18 @@ function App() {
     // --- Main Render ---
 
     return (
-        <div className="flex flex-col h-[100svh] font-sans bg-slate-900 text-slate-100 antialiased">
-            <header className="bg-slate-800 text-white pt-2 sm:pt-4 pb-1 sm:pb-2 px-2 shadow-lg z-40 border-b border-slate-700">
+        <div className="app-grid-container font-sans bg-slate-900 text-slate-100 antialiased">
+            <header className="app-header bg-slate-800 text-white pt-2 sm:pt-4 pb-1 sm:pb-2 px-2 shadow-lg z-40 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-base sm:text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
                     <p className="text-[0.7rem] sm:text-xs sm:text-sm text-slate-400 mt-0.5 sm:mt-0">{headerTimeDisplay}</p>
                 </div>
             </header>
 
-            {/* This main flex container now has padding-bottom for mobile to avoid overlap with BottomNav */}
-            <div className="flex flex-1 overflow-hidden pb-16 lg:pb-0">
+            {/* This div now acts as a wrapper for the main content area and the desktop sidebar, fitting into the grid */}
+            <div className="app-main-area-wrapper"> {/* Removed Tailwind: flex flex-1 overflow-hidden pb-16 lg:pb-0 */}
 
-                {/* MAIN CONTENT AREA - This will now adapt based on activeMobileView */}
-                {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
-                {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
-                <main className="flex-1 relative bg-slate-900 lg:bg-black w-full min-w-0 overflow-y-auto">
+                <main className="app-main-content bg-slate-900 lg:bg-black w-full"> {/* Removed Tailwind: flex-1 relative min-w-0 overflow-y-auto */}
                     <ErrorBoundary>
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <Routes>
@@ -941,21 +938,18 @@ function App() {
                                       globeFocusLng={globeFocusLng}
                                       handleQuakeClick={handleQuakeClick}
                                       getMagnitudeColor={getMagnitudeColor}
-                                      // Pass new state for GeoJSON
                                       coastlineData={coastlineData}
                                       tectonicPlatesData={tectonicPlatesData}
                                       areGeoJsonAssetsLoading={areGeoJsonAssetsLoading}
-                                      activeClusters={activeClusters} // This now uses calculatedClusters
+                                      activeClusters={activeClusters}
                                       lastMajorQuake={lastMajorQuake}
                                       formatTimeDuration={formatTimeDuration}
                                       handleNotableQuakeSelect={handleNotableQuakeSelect}
                                       keyStatsForGlobe={keyStatsForGlobe}
-                                      // areClustersLoading prop removed
                                     />
                                   </>
                                 }
                               >
-                                {/* Child routes for modals correctly nested HERE */}
                                 <Route
                                   path="quake/*"
                                   element={<EarthquakeDetailModalComponent />}
@@ -970,13 +964,12 @@ function App() {
                                       onIndividualQuakeSelect={handleQuakeClick}
                                       formatTimeAgo={formatTimeAgo}
                                       formatTimeDuration={formatTimeDuration}
-                                      areParentClustersLoading={false} // Pass static false
+                                      areParentClustersLoading={false}
                                     />
                                   }
                                 />
-                              </Route> {/* End of main "/" route and its children */}
+                              </Route>
 
-                              {/* Other top-level routes as siblings */}
                               <Route path="/overview" element={
                                   <OverviewPage
                                     ALERT_LEVELS={ALERT_LEVELS}
@@ -1011,13 +1004,11 @@ function App() {
                               <Route path="/learn/plate-tectonics" element={<PlateTectonicsPage />} />
 
                             </Routes>
-                </Suspense>
-            </ErrorBoundary>
+                        </Suspense>
+                    </ErrorBoundary>
                 </main>
 
-                {/* DESKTOP SIDEBAR (hidden on small screens, flex on large) */}
-                {/* The desktop sidebar's visibility is controlled by CSS (hidden lg:flex) */}
-                <aside className="hidden lg:flex w-[480px] bg-slate-800 p-0 flex-col border-l border-slate-700 shadow-2xl z-20">
+                <aside className="app-desktop-sidebar bg-slate-800 p-0 flex-col border-l border-slate-700 shadow-2xl z-20 hidden lg:flex w-[480px]"> {/* Added app-desktop-sidebar, kept relevant Tailwind */}
                     <div className="p-3 border-b border-slate-700"> <h2 className="text-md font-semibold text-indigo-400">Detailed Earthquake Analysis</h2> </div>
                     <div className="flex-shrink-0 p-2 space-x-1 border-b border-slate-700 whitespace-nowrap overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
                         <button onClick={handleSetSidebarOverview} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
@@ -1027,15 +1018,6 @@ function App() {
                         {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={handleSetSidebarDetails14day} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={handleSetSidebarDetails30day} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
                         <button onClick={handleSetSidebarLearnMore} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
                     </div>
-                    {/*
-                        PERFORMANCE NOTE:
-                        The 'key' prop was previously used on this div and tied to 'activeSidebarView'.
-                        This caused the entire sidebar content to re-mount on every view change, leading to performance issues.
-                        It has been removed. Child components below are now responsible for their own rendering optimization,
-                        primarily through `React.memo` and ensuring their props are stable or memoized.
-                        Avoid re-introducing a 'key' here that changes frequently unless absolutely necessary and the performance
-                        implications are understood and accepted.
-                    */}
                     <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
                         {error && !showFullScreenLoader && (
                             <div
@@ -1058,38 +1040,30 @@ function App() {
                                     <PaginatedEarthquakeTable
                                         title={`Alert Triggering Quakes (${currentAlertConfig.text})`}
                                         earthquakes={activeAlertTriggeringQuakes}
-                                        isLoading={false} // Assuming data is loaded if activeAlertTriggeringQuakes is populated
+                                        isLoading={false}
                                         onQuakeClick={handleQuakeClick}
                                         itemsPerPage={3}
                                         periodName="alerting"
                                         getMagnitudeColorStyle={getMagnitudeColorStyle}
                                         formatTimeAgo={formatTimeAgo}
                                         formatDate={formatDate}
-                                        SkeletonText={SkeletonText} // Pass SkeletonText
-                                        SkeletonTableRow={SkeletonTableRow} // Pass SkeletonTableRow
+                                        SkeletonText={SkeletonText}
+                                        SkeletonTableRow={SkeletonTableRow}
                                     />
                                 </Suspense>
                             ))}
                             <TimeSinceLastMajorQuakeBanner
-                                    // Props sourced from context are removed
                                 formatTimeDuration={formatTimeDuration}
                                 getRegionForEarthquake={getRegionForEarthquake}
                                 handleQuakeClick={handleQuakeClick}
                                 getMagnitudeColor={getMagnitudeColor}
                             />
-                            {/*
-                                PERFORMANCE NOTE: SummaryStatisticsCard is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <SummaryStatisticsCard
                                 title="Overview (Last 24 Hours)"
                                 currentPeriodData={earthquakesLast24Hours}
-                                previousPeriodData={prev24HourData} // Ensure trends are shown on desktop too
+                                previousPeriodData={prev24HourData}
                                 isLoading={isLoadingDaily || (isLoadingWeekly && !earthquakesLast24Hours)}
                                 calculateStats={calculateStats}
-                                // FEELABLE_QUAKE_THRESHOLD is imported by SummaryStatisticsCard
                             />
                             <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md text-sm">
                                 <h3 className="text-md font-semibold mb-1 text-indigo-400">Most Active Region (Last 24h)</h3>
@@ -1111,7 +1085,6 @@ function App() {
                                 )}
                             </div>
 
-                                {/* Active Earthquake Clusters Section - Desktop Sidebar */}
                                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
                                 <h3 className="text-md font-semibold mb-2 text-indigo-300"> Active Earthquake Clusters </h3>
                                 {overviewClusters && overviewClusters.length > 0 ? (
@@ -1121,13 +1094,6 @@ function App() {
 
                             {recentSignificantQuakesForOverview.length > 0 && (
                                 <Suspense fallback={<ChartLoadingFallback message="Loading significant quakes table..." />}>
-                                    {/*
-                                        PERFORMANCE NOTE: PaginatedEarthquakeTable is memoized.
-                                        Ensure any new complex props (objects, functions, arrays) passed to it
-                                        are memoized using useMemo or useCallback in this component (HomePage)
-                                        to prevent unnecessary re-renders.
-                                        (Example: onQuakeClick, getMagnitudeColorStyle, formatTimeAgo, formatDate are already useCallback'd or stable).
-                                    */}
                                     <PaginatedEarthquakeTable
                                         title={`Recent Significant Quakes (M${MAJOR_QUAKE_THRESHOLD.toFixed(1)}+)`}
                                         earthquakes={recentSignificantQuakesForOverview}
@@ -1162,126 +1128,26 @@ function App() {
                         </> )}
                         {activeSidebarView === 'learn_more' && ( <div className="p-2 bg-slate-700 rounded-md"> <h3 className="text-md font-semibold text-indigo-400 mb-2">Learn About Earthquakes</h3> <InfoSnippet topic="magnitude" /> <InfoSnippet topic="depth" /> <InfoSnippet topic="intensity" /> <InfoSnippet topic="alerts" /> <InfoSnippet topic="strike"/> <InfoSnippet topic="dip"/> <InfoSnippet topic="rake"/> <InfoSnippet topic="stressAxes"/> <InfoSnippet topic="beachball"/> <InfoSnippet topic="stationsUsed"/> <InfoSnippet topic="azimuthalGap"/> <InfoSnippet topic="rmsError"/> </div> )}
 
-                        {/* ... (rest of your desktop sidebar logic for details_1hr, details_24hr, etc. This part of your code was already handling these views) ... */}
                         {activeSidebarView === 'details_1hr' && !isLoadingDaily && earthquakesLastHour && ( <div className="space-y-3">
-                            {/*
-                                PERFORMANCE NOTE: SummaryStatisticsCard is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <SummaryStatisticsCard title="Summary (Last Hour)" currentPeriodData={earthquakesLastHour} previousPeriodData={earthquakesPriorHour} isLoading={isLoadingDaily} calculateStats={calculateStats} />
-                            {/*
-                                PERFORMANCE NOTE: MagnitudeDistributionSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDistributionSVGChart earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily} getMagnitudeColor={getMagnitudeColor} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: MagnitudeDepthScatterSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDepthScatterSVGChart earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily} getMagnitudeColor={getMagnitudeColor} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: RegionalDistributionList is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback message="Loading list..." />}><RegionalDistributionList earthquakes={earthquakesLastHour} titleSuffix="(Last Hour)" isLoading={isLoadingDaily} getRegionForEarthquake={getRegionForEarthquake} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: PaginatedEarthquakeTable is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                                (Example: onQuakeClick, getMagnitudeColorStyle, formatTimeAgo, formatDate are already useCallback'd or stable).
-                            */}
                             <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Earthquakes (Last Hour)" earthquakes={earthquakesLastHour} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} itemsPerPage={10} periodName="last hour" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} /></Suspense>
                         </div> )}
                         {activeSidebarView === 'details_24hr' && !isLoadingWeekly && earthquakesLast24Hours && ( <div className="space-y-3">
-                            {/*
-                                PERFORMANCE NOTE: SummaryStatisticsCard is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <SummaryStatisticsCard title="Summary (Last 24 Hours)" currentPeriodData={earthquakesLast24Hours} previousPeriodData={prev24HourData} isLoading={isLoadingWeekly || (isLoadingDaily && !prev24HourData) } calculateStats={calculateStats} />
-                            {/*
-                                PERFORMANCE NOTE: MagnitudeDistributionSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDistributionSVGChart earthquakes={earthquakesLast24Hours} titleSuffix="(Last 24 Hours)" isLoading={isLoadingDaily} getMagnitudeColor={getMagnitudeColor} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: MagnitudeDepthScatterSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast24Hours} titleSuffix="(Last 24 Hours)" isLoading={isLoadingDaily} getMagnitudeColor={getMagnitudeColor} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: RegionalDistributionList is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback message="Loading list..." />}><RegionalDistributionList earthquakes={earthquakesLast24Hours} titleSuffix="(Last 24 Hours)" isLoading={isLoadingDaily} getRegionForEarthquake={getRegionForEarthquake} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: PaginatedEarthquakeTable is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                                (Example: onQuakeClick, getMagnitudeColorStyle, formatTimeAgo, formatDate are already useCallback'd or stable).
-                            */}
                             <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Earthquakes (Last 24 Hours)" earthquakes={earthquakesLast24Hours} isLoading={isLoadingDaily} onQuakeClick={handleQuakeClick} periodName="last 24 hours" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} /></Suspense>
                         </div> )}
                         {activeSidebarView === 'details_7day' && !isLoadingWeekly && earthquakesLast7Days && ( <div className="space-y-3">
-                            {/*
-                                PERFORMANCE NOTE: SummaryStatisticsCard is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <SummaryStatisticsCard title="Summary (Last 7 Days)" currentPeriodData={earthquakesLast7Days} previousPeriodData={prev7DayData} isLoading={isLoadingWeekly || (isLoadingMonthly && hasAttemptedMonthlyLoad && !prev7DayData) } calculateStats={calculateStats} />
-                            {/*
-                                PERFORMANCE NOTE: MagnitudeDistributionSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDistributionSVGChart earthquakes={earthquakesLast7Days} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} getMagnitudeColor={getMagnitudeColor} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: MagnitudeDepthScatterSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast7Days} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} getMagnitudeColor={getMagnitudeColor} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: EarthquakeTimelineSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><EarthquakeTimelineSVGChart earthquakes={earthquakesLast7Days} days={7} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: RegionalDistributionList is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback message="Loading list..." />}><RegionalDistributionList earthquakes={earthquakesLast7Days} titleSuffix="(Last 7 Days)" isLoading={isLoadingWeekly} getRegionForEarthquake={getRegionForEarthquake} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: PaginatedEarthquakeTable is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                                (Example: onQuakeClick, getMagnitudeColorStyle, formatTimeAgo, formatDate are already useCallback'd or stable).
-                            */}
                             <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Earthquakes (Last 7 Days)" earthquakes={earthquakesLast7Days} isLoading={isLoadingWeekly} onQuakeClick={handleQuakeClick} periodName="last 7 days" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} /></Suspense>
                         </div> )}
 
@@ -1290,125 +1156,41 @@ function App() {
                         {hasAttemptedMonthlyLoad && monthlyError && !isLoadingMonthly && <p className="text-red-300 text-xs text-center py-1">Error loading monthly data: {monthlyError}</p>}
 
                         {activeSidebarView === 'details_14day' && hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length > 0 && ( <div className="space-y-3">
-                            {/*
-                                PERFORMANCE NOTE: SummaryStatisticsCard is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <SummaryStatisticsCard title="Summary (Last 14 Days)" currentPeriodData={earthquakesLast14Days} previousPeriodData={prev14DayData} isLoading={isLoadingMonthly} calculateStats={calculateStats} />
-                            {/*
-                                PERFORMANCE NOTE: MagnitudeDistributionSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDistributionSVGChart earthquakes={earthquakesLast14Days} titleSuffix="(Last 14 Days)" isLoading={isLoadingMonthly} getMagnitudeColor={getMagnitudeColor} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: MagnitudeDepthScatterSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDepthScatterSVGChart earthquakes={earthquakesLast14Days} titleSuffix="(Last 14 Days)" isLoading={isLoadingMonthly} getMagnitudeColor={getMagnitudeColor} /></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: EarthquakeTimelineSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><EarthquakeTimelineSVGChart earthquakes={earthquakesLast14Days} days={14} titleSuffix="(Last 14 Days)" isLoading={isLoadingMonthly}/></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: PaginatedEarthquakeTable is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                                (Example: onQuakeClick, getMagnitudeColorStyle, formatTimeAgo, formatDate are already useCallback'd or stable).
-                            */}
                             <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="All Earthquakes (Last 14 Days)" earthquakes={earthquakesLast14Days} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={10} defaultSortKey="time" initialSortDirection="descending" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
                         </div> )}
                         {activeSidebarView === 'details_30day' && hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length > 0 && ( <div className="space-y-3">
-                            {/*
-                                PERFORMANCE NOTE: SummaryStatisticsCard is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <SummaryStatisticsCard title="Summary (Last 30 Days)" currentPeriodData={earthquakesLast30Days} isLoading={isLoadingMonthly} calculateStats={calculateStats} />
-                            {/*
-                                PERFORMANCE NOTE: MagnitudeDistributionSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDistributionSVGChart earthquakes={allEarthquakes} titleSuffix="(Last 30 Days)" isLoading={isLoadingMonthly} getMagnitudeColor={getMagnitudeColor}/></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: MagnitudeDepthScatterSVGChart is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback />}><MagnitudeDepthScatterSVGChart earthquakes={allEarthquakes} titleSuffix="(Last 30 Days)" isLoading={isLoadingMonthly} getMagnitudeColor={getMagnitudeColor}/></Suspense>
-                            {/*
-                                PERFORMANCE NOTE: RegionalDistributionList is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                            */}
                             <Suspense fallback={<ChartLoadingFallback message="Loading list..." />}><RegionalDistributionList earthquakes={allEarthquakes} titleSuffix="(Last 30 Days)" isLoading={isLoadingMonthly} getRegionForEarthquake={getRegionForEarthquake}/></Suspense>
                             <div className="grid grid-cols-1 gap-3">
-                                {/*
-                                    PERFORMANCE NOTE: PaginatedEarthquakeTable is memoized.
-                                    Ensure any new complex props (objects, functions, arrays) passed to it
-                                    are memoized using useMemo or useCallback in this component (HomePage)
-                                    to prevent unnecessary re-renders.
-                                    (Example: onQuakeClick, getMagnitudeColorStyle, formatTimeAgo, formatDate are already useCallback'd or stable).
-                                */}
                                 <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Top 10 Strongest (30d)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={10} defaultSortKey="mag" initialSortDirection="descending" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
-                                {/*
-                                    PERFORMANCE NOTE: PaginatedEarthquakeTable is memoized.
-                                    Ensure any new complex props (objects, functions, arrays) passed to it
-                                    are memoized using useMemo or useCallback in this component (HomePage)
-                                    to prevent unnecessary re-renders.
-                                    (Example: onQuakeClick, getMagnitudeColorStyle, formatTimeAgo, formatDate are already useCallback'd or stable).
-                                */}
                                 <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Most Widely Felt (30d)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={5} defaultSortKey="felt" initialSortDirection="descending" filterPredicate={q => q.properties.felt !== null && typeof q.properties.felt === 'number' && q.properties.felt > FELT_REPORTS_THRESHOLD} getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
-                                {/*
-                                    PERFORMANCE NOTE: PaginatedEarthquakeTable is memoized.
-                                    Ensure any new complex props (objects, functions, arrays) passed to it
-                                    are memoized using useMemo or useCallback in this component (HomePage)
-                                    to prevent unnecessary re-renders.
-                                    (Example: onQuakeClick, getMagnitudeColorStyle, formatTimeAgo, formatDate are already useCallback'd or stable).
-                                */}
                                 <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Most Significant (30d)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={5} defaultSortKey="sig" initialSortDirection="descending" filterPredicate={q => q.properties.sig !== null && typeof q.properties.sig === 'number' && q.properties.sig > SIGNIFICANCE_THRESHOLD} getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
                             </div>
-                            {/*
-                                PERFORMANCE NOTE: PaginatedEarthquakeTable is memoized.
-                                Ensure any new complex props (objects, functions, arrays) passed to it
-                                are memoized using useMemo or useCallback in this component (HomePage)
-                                to prevent unnecessary re-renders.
-                                (Example: onQuakeClick, getMagnitudeColorStyle, formatTimeAgo, formatDate are already useCallback'd or stable).
-                            */}
                             <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="All Earthquakes (Last 30 Days)" earthquakes={allEarthquakes} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={15} defaultSortKey="time" initialSortDirection="descending" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
                         </div> )}
 
-                        {(isLoadingDaily || isLoadingWeekly || (hasAttemptedMonthlyLoad && isLoadingMonthly)) && !showFullScreenLoader && // Use hook's isLoadingDaily/Weekly
+                        {(isLoadingDaily || isLoadingWeekly || (hasAttemptedMonthlyLoad && isLoadingMonthly)) && !showFullScreenLoader &&
                             activeSidebarView !== 'overview_panel' && activeSidebarView !== 'learn_more' &&
                             !((activeSidebarView === 'details_1hr' && earthquakesLastHour) || (activeSidebarView === 'details_24hr' && earthquakesLast24Hours && prev24HourData) || (activeSidebarView === 'details_7day' && earthquakesLast7Days)) &&
                             ( <div className="text-center py-10"><p className="text-sm text-slate-500 animate-pulse">Loading selected data...</p></div> )
                         }
                         {hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length === 0 && (activeSidebarView === 'details_14day' || activeSidebarView === 'details_30day') &&( <p className="text-slate-400 text-center py-4 text-sm">No 14/30 day earthquake data found or loaded.</p> )}
                         {!initialDataLoaded && !isLoadingDaily && !isLoadingWeekly && (activeSidebarView === 'details_1hr' || activeSidebarView === 'details_24hr' || activeSidebarView === 'details_7day' ) && ( <div className="text-center py-10"><p className="text-sm text-slate-500">No data available for this period.</p></div> )}
-                    </div> {/* End of desktop sidebar scrollable content */}
+                    </div>
                     <footer className="p-1.5 text-center border-t border-slate-700 mt-auto">
                         <p className="text-[10px] text-slate-500">&copy; {new Date().getFullYear()} Built By Vibes | Data: USGS</p>
                     </footer>
                 </aside>
-            </div> {/* End of main flex container (main + aside) */}
+            </div>
 
-            <BottomNav onNavClick={setActiveSidebarView} activeView={activeSidebarView} />
+            <BottomNav className="app-footer" onNavClick={setActiveSidebarView} activeView={activeSidebarView} />
 
-            {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
         </div>
     );
 }
