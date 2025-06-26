@@ -159,6 +159,11 @@ const InteractiveGlobeView = ({
 
 
     useEffect(() => {
+        if (dimensions.width === 0 || dimensions.height === 0) {
+            console.log('[InteractiveGlobeView] Dimensions not ready for points processing', dimensions);
+            setPoints([]); // Ensure points are cleared if dimensions become invalid
+            return; // Wait for valid dimensions
+        }
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
             const isHighlighted = quake.id === highlightedQuakeId;
             const magValue = parseFloat(quake.properties.mag) || 0;
@@ -301,7 +306,7 @@ const InteractiveGlobeView = ({
         // }
         // --- END NEW ---
         setPoints(allPointsData);
-    }, [globeEarthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]); // Update dependency array
+    }, [globeEarthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters, dimensions]); // Add dimensions to dependency array
 
     useEffect(() => {
         let processedPaths = [];
@@ -404,6 +409,11 @@ const InteractiveGlobeView = ({
 
     // useEffect for Rings Data
     useEffect(() => {
+        if (dimensions.width === 0 || dimensions.height === 0) {
+            console.log('[InteractiveGlobeView] Dimensions not ready for rings processing', dimensions);
+            setRingsData([]); // Ensure rings are cleared
+            return; // Wait for valid dimensions
+        }
         const newRings = [];
 
         // Ring for lastMajorQuake (from context, previously latestMajorQuakeForRing)
@@ -459,7 +469,7 @@ const InteractiveGlobeView = ({
              setRingsData(newRings);
         }
 
-    }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length]); // Update dependency array, added getMagnitudeColorFunc as it's used in color callbacks
+    }, [lastMajorQuake, previousMajorQuake, getMagnitudeColorFunc, ringsData.length, dimensions]); // Add dimensions
 
 
 
