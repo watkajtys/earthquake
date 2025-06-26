@@ -462,6 +462,7 @@ const InteractiveGlobeView = ({
 
     return (
         <Globe
+            key={`${dimensions.width}-${dimensions.height}`} // Force re-mount on dimension change
             ref={globeRef}
             width={dimensions.width}
             height={dimensions.height}
