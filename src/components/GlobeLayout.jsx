@@ -1,26 +1,4 @@
 
-import React, { Suspense } from 'react';
-import { Outlet } from 'react-router-dom';
-import NotableQuakeFeature from './NotableQuakeFeature';
-import PreviousNotableQuakeFeature from './PreviousNotableQuakeFeature';
-import GlobalLastMajorQuakeTimer from "./GlobalLastMajorQuakeTimer.jsx";
-import InteractiveGlobeView from './InteractiveGlobeView';
-
-const GlobeLayout = (props) => {
-  const {
-    globeFocusLng,
-    handleQuakeClick,
-    getMagnitudeColor,
-    activeClusters,
-    lastMajorQuake,
-    formatTimeDuration,
-    handleNotableQuakeSelect,
-    keyStatsForGlobe,
-    coastlineData,
-    tectonicPlatesData,
-    areGeoJsonAssetsLoading
-  } = props;
-
 import React, { Suspense, useRef } from 'react'; // Added useRef
 import { Outlet } from 'react-router-dom';
 import NotableQuakeFeature from './NotableQuakeFeature';
@@ -46,7 +24,7 @@ const GlobeLayout = (props) => {
   const globeContainerRef = useRef(null); // Create a ref for the globe container
 
   return (
-    // This div is the .globe-wrapper, its ref is passed to InteractiveGlobeView
+    // Applied .globe-wrapper class, added ref
     <div ref={globeContainerRef} className="globe-wrapper">
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
         {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
