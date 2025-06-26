@@ -167,6 +167,9 @@ const GlobeLayout = (props) => {
             tectonicPlatesGeoJson={tectonicPlatesData}
             activeClusters={activeClusters}
           />
+        ) : (
+          // Else case for when assets are loaded but dimensions are not valid
+          <div className="w-full h-full flex items-center justify-center text-slate-500">Waiting for container dimensions...</div>
         )}
       </Suspense>
 

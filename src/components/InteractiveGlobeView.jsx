@@ -526,7 +526,7 @@ const InteractiveGlobeView = ({
 
                     enablePointerInteraction={true}
                 />
-            )}
+            {/* Removed extraneous )} */}
         </div>
     );
 };
