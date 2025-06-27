@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SVH Fixed Footer Test</title>
+    <style>
+        html {
+            height: 100svh;
+            margin: 0; padding: 0;
+            background-color: lightblue; /* To see html extent */
+            overflow: hidden; /* Critical for fixed behavior */
+        }
+        body {
+            height: 100%;
+            margin: 0; padding: 0;
+            background-color: lightcoral; /* To see body extent */
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            height: 50px;
+            background-color: orange;
+            text-align:center;
+            line-height:50px;
+            flex-shrink: 0; /* Prevent header from shrinking */
+            position: sticky; /* Make header sticky to see content scroll under it */
+            top: 0;
+            z-index: 20; /* Above content */
+        }
+        .content {
+            flex: 1; /* Takes up remaining space */
+            background-color: lightgreen;
+            overflow-y: auto; /* For scrolling content within */
+            /* The padding-bottom is crucial if the footer is part of the body's flex flow
+               but since footer is position:fixed, this padding is for content visibility. */
+            padding-bottom: 60px; /* Space for the fixed footer */
+        }
+        .footer {
+            height: 60px; /* Known fixed footer height */
+            background-color: grey;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            line-height: 60px;
+            z-index: 10;
+        }
+        .tall-content {
+            height: 1500px; /* Make content scrollable */
+            background: repeating-linear-gradient(45deg, yellow, yellow 10px, gold 10px, gold 20px);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">Header (50px)</div>
+    <div class="content">
+        <p>Scrollable Content Area (should be above footer)</p>
+        <p>Try scrolling this area.</p>
+        <div class="tall-content"></div>
+    </div>
+    <div class="footer">Footer (60px)</div>
+    <script>
+        function logDims(event_type) {
+            var htmlEl = document.documentElement;
+            var bodyEl = document.body;
+            var contentEl = document.querySelector('.content');
+            var messages = [];
+
+            messages.push('Event: ' + event_type);
+            messages.push('HTML OffsetH: ' + (htmlEl ? htmlEl.offsetHeight : 'N/A'));
+            messages.push('Body OffsetH: ' + (bodyEl ? bodyEl.offsetHeight : 'N/A'));
+            messages.push('Content OffsetH: ' + (contentEl ? contentEl.offsetHeight : 'N/A'));
+
+            if (window.visualViewport) {
+                messages.push('VV Height: ' + window.visualViewport.height);
+                messages.push('VV Width: ' + window.visualViewport.width);
+                messages.push('VV OffsetTop: ' + window.visualViewport.offsetTop);
+                messages.push('VV Scale: ' + window.visualViewport.scale);
+            } else {
+                messages.push('VisualViewport API not supported');
+            }
+            messages.push('Window InnerHeight: ' + window.innerHeight);
+            messages.push('Screen AvailHeight: ' + screen.availHeight);
+            messages.push('----------------------------------');
+
+            console.log(messages.join('\\n'));
+            // alert(messages.join('\\n')); // Alert can be annoying, use console
+        }
+
+        // Initial log attempts
+        requestAnimationFrame(() => logDims('rAF Initial'));
+        window.addEventListener('load', () => {
+            logDims('Window Load');
+            // Set up a poller for a short duration to see if dimensions change without interaction
+            let pollCount = 0;
+            const maxPolls = 10; // Poll for 1 second (10 * 100ms)
+            const pollInterval = setInterval(() => {
+                logDims('Poll ' + (pollCount + 1));
+                pollCount++;
+                if (pollCount >= maxPolls) {
+                    clearInterval(pollInterval);
+                }
+            }, 100);
+        });
+
+        // Listeners for dynamic changes
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => logDims('VV Resize'));
+            window.visualViewport.addEventListener('scroll', () => logDims('VV Scroll')); // Often fires with resize
+        }
+        window.addEventListener('resize', () => logDims('Window Resize'));
+
+        let interactionCount = 0;
+        document.body.addEventListener('touchstart', () => {
+            interactionCount++;
+            logDims('Touch Interaction (' + interactionCount + ')');
+        }, { passive: true }); // passive:true for scroll performance
+    </script>
+</body>
+</html>
