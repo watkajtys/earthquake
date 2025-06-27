@@ -168,7 +168,7 @@ const InteractiveGlobeView = ({
                 const newWidth = containerRef.current.offsetWidth;
                 const newHeight = containerRef.current.offsetHeight;
                 if (newWidth > 10 && newHeight > 10) {
-                    setGlobeDimensions({ width: newWidth, height: newHeight });
+                    setInternalGlobeDimensions({ width: newWidth, height: newHeight });
                 }
             }
         } else {
@@ -186,7 +186,7 @@ const InteractiveGlobeView = ({
                                 const w = containerRef.current.offsetWidth;
                                 const h = containerRef.current.offsetHeight;
                                 if (w > 10 && h > 10) {
-                                    setGlobeDimensions({ width: w, height: h });
+                                    setInternalGlobeDimensions({ width: w, height: h });
                                 }
                             }
                         }, 150);
