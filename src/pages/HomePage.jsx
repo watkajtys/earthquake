@@ -190,10 +190,50 @@ const GlobeLayout = (props) => {
 function App() {
     const {
         activeSidebarView, setActiveSidebarView,
-        // activeFeedPeriod, // Unused variable removed
         globeFocusLng, setGlobeFocusLng,
         setFocusedNotableQuake
     } = useUIState();
+
+    // Refs for logging element heights
+    // TODO: Remove these refs and the associated useEffect for debugging
+    const appRootRef = useRef(null);
+    const contentWrapperRef = useRef(null);
+    const mainElementRef = useRef(null);
+    const bottomNavWrapperRef = useRef(null);
+
+    useEffect(() => {
+        const logHeights = () => {
+            console.log('--- App Layout Heights (HomePage.jsx) ---');
+            if (appRootRef.current) {
+                console.log('App Root Div OffsetHeight:', appRootRef.current.offsetHeight);
+            }
+            if (contentWrapperRef.current) {
+                console.log('Content Wrapper Div OffsetHeight:', contentWrapperRef.current.offsetHeight);
+            }
+            if (mainElementRef.current) {
+                console.log('Main Element OffsetHeight:', mainElementRef.current.offsetHeight);
+            }
+            if (bottomNavWrapperRef.current) {
+                console.log('BottomNav Wrapper OffsetHeight:', bottomNavWrapperRef.current.offsetHeight);
+            }
+            console.log('Window InnerHeight:', window.innerHeight);
+            if (window.visualViewport) {
+                console.log('VisualViewport Height:', window.visualViewport.height);
+                console.log('VisualViewport Width:', window.visualViewport.width);
+            } else {
+                console.log('VisualViewport API: Not Supported');
+            }
+            console.log('------------------------------------');
+        };
+
+        // Log heights after initial render and potentially after some delay to catch settled state
+        const timeoutId = setTimeout(logHeights, 500); // Log after 500ms
+
+        // Also log on mount
+        requestAnimationFrame(logHeights); // Log on next animation frame
+
+        return () => clearTimeout(timeoutId);
+    }, []); // Run once on mount
 
     // const [registeredIdsThisSession, setRegisteredIdsThisSession] = useState(new Set()); // Removed
 
@@ -981,7 +1021,7 @@ function App() {
     // --- Main Render ---
 
     return (
-        <div className="flex flex-col h-[100svh] font-sans bg-slate-900 text-slate-100 antialiased">
+        <div ref={appRootRef} className="flex flex-col h-full font-sans bg-slate-900 text-slate-100 antialiased">
             <header className="bg-slate-800 text-white pt-2 sm:pt-4 pb-1 sm:pb-2 px-2 shadow-lg z-40 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-base sm:text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
@@ -990,12 +1030,9 @@ function App() {
             </header>
 
             {/* This main flex container now has padding-bottom for mobile to avoid overlap with BottomNav */}
-            <div className="flex flex-1 overflow-hidden pb-16 lg:pb-0">
+            <div ref={contentWrapperRef} className="flex flex-1 overflow-hidden pb-16 lg:pb-0">
 
-                {/* MAIN CONTENT AREA - This will now adapt based on activeMobileView */}
-                {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
-                {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
-                <main className="flex-1 relative bg-slate-900 lg:bg-black w-full min-w-0 overflow-y-auto">
+                <main ref={mainElementRef} className="flex-1 relative bg-slate-900 lg:bg-black w-full min-w-0 overflow-y-auto">
                     <ErrorBoundary>
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <Routes>
@@ -1484,7 +1521,9 @@ function App() {
                 </aside>
             </div> {/* End of main flex container (main + aside) */}
 
-            <BottomNav onNavClick={setActiveSidebarView} activeView={activeSidebarView} />
+            <div ref={bottomNavWrapperRef} className="lg:hidden"> {/* Wrapper for BottomNav, also hidden on large screens */}
+                <BottomNav onNavClick={setActiveSidebarView} activeView={activeSidebarView} />
+            </div>
 
             {/* Removed direct rendering of EarthquakeDetailView, now handled by routing */}
         </div>
