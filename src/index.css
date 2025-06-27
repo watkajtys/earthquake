@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  height: 100svh;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent body scrollbars if content tries to exceed 100% height */
+}
+
+#root {
+  height: 100%;
+}
+
 /* This is for the DivIcon itself, to ensure no default styles interfere */
 .custom-pulsing-icon {
   background: none !important;
