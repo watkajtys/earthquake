@@ -1,6 +1,6 @@
 // src/pages/HomePage.jsx
-import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState, useRef } from 'react';
-// Ensuring useRef is definitely in the import list.
+import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState } from 'react';
+// useRef removed as it's no longer used after deleting debug refs and JS height logic
 import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
@@ -984,9 +984,8 @@ function App() {
 
     return (
         <div
-            ref={appRootRef}
-            className="flex flex-col h-full font-sans bg-slate-900 text-slate-100 antialiased" // Added h-full back
-            // style={{ height: dynamicAppHeight > 0 ? `${dynamicAppHeight}px` : '100vh' }} // Removed inline style
+            // ref={appRootRef} // Removed ref
+            className="flex flex-col h-full font-sans bg-slate-900 text-slate-100 antialiased"
         >
             <header className="bg-slate-800 text-white pt-2 sm:pt-4 pb-1 sm:pb-2 px-2 shadow-lg z-40 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
@@ -996,9 +995,9 @@ function App() {
             </header>
 
             {/* This main flex container now has padding-bottom for mobile to avoid overlap with BottomNav */}
-            <div ref={contentWrapperRef} className="flex flex-1 overflow-hidden pb-16 lg:pb-0">
+            <div /*ref={contentWrapperRef}*/ className="flex flex-1 overflow-hidden pb-16 lg:pb-0"> {/* Removed ref */}
 
-                <main ref={mainElementRef} className="flex-1 relative bg-slate-900 lg:bg-black w-full min-w-0 overflow-y-auto">
+                <main /*ref={mainElementRef}*/ className="flex-1 relative bg-slate-900 lg:bg-black w-full min-w-0 overflow-y-auto"> {/* Removed ref */}
                     <ErrorBoundary>
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <Routes>
@@ -1486,7 +1485,7 @@ function App() {
                 </aside>
             </div> {/* End of main flex container (main + aside) */}
 
-            <div ref={bottomNavWrapperRef} className="lg:hidden"> {/* Wrapper for BottomNav, also hidden on large screens */}
+            <div /*ref={bottomNavWrapperRef}*/ className="lg:hidden"> {/* Removed ref. Wrapper for BottomNav, also hidden on large screens */}
                 <BottomNav onNavClick={setActiveSidebarView} activeView={activeSidebarView} />
             </div>
 
