@@ -196,12 +196,99 @@ function App() {
     } = useUIState();
 
     // Refs for logging element heights
-    // TODO: Remove these refs and the associated useEffect for debugging
+    // TODO: Remove these refs and the associated useEffect for debugging (or adapt them)
     const appRootRef = useRef(null);
     const contentWrapperRef = useRef(null);
     const mainElementRef = useRef(null);
     const bottomNavWrapperRef = useRef(null);
 
+    const [dynamicAppHeight, setDynamicAppHeight] = useState(0); // Initialize with 0 or window.innerHeight
+    const initialGoodVVHeightCapturedRef = useRef(false);
+    const capturedGoodVVHeightRef = useRef(0);
+
+    // Effect to capture initial visualViewport height and listen for resizes
+    useEffect(() => {
+        if (!window.visualViewport) {
+            // Fallback if visualViewport is not supported - use window.innerHeight
+            // This could also be a place to set a more static fallback like '100vh' for the style
+            const setFallbackHeight = () => setDynamicAppHeight(window.innerHeight);
+            setFallbackHeight();
+            window.addEventListener('resize', setFallbackHeight);
+            return () => window.removeEventListener('resize', setFallbackHeight);
+        }
+
+        const vv = window.visualViewport;
+
+        const handleViewportResize = () => {
+            const currentVVHeight = vv.height;
+            if (initialGoodVVHeightCapturedRef.current) {
+                // If we've captured a "good" initial small height,
+                // be wary of it suddenly jumping to a much larger known bad value.
+                // This logic might need to be more sophisticated, e.g. only allow it to grow
+                // if user interaction is detected, or if it stabilizes at the new larger value
+                // for a while (though the problem states it's stable until interaction).
+                // For now, if it was good, let's assume subsequent resizes are legitimate
+                // (e.g. orientation change, keyboard).
+                setDynamicAppHeight(currentVVHeight);
+            } else {
+                // Still waiting for the first "good" capture.
+                // The requestAnimationFrame logic below handles the very first capture.
+                // This resize might be the one that gives us the good value if rAF missed it or was too early.
+                // Or it might give us the bad 1109px value.
+                 const plausibleSVHMax = 950; // Heuristic: max expected svh
+                if (currentVVHeight > 0 && currentVVHeight < plausibleSVHMax && currentVVHeight < window.innerHeight * 0.9) {
+                    setDynamicAppHeight(currentVVHeight);
+                    capturedGoodVVHeightRef.current = currentVVHeight;
+                    initialGoodVVHeightCapturedRef.current = true;
+                } else if (currentVVHeight > 0 && !initialGoodVVHeightCapturedRef.current) {
+                    // If we haven't captured a good one yet, and this isn't good, take it anyway for now
+                    // to avoid 0 height, but don't flag as "good" capture.
+                    // Or, stick with initial state (e.g. window.innerHeight)
+                    setDynamicAppHeight(currentVVHeight); // Could be the bad 1109px
+                }
+            }
+        };
+
+        // Initial capture attempt using requestAnimationFrame
+        requestAnimationFrame(() => {
+            if (window.visualViewport) { // Check again inside rAF
+                const initialVVHeight = window.visualViewport.height;
+                const plausibleSVHMax = 950; // Heuristic
+                // Try to capture the first, hopefully smaller, visual viewport height.
+                if (initialVVHeight > 0 &&
+                    !initialGoodVVHeightCapturedRef.current &&
+                    initialVVHeight < plausibleSVHMax && /* avoid known anomalous large values */
+                    initialVVHeight < window.innerHeight * 0.9 /* ensure it's smaller than overall window if address bar is up */
+                    ) {
+                    setDynamicAppHeight(initialVVHeight);
+                    capturedGoodVVHeightRef.current = initialVVHeight;
+                    initialGoodVVHeightCapturedRef.current = true;
+                } else if (initialVVHeight > 0 && !initialGoodVVHeightCapturedRef.current) {
+                    // If the very first rAF reading is already the large one, set it, but don't mark as "good capture"
+                    // The resize listener might catch a "good" one later if VV resizes after interaction.
+                    setDynamicAppHeight(initialVVHeight);
+                } else if (!initialGoodVVHeightCapturedRef.current) {
+                    // Fallback if VV height is 0 or not yet good, use innerHeight for the moment
+                    setDynamicAppHeight(window.innerHeight);
+                }
+            } else {
+                 setDynamicAppHeight(window.innerHeight); // Fallback if no VV
+            }
+        });
+
+        vv.addEventListener('resize', handleViewportResize);
+        // Consider scroll as well, as it can sometimes affect vv.height on mobile
+        // vv.addEventListener('scroll', handleViewportResize);
+
+        return () => {
+            if (vv) {
+                vv.removeEventListener('resize', handleViewportResize);
+                // vv.removeEventListener('scroll', handleViewportResize);
+            }
+        };
+    }, []); // Run once on mount
+
+    // useEffect for logging (can be kept for debugging this change)
     useEffect(() => {
         const logHeights = () => {
             console.log('--- App Layout Heights (HomePage.jsx) ---');
@@ -1022,7 +1109,11 @@ function App() {
     // --- Main Render ---
 
     return (
-        <div ref={appRootRef} className="flex flex-col h-full font-sans bg-slate-900 text-slate-100 antialiased">
+        <div
+            ref={appRootRef}
+            className="flex flex-col font-sans bg-slate-900 text-slate-100 antialiased" // Removed h-full
+            style={{ height: dynamicAppHeight > 0 ? `${dynamicAppHeight}px` : '100vh' }} // Apply dynamic height, fallback to 100vh
+        >
             <header className="bg-slate-800 text-white pt-2 sm:pt-4 pb-1 sm:pb-2 px-2 shadow-lg z-40 border-b border-slate-700">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-base sm:text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
