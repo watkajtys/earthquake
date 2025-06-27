@@ -15,14 +15,23 @@
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2); /* Softer outer glow */
 }
 
-/* Ensure html, body, and #root can support full height for JS-driven app height */
-html, body, #root {
-  height: 100%;
+/* Pure CSS SVH-based layout foundation */
+html {
+  height: 100svh;
+  width: 100vw;
   margin: 0;
   padding: 0;
+  overflow: hidden;
 }
-
 body {
-  /* overflow-x: hidden; /* Prevent horizontal scrollbars if desired */
-  /* vertical overflow will be managed by specific containers or App root if needed */
+  height: 100%; /* Fill html */
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent body scrollbars */
+}
+#root {
+  height: 100%; /* Fill body */
+  width: 100%;
+  /* overflow: auto; /* Optional: if #root's direct children need to scroll */
 }

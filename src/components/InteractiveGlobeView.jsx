@@ -212,11 +212,6 @@ const InteractiveGlobeView = ({
     }, [useExplicitDimensions, initialLayoutComplete]); // Effect now depends on useExplicitDimensions and initialLayoutComplete
 
     useEffect(() => {
-        // TODO: Remove this debug log
-        console.log('[InteractiveGlobeView] Internal Dimensions:', internalGlobeDimensions);
-    }, [internalGlobeDimensions]);
-
-    useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
             const isHighlighted = quake.id === highlightedQuakeId;
             const magValue = parseFloat(quake.properties.mag) || 0;
