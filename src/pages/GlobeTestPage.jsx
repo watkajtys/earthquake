@@ -148,7 +148,7 @@ function GlobeTestPage() {
                 top: '0',
                 left: '0',
                 width: '100vw',
-                height: '100svh',
+                height: '100vh', // Changed from 100svh to 100vh
                 backgroundColor: 'rgba(0, 0, 25, 1)',
                 zIndex: 9999,
                 display: 'flex',
