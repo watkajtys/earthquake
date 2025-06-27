@@ -1,20 +1,27 @@
 @tailwind base;
 
-html,
-body,
-#root {
+html {
+  height: 100svh;
+  overflow: hidden; /* To prevent scrollbars if 100svh is briefly too large */
+  margin: 0;
+  padding: 0;
+}
+
+body {
   height: 100%;
   margin: 0;
   padding: 0;
-  /* Prevent scrollbars on html/body if a child is 100svh and slightly larger than 100% due to browser UI */
-  /* overflow: hidden; /* This might be too restrictive if any part of #root needs to scroll */
+  display: flex;
+  flex-direction: column;
 }
 
-/* Ensure svh works as expected by making #root a potential flex container if needed, though App.jsx handles main flex */
-/* #root { */
-  /* display: flex; */
-  /* flex-direction: column; */
-/* } */
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1; /* Ensures #root takes up available space in body if body is flex */
+  /* Existing max-width, margin auto for horizontal centering, and padding from App.css can remain */
+}
 
 @tailwind components;
 @tailwind utilities;
