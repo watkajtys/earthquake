@@ -1,6 +1,7 @@
 // src/pages/HomePage.jsx
 import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime, removed useRef
 import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
+import { useViewportHeight } from '../hooks/useViewportHeight';
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
@@ -187,6 +188,8 @@ const GlobeLayout = (props) => {
  * @returns {JSX.Element} The rendered App component.
  */
 function App() {
+  useViewportHeight(); // Set --vh custom property
+
     const {
         activeSidebarView, setActiveSidebarView,
         // activeFeedPeriod, // Unused variable removed
