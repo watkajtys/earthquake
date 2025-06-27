@@ -197,93 +197,112 @@ function App() {
 
     // Refs for logging element heights
     // TODO: Remove these refs and the associated useEffect for debugging (or adapt them)
+    // TODO: Remove these refs and the associated useEffect for debugging (or adapt them)
     const appRootRef = useRef(null);
     const contentWrapperRef = useRef(null);
     const mainElementRef = useRef(null);
     const bottomNavWrapperRef = useRef(null);
 
-    const [dynamicAppHeight, setDynamicAppHeight] = useState(0); // Initialize with 0 or window.innerHeight
-    const initialGoodVVHeightCapturedRef = useRef(false);
-    const capturedGoodVVHeightRef = useRef(0);
+    const [dynamicAppHeight, setDynamicAppHeight] = useState(0);
+    const initialVVHeightCapturedRef = useRef(false); // Tracks if we've locked in the initial small VV height
+    const capturedVVHeightValueRef = useRef(0);   // Stores the locked-in small VV height
 
     // Effect to capture initial visualViewport height and listen for resizes
     useEffect(() => {
         if (!window.visualViewport) {
-            // Fallback if visualViewport is not supported - use window.innerHeight
-            // This could also be a place to set a more static fallback like '100vh' for the style
-            const setFallbackHeight = () => setDynamicAppHeight(window.innerHeight);
+            const setFallbackHeight = () => {
+                if (!initialVVHeightCapturedRef.current) { // Only use if we haven't captured a VV height
+                    setDynamicAppHeight(window.innerHeight);
+                    console.log('[HomePage] visualViewport not supported, using window.innerHeight:', window.innerHeight);
+                }
+            };
             setFallbackHeight();
-            window.addEventListener('resize', setFallbackHeight);
+            window.addEventListener('resize', setFallbackHeight); // Update on window resize if VV not supported
             return () => window.removeEventListener('resize', setFallbackHeight);
         }
 
         const vv = window.visualViewport;
 
         const handleViewportResize = () => {
-            const currentVVHeight = vv.height;
-            if (initialGoodVVHeightCapturedRef.current) {
-                // If we've captured a "good" initial small height,
-                // be wary of it suddenly jumping to a much larger known bad value.
-                // This logic might need to be more sophisticated, e.g. only allow it to grow
-                // if user interaction is detected, or if it stabilizes at the new larger value
-                // for a while (though the problem states it's stable until interaction).
-                // For now, if it was good, let's assume subsequent resizes are legitimate
-                // (e.g. orientation change, keyboard).
-                setDynamicAppHeight(currentVVHeight);
-            } else {
-                // Still waiting for the first "good" capture.
-                // The requestAnimationFrame logic below handles the very first capture.
-                // This resize might be the one that gives us the good value if rAF missed it or was too early.
-                // Or it might give us the bad 1109px value.
-                 const plausibleSVHMax = 950; // Heuristic: max expected svh
-                if (currentVVHeight > 0 && currentVVHeight < plausibleSVHMax && currentVVHeight < window.innerHeight * 0.9) {
-                    setDynamicAppHeight(currentVVHeight);
-                    capturedGoodVVHeightRef.current = currentVVHeight;
-                    initialGoodVVHeightCapturedRef.current = true;
-                } else if (currentVVHeight > 0 && !initialGoodVVHeightCapturedRef.current) {
-                    // If we haven't captured a good one yet, and this isn't good, take it anyway for now
-                    // to avoid 0 height, but don't flag as "good" capture.
-                    // Or, stick with initial state (e.g. window.innerHeight)
-                    setDynamicAppHeight(currentVVHeight); // Could be the bad 1109px
+            const newVVHeight = vv.height;
+            console.log('[HomePage] VV Resize Event. New VVH:', newVVHeight, 'Captured Good VVH:', capturedVVHeightValueRef.current, 'Capture Flag:', initialVVHeightCapturedRef.current);
+
+            if (initialVVHeightCapturedRef.current) {
+                // We have a "good" initial height. Only update if the new height is still "good"
+                // or very close to our captured good height. This tries to prevent flipping to the large stable anomalous value.
+                // This allows for small changes (like keyboard) or if it settles to an even smaller correct svh.
+                const knownAnomalousLargeHeightApprox = 1100; // Approx, based on logs (1109.33px)
+                const differenceFromCaptured = Math.abs(newVVHeight - capturedVVHeightValueRef.current);
+
+                if (newVVHeight < capturedVVHeightValueRef.current + 50 && newVVHeight < knownAnomalousLargeHeightApprox - 50) {
+                    // Allow if it's still small or slightly larger than initial capture, but not the known bad large one
+                    setDynamicAppHeight(newVVHeight);
+                    // capturedVVHeightValueRef.current = newVVHeight; // Optionally update the reference "good" height if it changes but is still good
+                    console.log('[HomePage] VV Resize: Updated dynamicAppHeight with new good VVH:', newVVHeight);
+                } else {
+                    console.log('[HomePage] VV Resize: Ignored update to newVVHeight', newVVHeight, 'as it might be anomalous or too different from captured good VVH.');
+                    // Stick with capturedVVHeightValueRef.current for dynamicAppHeight
+                    setDynamicAppHeight(capturedVVHeightValueRef.current);
                 }
+            } else {
+                // Still trying to make the first "good" capture via a resize event
+                const currentWindowInnerHeight = window.innerHeight;
+                const plausibleSVHMax = 900; // Heuristic: plausible max for a *small* viewport height
+                const isGoodInitialHeight = newVVHeight > 0 && newVVHeight < currentWindowInnerHeight * 0.90 && newVVHeight < plausibleSVHMax;
+
+                if (isGoodInitialHeight) {
+                    setDynamicAppHeight(newVVHeight);
+                    capturedVVHeightValueRef.current = newVVHeight;
+                    initialVVHeightCapturedRef.current = true;
+                    console.log('[HomePage] VV Resize: Captured initial good VVH:', newVVHeight);
+                } else if (newVVHeight > 0) { // Not "good" but positive, use it temporarily
+                    setDynamicAppHeight(newVVHeight);
+                     console.log('[HomePage] VV Resize: Set temporary (non-good) VVH:', newVVHeight);
+                }
+                // If newVVHeight is 0, dynamicAppHeight remains unchanged from its previous state (or initial 0)
             }
         };
 
         // Initial capture attempt using requestAnimationFrame
         requestAnimationFrame(() => {
-            if (window.visualViewport) { // Check again inside rAF
-                const initialVVHeight = window.visualViewport.height;
-                const plausibleSVHMax = 950; // Heuristic
-                // Try to capture the first, hopefully smaller, visual viewport height.
-                if (initialVVHeight > 0 &&
-                    !initialGoodVVHeightCapturedRef.current &&
-                    initialVVHeight < plausibleSVHMax && /* avoid known anomalous large values */
-                    initialVVHeight < window.innerHeight * 0.9 /* ensure it's smaller than overall window if address bar is up */
-                    ) {
-                    setDynamicAppHeight(initialVVHeight);
-                    capturedGoodVVHeightRef.current = initialVVHeight;
-                    initialGoodVVHeightCapturedRef.current = true;
-                } else if (initialVVHeight > 0 && !initialGoodVVHeightCapturedRef.current) {
-                    // If the very first rAF reading is already the large one, set it, but don't mark as "good capture"
-                    // The resize listener might catch a "good" one later if VV resizes after interaction.
-                    setDynamicAppHeight(initialVVHeight);
-                } else if (!initialGoodVVHeightCapturedRef.current) {
-                    // Fallback if VV height is 0 or not yet good, use innerHeight for the moment
-                    setDynamicAppHeight(window.innerHeight);
+            if (window.visualViewport) { // Check again inside rAF as vv might become available
+                const initialVVHeight = vv.height; // vv is already window.visualViewport
+                const currentWindowInnerHeight = window.innerHeight;
+                const plausibleSVHMax = 900; // Heuristic
+                console.log('[HomePage] rAF: Initial Read VVH:', initialVVHeight, 'InnerH:', currentWindowInnerHeight);
+
+                const isGoodInitialHeight = initialVVHeight > 0 &&
+                                           initialVVHeight < currentWindowInnerHeight * 0.90 && // Significantly smaller than window.innerHeight
+                                           initialVVHeight < plausibleSVHMax; // Below our anomalous threshold
+
+                if (isGoodInitialHeight) {
+                    if (!initialVVHeightCapturedRef.current) { // Only set if not already captured by a quick resize
+                        setDynamicAppHeight(initialVVHeight);
+                        capturedVVHeightValueRef.current = initialVVHeight;
+                        initialVVHeightCapturedRef.current = true;
+                        console.log('[HomePage] rAF: Captured initial good VVH:', initialVVHeight);
+                    }
+                } else if (initialVVHeight > 0 && !initialVVHeightCapturedRef.current) {
+                    setDynamicAppHeight(initialVVHeight); // Might be the bad 1109px, but better than 0
+                    console.log('[HomePage] rAF: Set temporary (non-good) VVH:', initialVVHeight);
+                } else if (!initialVVHeightCapturedRef.current) {
+                    setDynamicAppHeight(currentWindowInnerHeight); // Ultimate fallback if VVH is 0 or weird
+                    console.log('[HomePage] rAF: Fallback to window.innerHeight:', currentWindowInnerHeight);
                 }
             } else {
-                 setDynamicAppHeight(window.innerHeight); // Fallback if no VV
+                // This case should be covered by the !window.visualViewport check at the start of useEffect
+                 if (!initialVVHeightCapturedRef.current) { // ensure we don't overwrite if a resize listener already set something
+                    setDynamicAppHeight(window.innerHeight);
+                    console.log('[HomePage] rAF: visualViewport not supported, using window.innerHeight:', window.innerHeight);
+                 }
             }
         });
 
         vv.addEventListener('resize', handleViewportResize);
-        // Consider scroll as well, as it can sometimes affect vv.height on mobile
-        // vv.addEventListener('scroll', handleViewportResize);
 
         return () => {
             if (vv) {
                 vv.removeEventListener('resize', handleViewportResize);
-                // vv.removeEventListener('scroll', handleViewportResize);
             }
         };
     }, []); // Run once on mount
