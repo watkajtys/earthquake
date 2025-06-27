@@ -144,21 +144,18 @@ function GlobeTestPage() {
         <div
             ref={wrapperRef}
             style={{
-                position: 'fixed',
-                top: '0',
-                left: '0',
-                width: '100vw',
-                height: '100vh', // Changed from 100svh to 100vh
+                width: '100%', // Fill parent (#root or body)
+                height: '100%', // Fill parent (#root or body)
                 backgroundColor: 'rgba(0, 0, 25, 1)',
-                zIndex: 9999,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                // position: 'fixed', top: '0', left: '0', zIndex: 9999 are removed
             }}
             id="globe-test-page-wrapper"
         >
             <div style={{
-                position: 'absolute',
+                position: 'absolute', // This debug display can remain absolutely positioned within the wrapper
                 top: '10px',
                 left: '10px',
                 padding: '5px',
