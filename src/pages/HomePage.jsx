@@ -1,5 +1,6 @@
 // src/pages/HomePage.jsx
-import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime, removed useRef
+import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState, useRef } from 'react';
+// Ensuring useRef is definitely in the import list.
 import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
