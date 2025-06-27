@@ -1,6 +1,7 @@
 // src/pages/HomePage.jsx
 import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime, removed useRef
 import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
+import { useVisualViewport } from '../hooks/useVisualViewport';
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
@@ -187,6 +188,14 @@ const GlobeLayout = (props) => {
  * @returns {JSX.Element} The rendered App component.
  */
 function App() {
+  const viewportHeight = useVisualViewport();
+
+  useEffect(() => {
+    if (viewportHeight > 0) { // Only set if a valid height is obtained
+      document.documentElement.style.setProperty('--viewport-height', `${viewportHeight}px`);
+    }
+  }, [viewportHeight]);
+
     const {
         activeSidebarView, setActiveSidebarView,
         // activeFeedPeriod, // Unused variable removed
@@ -612,7 +621,7 @@ function App() {
 
     // Fallback UI for Suspense
     const RouteLoadingFallback = () => (
-        <div className="flex items-center justify-center h-screen w-full bg-slate-900"> {/* Ensure it covers the area */}
+        <div className="flex items-center justify-center h-dynamic-screen w-full bg-slate-900"> {/* Ensure it covers the area */}
             <div className="text-center">
                 <svg className="animate-spin h-10 w-10 text-indigo-400 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -964,7 +973,7 @@ function App() {
     if (showFullScreenLoader) { // Uses isLoadingInitialData from hook
         return (
             <div
-                className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white antialiased"
+                className="flex flex-col items-center justify-center h-dynamic-screen bg-slate-900 text-white antialiased"
                 role="status"
                 aria-live="polite"
             >
