@@ -989,7 +989,7 @@ function App() {
             </header>
 
             {/* This main flex container now has padding-bottom for mobile to avoid overlap with BottomNav */}
-            <div className="flex flex-1 overflow-hidden pb-16 lg:pb-0">
+            <div className="flex flex-1 overflow-hidden mb-16 lg:mb-0">
 
                 {/* MAIN CONTENT AREA - This will now adapt based on activeMobileView */}
                 {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
