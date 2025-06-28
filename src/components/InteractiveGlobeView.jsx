@@ -137,7 +137,14 @@ const InteractiveGlobeView = ({
             if (!currentContainerRefActual) return;
 
             const newWidth = currentContainerRefActual.offsetWidth;
-            const newHeight = currentContainerRefActual.offsetHeight;
+            let newHeight = currentContainerRefActual.clientHeight; // Use clientHeight
+
+            // Check for mobile devices and potentially use window.innerHeight
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            if (isMobile && (newHeight === null || newHeight < 100 || newHeight > window.innerHeight * 1.5)) { // Added a more robust check for mobile height
+                newHeight = window.innerHeight;
+            }
+
 
             if (newWidth > 10 && newHeight > 10) {
                  setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
@@ -153,7 +160,11 @@ const InteractiveGlobeView = ({
             // Call updateDimensions directly here to ensure it runs with initialLayoutComplete = true
             if (containerRef.current) {
                 const newWidth = containerRef.current.offsetWidth;
-                const newHeight = containerRef.current.offsetHeight;
+                let newHeight = containerRef.current.clientHeight; // Use clientHeight
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                if (isMobile && (newHeight === null || newHeight < 100 || newHeight > window.innerHeight * 1.5)) {
+                    newHeight = window.innerHeight;
+                }
                 if (newWidth > 10 && newHeight > 10) { // Check for valid dimensions
                     setGlobeDimensions({ width: newWidth, height: newHeight });
                 }
@@ -166,7 +177,12 @@ const InteractiveGlobeView = ({
                 // and window has loaded.
                 if (containerRef.current) {
                     const newWidth = containerRef.current.offsetWidth;
-                    const newHeight = containerRef.current.offsetHeight;
+                    let newHeight = containerRef.current.clientHeight; // Use clientHeight
+                    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                    if (isMobile && (newHeight === null || newHeight < 100 || newHeight > window.innerHeight * 1.5)) {
+                        newHeight = window.innerHeight;
+                    }
+
                     if (newWidth > 10 && newHeight > 10) {
                          setGlobeDimensions({ width: newWidth, height: newHeight });
                     } else {
@@ -174,7 +190,10 @@ const InteractiveGlobeView = ({
                         setTimeout(() => {
                             if (containerRef.current) {
                                 const w = containerRef.current.offsetWidth;
-                                const h = containerRef.current.offsetHeight;
+                                let h = containerRef.current.clientHeight; // Use clientHeight
+                                if (isMobile && (h === null || h < 100 || h > window.innerHeight * 1.5)) {
+                                    h = window.innerHeight;
+                                }
                                 if (w > 10 && h > 10) {
                                     setGlobeDimensions({ width: w, height: h });
                                 }
