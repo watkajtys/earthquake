@@ -130,82 +130,75 @@ const InteractiveGlobeView = ({
         if (!currentContainerRef) return;
 
         const updateDimensions = () => {
-            // Don't run if window.load hasn't fired yet, unless it's a resize event (implicitly initialLayoutComplete is true)
-            if (!initialLayoutComplete && !windowLoadedRef.current) return;
-
-            const currentContainerRefActual = containerRef.current; // Re-read ref
+            // This specific 'updateDimensions' function is primarily for the ResizeObserver
+            // and scenarios AFTER initial load, or for non-mobile initial load.
+            const currentContainerRefActual = containerRef.current;
             if (!currentContainerRefActual) return;
 
             const newWidth = currentContainerRefActual.offsetWidth;
-            let newHeight = currentContainerRefActual.clientHeight; // Use clientHeight
-
-            // Check for mobile devices and potentially use window.innerHeight
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            if (isMobile && (newHeight === null || newHeight < 100 || newHeight > window.innerHeight * 1.5)) { // Added a more robust check for mobile height
-                newHeight = window.innerHeight;
-            }
-
+            const newHeight = currentContainerRefActual.offsetHeight; // Trust offsetHeight for resizes
 
             if (newWidth > 10 && newHeight > 10) {
-                 setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
+                setGlobeDimensions(prev => {
+                    if (prev.width !== newWidth || prev.height !== newHeight) {
+                        return { width: newWidth, height: newHeight };
+                    }
+                    return prev;
+                });
             }
         };
 
         // Debounced version for ResizeObserver
         const debouncedUpdateDimensions = debounce(updateDimensions, 200);
 
-        if (document.readyState === 'complete') {
-            windowLoadedRef.current = true;
-            setInitialLayoutComplete(true);
-            // Call updateDimensions directly here to ensure it runs with initialLayoutComplete = true
-            if (containerRef.current) {
-                const newWidth = containerRef.current.offsetWidth;
-                let newHeight = containerRef.current.clientHeight; // Use clientHeight
-                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                if (isMobile && (newHeight === null || newHeight < 100 || newHeight > window.innerHeight * 1.5)) {
-                    newHeight = window.innerHeight;
-                }
-                if (newWidth > 10 && newHeight > 10) { // Check for valid dimensions
-                    setGlobeDimensions({ width: newWidth, height: newHeight });
-                }
-            }
-        } else {
-            const handleWindowLoad = () => {
-                windowLoadedRef.current = true;
-                setInitialLayoutComplete(true);
-                // Explicitly call updateDimensions after setting initialLayoutComplete to true
-                // and window has loaded.
-                if (containerRef.current) {
-                    const newWidth = containerRef.current.offsetWidth;
-                    let newHeight = containerRef.current.clientHeight; // Use clientHeight
-                    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                    if (isMobile && (newHeight === null || newHeight < 100 || newHeight > window.innerHeight * 1.5)) {
-                        newHeight = window.innerHeight;
-                    }
+        // Handles the very first dimension setup
+        const initialDimensionSetup = () => {
+            windowLoadedRef.current = true; // Mark window as loaded
+            if (!containerRef.current) return;
 
-                    if (newWidth > 10 && newHeight > 10) {
-                         setGlobeDimensions({ width: newWidth, height: newHeight });
-                    } else {
-                        // Fallback or retry if dimensions are still not good
-                        setTimeout(() => {
-                            if (containerRef.current) {
-                                const w = containerRef.current.offsetWidth;
-                                let h = containerRef.current.clientHeight; // Use clientHeight
-                                if (isMobile && (h === null || h < 100 || h > window.innerHeight * 1.5)) {
-                                    h = window.innerHeight;
-                                }
-                                if (w > 10 && h > 10) {
-                                    setGlobeDimensions({ width: w, height: h });
-                                }
-                            }
-                        }, 150); // A short delay for a retry
+            const newWidth = containerRef.current.offsetWidth;
+            let newHeight;
+
+            const isLikelyMobile = window.matchMedia("(pointer: coarse)").matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+            if (isLikelyMobile) {
+                // For mobile initial load, directly use window.innerHeight.
+                // You might need to subtract heights of fixed header/footer if they exist within the viewport
+                // and are not part of the globe's container's desired height.
+                // For now, let's assume window.innerHeight is the target for the globe container.
+                newHeight = window.innerHeight;
+            } else {
+                // For non-mobile, or if not explicitly targeting mobile for this direct override,
+                // use the container's offsetHeight.
+                newHeight = containerRef.current.offsetHeight;
+            }
+
+            if (newWidth > 10 && newHeight > 10) {
+                setGlobeDimensions({ width: newWidth, height: newHeight });
+            } else {
+                // Fallback if dimensions are still not good (e.g. container not ready)
+                // This is a simple retry, might need to be more robust if this path is hit often.
+                setTimeout(() => {
+                    if (containerRef.current) {
+                        const w = containerRef.current.offsetWidth;
+                        const h = isLikelyMobile ? window.innerHeight : containerRef.current.offsetHeight;
+                        if (w > 10 && h > 10) {
+                            setGlobeDimensions({ width: w, height: h });
+                        }
                     }
-                }
-                window.removeEventListener('load', handleWindowLoad); // Clean up listener
-            };
-            window.addEventListener('load', handleWindowLoad);
+                }, 100);
+            }
+            setInitialLayoutComplete(true); // Mark initial layout as complete AFTER first attempt
+        };
+
+        // Setup initial dimensions once document/window is ready
+        if (document.readyState === 'complete') {
+            initialDimensionSetup();
+        } else {
+            window.addEventListener('load', initialDimensionSetup, { once: true });
         }
 
+        // Setup ResizeObserver for subsequent changes
         const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
         if (currentContainerRef) { // Ensure ref is still valid before observing
             resizeObserver.observe(currentContainerRef);
