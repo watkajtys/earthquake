@@ -102,7 +102,7 @@ const GlobeLayout = (props) => {
     keyStatsForGlobe,
     coastlineData,
     tectonicPlatesData,
-    areGeoJsonAssetsLoading
+    areGeoJsonAssetsLoading, // Added comma here
     // areClustersLoading // Prop removed from destructuring
     containerStyle // Added containerStyle to props
   } = props;
