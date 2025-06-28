@@ -636,7 +636,7 @@ function App() {
             return <span role="status" aria-live="polite">{connectingMsg}</span>;
         }
         if (!dataFetchTime) {
-            return <span role="status" aria-live="polite">{awaitingMsg}</span>;
+            return awaitingMsg;
         }
         const timeSinceFetch = appCurrentTime - dataFetchTime;
         return `Live Data (7-day): ${timeSinceFetch < 30000 ? 'just now' : formatTimeAgo(timeSinceFetch)} | USGS Feed Updated: ${lastUpdated || 'N/A'}`;
