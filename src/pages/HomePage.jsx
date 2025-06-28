@@ -964,7 +964,7 @@ function App() {
     if (showFullScreenLoader) { // Uses isLoadingInitialData from hook
         return (
             <div
-                className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white antialiased"
+                className="flex flex-col items-center justify-center h-[100svh] bg-slate-900 text-white antialiased"
                 role="status"
                 aria-live="polite"
             >
