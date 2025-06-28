@@ -159,33 +159,22 @@ const InteractiveGlobeView = ({
             const newWidth = containerRef.current.offsetWidth;
             let newHeight;
 
-            const isLikelyMobile = window.matchMedia("(pointer: coarse)").matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-            if (isLikelyMobile) {
-                // For mobile initial load, subtract header (estimated 55px) and footer (64px) from window.innerHeight.
-                const HEADER_HEIGHT_MOBILE = 55; // px
-                const FOOTER_HEIGHT_MOBILE = 64; // px
-                newHeight = window.innerHeight - HEADER_HEIGHT_MOBILE - FOOTER_HEIGHT_MOBILE;
-            } else {
-                // For non-mobile, or if not explicitly targeting mobile for this direct override,
-                // use the container's offsetHeight.
-                newHeight = containerRef.current.offsetHeight;
-            }
+            // Now directly trust offsetHeight as the parent should be styled correctly.
+            newHeight = containerRef.current.offsetHeight;
 
             if (newWidth > 10 && newHeight > 10) {
                 setGlobeDimensions({ width: newWidth, height: newHeight });
             } else {
-                // Fallback if dimensions are still not good (e.g. container not ready)
-                // This is a simple retry, might need to be more robust if this path is hit often.
+                // Minimal fallback if dimensions are still not good (e.g. container not ready or visible yet)
                 setTimeout(() => {
                     if (containerRef.current) {
                         const w = containerRef.current.offsetWidth;
-                        const h = isLikelyMobile ? window.innerHeight : containerRef.current.offsetHeight;
+                        const h = containerRef.current.offsetHeight;
                         if (w > 10 && h > 10) {
                             setGlobeDimensions({ width: w, height: h });
                         }
                     }
-                }, 100);
+                }, 150); // Slightly longer delay for this simple fallback
             }
             setInitialLayoutComplete(true); // Mark initial layout as complete AFTER first attempt
         };

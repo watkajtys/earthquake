@@ -1,8 +1,8 @@
 // src/pages/HomePage.jsx
-import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime, removed useRef
-import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
+import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState } from 'react';
+import { Routes, Route, useNavigate, Outlet } from 'react-router-dom';
 import SeoMetadata from '../components/SeoMetadata';
-import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
+import ErrorBoundary from '../components/ErrorBoundary';
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
 // import InteractiveGlobeView from '../components/InteractiveGlobeView'; // Will be lazy loaded
 import NotableQuakeFeature from '../components/NotableQuakeFeature';
@@ -104,10 +104,12 @@ const GlobeLayout = (props) => {
     tectonicPlatesData,
     areGeoJsonAssetsLoading
     // areClustersLoading // Prop removed from destructuring
+    containerStyle // Added containerStyle to props
   } = props;
 
   return (
-    <div className="block h-full w-full">
+    // Removed h-full from className, applying style directly
+    <div className="block w-full" style={containerStyle}>
       <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-500">Loading Globe Components...</div>}>
         {(areGeoJsonAssetsLoading || !coastlineData || !tectonicPlatesData) ? (
            <div className="w-full h-full flex items-center justify-center text-slate-500">Loading Map Data...</div>
@@ -415,6 +417,24 @@ function App() {
     //         default: return "Earthquakes (Last 24 Hours)";
     //     }
     // }, [activeFeedPeriod, hasAttemptedMonthlyLoad, allEarthquakes]);
+
+    const isLikelyMobile = useMemo(() => {
+        // Ensure window is defined (for SSR or test environments)
+        if (typeof window === 'undefined') return false;
+        return window.matchMedia("(pointer: coarse)").matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    }, []);
+
+    const globeContainerHeightStyle = useMemo(() => {
+        if (isLikelyMobile) {
+            // Ensure window is defined
+            if (typeof window === 'undefined') return { height: '100%' }; // Fallback for SSR/test
+            const HEADER_HEIGHT_MOBILE = 55; // px
+            const FOOTER_HEIGHT_MOBILE = 64; // px
+            const availableHeight = window.innerHeight - HEADER_HEIGHT_MOBILE - FOOTER_HEIGHT_MOBILE;
+            return { height: `${availableHeight}px` };
+        }
+        return { height: '100%' }; // For desktop, let CSS h-full or parent dictate
+    }, [isLikelyMobile]); // Dependency: isLikelyMobile
 
     // const currentFeedisLoading = useMemo(() => { // Unused variable
     //     if (activeFeedPeriod === 'last_hour') return isLoadingDaily && (!earthquakesLastHour || earthquakesLastHour.length === 0);
@@ -1025,6 +1045,7 @@ function App() {
                                       handleNotableQuakeSelect={handleNotableQuakeSelect}
                                       keyStatsForGlobe={keyStatsForGlobe}
                                       // areClustersLoading prop removed
+                                      containerStyle={globeContainerHeightStyle} // Pass down the calculated style
                                     />
                                   </>
                                 }
