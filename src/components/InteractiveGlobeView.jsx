@@ -162,11 +162,10 @@ const InteractiveGlobeView = ({
             const isLikelyMobile = window.matchMedia("(pointer: coarse)").matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
             if (isLikelyMobile) {
-                // For mobile initial load, directly use window.innerHeight.
-                // You might need to subtract heights of fixed header/footer if they exist within the viewport
-                // and are not part of the globe's container's desired height.
-                // For now, let's assume window.innerHeight is the target for the globe container.
-                newHeight = window.innerHeight;
+                // For mobile initial load, subtract header (estimated 55px) and footer (64px) from window.innerHeight.
+                const HEADER_HEIGHT_MOBILE = 55; // px
+                const FOOTER_HEIGHT_MOBILE = 64; // px
+                newHeight = window.innerHeight - HEADER_HEIGHT_MOBILE - FOOTER_HEIGHT_MOBILE;
             } else {
                 // For non-mobile, or if not explicitly targeting mobile for this direct override,
                 // use the container's offsetHeight.
