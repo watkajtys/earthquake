@@ -105,7 +105,7 @@ const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning, ALERT_LEVEL
               M {tsunamiTriggeringQuake.properties?.mag?.toFixed(1) || 'N/A'}
             </span>
             <span>
-              {tsunamiTriggeringQuake.properties?.time ? formatTimeAgo(Date.now() - tsunamiTriggeringQuake.properties.time) : 'Time N/A'}
+              {tsunamiTriggeringQuake.properties?.time ? formatTimeAgo(tsunamiTriggeringQuake.properties.time) : 'Time N/A'}
             </span>
           </div>
           <p className="truncate text-[11px] font-medium mb-1" title={tsunamiTriggeringQuake.properties?.place || undefined}>
