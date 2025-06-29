@@ -100,12 +100,10 @@ function EarthquakeRegionalMapPanel({
         <div className={`${exhibitPanelClass} border-sky-500`}>
             <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
             <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
-                {loadingFaults && <p className="text-center text-slate-400">Loading nearby faults...</p>}
+                <EarthquakeMap {...finalMapProps} />
+                {loadingFaults && <p className="text-center text-slate-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800 bg-opacity-75 p-2 rounded-md">Loading nearby faults...</p>}
                 {!loadingFaults && (!nearbyFaults || nearbyFaults.features.length === 0) && (
-                    <p className="text-center text-slate-400">No nearby faults found.</p>
-                )}
-                {!loadingFaults && nearbyFaults && nearbyFaults.features.length > 0 && (
-                    <EarthquakeMap {...finalMapProps} />
+                    <p className="text-center text-slate-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800 bg-opacity-75 p-2 rounded-md">No nearby faults found.</p>
                 )}
             </div>
         </div>

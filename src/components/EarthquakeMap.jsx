@@ -138,6 +138,7 @@ const EarthquakeMap = ({
   defaultZoom = 8,
   localFaults = null, // New prop for local faults
 }) => {
+  console.log("EarthquakeMap: received localFaults prop:", localFaults);
   const mapRef = useRef(null);
   const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);
   const [isTectonicPlatesLoading, setIsTectonicPlatesLoading] = useState(true);
