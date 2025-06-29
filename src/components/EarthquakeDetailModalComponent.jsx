@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'; // Added useMemo and useCallback, removed useEffect
+import React, { useState, useMemo, useCallback, useEffect } from 'react'; // Added useMemo, useCallback, and useEffect
 import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 import { useParams, useNavigate } from 'react-router-dom';
@@ -75,6 +75,9 @@ const EarthquakeDetailModalComponent = () => {
     }
 
     const [seoProps, setSeoProps] = useState(null); // Renamed from seoData to seoProps
+    const [nearbyFaults, setNearbyFaults] = useState(null);
+    const [loadingFaults, setLoadingFaults] = useState(false);
+    const [earthquakeCoordinates, setEarthquakeCoordinates] = useState(null);
 
     const handleClose = () => {
         navigate(-1); // Go back to the previous page
@@ -174,7 +177,40 @@ const EarthquakeDetailModalComponent = () => {
             modifiedTime: updated ? new Date(updated).toISOString() : (time ? new Date(time).toISOString() : undefined),
             imageUrl: shakemapIntensityImageUrl || null,
         });
+
+        if (typeof latitude === 'number' && typeof longitude === 'number') {
+            setEarthquakeCoordinates({ latitude, longitude });
+        }
     }, [detailUrlParam]); // detailUrlParam (params['*']) is a dependency for canonicalPageUrl
+
+    useEffect(() => {
+        const fetchNearbyFaults = async () => {
+            if (!earthquakeCoordinates) {
+                setNearbyFaults(null);
+                return;
+            }
+
+            setLoadingFaults(true);
+            try {
+                const { latitude, longitude } = earthquakeCoordinates;
+                const radius = 500; // Define a reasonable radius (e.g., 500 km) for fetching nearby faults
+
+                const response = await fetch(`/api/get-nearby-faults?latitude=${latitude}&longitude=${longitude}&radius=${radius}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                setNearbyFaults(data);
+            } catch (error) {
+                console.error("Error fetching nearby faults:", error);
+                setNearbyFaults(null);
+            } finally {
+                setLoadingFaults(false);
+            }
+        };
+
+        fetchNearbyFaults();
+    }, [earthquakeCoordinates]);
 
     // Default/loading SEO values
     const initialPageTitle = "Loading Earthquake Details... | Earthquakes Live";
@@ -211,6 +247,8 @@ const EarthquakeDetailModalComponent = () => {
                     handleLoadMonthlyData={loadMonthlyData}
                     hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
                     isLoadingMonthly={isLoadingMonthly}
+                    nearbyFaults={nearbyFaults}
+                    loadingFaults={loadingFaults}
                 />
             )}
         </>

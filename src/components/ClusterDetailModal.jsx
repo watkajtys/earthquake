@@ -1,8 +1,8 @@
 // src/ClusterDetailModal.jsx
-import React from 'react';
-import ClusterMiniMap from './ClusterMiniMap'; // Added import for the mini-map
+import React, { useState, useEffect } from 'react';
+import EarthquakeMap from './EarthquakeMap'; // Import EarthquakeMap
 import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the new chart
-// import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor - Unused
+// import LocalFaultsGlobeView from './LocalFaultsGlobeView'; // Removed as per user request
 
 /**
  * A modal component to display detailed information about an earthquake cluster.
@@ -79,6 +79,43 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
         };
     }, [onClose]);
 
+    const [nearbyFaults, setNearbyFaults] = useState(null);
+    const [loadingFaults, setLoadingFaults] = useState(false);
+
+    useEffect(() => {
+        const fetchNearbyFaults = async () => {
+            if (!cluster || !cluster.originalQuakes || cluster.originalQuakes.length === 0) {
+                setNearbyFaults(null);
+                return;
+            }
+
+            setLoadingFaults(true);
+            try {
+                // Calculate center of the cluster for fetching nearby faults
+                const latitudes = cluster.originalQuakes.map(q => q.geometry.coordinates[1]);
+                const longitudes = cluster.originalQuakes.map(q => q.geometry.coordinates[0]);
+                const centerLat = latitudes.reduce((sum, lat) => sum + lat, 0) / latitudes.length;
+                const centerLon = longitudes.reduce((sum, lon) => sum + lon, 0) / longitudes.length;
+
+                // Define a reasonable radius (e.g., 500 km) for fetching nearby faults
+                const radius = 500; 
+
+                const response = await fetch(`/api/get-nearby-faults?latitude=${centerLat}&longitude=${centerLon}&radius=${radius}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                setNearbyFaults(data);
+            } catch (error) {
+                console.error("Error fetching nearby faults:", error);
+                setNearbyFaults(null);
+            } finally {
+                setLoadingFaults(false);
+            }
+        };
+
+        fetchNearbyFaults();
+    }, [cluster]);
 
     if (!cluster) {
         return null;
@@ -156,9 +193,21 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                     <p><strong>Depth Range:</strong> <span className="text-slate-100">{depthRangeStr}</span></p>
                 </div>
 
-                {/* Cluster Mini Map */}
-                <div className="my-4"> {/* Added margin for spacing */}
-                    <ClusterMiniMap cluster={cluster} />
+                {/* Regional Map for Faults */}
+                <div className="my-4" style={{ height: '400px', width: '100%' }}>
+                    {loadingFaults && <p className="text-center text-slate-400">Loading nearby faults...</p>}
+                    {!loadingFaults && nearbyFaults && nearbyFaults.features.length > 0 && (
+                        <EarthquakeMap
+                            mapCenterLatitude={cluster.centerCoordinates.latitude}
+                            mapCenterLongitude={cluster.centerCoordinates.longitude}
+                            defaultZoom={8} // Adjust zoom as needed
+                            localFaults={nearbyFaults}
+                            fitMapToBounds={true}
+                        />
+                    )}
+                    {!loadingFaults && nearbyFaults && nearbyFaults.features.length === 0 && (
+                        <p className="text-center text-slate-400">No nearby faults found.</p>
+                    )}
                 </div>
 
                 {/* Earthquake Sequence Chart */}

@@ -162,5 +162,9 @@ crons = ["*/1 * * * *"] # Run every minute
 # If you have other bindings (like R2, Services), define them here too.
 # Refer to Cloudflare Wrangler documentation for more details.
 # wrangler.toml (wrangler v3.88.0^)
+
+[[r2_buckets]]
+binding = "ASSETS_BUCKET" # The binding name you'll use in your Worker
+bucket_name = "earthquake-assets" # The name of your R2 bucket
 [observability.logs]
 enabled = true

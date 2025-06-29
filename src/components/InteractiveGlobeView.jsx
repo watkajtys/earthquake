@@ -365,6 +365,19 @@ const InteractiveGlobeView = ({
                     return { id: `plate-${f.properties?.OBJECTID || i}`, coords: f.geometry.coordinates, color, stroke: 1, label: `Plate Boundary: ${type || 'Unknown'}`, properties: f.properties };
                 }));
         }
+        // Add nearby faults
+        if (faults?.type === "FeatureCollection" && Array.isArray(faults.features)) {
+            processedPaths = processedPaths.concat(faults.features
+                .filter(f => f.type === "Feature" && f.geometry?.type === "LineString" && Array.isArray(f.geometry.coordinates))
+                .map((f, i) => ({
+                    id: `local-fault-${f.properties?.OBJECTID || i}`,
+                    coords: f.geometry.coordinates,
+                    color: 'rgba(255, 255, 0, 0.7)', // Yellow color for local faults
+                    stroke: 1.5,
+                    label: `Local Fault: ${f.properties?.name || 'Unknown'}`,
+                    properties: f.properties
+                })));
+        }
         setPaths(processedPaths);
     }, [coastlineGeoJson, tectonicPlatesGeoJson]);
 

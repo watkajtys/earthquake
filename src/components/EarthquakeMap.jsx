@@ -90,6 +90,15 @@ const getTectonicPlateStyle = (feature) => {
 };
 
 /**
+ * Defines the styling for local fault GeoJSON features.
+ *
+ * @returns {Object} A Leaflet path style options object for the feature.
+ */
+const getLocalFaultStyle = () => {
+  return { color: 'rgba(255, 255, 0, 0.7)', weight: 1.5, opacity: 0.7 }; // Yellow color for local faults
+};
+
+/**
  * Renders an interactive Leaflet map to display earthquake information.
  * Key features include:
  * - Displaying a main highlighted earthquake with a pulsing icon.
@@ -127,6 +136,7 @@ const EarthquakeMap = ({
   mainQuakeDetailUrl = null,
   fitMapToBounds = false,
   defaultZoom = 8,
+  localFaults = null, // New prop for local faults
 }) => {
   const mapRef = useRef(null);
   const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);
@@ -286,6 +296,10 @@ const EarthquakeMap = ({
 
       {!isTectonicPlatesLoading && tectonicPlatesDataJson && (
         <GeoJSON data={tectonicPlatesDataJson} style={getTectonicPlateStyle} />
+      )}
+
+      {localFaults && localFaults.features && localFaults.features.length > 0 && (
+        <GeoJSON data={localFaults} style={getLocalFaultStyle} />
       )}
     </MapContainer>
   );

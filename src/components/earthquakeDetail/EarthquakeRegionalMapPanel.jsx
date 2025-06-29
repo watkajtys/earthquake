@@ -9,7 +9,9 @@ function EarthquakeRegionalMapPanel({
     regionalQuakes,
     detailUrl,
     exhibitPanelClass,
-    exhibitTitleClass
+    exhibitTitleClass,
+    nearbyFaults, // New prop
+    loadingFaults // New prop
 }) {
     console.log("--- [EarthquakeRegionalMapPanel] START ---");
     try {
@@ -78,6 +80,7 @@ function EarthquakeRegionalMapPanel({
         nearbyQuakes: regionalQuakes,
         mainQuakeDetailUrl: detailUrl,
         fitMapToBounds: false,
+        localFaults: nearbyFaults, // Pass nearbyFaults to EarthquakeMap
         // defaultZoom is handled by EarthquakeMap's defaults
     };
 
@@ -97,7 +100,13 @@ function EarthquakeRegionalMapPanel({
         <div className={`${exhibitPanelClass} border-sky-500`}>
             <h2 className={`${exhibitTitleClass} text-sky-800 border-sky-200`}>Regional Map</h2>
             <div className="h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
-                <EarthquakeMap {...finalMapProps} />
+                {loadingFaults && <p className="text-center text-slate-400">Loading nearby faults...</p>}
+                {!loadingFaults && (!nearbyFaults || nearbyFaults.features.length === 0) && (
+                    <p className="text-center text-slate-400">No nearby faults found.</p>
+                )}
+                {!loadingFaults && nearbyFaults && nearbyFaults.features.length > 0 && (
+                    <EarthquakeMap {...finalMapProps} />
+                )}
             </div>
         </div>
     );

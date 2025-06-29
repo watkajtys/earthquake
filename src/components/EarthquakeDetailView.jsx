@@ -67,7 +67,7 @@ import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfo
  * @param {boolean} [props.isLoadingMonthly] - Flag indicating if monthly data is currently being loaded.
  * @returns {JSX.Element} The EarthquakeDetailView component, typically rendered within a modal structure.
  */
-function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) {
+function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly, nearbyFaults, loadingFaults }) {
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(!!detailUrl);
     const [error, setError] = useState(null);
@@ -397,6 +397,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         shakemapIntensityImageUrl={shakemapIntensityImageUrl}
                         regionalQuakes={regionalQuakes}
                         detailUrl={detailUrl}
+                        nearbyFaults={nearbyFaults}
+                        loadingFaults={loadingFaults}
                         // isValidNumber is now imported by child
                         exhibitPanelClass={exhibitPanelClass}
                         exhibitTitleClass={exhibitTitleClass}
