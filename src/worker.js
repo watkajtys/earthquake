@@ -9,6 +9,7 @@ import { handleUsgsProxy as kvEnabledUsgsProxyHandler } from '../functions/route
 
 // Import the get-earthquakes handler
 import { onRequestGet as handleGetEarthquakes } from '../functions/api/get-earthquakes.js';
+import { onRequestGet as handleGetNearbyFaults } from '../functions/api/get-nearby-faults.js';
 
 
 // === Helper Functions (originally from [[catchall]].js) ===
@@ -520,6 +521,10 @@ export default {
       // so it expects a context object similar to Pages Functions.
       // We pass { request, env, ctx } to provide necessary bindings and execution context.
       return handleGetEarthquakes({ request, env, ctx });
+    }
+
+    if (pathname === '/api/get-nearby-faults' && request.method === 'GET') {
+      return handleGetNearbyFaults({ request, env, ctx });
     }
 
     // Serve static assets from ASSETS binding
