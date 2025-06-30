@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 // import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
+import { getFaultColor } from '../utils/faultColors.js';
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -94,8 +95,10 @@ const getTectonicPlateStyle = (feature) => {
  *
  * @returns {Object} A Leaflet path style options object for the feature.
  */
-const getLocalFaultStyle = () => {
-  return { color: 'rgba(255, 255, 0, 0.7)', weight: 1.5, opacity: 0.7 }; // Yellow color for local faults
+const getLocalFaultStyle = (feature) => {
+  const type = feature?.properties?.slip_type;
+  const color = getFaultColor(type);
+  return { color, weight: 1.5, opacity: 0.7 };
 };
 
 /**
@@ -134,11 +137,10 @@ const EarthquakeMap = ({
   shakeMapUrl = null,
   nearbyQuakes = [],
   mainQuakeDetailUrl = null,
+  localFaults = null,
   fitMapToBounds = false,
   defaultZoom = 8,
-  localFaults = null, // New prop for local faults
 }) => {
-  console.log("EarthquakeMap: received localFaults prop:", localFaults);
   const mapRef = useRef(null);
   const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);
   const [isTectonicPlatesLoading, setIsTectonicPlatesLoading] = useState(true);
@@ -302,6 +304,8 @@ const EarthquakeMap = ({
       {localFaults && localFaults.features && localFaults.features.length > 0 && (
         <GeoJSON data={localFaults} style={getLocalFaultStyle} />
       )}
+
+      
     </MapContainer>
   );
 };

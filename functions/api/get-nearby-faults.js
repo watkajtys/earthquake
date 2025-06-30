@@ -15,7 +15,7 @@ export async function onRequestGet(context) {
   const center = point([longitude, latitude]);
 
   try {
-    const object = await env.ASSETS_BUCKET.get('local_active_faults.json');
+    const object = await env.ASSETS_BUCKET.get('gem_active_faults_harmonized.json');
 
     if (!object) {
       return new Response('Fault data not found.', { status: 404 });
