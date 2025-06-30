@@ -994,7 +994,7 @@ function App() {
                 {/* MAIN CONTENT AREA - This will now adapt based on activeMobileView */}
                 {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
                 {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
-                <main className="flex-1 relative bg-slate-900 lg:bg-black w-full min-w-0 overflow-y-auto h-[calc(100svh-8rem)] lg:h-full">
+                <main className="flex-1 relative bg-slate-900 lg:bg-black w-full min-w-0 overflow-y-auto h-[calc(100svh-8rem)] lg:h-full max-h-[calc(100vh-4rem)]">
                     <ErrorBoundary>
                         <Suspense fallback={<RouteLoadingFallback />}>
                             <Routes>
