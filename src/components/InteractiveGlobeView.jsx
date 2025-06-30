@@ -563,7 +563,7 @@ const InteractiveGlobeView = ({
     return (
         <div
             ref={containerRef}
-            className="w-full h-full"
+            className="w-full h-full max-h-[100vh] max-w-[100vw]"
             style={{ position: 'relative', cursor: 'default' }}
             onMouseMove={handleContainerMouseMove}
             onMouseLeave={handleContainerMouseLeave}
