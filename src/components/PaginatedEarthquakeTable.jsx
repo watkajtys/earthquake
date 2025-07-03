@@ -36,7 +36,14 @@ const PaginatedEarthquakeTable = memo(({
     periodName, filterPredicate,
     getMagnitudeColorStyle, formatTimeAgo, formatDate
 }) => {
-    const cardBg = "bg-slate-700"; const titleColor = "text-indigo-300"; const tableHeaderBg = "bg-slate-800"; const tableHeaderTextColor = "text-slate-400"; const tableRowHover = "hover:bg-slate-500"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"; const paginationText = "text-slate-300";
+    const cardBg = "bg-slate-700";
+    const titleColor = "text-indigo-300";
+    // const tableHeaderBg = "bg-slate-800"; // Unused
+    // const tableHeaderTextColor = "text-slate-400"; // Unused
+    const tableRowHover = "hover:bg-slate-500";
+    const borderColor = "border-slate-600";
+    const paginationButton = "bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed";
+    const paginationText = "text-slate-300";
     const [sortConfig, setSortConfig] = useState({key: defaultSortKey, direction: initialSortDirection}); const [currentPage, setCurrentPage] = useState(1);
 
     const sortableFields = [

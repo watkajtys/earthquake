@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ClusterDetailModal from './ClusterDetailModal';
 import SeoMetadata from './SeoMetadata';
-import { fetchClusterWithQuakes, fetchActiveClusters } from '../services/clusterApiService.js'; // Changed fetchClusterDefinition to fetchClusterWithQuakes
+import { fetchClusterWithQuakes } from '../services/clusterApiService.js'; // Changed fetchClusterDefinition to fetchClusterWithQuakes, removed fetchActiveClusters
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx';
 // import { findActiveClusters } from '../utils/clusterUtils.js'; // Removed
 import { CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES } from '../constants/appConstants.js';

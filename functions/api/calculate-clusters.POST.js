@@ -95,10 +95,10 @@ function getDepthRangeString(cluster) {
  * @returns {string} A URL-friendly slug string.
  */
 function generateSlug(quakeCount, locationName, maxMagnitude, id) {
-  const safeLocation = (locationName || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const locationSlug = (locationName || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const magStr = maxMagnitude.toFixed(1);
   const idStr = id.substring(0, 6);
-  return `${quakeCount}-quakes-near-${safeLocation.slice(0, 50)}-m${magStr}-${idStr}`;
+  return `${quakeCount}-quakes-near-${locationSlug.slice(0, 50)}-m${magStr}-${idStr}`;
 }
 
 /**
@@ -109,8 +109,8 @@ function generateSlug(quakeCount, locationName, maxMagnitude, id) {
  * @returns {string} A title string for the cluster.
  */
 function generateTitle(quakeCount, locationName, maxMagnitude) {
-  const safeLocation = locationName || "Unknown Location";
-  return `Cluster: ${quakeCount} events near ${safeLocation}, max M${maxMagnitude.toFixed(1)}`;
+  const titleLocationName = locationName || "Unknown Location"; // Renamed to avoid conflict with outer scope if any
+  return `Cluster: ${quakeCount} events near ${titleLocationName}, max M${maxMagnitude.toFixed(1)}`;
 }
 
 /**
@@ -122,9 +122,9 @@ function generateTitle(quakeCount, locationName, maxMagnitude) {
  * @returns {string} A description string for the cluster.
  */
 function generateDescription(quakeCount, locationName, maxMagnitude, durationHours) {
-  const safeLocation = locationName || "Unknown Location";
+  const descLocationName = locationName || "Unknown Location"; // Renamed to avoid conflict
   const durationStr = durationHours > 0 ? `approx ${durationHours.toFixed(1)} hours` : "a short period";
-  return `A cluster of ${quakeCount} earthquakes occurred near ${locationName}. Strongest: M${maxMagnitude.toFixed(1)}. Duration: ${durationStr}.`;
+  return `A cluster of ${quakeCount} earthquakes occurred near ${descLocationName}. Strongest: M${maxMagnitude.toFixed(1)}. Duration: ${durationStr}.`;
 }
 
 

@@ -16,7 +16,7 @@ import { escapeXml } from '../../utils/xml-utils.js';
  * or a plain text error response if fetching or data validation fails.
  */
 export async function handleQuakeDetailPrerender(context, eventId) {
-  const { env } = context; // env might be used for future configurations like API keys
+  // const { env } = context; // env might be used for future configurations like API keys
 
   try {
     const fetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${eventId}`;

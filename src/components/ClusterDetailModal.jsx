@@ -16,7 +16,7 @@ import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the n
  *     locationName: string,
  *     quakeCount: number,
  *     maxMagnitude: number,
- *     timeRange: string, // Formatted time range string
+ *     timeRange: string, // Formatted time range string - THIS IS THE PROP, NOT THE LOCAL VAR
  *     originalQuakes: Array<object> // Array of individual quake objects
  *   }
  * @param {function} props.onClose - Function to call when the modal should be closed.
@@ -88,7 +88,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
         locationName,
         quakeCount,
         maxMagnitude,
-        timeRange,
+        // timeRange, // Removed unused destructured variable
         originalQuakes = [] // Default to empty array if not provided
     } = cluster;
 

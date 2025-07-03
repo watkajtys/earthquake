@@ -1,6 +1,6 @@
 // Import D1 utility functions
 // Note: Adjusted path assuming worker.js is in src/ and d1Utils.js is in src/utils/
-import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js'; // Used by the KV-enabled proxy too.
+// import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js'; // Used by the KV-enabled proxy too. - Now unused
 import { onRequestGet as handleGetClusterWithQuakes } from '../functions/api/cluster-detail-with-quakes.js';
 import { onRequestPost as handlePostCalculateClusters } from '../functions/api/calculate-clusters.POST.js';
 
@@ -417,7 +417,7 @@ async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
   }
 
   try {
-    const usgsUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${event_id}.geojson`;
+    const usgsUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${event_id}.geojson`;
     console.log(`[${sourceName}] Fetching event ${event_id} from USGS: ${usgsUrl}`);
     let usgsResponse;
     try { usgsResponse = await fetch(usgsUrl); }

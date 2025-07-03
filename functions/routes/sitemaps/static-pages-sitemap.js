@@ -10,7 +10,7 @@
  * @param {Request} context.request - The incoming HTTP request. Not directly used but part of context.
  * @returns {Response} An XML response containing the static pages sitemap.
  */
-export function handleStaticPagesSitemap(context) {
+export function handleStaticPagesSitemap(_context) { // context renamed to _context
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://earthquakeslive.com/</loc></url>

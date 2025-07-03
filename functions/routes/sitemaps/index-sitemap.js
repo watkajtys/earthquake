@@ -10,7 +10,7 @@
  * @param {Request} context.request - The incoming HTTP request. Not directly used but part of context.
  * @returns {Response} An XML response containing the sitemap index.
  */
-export function handleIndexSitemap(context) {
+export function handleIndexSitemap(_context) { // context renamed to _context
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>

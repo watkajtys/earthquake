@@ -138,7 +138,7 @@ export async function handleUsgsProxy(context) { // context contains { request, 
 
       if (oldFeaturesFromKV && Array.isArray(oldFeaturesFromKV)) {
         console.log(`[usgs-proxy-kv] Comparing ${totalNewFeaturesFetched} new features against ${oldFeaturesFromKV.length} old features from KV.`);
-        const newFeaturesMap = new Map(responseDataForLogic.features.map(f => [f.id, f]));
+        // const newFeaturesMap = new Map(responseDataForLogic.features.map(f => [f.id, f])); // Unused variable
         const oldFeaturesMap = new Map(oldFeaturesFromKV.map(f => [f.id, f]));
 
         featuresToUpsert = responseDataForLogic.features.filter(newFeature => {
@@ -165,7 +165,7 @@ export async function handleUsgsProxy(context) { // context contains { request, 
         // Fallback: KV not configured, upsert all fetched features
         console.log("[usgs-proxy-kv] KV not configured. All " + totalNewFeaturesFetched + " fetched features will be considered for D1 upsert.");
         // featuresToUpsert is already all features
-      } else {
+      } else { // This covers: usgsKvNamespace is configured, but oldFeaturesFromKV is null or not an array (e.g. first run, KV error)
         // Fallback: KV is configured but no data found (e.g., first run or error)
         console.log("[usgs-proxy-kv] No previous data in KV (or error reading). All " + totalNewFeaturesFetched + " fetched features will be considered for D1 upsert.");
         // featuresToUpsert is already all features
@@ -186,11 +186,10 @@ export async function handleUsgsProxy(context) { // context contains { request, 
 
           } else if (d1Result.successCount === 0 && featuresToUpsert.length > 0) {
             console.warn(`[usgs-proxy-kv] D1 upsert reported no successes for ${featuresToUpsert.length} candidate features. KV will NOT be updated with this dataset to prevent stale reference data.`);
-          } else if (!usgsKvNamespace) {
+          } else if (!usgsKvNamespace) { // This condition is now distinct from the one above.
             console.log("[usgs-proxy-kv] D1 upsert processed. KV not configured, so not updating KV.");
-          } else if (d1Result.successCount > 0 && !usgsKvNamespace) { // Should not happen based on outer if, but for completeness
-            console.log("[usgs-proxy-kv] D1 upsert successful, but KV namespace not configured. Cannot update KV.");
           }
+          // Removed the redundant else if (d1Result.successCount > 0 && !usgsKvNamespace) as it's covered by the above.
         } catch (e) {
           console.error("[usgs-proxy-d1] Error during D1 upsert operation:", e.message, e.name, e.stack);
           console.warn(`[usgs-proxy-kv] KV will NOT be updated due to D1 upsert error, to prevent stale reference data for key ${USGS_LAST_RESPONSE_KEY}.`);

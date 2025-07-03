@@ -108,11 +108,11 @@ const InteractiveGlobeView = ({
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
     const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
-    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false); // Added
+    // const [initialLayoutComplete, setInitialLayoutComplete] = useState(false); // Removed
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
-    const windowLoadedRef = useRef(false); // To track if window.load has fired
+    // const windowLoadedRef = useRef(false); // Removed
     const [ringsData, setRingsData] = useState([]);
 
     const debounce = (func, delay) => {
@@ -201,7 +201,7 @@ const InteractiveGlobeView = ({
             window.removeEventListener('load', handleWindowLoad);
             if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
         };
-    }, []); // Remove dependency on initialLayoutComplete
+    }, []);
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context

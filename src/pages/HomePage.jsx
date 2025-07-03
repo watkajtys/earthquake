@@ -36,7 +36,7 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 const InteractiveGlobeView = lazy(() => import('../components/InteractiveGlobeView'));
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 import { useUIState } from '../contexts/UIStateContext.jsx';
-import { registerClusterDefinition, fetchActiveClusters } from '../services/clusterApiService.js';
+import { fetchActiveClusters } from '../services/clusterApiService.js'; // Removed registerClusterDefinition
 import {
     CLUSTER_MAX_DISTANCE_KM,
     CLUSTER_MIN_QUAKES,
