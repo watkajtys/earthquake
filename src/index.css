@@ -2,6 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile viewport stabilization */
+@supports (height: 100dvh) {
+  .mobile-safe-height {
+    height: 100dvh;
+  }
+}
+
+@supports not (height: 100dvh) {
+  .mobile-safe-height {
+    height: 100vh;
+  }
+}
+
+/* Prevent iOS Safari bounce and improve mobile experience */
+html, body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure root container fills viewport properly */
+#root {
+  max-width: unset;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* This is for the DivIcon itself, to ensure no default styles interfere */
 .custom-pulsing-icon {
   background: none !important;
