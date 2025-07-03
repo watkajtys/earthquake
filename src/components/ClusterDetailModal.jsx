@@ -128,7 +128,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 aria-modal="true" // Indicates this is a modal dialog
                 aria-labelledby="cluster-detail-title" // Associates with the title
                 // onKeyDown={(e) => { if (e.key === 'Escape') { onClose(); e.stopPropagation(); } }} // Removed as Escape is handled by useEffect
-                className="bg-slate-800 p-4 sm:p-6 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90svh] flex flex-col border border-slate-700 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700"
+                className="bg-slate-800 p-4 sm:p-6 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] lg:max-h-[90svh] flex flex-col border border-slate-700 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700"
                 // onClick={e => e.stopPropagation()} // This was already removed
             >
                 {/* Header */}

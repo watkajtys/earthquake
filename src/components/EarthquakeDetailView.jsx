@@ -364,7 +364,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
             <ErrorBoundary> {/* ErrorBoundary goes here, around the main content box */}
                 <div
                     ref={modalContentRef}
-                    className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800 overflow-y-auto max-h-[calc(100svh-5rem)]"
+                    className="bg-gray-100 rounded-lg shadow-xl max-w-3xl w-full mb-8 text-slate-800 overflow-y-auto max-h-[calc(100vh-5rem)] lg:max-h-[calc(100svh-5rem)]"
                 // onClick={(e) => e.stopPropagation()} // Removed to fix jsx-a11y errors
                 tabIndex="-1" // Make the modal container focusable for the trap if no inner elements are
             >
