@@ -79,6 +79,8 @@ function EarthquakeRegionalMapPanel({
         mainQuakeDetailUrl: detailUrl,
         fitMapToBounds: false,
         // defaultZoom is handled by EarthquakeMap's defaults
+        showLocalFaults: true,                                      // Enable local fault visualization
+        faultRadiusKm: 200,                                         // Show faults within 200km of epicenter
     };
 
     console.log("--- [EarthquakeRegionalMapPanel] Props being passed to EarthquakeMap ---");

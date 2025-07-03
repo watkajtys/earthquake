@@ -122,6 +122,8 @@ const ClusterMiniMap = ({ cluster }) => {
     mainQuakeDetailUrl: null,                                   // No single detail URL for the entire cluster view.
                                                                 // Could potentially link to the latestQuake's detail if available.
     defaultZoom: 8,                                             // Default zoom for EarthquakeMap (used if not fitting bounds or single point).
+    showLocalFaults: true,                                      // Enable local fault visualization
+    faultRadiusKm: 150,                                         // Show faults within 150km of cluster center
   };
 
   // Render the EarthquakeMap with the prepared props, wrapped in a div to maintain fixed height.

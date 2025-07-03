@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 // import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
+import { filterNearbyFaults, getFaultDisplayInfo } from '../utils/faultUtils.js';
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -90,6 +91,23 @@ const getTectonicPlateStyle = (feature) => {
 };
 
 /**
+ * Defines the styling for local active fault GeoJSON features.
+ * The color varies based on the fault's slip type, distinct from tectonic plate colors.
+ *
+ * @param {Object} feature - The GeoJSON feature representing a local active fault.
+ * @returns {Object} A Leaflet path style options object for the feature.
+ */
+const getLocalFaultStyle = (feature) => {
+  const faultInfo = getFaultDisplayInfo(feature);
+  return { 
+    color: faultInfo.color, 
+    weight: 2, 
+    opacity: 0.7,
+    dashArray: '5, 5' // Dashed line to distinguish from tectonic plates
+  };
+};
+
+/**
  * Renders an interactive Leaflet map to display earthquake information.
  * Key features include:
  * - Displaying a main highlighted earthquake with a pulsing icon.
@@ -113,6 +131,8 @@ const getTectonicPlateStyle = (feature) => {
  * @param {string|null} [props.mainQuakeDetailUrl=null] - Internal application URL for the detail page of the highlighted quake.
  * @param {boolean} [props.fitMapToBounds=false] - If true, the map will adjust its bounds to show all plotted quakes. If false, it uses `defaultZoom`.
  * @param {number} [props.defaultZoom=8] - Default zoom level for the map if not fitting to bounds or if only one point is shown.
+ * @param {boolean} [props.showLocalFaults=true] - Whether to load and display local active faults near the center point.
+ * @param {number} [props.faultRadiusKm=200] - Radius in kilometers for loading nearby local faults.
  * @returns {JSX.Element} The EarthquakeMap component.
  */
 const EarthquakeMap = ({
@@ -127,10 +147,16 @@ const EarthquakeMap = ({
   mainQuakeDetailUrl = null,
   fitMapToBounds = false,
   defaultZoom = 8,
+  showLocalFaults = true,
+  faultRadiusKm = 200,
 }) => {
   const mapRef = useRef(null);
+  const mapContainerRef = useRef(null);
   const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);
   const [isTectonicPlatesLoading, setIsTectonicPlatesLoading] = useState(true);
+  const [localFaultsDataJson, setLocalFaultsDataJson] = useState(null);
+  const [isLocalFaultsLoading, setIsLocalFaultsLoading] = useState(showLocalFaults);
+  const [isMapVisible, setIsMapVisible] = useState(false);
 
   const initialMapCenter = useMemo(() => [mapCenterLatitude, mapCenterLongitude], [mapCenterLatitude, mapCenterLongitude]);
   const highlightedQuakePosition = useMemo(() => {
@@ -211,13 +237,73 @@ const EarthquakeMap = ({
     };
   }, []);
 
+  // Memoized fault loading to prevent unnecessary reloads
+  const faultCenter = useMemo(() => ({ lat: mapCenterLatitude, lng: mapCenterLongitude }), [mapCenterLatitude, mapCenterLongitude]);
+  
+  // Intersection Observer to detect when map is visible
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsMapVisible(entry.isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+
+    if (mapContainerRef.current) {
+      observer.observe(mapContainerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Load local active faults near the map center (only when visible)
+  useEffect(() => {
+    if (!showLocalFaults || !isMapVisible || typeof faultCenter.lat !== 'number' || typeof faultCenter.lng !== 'number') {
+      setIsLocalFaultsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const loadLocalFaults = async () => {
+      try {
+        setIsLocalFaultsLoading(true);
+        const nearbyFaults = await filterNearbyFaults(faultCenter.lat, faultCenter.lng, faultRadiusKm);
+        
+        if (isMounted) {
+          if (nearbyFaults.length > 0) {
+            // Convert to GeoJSON FeatureCollection
+            const faultsGeoJson = {
+              type: 'FeatureCollection',
+              features: nearbyFaults
+            };
+            setLocalFaultsDataJson(faultsGeoJson);
+          } else {
+            setLocalFaultsDataJson(null);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading local faults data:", error);
+      } finally {
+        if (isMounted) {
+          setIsLocalFaultsLoading(false);
+        }
+      }
+    };
+    
+    loadLocalFaults();
+    return () => {
+      isMounted = false;
+    };
+  }, [faultCenter.lat, faultCenter.lng, showLocalFaults, faultRadiusKm, isMapVisible]);
+
   return (
-    <MapContainer
-      center={initialMapCenter}
-      zoom={defaultZoom}
-      style={mapStyle}
-      ref={mapRef}
-    >
+    <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }}>
+      <MapContainer
+        center={initialMapCenter}
+        zoom={defaultZoom}
+        style={mapStyle}
+        ref={mapRef}
+      >
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
@@ -287,7 +373,27 @@ const EarthquakeMap = ({
       {!isTectonicPlatesLoading && tectonicPlatesDataJson && (
         <GeoJSON data={tectonicPlatesDataJson} style={getTectonicPlateStyle} />
       )}
-    </MapContainer>
+
+      {!isLocalFaultsLoading && localFaultsDataJson && (
+        <GeoJSON 
+          data={localFaultsDataJson} 
+          style={getLocalFaultStyle}
+          onEachFeature={(feature, layer) => {
+            const faultInfo = getFaultDisplayInfo(feature);
+            layer.bindTooltip(
+              `<div style="font-size: 12px;">
+                <strong>${faultInfo.name}</strong><br/>
+                Type: ${faultInfo.slipType}<br/>
+                Slip Rate: ${faultInfo.slipRate}<br/>
+                Source: ${faultInfo.catalog}
+              </div>`,
+              { direction: 'top', offset: [0, -10] }
+            );
+          }}
+        />
+      )}
+      </MapContainer>
+    </div>
   );
 };
 
