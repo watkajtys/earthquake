@@ -199,8 +199,10 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                             centerLat={centerLat}
                             centerLng={centerLng}
                             regionalQuakes={originalQuakes}
+                            earthquakeData={cluster.maxMagQuake || originalQuakes?.[0]}
                             radiusKm={150}
                             expanded={false}
+                            userContext={{ expertise: 'general', detailed: true }}
                         />
                     </div>
                 )}

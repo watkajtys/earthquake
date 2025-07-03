@@ -36,8 +36,10 @@ function EarthquakeRegionalSeismicityPanel({
                         centerLat={earthquakeLat}
                         centerLng={earthquakeLng}
                         regionalQuakes={broaderEarthquakeData || []}
+                        earthquakeData={detailData}
                         radiusKm={200}
                         expanded={false}
+                        userContext={{ expertise: 'general', detailed: false }}
                     />
                 </div>
             )}
