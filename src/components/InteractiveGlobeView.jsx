@@ -130,79 +130,78 @@ const InteractiveGlobeView = ({
         if (!currentContainerRef) return;
 
         const updateDimensions = () => {
-            // Don't run if window.load hasn't fired yet, unless it's a resize event (implicitly initialLayoutComplete is true)
-            if (!initialLayoutComplete && !windowLoadedRef.current) return;
+            const containerElement = containerRef.current;
+            if (!containerElement) return;
 
-            const currentContainerRefActual = containerRef.current; // Re-read ref
-            if (!currentContainerRefActual) return;
-
-            const newWidth = currentContainerRefActual.offsetWidth;
-            const newHeight = currentContainerRefActual.offsetHeight;
+            const rect = containerElement.getBoundingClientRect();
+            const newWidth = rect.width;
+            const newHeight = rect.height;
 
             if (newWidth > 10 && newHeight > 10) {
-                 setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) ? { width: newWidth, height: newHeight } : prev);
+                setGlobeDimensions(prev => (prev.width !== newWidth || prev.height !== newHeight) 
+                    ? { width: newWidth, height: newHeight } : prev);
             }
         };
 
-        // Debounced version for ResizeObserver
-        const debouncedUpdateDimensions = debounce(updateDimensions, 200);
-
-        if (document.readyState === 'complete') {
-            windowLoadedRef.current = true;
-            setInitialLayoutComplete(true);
-            // Call updateDimensions directly here to ensure it runs with initialLayoutComplete = true
+        // Multi-strategy initialization for reliable hard reload handling
+        const initializeDimensions = () => {
+            updateDimensions();
+            
+            // Retry if dimensions are still invalid (handles hard reload timing)
             if (containerRef.current) {
-                const newWidth = containerRef.current.offsetWidth;
-                const newHeight = containerRef.current.offsetHeight;
-                if (newWidth > 10 && newHeight > 10) { // Check for valid dimensions
-                    setGlobeDimensions({ width: newWidth, height: newHeight });
+                const rect = containerRef.current.getBoundingClientRect();
+                if (rect.width <= 10 || rect.height <= 10) {
+                    requestAnimationFrame(() => {
+                        updateDimensions();
+                        // Final retry after next frame
+                        setTimeout(updateDimensions, 100);
+                    });
                 }
             }
-        } else {
-            const handleWindowLoad = () => {
-                windowLoadedRef.current = true;
-                setInitialLayoutComplete(true);
-                // Explicitly call updateDimensions after setting initialLayoutComplete to true
-                // and window has loaded.
-                if (containerRef.current) {
-                    const newWidth = containerRef.current.offsetWidth;
-                    const newHeight = containerRef.current.offsetHeight;
-                    if (newWidth > 10 && newHeight > 10) {
-                         setGlobeDimensions({ width: newWidth, height: newHeight });
-                    } else {
-                        // Fallback or retry if dimensions are still not good
-                        setTimeout(() => {
-                            if (containerRef.current) {
-                                const w = containerRef.current.offsetWidth;
-                                const h = containerRef.current.offsetHeight;
-                                if (w > 10 && h > 10) {
-                                    setGlobeDimensions({ width: w, height: h });
-                                }
-                            }
-                        }, 150); // A short delay for a retry
-                    }
-                }
-                window.removeEventListener('load', handleWindowLoad); // Clean up listener
-            };
-            window.addEventListener('load', handleWindowLoad);
-        }
+        };
 
+        // Immediate initialization
+        initializeDimensions();
+
+        // Additional initialization strategies for hard reload
+        setTimeout(initializeDimensions, 50);
+        setTimeout(initializeDimensions, 200);
+
+        // Debounced version for ResizeObserver
+        const debouncedUpdateDimensions = debounce(updateDimensions, 100);
+
+        // ResizeObserver for ongoing updates
         const resizeObserver = new ResizeObserver(debouncedUpdateDimensions);
-        if (currentContainerRef) { // Ensure ref is still valid before observing
-            resizeObserver.observe(currentContainerRef);
+        resizeObserver.observe(currentContainerRef);
+
+        // IntersectionObserver to detect when container becomes visible
+        const intersectionObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting && entry.intersectionRatio > 0) {
+                    setTimeout(updateDimensions, 50);
+                }
+            });
+        }, { threshold: 0.1 });
+        intersectionObserver.observe(currentContainerRef);
+
+        // Window load event as final fallback
+        const handleWindowLoad = () => {
+            setTimeout(updateDimensions, 100);
+        };
+        
+        if (document.readyState === 'complete') {
+            handleWindowLoad();
+        } else {
+            window.addEventListener('load', handleWindowLoad, { once: true });
         }
 
         return () => {
-            // Note: handleWindowLoad cleanup is inside the handler itself upon execution.
-            // If the component unmounts before 'load', the listener might remain.
-            // To be fully robust, it would need to be removed here too if it was assigned to a variable accessible here.
-            // For this specific subtask, the provided snippet's cleanup is followed.
-            if (currentContainerRef) {
-                resizeObserver.unobserve(currentContainerRef);
-            }
+            resizeObserver.unobserve(currentContainerRef);
+            intersectionObserver.unobserve(currentContainerRef);
+            window.removeEventListener('load', handleWindowLoad);
             if (debouncedUpdateDimensions.timeout) clearTimeout(debouncedUpdateDimensions.timeout);
         };
-    }, [initialLayoutComplete]); // Add initialLayoutComplete to dependency array.
+    }, []); // Remove dependency on initialLayoutComplete
 
     useEffect(() => {
         let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
