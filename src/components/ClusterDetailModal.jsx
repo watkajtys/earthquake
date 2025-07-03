@@ -2,6 +2,7 @@
 import React from 'react';
 import ClusterMiniMap from './ClusterMiniMap'; // Added import for the mini-map
 import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the new chart
+import RegionalSeismicityDescription from './RegionalSeismicityDescription'; // Import seismicity analysis
 // import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor - Unused
 
 /**
@@ -99,6 +100,30 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
         return timeB - timeA; // Descending order
     });
 
+    // Calculate cluster center coordinates for seismicity analysis
+    let centerLat = null;
+    let centerLng = null;
+    if (originalQuakes.length > 0) {
+        let sumLat = 0;
+        let sumLng = 0;
+        let validCoords = 0;
+        
+        originalQuakes.forEach(quake => {
+            if (quake.geometry?.coordinates && 
+                typeof quake.geometry.coordinates[1] === 'number' && 
+                typeof quake.geometry.coordinates[0] === 'number') {
+                sumLat += quake.geometry.coordinates[1];
+                sumLng += quake.geometry.coordinates[0];
+                validCoords++;
+            }
+        });
+        
+        if (validCoords > 0) {
+            centerLat = sumLat / validCoords;
+            centerLng = sumLng / validCoords;
+        }
+    }
+
     // Calculate Depth Range (Optional, as designed)
     let minDepth = Infinity;
     let maxDepth = -Infinity;
@@ -166,6 +191,19 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 <div className="my-4 py-4 border-t border-b border-slate-700">
                     <EarthquakeSequenceChart cluster={cluster} />
                 </div>
+
+                {/* Regional Seismicity Context */}
+                {centerLat !== null && centerLng !== null && (
+                    <div className="my-4">
+                        <RegionalSeismicityDescription 
+                            centerLat={centerLat}
+                            centerLng={centerLng}
+                            regionalQuakes={originalQuakes}
+                            radiusKm={150}
+                            expanded={false}
+                        />
+                    </div>
+                )}
 
                 {/* Individual Earthquakes List */}
                 <h3 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2"> {/* Removed border-t as chart section has it now */}
