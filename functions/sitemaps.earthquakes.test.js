@@ -63,8 +63,12 @@ describe('Earthquake Sitemap Handler', () => {
         expect(response.headers.get('Content-Type')).toContain('application/xml');
         const text = await response.text();
         expect(text).toContain('<urlset');
-        // Check for data from the default MSW handler
-        expect(text).toContain(encodeURIComponent("default_msw_event_detail_url_1"));
+        // Check for data from the default MSW handler - updated for new URL structure
+        const expectedMag = (3.0).toFixed(1);
+        const expectedPlaceSlug = "default-msw-test-place";
+        const expectedId = "msw_ev1";
+        const expectedUrl = `https://earthquakeslive.com/quake/m${expectedMag}-${expectedPlaceSlug}-${expectedId}`;
+        expect(text).toContain(`<loc>${expectedUrl}</loc>`);
     });
 
     it('/sitemap-earthquakes.xml should handle fetch error', async () => {
@@ -76,9 +80,8 @@ describe('Earthquake Sitemap Handler', () => {
         const request = new Request('http://localhost/sitemap-earthquakes.xml');
         const context = createMockContext(request);
         const response = await onRequest(context);
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(200); // Function handles error internally and returns 200 with error comment
         const text = await response.text();
-        // Adjusted to match the likely outcome of HttpResponse.error()
         expect(text).toContain("<!-- Exception processing earthquake data: Failed to fetch -->");
     });
 
@@ -91,7 +94,7 @@ describe('Earthquake Sitemap Handler', () => {
         const request = new Request('http://localhost/sitemap-earthquakes.xml');
         const context = createMockContext(request);
         const response = await onRequest(context);
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(200); // Function handles error internally
         const text = await response.text();
         expect(text).toContain("<!-- Error fetching earthquake data -->");
     });
@@ -110,14 +113,15 @@ describe('Earthquake Sitemap Handler', () => {
         expect(text).not.toContain("<loc>");
     });
 
-    it('/sitemap-earthquakes.xml should skip features missing properties.detail', async () => {
+    it('/sitemap-earthquakes.xml should skip features missing id or properties', async () => {
       server.use(
         http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson', () => {
           return HttpResponse.json({
             features: [
-              { properties: { mag: 3.0, place: "Test Place Valid", time: Date.now(), updated: Date.now(), detail: "event_detail_url_valid" }, id: "ev_valid" },
-              { properties: { mag: 2.5, place: "Test Place Missing Detail", time: Date.now(), updated: Date.now(), detail: null }, id: "ev_missing_detail" },
-              { properties: { mag: 2.8, place: "Test Place Undefined Detail", time: Date.now(), updated: Date.now() /* detail implicitly undefined */ }, id: "ev_undefined_detail" }
+              { properties: { mag: 3.0, place: "Test Place Valid", time: Date.now(), updated: Date.now() }, id: "ev_valid" }, // Valid
+              { properties: { mag: 2.5, place: "Test Place Missing ID", time: Date.now(), updated: Date.now() } /* id implicitly undefined */ },
+              { id: "ev_missing_props", /* properties implicitly undefined */ },
+              { id: "ev_null_props", properties: null }
             ]
           });
         })
@@ -129,19 +133,24 @@ describe('Earthquake Sitemap Handler', () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get('Content-Type')).toContain('application/xml');
-      expect(text).toContain('<loc>event_detail_url_valid</loc>');
+      const expectedMag = (3.0).toFixed(1);
+      const expectedPlaceSlug = "test-place-valid";
+      const expectedId = "ev_valid";
+      const expectedUrl = `https://earthquakeslive.com/quake/m${expectedMag}-${expectedPlaceSlug}-${expectedId}`;
+      expect(text).toContain(`<loc>${expectedUrl}</loc>`);
       const locCount = (text.match(/<loc>/g) || []).length;
-      expect(locCount).toBe(1);
+      expect(locCount).toBe(1); // Only the valid entry should be present
     });
 
     it('/sitemap-earthquakes.xml should skip features with missing or invalid properties.updated', async () => {
+      const now = Date.now();
       server.use(
         http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson', () => {
           return HttpResponse.json({
             features: [
-              { properties: { mag: 3.1, place: "Test Place Valid Update", time: Date.now(), updated: Date.now(), detail: "event_detail_url_valid_update" }, id: "ev_valid_upd" },
-              { properties: { mag: 2.6, place: "Test Place Missing Update", time: Date.now(), detail: "event_detail_url_missing_update" /* updated implicitly undefined */ }, id: "ev_missing_upd" },
-              { properties: { mag: 2.7, place: "Test Place Invalid Update", time: Date.now(), updated: "not-a-number", detail: "event_detail_url_invalid_update" }, id: "ev_invalid_upd" }
+              { properties: { mag: 3.1, place: "Test Place Valid Update", time: now, updated: now }, id: "ev_valid_upd" },
+              { properties: { mag: 2.6, place: "Test Place Missing Update", time: now /* updated implicitly undefined */ }, id: "ev_missing_upd" },
+              { properties: { mag: 2.7, place: "Test Place Invalid Update", time: now, updated: "not-a-number" }, id: "ev_invalid_upd" }
             ]
           });
         })
@@ -153,20 +162,28 @@ describe('Earthquake Sitemap Handler', () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get('Content-Type')).toContain('application/xml');
-      expect(text).toContain('<loc>event_detail_url_valid_update</loc>');
+      const expectedMag = (3.1).toFixed(1);
+      const expectedPlaceSlug = "test-place-valid-update";
+      const expectedId = "ev_valid_upd";
+      const expectedUrl = `https://earthquakeslive.com/quake/m${expectedMag}-${expectedPlaceSlug}-${expectedId}`;
+      expect(text).toContain(`<loc>${expectedUrl}</loc>`);
       expect(text).toContain('<lastmod>');
       const urlCount = (text.match(/<url>/g) || []).length;
-      expect(urlCount).toBe(1);
+      expect(urlCount).toBe(1); // Only the valid entry
     });
 
     it('/sitemap-earthquakes.xml should use env.USGS_API_URL if provided', async () => {
       const customApiUrl = "https://example.com/custom/feed.geojson";
-      // This test will use the default MSW handler for customApiUrl
+      // This test will use the MSW handler for customApiUrl (defined in setupTests.js or mocks/handlers.js)
       const request = new Request('http://localhost/sitemap-earthquakes.xml');
       const context = createMockContext(request, { USGS_API_URL: customApiUrl });
       const response = await onRequest(context);
       const text = await response.text();
       expect(response.status).toBe(200);
-      expect(text).toContain(encodeURIComponent("custom_msw_event_detail_url_1"));
+      const expectedMag = (2.0).toFixed(1); // Assuming custom MSW handler returns mag 2.0
+      const expectedPlaceSlug = "custom-msw-feed-place";
+      const expectedId = "msw_custom_ev1";
+      const expectedUrl = `https://earthquakeslive.com/quake/m${expectedMag}-${expectedPlaceSlug}-${expectedId}`;
+      expect(text).toContain(`<loc>${expectedUrl}</loc>`);
     });
 });
