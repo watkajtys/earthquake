@@ -67,9 +67,33 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
 
   // All other useMemo hooks moved here, before any conditional returns
   const timeDomain = useMemo(() => {
-    if (originalQuakes.length === 0) return [new Date(0), new Date()]; // Default to prevent crash
+    if (originalQuakes.length === 0) {
+      // Default domain if no quakes: current time +/- 1 hour
+      const now = new Date();
+      return [new Date(now.getTime() - 60 * 60 * 1000), new Date(now.getTime() + 60 * 60 * 1000)];
+    }
+
     const times = originalQuakes.map(d => new Date(d.properties.time));
-    return d3Extent(times);
+    const [minTime, maxTime] = d3Extent(times);
+
+    if (minTime === undefined || maxTime === undefined) { // Should not happen if originalQuakes is not empty
+        const now = new Date();
+        return [new Date(now.getTime() - 60 * 60 * 1000), new Date(now.getTime() + 60 * 60 * 1000)];
+    }
+
+    let startTime = minTime.getTime();
+    let endTime = maxTime.getTime();
+
+    if (startTime === endTime) {
+      // If all events are at the same time, or only one event
+      const paddingMs = 60 * 60 * 1000; // 1 hour padding
+      return [new Date(startTime - paddingMs), new Date(endTime + paddingMs)];
+    }
+
+    const duration = endTime - startTime;
+    const padding = duration * 0.05; // 5% padding on each side
+
+    return [new Date(startTime - padding), new Date(endTime + padding)];
   }, [originalQuakes]);
 
   const magDomain = useMemo(() => {
@@ -117,24 +141,67 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
 
   const timeAxisTicks = useMemo(() => {
     if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
-    const tempScale = scaleTime().domain(timeDomain).range([0, width]);
+
     const [domainStartTime, domainEndTime] = timeDomain;
     const durationMs = domainEndTime.getTime() - domainStartTime.getTime();
-    const durationHours = durationMs / (1000 * 60 * 60);
+    const durationMinutes = durationMs / (1000 * 60);
+    const durationHours = durationMinutes / 60;
 
     let tickInterval;
-    if (durationHours < 12) { // Less than 12 hours
-      tickInterval = timeHour.every(durationHours < 6 ? 1 : 2);
+    let timeTickFormatString;
+
+    if (durationHours < 1) { // Less than 1 hour
+        if (durationMinutes < 15) {
+            tickInterval = timeHour.every(1); // Fallback, d3 might make it minutes
+            timeTickFormatString = "%H:%M"; // e.g., 14:35
+        } else if (durationMinutes < 30) {
+            tickInterval = timeHour.every(1); // d3 will likely choose 5 or 10 min intervals
+            timeTickFormatString = "%H:%M";
+        } else {
+            tickInterval = timeHour.every(1); // d3 will likely choose 10 or 15 min intervals
+            timeTickFormatString = "%H:%M";
+        }
+    } else if (durationHours < 2) { // 1 to 2 hours
+        tickInterval = timeHour.every(1); // d3 will likely choose 15 or 30 min intervals
+        timeTickFormatString = "%H:%M";
+    } else if (durationHours < 6) { // 2 to 6 hours
+      tickInterval = timeHour.every(1); // Ticks every hour
+      timeTickFormatString = "%-I%p"; // e.g., "1PM"
+    } else if (durationHours < 12) { // 6 to 12 hours
+      tickInterval = timeHour.every(2); // Ticks every 2 hours
+      timeTickFormatString = "%-I%p";
     } else if (durationHours < 24) { // 12 to 24 hours
-      tickInterval = timeHour.every(3);
-    } else if (durationHours < 72) { // 24 to 72 hours (1 to 3 days)
-      tickInterval = timeHour.every(6);
-    } else { // 72 hours (3 days) or more
-      tickInterval = timeHour.every(24);
+      tickInterval = timeHour.every(3); // Ticks every 3 hours
+      timeTickFormatString = "%-I%p";
+    } else if (durationHours < 72) { // 1 to 3 days
+      tickInterval = timeHour.every(6); // Ticks every 6 hours
+      timeTickFormatString = "%-I%p";
+    } else if (durationHours < 168) { // 3 to 7 days
+      tickInterval = timeHour.every(12); // Ticks every 12 hours
+      timeTickFormatString = "%-I%p";
+    } else { // More than 7 days
+      tickInterval = timeHour.every(24); // Ticks every 24 hours (once a day)
+      timeTickFormatString = "%-I%p"; // Will show "12AM"
     }
 
-    const potentialTicks = tempScale.ticks(tickInterval);
-    const timeTickFormat = timeFormat("%-I%p");
+    // Let D3 generate the ticks using the suggested interval.
+    // For very short durations, explicitly ask for more ticks if d3.ticks with timeHour.every(1) is too sparse.
+    let potentialTicks;
+    if (durationHours < 1 && durationMinutes < 30) {
+        potentialTicks = xScale.ticks(5); // Request approx 5 ticks for very short spans
+    } else if (durationHours < 2) {
+        potentialTicks = xScale.ticks(timeHour.every(1)); // Try for hourly ticks
+        if (potentialTicks.length < 2 && durationMinutes > 30) { // if not enough, try more specific
+             potentialTicks = xScale.ticks(Math.max(2, Math.floor(durationMinutes / 15))); // e.g. every 15min
+        } else if (potentialTicks.length < 2) {
+            potentialTicks = xScale.ticks(2); // fallback to 2 ticks
+        }
+    }
+    else {
+        potentialTicks = xScale.ticks(tickInterval);
+    }
+
+    const timeTickFormat = timeFormat(timeTickFormatString);
 
     return potentialTicks.map(value => ({
         value,
