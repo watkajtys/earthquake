@@ -91,14 +91,45 @@ function getDepthRangeString(cluster) {
  * @param {number} quakeCount - Number of earthquakes in the cluster.
  * @param {string} locationName - Name of the location of the cluster.
  * @param {number} maxMagnitude - Maximum magnitude in the cluster.
- * @param {string} id - Unique ID of the cluster.
+ * @param {string} stableKey - Stable key of the cluster.
  * @returns {string} A URL-friendly slug string.
  */
-function generateSlug(quakeCount, locationName, maxMagnitude, id) {
-  const safeLocation = (locationName || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  const magStr = maxMagnitude.toFixed(1);
-  const idStr = id.substring(0, 6);
-  return `${quakeCount}-quakes-near-${safeLocation.slice(0, 50)}-m${magStr}-${idStr}`;
+function generateSlug(quakeCount, locationName, maxMagnitude, stableKey) {
+  const safeLocationBase = (locationName || "unknown-location")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '') // Allow letters, numbers, spaces, hyphens
+    .trim()
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-'); // Replace multiple hyphens with single
+
+  // Extract components from stableKey. Example stableKey: "v1_anytown_123456_34.5-118.2"
+  const keyParts = stableKey.split('_');
+  let stableKeyIdentifier = "";
+  if (keyParts.length >= 4) {
+    // Use timeComponent and a sanitized geoComponent
+    // keyParts[0] is version, keyParts[1] is location (not used directly here),
+    // keyParts[2] is time, keyParts[3] is geo
+    const timePart = keyParts[2];
+    // Sanitize geoPart: replace dots, ensure it's not too long.
+    const geoPart = keyParts[3].replace(/\./g, 'd').replace(/[^a-z0-9-]/g, '').substring(0, 15);
+    stableKeyIdentifier = `${timePart}-${geoPart}`;
+  } else {
+    // Fallback: generate a short hash of the stableKey if parsing fails
+    let hash = 0;
+    for (let i = 0; i < stableKey.length; i++) {
+      const char = stableKey.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash |= 0; // Convert to 32bit integer
+    }
+    // Use a prefix "skh" (stable key hash) to denote this fallback was used.
+    stableKeyIdentifier = `skh${Math.abs(hash).toString(36).substring(0, 6)}`;
+  }
+
+  const magStr = typeof maxMagnitude === 'number' ? maxMagnitude.toFixed(1) : 'unknown';
+  const countStr = Number.isFinite(quakeCount) ? quakeCount : 'multiple';
+  const locationSlugPart = safeLocationBase.slice(0, 30).replace(/^-+|-+$/g, '');
+
+  return `${countStr}-quakes-near-${locationSlugPart}-m${magStr}-${stableKeyIdentifier}`;
 }
 
 /**
@@ -135,6 +166,35 @@ function generateDescription(quakeCount, locationName, maxMagnitude, durationHou
 // It uses calculateDistance imported from '../utils/mathUtils.js' (synced from /common/mathUtils.js).
 // Algorithmic changes to core clustering logic should be synchronized with the frontend version where applicable.
 
+// New helper function to generate a stable key for a cluster
+function generateStableClusterKey(calculatedCluster, strongestQuakeInCalcCluster) {
+  const D_STABLE_KEY_VERSION = "v1"; // To allow for future changes in key generation logic
+
+  let locationComponent = "unknown-location";
+  if (strongestQuakeInCalcCluster && strongestQuakeInCalcCluster.properties && strongestQuakeInCalcCluster.properties.place) {
+    const place = strongestQuakeInCalcCluster.properties.place;
+    const parts = place.split(" of ");
+    const generalPlace = parts.length > 1 ? parts[parts.length - 1] : place;
+    locationComponent = generalPlace.toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 30);
+    if (!locationComponent) locationComponent = "unknown-location"; // Ensure not empty
+  }
+
+  const startTime = getStartTime(calculatedCluster); // Assuming getStartTime is available
+  const sixHoursInMillis = 6 * 60 * 60 * 1000;
+  const timeComponent = Math.floor(startTime / sixHoursInMillis);
+
+  let geoComponent = "0.0-0.0";
+  if (strongestQuakeInCalcCluster && strongestQuakeInCalcCluster.geometry && strongestQuakeInCalcCluster.geometry.coordinates) {
+    const lon = strongestQuakeInCalcCluster.geometry.coordinates[0];
+    const lat = strongestQuakeInCalcCluster.geometry.coordinates[1];
+    if (typeof lon === 'number' && typeof lat === 'number') {
+      geoComponent = `${lat.toFixed(1)}-${lon.toFixed(1)}`;
+    }
+  }
+  return `${D_STABLE_KEY_VERSION}_${locationComponent}_${timeComponent}_${geoComponent}`;
+}
+
+
 /**
  * Asynchronously stores definitions for significant earthquake clusters in the D1 database.
  * This function is intended to be run in the background (e.g., using `ctx.waitUntil`)
@@ -142,11 +202,11 @@ function generateDescription(quakeCount, locationName, maxMagnitude, durationHou
  *
  * A cluster is considered "significant" if it meets criteria defined by
  * `CLUSTER_MIN_QUAKES_CONST` and `DEFINED_CLUSTER_MIN_MAGNITUDE_CONST`.
- * For each significant cluster, it generates metadata (ID, slug, title, description, etc.)
- * and then calls `storeClusterDefinition` to persist it.
+ * For each significant cluster, it generates a stable key. If a cluster with this key
+ * already exists, it updates the existing record. Otherwise, it creates a new record.
  *
  * Logs information about the process, including counts of significant clusters,
- * successfully stored definitions, and any errors encountered.
+ * successfully stored/updated definitions, and any errors encountered.
  *
  * @async
  * @param {object} db - The D1 database instance (e.g., `env.DB`).
@@ -164,15 +224,15 @@ async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUA
 
   console.log(`storeClusterDefinitionsInBackground: Starting processing of ${clusters.length} clusters for potential definition storage.`);
   let significantClusterCount = 0;
-  let storedCount = 0;
+  let processedCount = 0; // Renamed from storedCount to reflect updates too
   let errorCount = 0;
 
   for (const calculatedCluster of clusters) {
     if (!calculatedCluster || calculatedCluster.length === 0) continue;
 
     const strongestQuakeInCalcCluster = getStrongestQuake(calculatedCluster);
-    if (!strongestQuakeInCalcCluster || !strongestQuakeInCalcCluster.properties) {
-        console.warn("storeClusterDefinitionsInBackground: Skipping cluster definition due to missing strongest quake or properties.");
+    if (!strongestQuakeInCalcCluster || !strongestQuakeInCalcCluster.properties || !strongestQuakeInCalcCluster.id) {
+        console.warn("storeClusterDefinitionsInBackground: Skipping cluster definition due to missing strongest quake, properties, or ID.");
         continue;
     }
 
@@ -180,51 +240,100 @@ async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUA
 
     if (calculatedCluster.length >= CLUSTER_MIN_QUAKES_CONST && clusterMaxMag >= DEFINED_CLUSTER_MIN_MAGNITUDE_CONST) {
       significantClusterCount++;
-      const clusterId = randomUUID(); // Generate a new UUID for this definition
+
+      const stableKey = generateStableClusterKey(calculatedCluster, strongestQuakeInCalcCluster);
       const quakeCount = calculatedCluster.length;
       const startTime = getStartTime(calculatedCluster);
       const endTime = getEndTime(calculatedCluster);
       const durationHours = (endTime > startTime) ? (endTime - startTime) / (1000 * 60 * 60) : 0;
       const locationName = strongestQuakeInCalcCluster.properties.place || "Unknown Location";
       const maxMagnitude = clusterMaxMag;
-      // Note: storeClusterDefinition utility will add its own `updatedAt`. `createdAt` is handled by DB default on new.
-
-      const clusterDataForUtil = {
-        id: clusterId,
-        earthquakeIds: calculatedCluster.map(q => q.id),
-        quakeCount: quakeCount,
-        strongestQuakeId: strongestQuakeInCalcCluster.id,
-        maxMagnitude: maxMagnitude,
-        minMagnitude: getMinMagnitude(calculatedCluster),
-        meanMagnitude: getMeanMagnitude(calculatedCluster),
-        startTime: startTime,
-        endTime: endTime,
-        durationHours: durationHours,
-        locationName: locationName,
-        centroidLat: strongestQuakeInCalcCluster.geometry.coordinates[1] || 0,
-        centroidLon: strongestQuakeInCalcCluster.geometry.coordinates[0] || 0,
-        radiusKm: 0, // Placeholder, d1ClusterUtils might have a default or expect it
-        depthRange: getDepthRangeString(calculatedCluster),
-        slug: generateSlug(quakeCount, locationName, maxMagnitude, clusterId), // Use the new UUID for slug uniqueness
-        title: generateTitle(quakeCount, locationName, maxMagnitude),
-        description: generateDescription(quakeCount, locationName, maxMagnitude, durationHours),
-        significanceScore: quakeCount > 0 ? maxMagnitude * Math.log10(quakeCount) : 0,
-        version: 1, // Default version
-        // createdAt and updatedAt will be handled by storeClusterDefinition or DB
-      };
+      const newEarthquakeIds = calculatedCluster.map(q => q.id);
+      const newStrongestQuakeId = strongestQuakeInCalcCluster.id;
+      const newMinMagnitude = getMinMagnitude(calculatedCluster);
+      const newMeanMagnitude = getMeanMagnitude(calculatedCluster);
+      const newDepthRange = getDepthRangeString(calculatedCluster);
+      const newCentroidLat = strongestQuakeInCalcCluster.geometry.coordinates[1] || 0;
+      const newCentroidLon = strongestQuakeInCalcCluster.geometry.coordinates[0] || 0;
+      const newTitle = generateTitle(quakeCount, locationName, maxMagnitude);
+      const newDescription = generateDescription(quakeCount, locationName, maxMagnitude, durationHours);
+      const newSignificanceScore = quakeCount > 0 ? maxMagnitude * Math.log10(quakeCount) : 0;
 
       try {
-        // Call the imported utility function
-        const result = await storeClusterDefinition(db, clusterDataForUtil);
-        if (result.success) {
-          console.log(`storeClusterDefinitionsInBackground: Successfully stored definition for cluster ${clusterId}`);
-          storedCount++;
+        const existingStmt = db.prepare("SELECT id, slug, version FROM ClusterDefinitions WHERE stableKey = ?").bind(stableKey);
+        const existingDefinition = await existingStmt.first();
+
+        if (existingDefinition) {
+          // Update existing definition
+          const updatedVersion = (existingDefinition.version || 1) + 1;
+          const updateSql = `
+            UPDATE ClusterDefinitions
+            SET earthquakeIds = ?, quakeCount = ?, strongestQuakeId = ?, maxMagnitude = ?,
+                minMagnitude = ?, meanMagnitude = ?, endTime = ?, durationHours = ?,
+                locationName = ?, centroidLat = ?, centroidLon = ?, depthRange = ?,
+                title = ?, description = ?, significanceScore = ?, version = ?,
+                updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`;
+          // Note: `updatedAt` is explicitly set here. If a DB trigger also sets it, ensure they don't conflict.
+          // The d1ClusterUtils.js storeClusterDefinition also sets it, but we are bypassing that for updates here.
+          // If the DB trigger is robust, explicit setting here might be redundant.
+
+          await db.prepare(updateSql).bind(
+            JSON.stringify(newEarthquakeIds), quakeCount, newStrongestQuakeId, maxMagnitude,
+            newMinMagnitude, newMeanMagnitude, endTime, durationHours,
+            locationName, newCentroidLat, newCentroidLon, newDepthRange,
+            newTitle, newDescription, newSignificanceScore, updatedVersion,
+            existingDefinition.id // Use the existing primary key 'id'
+          ).run();
+          console.log(`storeClusterDefinitionsInBackground: Successfully updated definition for cluster with stableKey ${stableKey} (ID: ${existingDefinition.id})`);
+          processedCount++;
         } else {
-          console.error(`storeClusterDefinitionsInBackground: Failed to store definition for cluster ${clusterId}: ${result.error}`);
-          errorCount++;
+          // Create new definition
+          const newClusterId = randomUUID(); // Primary key for the table
+          // generateSlug now takes stableKey to make initial slug creation more deterministic
+          const newSlug = generateSlug(quakeCount, locationName, maxMagnitude, stableKey);
+
+          const clusterDataForStoreUtil = {
+            id: newClusterId,
+            stableKey: stableKey, // Store the stableKey
+            earthquakeIds: newEarthquakeIds, // Already an array
+            quakeCount: quakeCount,
+            strongestQuakeId: newStrongestQuakeId,
+            maxMagnitude: maxMagnitude,
+            minMagnitude: newMinMagnitude,
+            meanMagnitude: newMeanMagnitude,
+            startTime: startTime, // Initial start time
+            endTime: endTime,
+            durationHours: durationHours,
+            locationName: locationName,
+            centroidLat: newCentroidLat,
+            centroidLon: newCentroidLon,
+            radiusKm: 0,
+            depthRange: newDepthRange,
+            slug: newSlug,
+            title: newTitle,
+            description: newDescription,
+            significanceScore: newSignificanceScore,
+            version: 1, // Initial version
+          };
+
+          // Use the existing storeClusterDefinition utility, which handles JSON stringification of earthquakeIds
+          // and sets createdAt/updatedAt. We might need to adjust storeClusterDefinition if it
+          // doesn't expect stableKey or if its behavior for updatedAt conflicts.
+          // For now, assume storeClusterDefinition can take `stableKey` as an extra param or it's added to its schema.
+          // The `storeClusterDefinition` in `d1ClusterUtils.js` will need to be adapted to accept `stableKey`.
+          const result = await storeClusterDefinition(db, clusterDataForStoreUtil);
+
+          if (result.success) {
+            console.log(`storeClusterDefinitionsInBackground: Successfully stored new definition for cluster ${newClusterId} with stableKey ${stableKey}`);
+            processedCount++;
+          } else {
+            console.error(`storeClusterDefinitionsInBackground: Failed to store new definition for cluster ${newClusterId} (stableKey ${stableKey}): ${result.error}`);
+            errorCount++;
+          }
         }
       } catch (e) {
-        console.error(`storeClusterDefinitionsInBackground: Exception while storing definition for cluster ${clusterId}: ${e.message}`, e.stack);
+        console.error(`storeClusterDefinitionsInBackground: Exception while processing cluster with stableKey ${stableKey}: ${e.message}`, e.stack);
         errorCount++;
       }
     }
@@ -233,7 +342,7 @@ async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUA
   if (significantClusterCount === 0) {
     console.log("storeClusterDefinitionsInBackground: No significant clusters met criteria for definition storage.");
   }
-  console.log(`storeClusterDefinitionsInBackground: Finished processing. Found ${significantClusterCount} significant clusters. Stored: ${storedCount}, Errors: ${errorCount}.`);
+  console.log(`storeClusterDefinitionsInBackground: Finished processing. Found ${significantClusterCount} significant clusters. Processed (stored/updated): ${processedCount}, Errors: ${errorCount}.`);
 }
 
 /**
