@@ -129,7 +129,7 @@ export async function onRequest(context) {
       }
 
       const stmt = env.DB.prepare(
-        `SELECT id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
+        `SELECT id, stableKey, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
                 maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
                 radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore,
                 version, createdAt, updatedAt
