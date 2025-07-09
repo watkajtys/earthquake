@@ -224,7 +224,7 @@ describe('Cluster Definition API (/api/cluster-definition)', () => {
       expect(response.headers.get('Content-Type')).toBe('application/json');
       expect(await response.json()).toEqual(expectedResponseData);
 
-      const expectedQuery = `SELECT id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
+      const expectedQuery = `SELECT id, stableKey, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
                 maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
                 radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore,
                 version, createdAt, updatedAt

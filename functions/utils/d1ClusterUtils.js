@@ -11,7 +11,8 @@
  * @async
  * @param {object} db - The D1 database binding.
  * @param {object} clusterData - An object containing all the fields for a cluster definition.
- * @param {string} clusterData.id - Unique identifier for the cluster.
+ * @param {string} clusterData.id - Unique identifier for the cluster (primary key).
+ * @param {string} [clusterData.stableKey] - Stable identifier for the cluster, used for lookups.
  * @param {string} clusterData.slug - SEO-friendly slug.
  * @param {string} clusterData.strongestQuakeId - ID of the most significant quake.
  * @param {Array<string>} clusterData.earthquakeIds - Array of earthquake IDs.
@@ -68,31 +69,34 @@ export async function storeClusterDefinition(db, clusterData) {
   console.log('[storeClusterDefinition] Received clusterData:', JSON.stringify(clusterData, null, 2)); // Added null, 2 for pretty print
 
   try {
+    // Destructure all expected fields, including the new stableKey
     const {
-      id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
+      id, stableKey, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
       maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
       radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore,
-      version, // version can be undefined, DB will use default
-      createdAt, // If present, use it; otherwise, DB default on new insert
-      updatedAt  // Now explicitly set
+      version,
+      createdAt,
+      updatedAt
     } = clusterData;
 
+    // Add stableKey to the SQL query and parameters
     const sqlQuery = `
       INSERT OR REPLACE INTO ClusterDefinitions
-       (id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
+       (id, stableKey, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
         maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
         radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore, version,
         createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `; // Added one more ? for stableKey, total 23
     console.log('[storeClusterDefinition] Preparing SQL Query:', sqlQuery);
     const stmt = db.prepare(sqlQuery);
 
     const params = [
       id,
+      stableKey === undefined ? null : stableKey, // Add stableKey to params
       slug,
       strongestQuakeId,
-      JSON.stringify(earthquakeIds || []), // Ensure earthquakeIds is always an array, then stringify
+      JSON.stringify(earthquakeIds || []),
       title === undefined ? null : title,
       description === undefined ? null : description,
       locationName === undefined ? null : locationName,
@@ -108,9 +112,9 @@ export async function storeClusterDefinition(db, clusterData) {
       durationHours === undefined ? null : durationHours,
       quakeCount,
       significanceScore === undefined ? null : significanceScore,
-      version === undefined ? null : version, // Let DB handle default for version if undefined/null
-      createdAt === undefined ? null : createdAt, // Pass null for DB default on new records, or existing value
-      updatedAt // Always provide the new updatedAt timestamp
+      version === undefined ? null : version,
+      createdAt === undefined ? null : createdAt,
+      updatedAt
     ];
 
     // Log parameters before binding
