@@ -19,47 +19,8 @@ const slugify = (text) => {
     .replace(/-+$/, '');    // trim trailing hyphen
 };
 
-async function generateEarthquakeSitemapIndex(db) {
-  try {
-    const countResult = await db.prepare(
-      "SELECT COUNT(*) as total FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= ?"
-    ).bind(MIN_FEELABLE_MAGNITUDE).first();
-    const totalEvents = countResult?.total || 0;
-
-    if (totalEvents === 0) {
-      return new Response(`<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No feelable earthquake events found --></sitemapindex>`, { headers: { "Content-Type": "application/xml" } });
-    }
-
-    const totalPages = Math.ceil(totalEvents / SITEMAP_PAGE_SIZE);
-    let sitemapIndexXml = `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-
-    // To get a representative lastmod for the sitemap index, we could query the latest event_time or updated geojson_feature time
-    // For simplicity here, we'll use the current date, or ideally the lastmod of the most recent sitemap page.
-    // Fetching the absolute latest modification time across all *feelable* events for the index <lastmod>
-    let overallLastMod = new Date().toISOString(); // Fallback
-    try {
-        const latestEvent = await db.prepare(
-            "SELECT MAX(CASE WHEN geojson_feature IS NOT NULL THEN JSON_EXTRACT(geojson_feature, '$.properties.updated') ELSE event_time * 1000 END) as latest_mod_ts FROM EarthquakeEvents WHERE magnitude >= ?"
-        ).bind(MIN_FEELABLE_MAGNITUDE).first();
-        if (latestEvent && latestEvent.latest_mod_ts) {
-            overallLastMod = new Date(latestEvent.latest_mod_ts).toISOString();
-        }
-    } catch (e) {
-        console.error("Error fetching latest modification time for sitemap index (feelable events):", e.message);
-    }
-
-
-    for (let i = 1; i <= totalPages; i++) {
-      sitemapIndexXml += `<sitemap><loc>${BASE_URL}/sitemaps/earthquakes-${i}.xml</loc><lastmod>${overallLastMod}</lastmod></sitemap>`;
-    }
-    sitemapIndexXml += `</sitemapindex>`;
-    return new Response(sitemapIndexXml, { headers: { "Content-Type": "application/xml" } });
-
-  } catch (error) {
-    console.error("Error generating earthquake sitemap index:", error.message);
-    return new Response(`<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- Error generating sitemap index: ${escapeXml(error.message)} --></sitemapindex>`, { headers: { "Content-Type": "application/xml" }, status: 500 });
-  }
-}
+// Removed generateEarthquakeSitemapIndex function as it's no longer used.
+// The main sitemap index now directly lists paginated earthquake sitemaps.
 
 async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
   const offset = (pageNumber - 1) * SITEMAP_PAGE_SIZE;
@@ -152,9 +113,8 @@ export async function handleEarthquakesSitemap(context) {
     return new Response(errorXml, { headers: { "Content-Type": "application/xml" }, status: 500 });
   }
 
-  if (pathname === '/sitemaps/earthquakes-index.xml') { // Reverted to /sitemaps/ prefix
-    return generateEarthquakeSitemapIndex(env.DB);
-  }
+  // Removed the block for handling '/sitemaps/earthquakes-index.xml'
+  // as this functionality is now part of the main index-sitemap.js
 
   const pageMatch = pathname.match(/\/sitemaps\/earthquakes-(\d+)\.xml$/); // Reverted to /sitemaps/ prefix
 
