@@ -11,8 +11,9 @@ function EarthquakeDetailHeader({ properties }) { // Removed isValidString from 
 
     return (
         <header className="text-center p-4 md:p-5 bg-white rounded-t-lg border-b border-gray-300">
-            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-blue-700">Unpacking the Shakes!</h1>
-            <p id="earthquake-detail-title" className="text-md text-slate-600 mt-1">{properties.title}</p>
+            <h1 id="earthquake-detail-title" className="text-xl md:text-2xl lg:text-3xl font-bold text-slate-800">
+                {properties.title}
+            </h1>
         </header>
     );
 }
