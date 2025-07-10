@@ -47,7 +47,7 @@ async function generateEarthquakeSitemapIndex(db) {
 
 
     for (let i = 1; i <= totalPages; i++) {
-      sitemapIndexXml += `<sitemap><loc>${BASE_URL}/sitemaps/earthquakes-${i}.xml</loc><lastmod>${overallLastMod}</lastmod></sitemap>`;
+      sitemapIndexXml += `<sitemap><loc>${BASE_URL}/earthquakes-sitemap-${i}.xml</loc><lastmod>${overallLastMod}</lastmod></sitemap>`;
     }
     sitemapIndexXml += `</sitemapindex>`;
     return new Response(sitemapIndexXml, { headers: { "Content-Type": "application/xml" } });
@@ -149,11 +149,11 @@ export async function handleEarthquakesSitemap(context) {
     return new Response(errorXml, { headers: { "Content-Type": "application/xml" }, status: 500 });
   }
 
-  if (pathname === '/sitemaps/earthquakes-index.xml') {
+  if (pathname === '/earthquakes-sitemap-index.xml') { // Adjusted path
     return generateEarthquakeSitemapIndex(env.DB);
   }
 
-  const pageMatch = pathname.match(/\/sitemaps\/earthquakes-(\d+)\.xml$/);
+  const pageMatch = pathname.match(/\/earthquakes-sitemap-(\d+)\.xml$/); // Adjusted path regex
   if (pageMatch && pageMatch[1]) {
     const pageNumber = parseInt(pageMatch[1], 10);
     if (isNaN(pageNumber) || pageNumber < 1) {

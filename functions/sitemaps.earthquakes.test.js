@@ -56,11 +56,11 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
     });
 
     // --- Tests for Sitemap Index ---
-    it('/sitemaps/earthquakes-index.xml should return a sitemap index with correct pages', async () => {
+    it('/earthquakes-sitemap-index.xml should return a sitemap index with correct pages', async () => {
         const mockCountResult = { total: 85000 }; // Example: 3 pages (85000 / 40000 = 2.125 -> 3)
         const mockLatestModResult = { latest_mod_ts: Date.now() };
 
-        const request = new Request('http://localhost/sitemaps/earthquakes-index.xml');
+        const request = new Request('http://localhost/earthquakes-sitemap-index.xml');
         const context = createMockContext(request);
         context.env.DB.prepare = vi.fn().mockImplementation((query) => {
             if (query.toUpperCase().startsWith("SELECT COUNT(*)")) {
@@ -79,10 +79,10 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const text = await response.text();
 
         expect(text).toContain('<sitemapindex');
-        expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-1.xml</loc>');
-        expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-2.xml</loc>');
-        expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-3.xml</loc>');
-        expect(text).not.toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-4.xml</loc>');
+        expect(text).toContain('<loc>https://earthquakeslive.com/earthquakes-sitemap-1.xml</loc>');
+        expect(text).toContain('<loc>https://earthquakeslive.com/earthquakes-sitemap-2.xml</loc>');
+        expect(text).toContain('<loc>https://earthquakeslive.com/earthquakes-sitemap-3.xml</loc>');
+        expect(text).not.toContain('<loc>https://earthquakeslive.com/earthquakes-sitemap-4.xml</loc>');
         expect(text).toContain(`<lastmod>${new Date(mockLatestModResult.latest_mod_ts).toISOString()}</lastmod>`);
         // Check that COUNT query was called
         expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/^SELECT COUNT\(\*\) as total FROM EarthquakeEvents/));
@@ -90,9 +90,9 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/^SELECT MAX\(CASE WHEN geojson_feature IS NOT NULL THEN JSON_EXTRACT\(geojson_feature, '\$\.properties\.updated'\) ELSE event_time \* 1000 END\) as latest_mod_ts FROM EarthquakeEvents/));
     });
 
-    it('/sitemaps/earthquakes-index.xml should handle zero events correctly', async () => {
+    it('/earthquakes-sitemap-index.xml should handle zero events correctly', async () => {
         const mockCountResult = { total: 0 };
-        const request = new Request('http://localhost/sitemaps/earthquakes-index.xml');
+        const request = new Request('http://localhost/earthquakes-sitemap-index.xml');
         const context = createMockContext(request);
          context.env.DB.prepare = vi.fn().mockImplementation((query) => {
             if (query.toUpperCase().startsWith("SELECT COUNT(*)")) {
@@ -110,7 +110,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
 
     // --- Tests for Paginated Sitemap Content ---
-    it('/sitemaps/earthquakes-1.xml should query D1 and return XML with valid data for page 1', async () => {
+    it('/earthquakes-sitemap-1.xml should query D1 and return XML with valid data for page 1', async () => {
         const now = Date.now();
         const nowInSeconds = Math.floor(now / 1000);
         const mockEvents = {
@@ -132,7 +132,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
             ]
         };
         // Test page 1
-        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
+        const request = new Request('http://localhost/earthquakes-sitemap-1.xml');
         const context = createMockContext(request, {}, {}, mockEvents);
 
         const response = await onRequest(context);
@@ -155,7 +155,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(text).toContain(`<lastmod>${new Date(now - 10000).toISOString()}</lastmod>`);
     });
 
-    it('/sitemap-earthquakes.xml should use event_time if geojson_feature or properties.updated is missing/invalid', async () => {
+    it('/earthquakes-sitemap-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid', async () => {
         const eventTime1 = Math.floor(Date.now() / 1000) - 86400; // 1 day ago in seconds
         const eventTime2 = Math.floor(Date.now() / 1000) - 172800; // 2 days ago in seconds
 
@@ -175,7 +175,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
             ]
         };
-        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml'); // Target page 1
+        const request = new Request('http://localhost/earthquakes-sitemap-1.xml'); // Corrected path
         const context = createMockContext(request, {}, {}, mockEvents);
         const response = await onRequest(context);
         const text = await response.text();
@@ -198,8 +198,8 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(text).toContain(`<lastmod>${new Date((eventTime2 + 3600) * 1000).toISOString()}</lastmod>`);
     });
 
-    it('/sitemaps/earthquakes-1.xml should handle D1 query error for a page', async () => {
-        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
+    it('/earthquakes-sitemap-1.xml should handle D1 query error for a page', async () => {
+        const request = new Request('http://localhost/earthquakes-sitemap-1.xml');
         const context = createMockContext(request);
         context.env.DB.prepare = vi.fn().mockReturnThis();
         context.env.DB.bind = vi.fn().mockReturnThis(); // Ensure bind is also mocked before all
@@ -213,7 +213,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
     it('should handle D1 not configured for any earthquake sitemap request', async () => {
         // Test index first
-        let request = new Request('http://localhost/sitemaps/earthquakes-index.xml');
+        let request = new Request('http://localhost/earthquakes-sitemap-index.xml'); // Corrected path
         let context = createMockContext(request, { DB: undefined });
         let response = await onRequest(context);
         expect(response.status).toBe(500);
@@ -221,7 +221,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(text).toContain("<message>Database not configured</message>");
 
         // Test a page
-        request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
+        request = new Request('http://localhost/earthquakes-sitemap-1.xml');
         context = createMockContext(request, { DB: undefined });
         response = await onRequest(context);
         expect(response.status).toBe(500);
@@ -229,8 +229,8 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(text).toContain("<message>Database not configured</message>");
     });
 
-    it('/sitemaps/earthquakes-1.xml should handle empty results from D1 for a page', async () => {
-        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
+    it('/earthquakes-sitemap-1.xml should handle empty results from D1 for a page', async () => {
+        const request = new Request('http://localhost/earthquakes-sitemap-1.xml');
         const context = createMockContext(request); // Defaults to empty results
 
         const response = await onRequest(context);
@@ -240,7 +240,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(text).not.toContain("<loc>");
     });
 
-    it('/sitemaps/earthquakes-1.xml should skip events with missing id or place from D1', async () => {
+    it('/earthquakes-sitemap-1.xml should skip events with missing id or place from D1', async () => {
         const now = Date.now();
         const mockEvents = {
             results: [
@@ -291,7 +291,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         };
 
 
-        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml'); // Target page 1
+        const request = new Request('http://localhost/earthquakes-sitemap-1.xml'); // Corrected path
         const context = createMockContext(request, {}, {}, adjustedMockEvents);
         const response = await onRequest(context);
         const text = await response.text();
@@ -306,7 +306,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(urlCount).toBe(1); // Only the fully valid entry
     });
 
-    it('/sitemap-earthquakes.xml should skip events with invalid lastmodTimestamp after fallbacks', async () => {
+    it('/earthquakes-sitemap-1.xml should skip events with invalid lastmodTimestamp after fallbacks', async () => {
         const mockEvents = {
             results: [
                 {
@@ -326,7 +326,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                 }
             ]
         };
-        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml'); // Target page 1
+        const request = new Request('http://localhost/earthquakes-sitemap-1.xml'); // Corrected path
         const context = createMockContext(request, {}, {}, mockEvents);
         const response = await onRequest(context);
         const text = await response.text();
@@ -342,7 +342,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
     });
 
     it('should correctly handle requests for page numbers in paginated sitemap', async () => {
-        const requestPage2 = new Request('http://localhost/sitemaps/earthquakes-2.xml');
+        const requestPage2 = new Request('http://localhost/earthquakes-sitemap-2.xml');
         const contextPage2 = createMockContext(requestPage2); // Empty results for simplicity
 
         await onRequest(contextPage2);
@@ -350,12 +350,12 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         // Offset for page 2 = (2 - 1) * SITEMAP_PAGE_SIZE_FOR_TEST
         expect(contextPage2.env.DB.bind).toHaveBeenCalledWith(SITEMAP_PAGE_SIZE_FOR_TEST, SITEMAP_PAGE_SIZE_FOR_TEST);
 
-        const requestInvalidPage = new Request('http://localhost/sitemaps/earthquakes-abc.xml');
+        const requestInvalidPage = new Request('http://localhost/earthquakes-sitemap-abc.xml');
         const contextInvalidPage = createMockContext(requestInvalidPage);
         const responseInvalid = await onRequest(contextInvalidPage);
-        expect(responseInvalid.status).toBe(404); // Or 400 depending on how router handles it before sitemap logic
+        expect(responseInvalid.status).toBe(404);
 
-        const requestPageZero = new Request('http://localhost/sitemaps/earthquakes-0.xml');
+        const requestPageZero = new Request('http://localhost/earthquakes-sitemap-0.xml');
         const contextPageZero = createMockContext(requestPageZero);
         const responseZero = await onRequest(contextPageZero);
         expect(responseZero.status).toBe(400); // Invalid page number
