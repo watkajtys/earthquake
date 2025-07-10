@@ -30,6 +30,8 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const { pathname, searchParams } = url;
 
+  console.log(`[onRequest DEBUG] Pathname: ${pathname}`); // Added for debugging test failures
+
   if (pathname === "/api/usgs-proxy") {
     return handleUsgsProxy(context);
   }
@@ -42,8 +44,9 @@ export async function onRequest(context) {
     return handleStaticPagesSitemap(context);
   }
 
-  if (pathname === "/sitemap-earthquakes.xml") {
-    return handleEarthquakesSitemap(context);
+  // Updated routing for paginated earthquake sitemaps (reverted to /sitemaps/ prefix)
+  if (pathname === "/sitemaps/earthquakes-index.xml" || pathname.startsWith("/sitemaps/earthquakes-")) {
+    return handleEarthquakesSitemap(context); // This correctly points to the refactored handler
   }
 
   if (pathname === "/sitemap-clusters.xml") {
