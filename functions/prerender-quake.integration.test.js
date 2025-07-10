@@ -156,7 +156,7 @@ describe('Prerendering Handler: /quake/:id', () => {
         expect(jsonLdData.startDate).toBe(expectedIsoTime);
         expect(jsonLdData.endDate).toBe(expectedIsoTime); // As per plan
         expect(jsonLdData.eventStatus).toBe('https://schema.org/EventHappened');
-        expect(jsonLdData.eventAttendanceMode).toBe('https://schema.org/OfflineEventAttendanceMode');
+        // expect(jsonLdData.eventAttendanceMode).toBe('https://schema.org/OfflineEventAttendanceMode'); // Property removed
 
         expect(jsonLdData.location).toBeDefined();
         expect(jsonLdData.location['@type']).toBe('Place');
