@@ -1,6 +1,7 @@
 import { onRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
+import { MIN_FEELABLE_MAGNITUDE } from '../routes/sitemaps/earthquakes-sitemap.js';
 // --- Mocks for Cloudflare Environment ---
 const mockCache = {
   match: vi.fn(),
@@ -46,6 +47,7 @@ const createMockContext = (request, env = {}, cf = {}, mockDbResults = { results
 
 // SITEMAP_PAGE_SIZE from the main module, assuming it's 40000 for tests
 const SITEMAP_PAGE_SIZE_FOR_TEST = 40000;
+// const MIN_FEELABLE_MAGNITUDE_FOR_TEST = 2.5; // Replaced by import
 
 
 describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
@@ -56,21 +58,37 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
     });
 
     // --- Tests for Sitemap Index ---
-    it('/sitemaps/earthquakes-index.xml should return a sitemap index with correct pages', async () => {
-        const mockCountResult = { total: 85000 }; // Example: 3 pages (85000 / 40000 = 2.125 -> 3)
+    it('/sitemaps/earthquakes-index.xml should return a sitemap index with correct pages for feelable earthquakes', async () => {
+        // Simulate total 85000 feelable events -> 3 pages
+        const mockCountResult = { total: 85000 };
         const mockLatestModResult = { latest_mod_ts: Date.now() };
 
-        const request = new Request('http://localhost/sitemaps/earthquakes-index.xml'); // Reverted
+        const request = new Request('http://localhost/sitemaps/earthquakes-index.xml');
         const context = createMockContext(request);
-        context.env.DB.prepare = vi.fn().mockImplementation((query) => {
-            if (query.toUpperCase().startsWith("SELECT COUNT(*)")) {
-                return { first: vi.fn().mockResolvedValue(mockCountResult) };
+
+        const mockDbPrepare = vi.fn().mockImplementation((query) => {
+            const upperQuery = query.toUpperCase();
+            if (upperQuery.startsWith("SELECT COUNT(*)")) {
+                expect(upperQuery).toContain("MAGNITUDE >= ?");
+                return {
+                    bind: vi.fn().mockImplementation((mag) => {
+                        expect(mag).toBe(MIN_FEELABLE_MAGNITUDE);
+                        return { first: vi.fn().mockResolvedValue(mockCountResult) };
+                    })
+                };
             }
-            if (query.toUpperCase().startsWith("SELECT MAX(CASE")) {
-                return { first: vi.fn().mockResolvedValue(mockLatestModResult) };
+            if (upperQuery.startsWith("SELECT MAX(CASE")) {
+                expect(upperQuery).toContain("WHERE MAGNITUDE >= ?");
+                return {
+                    bind: vi.fn().mockImplementation((mag) => {
+                        expect(mag).toBe(MIN_FEELABLE_MAGNITUDE);
+                        return { first: vi.fn().mockResolvedValue(mockLatestModResult) };
+                    })
+                };
             }
-            return { first: vi.fn(), all: vi.fn(), bind: vi.fn().mockReturnThis() }; // Default mock
+            return { first: vi.fn(), all: vi.fn(), bind: vi.fn().mockReturnThis() };
         });
+        context.env.DB.prepare = mockDbPrepare;
 
 
         const response = await onRequest(context);
@@ -79,62 +97,73 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const text = await response.text();
 
         expect(text).toContain('<sitemapindex');
-        expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-1.xml</loc>'); // Reverted
-        expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-2.xml</loc>'); // Reverted
-        expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-3.xml</loc>'); // Reverted
-        expect(text).not.toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-4.xml</loc>'); // Reverted
+        expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-1.xml</loc>');
+        expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-2.xml</loc>');
+        expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-3.xml</loc>');
+        expect(text).not.toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-4.xml</loc>');
 
         expect(text).toContain(`<lastmod>${new Date(mockLatestModResult.latest_mod_ts).toISOString()}</lastmod>`);
-        // Check that COUNT query was called
-        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/^SELECT COUNT\(\*\) as total FROM EarthquakeEvents/));
-        // Check that MAX timestamp query was called
-        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/^SELECT MAX\(CASE WHEN geojson_feature IS NOT NULL THEN JSON_EXTRACT\(geojson_feature, '\$\.properties\.updated'\) ELSE event_time \* 1000 END\) as latest_mod_ts FROM EarthquakeEvents/));
+        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/^SELECT COUNT\(\*\) as total FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= \?/i));
+        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/^SELECT MAX\(CASE WHEN geojson_feature IS NOT NULL THEN JSON_EXTRACT\(geojson_feature, '\$\.properties\.updated'\) ELSE event_time \* 1000 END\) as latest_mod_ts FROM EarthquakeEvents WHERE magnitude >= \?/i));
     });
 
-    it('/sitemaps/earthquakes-index.xml should handle zero events correctly', async () => {
+    it('/sitemaps/earthquakes-index.xml should handle zero feelable events correctly', async () => {
         const mockCountResult = { total: 0 };
-        const request = new Request('http://localhost/sitemaps/earthquakes-index.xml'); // Reverted
+        const request = new Request('http://localhost/sitemaps/earthquakes-index.xml');
         const context = createMockContext(request);
-         context.env.DB.prepare = vi.fn().mockImplementation((query) => {
+        context.env.DB.prepare = vi.fn().mockImplementation((query) => {
             if (query.toUpperCase().startsWith("SELECT COUNT(*)")) {
-                return { first: vi.fn().mockResolvedValue(mockCountResult) };
+                 return {
+                    bind: vi.fn().mockImplementation((mag) => {
+                        expect(mag).toBe(MIN_FEELABLE_MAGNITUDE);
+                        return { first: vi.fn().mockResolvedValue(mockCountResult) };
+                    })
+                };
             }
-             return { first: vi.fn(), all: vi.fn(), bind: vi.fn().mockReturnThis() };
+            return { first: vi.fn(), all: vi.fn(), bind: vi.fn().mockReturnThis() };
         });
+
 
         const response = await onRequest(context);
         expect(response.status).toBe(200);
         const text = await response.text();
-        expect(text).toContain('<!-- No earthquake events found -->');
+        expect(text).toContain('<!-- No feelable earthquake events found -->');
         expect(text).not.toContain('<sitemap>');
     });
 
 
     // --- Tests for Paginated Sitemap Content ---
-    it('/sitemaps/earthquakes-1.xml should query D1 and return XML with valid data for page 1', async () => {
+    it('/sitemaps/earthquakes-1.xml should query D1 and return XML with only feelable earthquakes', async () => {
         const now = Date.now();
         const nowInSeconds = Math.floor(now / 1000);
-        const mockEvents = {
+        const mockDbResults = { // This object simulates the raw data *before* it would be filtered by the SQL query in the actual code.
             results: [
                 {
-                    id: "ev1",
-                    magnitude: 5.5,
-                    place: "10km N of Testville",
-                    event_time: nowInSeconds - 3600, // 1 hour ago
-                    geojson_feature: JSON.stringify({ properties: { updated: now } })
+                    id: "ev_feelable_1", magnitude: 5.5, place: "10km N of Testville",
+                    event_time: nowInSeconds - 3600, geojson_feature: JSON.stringify({ properties: { updated: now } })
                 },
                 {
-                    id: "ev2",
-                    magnitude: 4.2,
-                    place: "Somewhere Else",
-                    event_time: nowInSeconds - 7200, // 2 hours ago
-                    geojson_feature: JSON.stringify({ properties: { updated: now - 10000 } }) // slightly older update
+                    id: "ev_too_small", magnitude: 1.2, place: "Tiny Town", // Below threshold
+                    event_time: nowInSeconds - 5000, geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } })
                 },
+                {
+                    id: "ev_feelable_2", magnitude: 4.2, place: "Somewhere Else",
+                    event_time: nowInSeconds - 7200, geojson_feature: JSON.stringify({ properties: { updated: now - 10000 } })
+                },
+                 {
+                    id: "ev_on_threshold", magnitude: MIN_FEELABLE_MAGNITUDE, place: "Borderline Heights",
+                    event_time: nowInSeconds - 8000, geojson_feature: JSON.stringify({ properties: { updated: now - 15000 } })
+                }
             ]
         };
-        // Test page 1
-        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml'); // Reverted
-        const context = createMockContext(request, {}, {}, mockEvents);
+        // For the mock `all()` function, we provide data as if the SQL query has already done its job.
+        // So, we filter `mockDbResults` here to simulate what the DB would return after the `WHERE magnitude >= ?` clause.
+        const filteredMockResultsForDB = {
+            results: mockDbResults.results.filter(e => e.magnitude >= MIN_FEELABLE_MAGNITUDE)
+        };
+
+        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
+        const context = createMockContext(request, {}, {}, filteredMockResultsForDB); // Use the pre-filtered data for the mock
 
         const response = await onRequest(context);
         expect(response.status).toBe(200);
@@ -142,49 +171,64 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const text = await response.text();
 
         expect(context.env.DB.prepare).toHaveBeenCalledWith(
-             expect.stringMatching(/SELECT id, magnitude, place, event_time, geojson_feature FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL ORDER BY event_time DESC LIMIT \? OFFSET \?/i)
+             expect.stringMatching(/SELECT id, magnitude, place, event_time, geojson_feature FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= \? ORDER BY event_time DESC LIMIT \? OFFSET \?/i)
         );
-        expect(context.env.DB.bind).toHaveBeenCalledWith(SITEMAP_PAGE_SIZE_FOR_TEST, 0); // Page 1 means offset 0
+        // Check bind parameters: magnitude threshold, limit, offset
+        expect(context.env.DB.bind).toHaveBeenCalledWith(MIN_FEELABLE_MAGNITUDE, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
         expect(text).toContain('<urlset');
 
-        const expectedUrl1 = `https://earthquakeslive.com/quake/m5.5-10km-n-of-testville-ev1`;
+        const expectedUrl1 = `https://earthquakeslive.com/quake/m5.5-10km-n-of-testville-ev_feelable_1`;
         expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
         expect(text).toContain(`<lastmod>${new Date(now).toISOString()}</lastmod>`);
 
-        const expectedUrl2 = `https://earthquakeslive.com/quake/m4.2-somewhere-else-ev2`;
+        const expectedUrl2 = `https://earthquakeslive.com/quake/m4.2-somewhere-else-ev_feelable_2`;
         expect(text).toContain(`<loc>${expectedUrl2}</loc>`);
         expect(text).toContain(`<lastmod>${new Date(now - 10000).toISOString()}</lastmod>`);
+
+        const expectedUrl3 = `https://earthquakeslive.com/quake/m${MIN_FEELABLE_MAGNITUDE.toFixed(1)}-borderline-heights-ev_on_threshold`;
+        expect(text).toContain(`<loc>${expectedUrl3}</loc>`);
+        expect(text).toContain(`<lastmod>${new Date(now - 15000).toISOString()}</lastmod>`);
+
+        expect(text).not.toContain("ev_too_small"); // Ensure the non-feelable one is not present
+        const urlCount = (text.match(/<url>/g) || []).length;
+        expect(urlCount).toBe(3); // Only the 3 feelable events
     });
 
-    it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid', async () => {
+    it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid for feelable quakes', async () => {
         const eventTime1 = Math.floor(Date.now() / 1000) - 86400; // 1 day ago in seconds
         const eventTime2 = Math.floor(Date.now() / 1000) - 172800; // 2 days ago in seconds
 
-        const mockEvents = {
+        const rawMockEvents = { // Raw data before SQL filtering
             results: [
-                { // Missing geojson_feature
+                {
                     id: "ev_no_geojson", magnitude: 3.0, place: "No GeoJSON Here", event_time: eventTime1
                 },
-                { // geojson_feature present, but properties.updated is not a number
+                {
                     id: "ev_invalid_updated", magnitude: 3.1, place: "Invalid Updated", event_time: eventTime2,
                     geojson_feature: JSON.stringify({ properties: { updated: "not-a-timestamp" } })
                 },
-                 { // geojson_feature present, but no properties
+                 {
                     id: "ev_no_properties", magnitude: 3.2, place: "No Properties", event_time: eventTime2 + 3600,
                     geojson_feature: JSON.stringify({})
                 },
-
+                {
+                    id: "ev_too_small_for_lastmod_test", magnitude: 1.0, place: "Tiny Place", event_time: eventTime2 + 7200,
+                }
             ]
         };
-        const request = new Request('http://localhost/earthquakes-sitemap-1.xml'); // Corrected path
-        const context = createMockContext(request, {}, {}, mockEvents);
+        // Simulate DB filtering for the mock
+        const filteredMockEventsForDB = {
+            results: rawMockEvents.results.filter(e => e.magnitude >= MIN_FEELABLE_MAGNITUDE)
+        };
+
+        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
+        const context = createMockContext(request, {}, {}, filteredMockEventsForDB); // Use pre-filtered data
         const response = await onRequest(context);
         const text = await response.text();
 
         expect(response.status).toBe(200);
-        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/LIMIT \? OFFSET \?/i));
-        expect(context.env.DB.bind).toHaveBeenCalledWith(SITEMAP_PAGE_SIZE_FOR_TEST, 0);
-
+        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= \? ORDER BY event_time DESC LIMIT \? OFFSET \?/i));
+        expect(context.env.DB.bind).toHaveBeenCalledWith(MIN_FEELABLE_MAGNITUDE, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
 
         const expectedUrl1 = `https://earthquakeslive.com/quake/m3.0-no-geojson-here-ev_no_geojson`;
         expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
@@ -197,10 +241,14 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const expectedUrl3 = `https://earthquakeslive.com/quake/m3.2-no-properties-ev_no_properties`;
         expect(text).toContain(`<loc>${expectedUrl3}</loc>`);
         expect(text).toContain(`<lastmod>${new Date((eventTime2 + 3600) * 1000).toISOString()}</lastmod>`);
+
+        expect(text).not.toContain("ev_too_small_for_lastmod_test"); // Ensure non-feelable is not present
+        const urlCount = (text.match(/<url>/g) || []).length;
+        expect(urlCount).toBe(3); // Only the 3 feelable events that also meet other criteria
     });
 
-    it('/earthquakes-sitemap-1.xml should handle D1 query error for a page', async () => {
-        const request = new Request('http://localhost/earthquakes-sitemap-1.xml');
+    it('/sitemaps/earthquakes-1.xml should handle D1 query error for a page', async () => {
+        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
         const context = createMockContext(request);
         context.env.DB.prepare = vi.fn().mockReturnThis();
         context.env.DB.bind = vi.fn().mockReturnThis(); // Ensure bind is also mocked before all
