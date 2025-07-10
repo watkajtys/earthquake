@@ -465,6 +465,7 @@ export default {
     if (pathname === "/sitemap-static-pages.xml") return handleStaticPagesSitemapRequest(request, env, ctx);
     // Route for the new earthquake sitemap index and paginated sitemaps (reverted to /sitemaps/ prefix)
     if (pathname === "/sitemaps/earthquakes-index.xml" || pathname.startsWith("/sitemaps/earthquakes-")) {
+
       return handlePaginatedEarthquakesSitemap({ request, env, ctx });
     }
     if (pathname === "/sitemap-clusters.xml") return handleClustersSitemapRequest(request, env, ctx);

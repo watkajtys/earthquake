@@ -154,6 +154,7 @@ export async function handleEarthquakesSitemap(context) {
   }
 
   const pageMatch = pathname.match(/\/sitemaps\/earthquakes-(\d+)\.xml$/); // Reverted to /sitemaps/ prefix
+
   if (pageMatch && pageMatch[1]) {
     const pageNumber = parseInt(pageMatch[1], 10);
     if (isNaN(pageNumber) || pageNumber < 1) {
