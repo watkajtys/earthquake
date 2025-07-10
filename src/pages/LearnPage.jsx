@@ -29,9 +29,9 @@ const LearnPage = () => {
                 type="website"
             />
             <div className="p-3 md:p-4 h-full space-y-2 text-slate-200 lg:hidden">
-                <h2 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
+                <h1 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
                     Learn About Earthquakes
-                </h2>
+                </h1>
                 <InfoSnippet topic="magnitude" />
                 <InfoSnippet topic="depth" />
                 <InfoSnippet topic="intensity" />
