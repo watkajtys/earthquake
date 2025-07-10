@@ -5,6 +5,7 @@ import { escapeXml } from '../../utils/xml-utils.js';
 
 const SITEMAP_PAGE_SIZE = 40000; // Number of URLs per paginated sitemap file
 const BASE_URL = "https://earthquakeslive.com";
+export const MIN_FEELABLE_MAGNITUDE = 2.5; // Minimum magnitude for an earthquake to be considered "feelable"
 
 const slugify = (text) => {
   if (!text) return 'unknown-location';
@@ -20,11 +21,13 @@ const slugify = (text) => {
 
 async function generateEarthquakeSitemapIndex(db) {
   try {
-    const countResult = await db.prepare("SELECT COUNT(*) as total FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL").first();
+    const countResult = await db.prepare(
+      "SELECT COUNT(*) as total FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= ?"
+    ).bind(MIN_FEELABLE_MAGNITUDE).first();
     const totalEvents = countResult?.total || 0;
 
     if (totalEvents === 0) {
-      return new Response(`<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No earthquake events found --></sitemapindex>`, { headers: { "Content-Type": "application/xml" } });
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No feelable earthquake events found --></sitemapindex>`, { headers: { "Content-Type": "application/xml" } });
     }
 
     const totalPages = Math.ceil(totalEvents / SITEMAP_PAGE_SIZE);
@@ -32,17 +35,17 @@ async function generateEarthquakeSitemapIndex(db) {
 
     // To get a representative lastmod for the sitemap index, we could query the latest event_time or updated geojson_feature time
     // For simplicity here, we'll use the current date, or ideally the lastmod of the most recent sitemap page.
-    // Fetching the absolute latest modification time across all events for the index <lastmod>
+    // Fetching the absolute latest modification time across all *feelable* events for the index <lastmod>
     let overallLastMod = new Date().toISOString(); // Fallback
     try {
         const latestEvent = await db.prepare(
-            "SELECT MAX(CASE WHEN geojson_feature IS NOT NULL THEN JSON_EXTRACT(geojson_feature, '$.properties.updated') ELSE event_time * 1000 END) as latest_mod_ts FROM EarthquakeEvents"
-        ).first();
+            "SELECT MAX(CASE WHEN geojson_feature IS NOT NULL THEN JSON_EXTRACT(geojson_feature, '$.properties.updated') ELSE event_time * 1000 END) as latest_mod_ts FROM EarthquakeEvents WHERE magnitude >= ?"
+        ).bind(MIN_FEELABLE_MAGNITUDE).first();
         if (latestEvent && latestEvent.latest_mod_ts) {
             overallLastMod = new Date(latestEvent.latest_mod_ts).toISOString();
         }
     } catch (e) {
-        console.error("Error fetching latest modification time for sitemap index:", e.message);
+        console.error("Error fetching latest modification time for sitemap index (feelable events):", e.message);
     }
 
 
@@ -62,14 +65,14 @@ async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
   const offset = (pageNumber - 1) * SITEMAP_PAGE_SIZE;
   try {
     const d1Results = await db.prepare(
-      "SELECT id, magnitude, place, event_time, geojson_feature FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL ORDER BY event_time DESC LIMIT ? OFFSET ?"
-    ).bind(SITEMAP_PAGE_SIZE, offset).all();
+      "SELECT id, magnitude, place, event_time, geojson_feature FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= ? ORDER BY event_time DESC LIMIT ? OFFSET ?"
+    ).bind(MIN_FEELABLE_MAGNITUDE, SITEMAP_PAGE_SIZE, offset).all();
 
     const earthquakeEvents = d1Results.results;
 
     if (!earthquakeEvents || earthquakeEvents.length === 0) {
-      console.log(`No valid earthquake events found for page ${pageNumber}.`);
-      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
+      console.log(`No valid feelable earthquake events found for page ${pageNumber}.`);
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No feelable events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
