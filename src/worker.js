@@ -463,8 +463,9 @@ export default {
     // Sitemap routes
     if (pathname === "/sitemap-index.xml") return handleSitemapIndexRequest(request, env, ctx);
     if (pathname === "/sitemap-static-pages.xml") return handleStaticPagesSitemapRequest(request, env, ctx);
-    // Route for the new earthquake sitemap index and paginated sitemaps (now at root level)
-    if (pathname === "/earthquakes-sitemap-index.xml" || pathname.startsWith("/earthquakes-sitemap-")) {
+    // Route for the new earthquake sitemap index and paginated sitemaps (reverted to /sitemaps/ prefix)
+    if (pathname === "/sitemaps/earthquakes-index.xml" || pathname.startsWith("/sitemaps/earthquakes-")) {
+
       return handlePaginatedEarthquakesSitemap({ request, env, ctx });
     }
     if (pathname === "/sitemap-clusters.xml") return handleClustersSitemapRequest(request, env, ctx);
