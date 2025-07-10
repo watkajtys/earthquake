@@ -1,7 +1,8 @@
 import { onRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-import { MIN_FEELABLE_MAGNITUDE } from '../routes/sitemaps/earthquakes-sitemap.js';
+// Attempting a path as if 'functions/' is a root for module resolution in this test context
+import { MIN_FEELABLE_MAGNITUDE } from 'routes/sitemaps/earthquakes-sitemap.js';
 // --- Mocks for Cloudflare Environment ---
 const mockCache = {
   match: vi.fn(),

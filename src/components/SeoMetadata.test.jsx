@@ -54,7 +54,7 @@ describe('SeoMetadata Component', () => {
       expect(websiteScript).not.toBeNull();
       const websiteData = JSON.parse(websiteScript.textContent);
       expect(websiteData['@type']).toBe('WebSite');
-      expect(websiteData.name).toBe('Global Seismic Activity Monitor');
+      expect(websiteData.name).toBe('Earthquakes Live'); // Corrected name
       expect(websiteData.url).toBe(window.location.href);
       expect(websiteData.description).toBe(defaultProps.description);
 
