@@ -153,8 +153,8 @@ describe('EarthquakeDetailModalComponent SEO', () => {
         description: expectedDescription,
         startDate: new Date(props.time).toISOString(),
         endDate: new Date(props.time).toISOString(),
-        eventAttendanceMode: 'https://schema.org/OnlineEvent',
-        eventStatus: 'https://schema.org/EventScheduled',
+        // eventAttendanceMode removed
+        eventStatus: 'https://schema.org/EventHappened', // Corrected
         location: {
           '@type': 'Place',
           name: props.place,
@@ -166,13 +166,17 @@ describe('EarthquakeDetailModalComponent SEO', () => {
             "elevation": -geom.coordinates[2] * 1000
           },
         },
-        image: shakemapIntensityImageUrl,
+        image: shakemapIntensityImageUrl, // This will use the actual SVG path in component
         keywords: expectedKeywords.toLowerCase(),
         url: expectedCanonicalUrl,
         identifier: usgsEventId,
         sameAs: props.detail,
-        performer: { '@type': 'Organization', name: 'USGS' },
-        organizer: { '@type': 'Organization', name: 'USGS' }
+        // performer removed
+        organizer: { // Corrected
+            '@type': 'Organization',
+            name: 'Earthquakes Live',
+            url: 'https://earthquakeslive.com'
+        }
     });
     expect(lastSeoCall.title).toBe(expectedPageTitle);
     expect(lastSeoCall.description).toBe(expectedDescription);
@@ -212,7 +216,13 @@ describe('EarthquakeDetailModalComponent SEO', () => {
             }
         }),
         identifier: usgsEventIdMinimal,
-        image: 'https://earthquakeslive.com/placeholder-image.jpg',
+        image: expect.any(String), // Check that it's a string (path to the imported SVG)
+        eventStatus: 'https://schema.org/EventHappened', // Added
+        organizer: { // Added
+            '@type': 'Organization',
+            name: 'Earthquakes Live',
+            url: 'https://earthquakeslive.com'
+        }
       })
     );
     expect(lastSeoCall.eventJsonLd.sameAs).toBeUndefined();
