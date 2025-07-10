@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <title>Earthquake Icon</title>
+  <!-- Background -->
+  <rect width="100" height="100" fill="#f0f0f0"/>
+
+  <!-- Fault line -->
+  <line x1="10" y1="90" x2="90" y2="10" stroke="#6b7280" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Epicenter rings -->
+  <circle cx="50" cy="50" r="10" fill="none" stroke="#ef4444" stroke-width="2"/>
+  <circle cx="50" cy="50" r="20" fill="none" stroke="#ef4444" stroke-width="2" stroke-dasharray="3 2"/>
+  <circle cx="50" cy="50" r="30" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+  <!-- Small marker at epicenter -->
+  <circle cx="50" cy="50" r="3" fill="#ef4444"/>
+</svg>

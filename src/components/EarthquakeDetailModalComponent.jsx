@@ -4,6 +4,7 @@ import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // I
 import { useParams, useNavigate } from 'react-router-dom';
 import EarthquakeDetailView from './EarthquakeDetailView'; // Path relative to src/components/
 import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
+import defaultEarthquakeLogo from '../assets/default-earthquake-logo.svg'; // Import the new SVG
 
 /**
  * A wrapper component that displays detailed information about a specific earthquake in a modal-like view.
@@ -142,21 +143,17 @@ const EarthquakeDetailModalComponent = () => {
             description: pageDescription,
             startDate: time ? new Date(time).toISOString() : undefined,
             endDate: time ? new Date(time).toISOString() : undefined, // Added endDate
-            eventAttendanceMode: 'https://schema.org/OnlineEvent', // Added eventAttendanceMode
-            eventStatus: 'https://schema.org/EventScheduled', // Added eventStatus
+            eventStatus: 'https://schema.org/EventHappened', // Corrected status
             location: eventLocation,
-            image: shakemapIntensityImageUrl || 'https://earthquakeslive.com/placeholder-image.jpg', // Added default image
+            image: shakemapIntensityImageUrl || defaultEarthquakeLogo, // Use imported SVG
             keywords: pageKeywords.toLowerCase(),
             url: canonicalPageUrl,
             identifier: usgsEventId, // Using the actual USGS Event ID
             ...(usgsEventPageUrl && { sameAs: usgsEventPageUrl }), // Link to authoritative USGS event page
-            performer: {
+            organizer: { // Corrected organizer
                 '@type': 'Organization',
-                name: 'USGS' // Generic performer
-            },
-            organizer: {
-                '@type': 'Organization',
-                name: 'USGS' // Generic organizer
+                name: 'Earthquakes Live',
+                url: 'https://earthquakeslive.com'
             }
             // subjectOf is not typically used on Event itself, but on the WebPage about the event.
             // However, canonicalUrl serves a similar purpose for the event's own page.
