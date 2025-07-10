@@ -83,6 +83,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-2.xml</loc>'); // Reverted
         expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-3.xml</loc>'); // Reverted
         expect(text).not.toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-4.xml</loc>'); // Reverted
+
         expect(text).toContain(`<lastmod>${new Date(mockLatestModResult.latest_mod_ts).toISOString()}</lastmod>`);
         // Check that COUNT query was called
         expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/^SELECT COUNT\(\*\) as total FROM EarthquakeEvents/));
