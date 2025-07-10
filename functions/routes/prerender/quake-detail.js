@@ -77,7 +77,6 @@ export async function handleQuakeDetailPrerender(context, eventId) {
       "startDate": "${new Date(properties.time).toISOString()}",
       "endDate": "${new Date(properties.time).toISOString()}",
       "eventStatus": "https://schema.org/EventHappened",
-      "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
       "location": {
         "@type": "Place",
         "name": "${escapeXml(properties.place)}",

@@ -122,7 +122,7 @@ const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', 
     const websiteStructuredData = {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
-       name: 'Global Seismic Activity Monitor', // This can be a static name or dynamically set
+       name: 'Earthquakes Live', // Updated site name
        url: pageUrl || (typeof window !== 'undefined' ? window.location.href : ''),
        description: description,
        // potentialAction: { // Uncomment and adjust if search functionality is available
