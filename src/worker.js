@@ -10,6 +10,12 @@ import { handleUsgsProxy as kvEnabledUsgsProxyHandler } from '../functions/route
 // Import the get-earthquakes handler
 import { onRequestGet as handleGetEarthquakes } from '../functions/api/get-earthquakes.js';
 
+// Import the batch USGS fetch handler
+import { handleBatchUsgsFetch } from '../functions/api/batch-usgs-fetch.js';
+
+// Import the new paginated earthquakes sitemap handler
+import { handleEarthquakesSitemap as handlePaginatedEarthquakesSitemap } from '../functions/routes/sitemaps/earthquakes-sitemap.js';
+
 
 // === Helper Functions (originally from [[catchall]].js) ===
 const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefined) => {
@@ -72,14 +78,14 @@ async function handleUsgsProxyRequest(request, env, ctx, apiUrl) {
 */
 
 // eslint-disable-next-line no-unused-vars
-async function handleSitemapIndexRequest(request, env, ctx) {
+async function handleSitemapIndexRequest(request, env, ctx) { // This is the main sitemap index /sitemap-index.xml
   const sitemapIndexXML = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
     <loc>https://earthquakeslive.com/sitemap-static-pages.xml</loc>
   </sitemap>
   <sitemap>
-    <loc>https://earthquakeslive.com/sitemap-earthquakes.xml</loc>
+    <loc>https://earthquakeslive.com/sitemaps/earthquakes-index.xml</loc> {/* Path to the new earthquake sitemap index */}
   </sitemap>
   <sitemap>
     <loc>https://earthquakeslive.com/sitemap-clusters.xml</loc>
@@ -90,67 +96,42 @@ async function handleSitemapIndexRequest(request, env, ctx) {
 
 // eslint-disable-next-line no-unused-vars
 async function handleStaticPagesSitemapRequest(request, env, ctx) {
+  // Get current date in YYYY-MM-DD format for lastmod
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+  const day = String(today.getDate()).padStart(2, '0');
+  const lastModified = `${year}-${month}-${day}`;
+
   const staticPages = [
-    { loc: "https://earthquakeslive.com/", priority: "1.0", changefreq: "hourly" },
-    { loc: "https://earthquakeslive.com/overview", priority: "0.9", changefreq: "hourly" },
-    { loc: "https://earthquakeslive.com/feeds", priority: "0.9", changefreq: "hourly" },
+    { loc: "https://earthquakeslive.com/", priority: "1.0", changefreq: "daily", lastmod: lastModified },
+    { loc: "https://earthquakeslive.com/overview", priority: "0.9", changefreq: "daily", lastmod: lastModified },
+    { loc: "https://earthquakeslive.com/feeds", priority: "0.9", changefreq: "hourly", lastmod: lastModified }, // Feeds page itself might change if new feed types are added
   ];
   const feedPeriods = [
-    { period: "last_hour", priority: "0.9", changefreq: "hourly" },
-    { period: "last_24_hours", priority: "0.9", changefreq: "hourly" },
-    { period: "last_7_days", priority: "0.9", changefreq: "daily" },
-    { period: "last_30_days", priority: "0.7", changefreq: "daily" },
+    { period: "last_hour", priority: "0.9", changefreq: "hourly", lastmod: lastModified },
+    { period: "last_24_hours", priority: "0.9", changefreq: "hourly", lastmod: lastModified },
+    { period: "last_7_days", priority: "0.9", changefreq: "daily", lastmod: lastModified },
+    { period: "last_30_days", priority: "0.7", changefreq: "daily", lastmod: lastModified },
   ];
   let urlsXml = "";
-  staticPages.forEach(page => { urlsXml += `\n  <url><loc>${page.loc}</loc><priority>${page.priority}</priority><changefreq>${page.changefreq}</changefreq></url>`; });
-  feedPeriods.forEach(feed => { urlsXml += `\n  <url><loc>https://earthquakeslive.com/feeds?activeFeedPeriod=${feed.period}</loc><priority>${feed.priority}</priority><changefreq>${feed.changefreq}</changefreq></url>`; });
+  staticPages.forEach(page => { urlsXml += `\n  <url><loc>${page.loc}</loc><lastmod>${page.lastmod}</lastmod><changefreq>${page.changefreq}</changefreq><priority>${page.priority}</priority></url>`; });
+  feedPeriods.forEach(feed => { urlsXml += `\n  <url><loc>https://earthquakeslive.com/feeds?activeFeedPeriod=${feed.period}</loc><lastmod>${feed.lastmod}</lastmod><changefreq>${feed.changefreq}</changefreq><priority>${feed.priority}</priority></url>`; });
   urlsXml += `
-  <url><loc>https://earthquakeslive.com/learn</loc><priority>0.5</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://earthquakeslive.com/learn/magnitude-vs-intensity</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://earthquakeslive.com/learn/measuring-earthquakes</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://earthquakeslive.com/learn/plate-tectonics</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>`;
+  <url><loc>https://earthquakeslive.com/learn</loc><lastmod>${lastModified}</lastmod><priority>0.5</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://earthquakeslive.com/learn/magnitude-vs-intensity</loc><lastmod>${lastModified}</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://earthquakeslive.com/learn/measuring-earthquakes</loc><lastmod>${lastModified}</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://earthquakeslive.com/learn/plate-tectonics</loc><lastmod>${lastModified}</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>`;
   const sitemapXML = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urlsXml}\n</urlset>`;
   return new Response(sitemapXML, { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=86400" }});
 }
 
-// eslint-disable-next-line no-unused-vars
-async function handleEarthquakesSitemapRequest(request, env, ctx) {
-  const sourceName = "earthquakes-sitemap-handler";
-  const usgsFeedUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson";
-  let earthquakesXml = "";
-  try {
-    console.log(`[${sourceName}] Fetching earthquake data from: ${usgsFeedUrl}`);
-    const response = await fetch(usgsFeedUrl);
-    if (!response.ok) {
-      console.error(`[${sourceName}] Error fetching earthquake data: ${response.status} ${response.statusText}`);
-      return new Response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<!-- Error fetching earthquake data -->\n</urlset>`, { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" }});
-    }
-    const data = await response.json();
-    if (data && data.features) {
-      data.features.forEach(quake => {
-        if (quake && quake.id && quake.properties) {
-          const usgs_id = quake.id;
-          let formattedMagnitude = 'Munknown';
-          if (typeof quake.properties.mag === 'number' && !isNaN(quake.properties.mag)) { formattedMagnitude = `m${quake.properties.mag.toFixed(1)}`; }
-          else { console.warn(`[${sourceName}] Invalid or missing magnitude for quake ${usgs_id}: ${quake.properties.mag}. Using '${formattedMagnitude}'.`); }
-          const place = quake.properties.place || "Unknown Place";
-          const locationSlug = slugify(place);
-          const loc = `https://earthquakeslive.com/quake/${formattedMagnitude}-${locationSlug}-${usgs_id}`;
-          const lastmod = new Date(quake.properties.updated || quake.properties.time).toISOString();
-          earthquakesXml += `\n  <url><loc>${escapeXml(loc)}</loc><lastmod>${lastmod}</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>`;
-        } else { console.warn(`[${sourceName}] Skipping quake in sitemap due to missing id or properties:`, quake); }
-      });
-    }
-  } catch (error) {
-    console.error(`[${sourceName}] Exception fetching or processing earthquake data: ${error.message}`, error);
-    return new Response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<!-- Exception processing earthquake data: ${escapeXml(error.message)} -->\n</urlset>`, { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" }});
-  }
-  const sitemapXML = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${earthquakesXml}\n</urlset>`;
-  return new Response(sitemapXML, { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" }});
-}
+// The original handleEarthquakesSitemapRequest (which fetched 2.5_week.geojson) is now removed.
+// Its functionality is replaced by handlePaginatedEarthquakesSitemap,
+// which reads from D1 and supports pagination.
 
 // eslint-disable-next-line no-unused-vars
-async function handleClustersSitemapRequest(request, env, ctx) {
+async function handleClustersSitemapRequest(request, env, ctx) { // Renamed from handleClustersSitemapRequest to avoid conflict if we import one with same name
   const sourceName = "clusters-sitemap-handler";
   const DB = env.DB;
   let clustersXml = "";
@@ -482,7 +463,10 @@ export default {
     // Sitemap routes
     if (pathname === "/sitemap-index.xml") return handleSitemapIndexRequest(request, env, ctx);
     if (pathname === "/sitemap-static-pages.xml") return handleStaticPagesSitemapRequest(request, env, ctx);
-    if (pathname === "/sitemap-earthquakes.xml") return handleEarthquakesSitemapRequest(request, env, ctx);
+    // Route for the new earthquake sitemap index and paginated sitemaps (now at root level)
+    if (pathname === "/earthquakes-sitemap-index.xml" || pathname.startsWith("/earthquakes-sitemap-")) {
+      return handlePaginatedEarthquakesSitemap({ request, env, ctx });
+    }
     if (pathname === "/sitemap-clusters.xml") return handleClustersSitemapRequest(request, env, ctx);
 
     // API routes
@@ -522,6 +506,12 @@ export default {
       return handleGetEarthquakes({ request, env, ctx });
     }
 
+    if (pathname === '/api/batch-usgs-fetch' && request.method === 'GET') {
+      // This new endpoint is for manually triggering historical data fetches.
+      // It expects 'startDate' and 'endDate' query parameters.
+      return handleBatchUsgsFetch({ request, env, ctx });
+    }
+
     // Serve static assets from ASSETS binding
     try {
       if (!env.ASSETS) {
@@ -546,7 +536,7 @@ export default {
       return;
     }
 
-    const USGS_FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson";
+    const USGS_FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"; // Reverted to all_hour
     const proxyRequestUrl = `https://dummy-host/api/usgs-proxy?apiUrl=${encodeURIComponent(USGS_FEED_URL)}&isCron=true`; // Added isCron=true
     // Note: 'dummy-host' is used because new Request() requires a full URL.
     // The host itself doesn't matter when calling the handler directly as below,
