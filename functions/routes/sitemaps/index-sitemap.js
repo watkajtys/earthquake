@@ -17,7 +17,7 @@ export function handleIndexSitemap(context) {
     <loc>https://earthquakeslive.com/sitemap-static-pages.xml</loc>
   </sitemap>
   <sitemap>
-    <loc>https://earthquakeslive.com/sitemap-earthquakes.xml</loc>
+    <loc>https://earthquakeslive.com/sitemaps/earthquakes-index.xml</loc> {/* Changed path */}
   </sitemap>
   <sitemap>
     <loc>https://earthquakeslive.com/sitemap-clusters.xml</loc>

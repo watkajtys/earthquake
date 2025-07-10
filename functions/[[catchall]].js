@@ -42,8 +42,9 @@ export async function onRequest(context) {
     return handleStaticPagesSitemap(context);
   }
 
-  if (pathname === "/sitemap-earthquakes.xml") {
-    return handleEarthquakesSitemap(context);
+  // Updated routing for paginated earthquake sitemaps
+  if (pathname === "/sitemaps/earthquakes-index.xml" || pathname.startsWith("/sitemaps/earthquakes-")) {
+    return handleEarthquakesSitemap(context); // This correctly points to the refactored handler
   }
 
   if (pathname === "/sitemap-clusters.xml") {

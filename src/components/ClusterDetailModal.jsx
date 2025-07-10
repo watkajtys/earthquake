@@ -133,9 +133,9 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
             >
                 {/* Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-slate-700 mb-4">
-                    <h2 id="cluster-detail-title" className="text-lg sm:text-xl font-semibold text-indigo-400 truncate pr-2" title={locationName}>
+                    <h1 id="cluster-detail-title" className="text-lg sm:text-xl font-semibold text-indigo-400 truncate pr-2" title={locationName}>
                         Cluster: {locationName || 'Unknown Location'}
-                    </h2>
+                    </h1>
                     <button
                         ref={closeButtonRef}
                         onClick={onClose}
@@ -168,9 +168,9 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 </div>
 
                 {/* Individual Earthquakes List */}
-                <h3 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2"> {/* Removed border-t as chart section has it now */}
+                <h2 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2"> {/* Removed border-t as chart section has it now */}
                     Earthquakes in this Cluster
-                </h3>
+                </h2>
                 <div className="flex-grow space-y-2 pr-1">
                     {sortedQuakes.length > 0 ? (
                         sortedQuakes.map(quake => {
