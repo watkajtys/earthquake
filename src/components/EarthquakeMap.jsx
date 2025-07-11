@@ -90,11 +90,31 @@ const getTectonicPlateStyle = (feature) => {
 };
 
 /**
+ * Defines the styling for GEM active fault GeoJSON features.
+ * The color of the fault line varies based on its slip type (Normal, Reverse, Dextral, Sinistral).
+ *
+ * @param {Object} feature - The GeoJSON feature representing an active fault.
+ *                           Expected to have `feature.properties.slip_type`.
+ * @returns {Object} A Leaflet path style options object for the feature.
+ */
+const getActiveFaultStyle = (feature) => {
+  let color = 'rgba(255, 255, 255, 0.9)'; // Default white for unknown fault types
+  const slipType = feature?.properties?.slip_type;
+  if (slipType === 'Normal') color = 'rgba(255, 69, 0, 0.9)'; // Red-orange for Normal faults
+  else if (slipType === 'Reverse') color = 'rgba(255, 215, 0, 0.9)'; // Gold for Reverse faults
+  else if (slipType === 'Dextral') color = 'rgba(0, 191, 255, 0.9)'; // Deep sky blue for Dextral (right-lateral)
+  else if (slipType === 'Sinistral') color = 'rgba(138, 43, 226, 0.9)'; // Blue violet for Sinistral (left-lateral)
+  else if (slipType === 'Dextral-Normal') color = 'rgba(255, 140, 0, 0.9)'; // Dark orange for combined Dextral-Normal
+  return { color, weight: 1.5, opacity: 0.9 };
+};
+
+/**
  * Renders an interactive Leaflet map to display earthquake information.
  * Key features include:
  * - Displaying a main highlighted earthquake with a pulsing icon.
  * - Showing nearby earthquakes with icons whose opacity varies by age.
  * - Optionally displaying tectonic plate boundaries (dynamically imported GeoJSON).
+ * - Displaying GEM active faults with color-coded fault lines based on slip type.
  * - Ability to fit the map bounds to show all displayed quakes or center on a specific point.
  * - Customizable map zoom and center.
  * The component is memoized for performance optimization.
@@ -131,6 +151,8 @@ const EarthquakeMap = ({
   const mapRef = useRef(null);
   const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);
   const [isTectonicPlatesLoading, setIsTectonicPlatesLoading] = useState(true);
+  const [activeFaultsDataJson, setActiveFaultsDataJson] = useState(null);
+  const [isActiveFaultsLoading, setIsActiveFaultsLoading] = useState(true);
 
   const initialMapCenter = useMemo(() => [mapCenterLatitude, mapCenterLongitude], [mapCenterLatitude, mapCenterLongitude]);
   const highlightedQuakePosition = useMemo(() => {
@@ -211,6 +233,29 @@ const EarthquakeMap = ({
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadActiveFaults = async () => {
+      setIsActiveFaultsLoading(true);
+      try {
+        const faultsData = await import('../assets/gem_active_faults_harmonized.json');
+        if (isMounted) {
+          setActiveFaultsDataJson(faultsData.default);
+        }
+      } catch (error) {
+        console.error("Error loading active faults data:", error);
+      } finally {
+        if (isMounted) {
+          setIsActiveFaultsLoading(false);
+        }
+      }
+    };
+    loadActiveFaults();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <MapContainer
       center={initialMapCenter}
@@ -286,6 +331,26 @@ const EarthquakeMap = ({
 
       {!isTectonicPlatesLoading && tectonicPlatesDataJson && (
         <GeoJSON data={tectonicPlatesDataJson} style={getTectonicPlateStyle} />
+      )}
+      
+      {!isActiveFaultsLoading && activeFaultsDataJson && (
+        <GeoJSON 
+          data={activeFaultsDataJson} 
+          style={getActiveFaultStyle}
+          onEachFeature={(feature, layer) => {
+            if (feature.properties) {
+              const popupContent = `
+                <div>
+                  <strong>${feature.properties.name || 'Unknown Fault'}</strong><br/>
+                  <strong>Slip Type:</strong> ${feature.properties.slip_type || 'Unknown'}<br/>
+                  <strong>Net Slip Rate:</strong> ${feature.properties.net_slip_rate || 'Unknown'}<br/>
+                  <strong>Catalog:</strong> ${feature.properties.catalog_name || 'Unknown'}
+                </div>
+              `;
+              layer.bindPopup(popupContent);
+            }
+          }}
+        />
       )}
     </MapContainer>
   );
