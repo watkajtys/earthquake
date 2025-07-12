@@ -154,7 +154,6 @@ function generateTitle(quakeCount, locationName, maxMagnitude) {
  * @returns {string} A description string for the cluster.
  */
 function generateDescription(quakeCount, locationName, maxMagnitude, durationHours) {
-  const safeLocation = locationName || "Unknown Location";
   const durationStr = durationHours > 0 ? `approx ${durationHours.toFixed(1)} hours` : "a short period";
   return `A cluster of ${quakeCount} earthquakes occurred near ${locationName}. Strongest: M${maxMagnitude.toFixed(1)}. Duration: ${durationStr}.`;
 }
@@ -466,7 +465,7 @@ export async function onRequestPost(context) {
 
   try {
     const { env, request } = context; // Destructure request from context
-    const { earthquakes, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours } = await request.json();
+    const { earthquakes, maxDistanceKm, minQuakes } = await request.json();
 
     // Input Validation
     if (!Array.isArray(earthquakes)) {
