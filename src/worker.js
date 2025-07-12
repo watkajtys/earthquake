@@ -16,6 +16,11 @@ import { handleBatchUsgsFetch } from '../functions/api/batch-usgs-fetch.js';
 // Import the new paginated earthquakes sitemap handler
 import { handleEarthquakesSitemap as handlePaginatedEarthquakesSitemap } from '../functions/routes/sitemaps/earthquakes-sitemap.js';
 
+// Import the cache stats handler
+import { onRequestGet as handleGetCacheStats, onRequestDelete as handleDeleteCacheStats } from '../functions/api/cache-stats.js';
+
+// === Cache Management Functions ===
+// Cache management functions removed - cluster cache has been eliminated
 
 // === Helper Functions (originally from [[catchall]].js) ===
 const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefined) => {
@@ -513,6 +518,19 @@ export default {
       return handleBatchUsgsFetch({ request, env, ctx });
     }
 
+    if (pathname === '/api/cache-stats') {
+      if (request.method === 'GET') {
+        return handleGetCacheStats({ request, env, ctx });
+      } else if (request.method === 'DELETE') {
+        return handleDeleteCacheStats({ request, env, ctx });
+      } else {
+        return new Response('Method Not Allowed', { 
+          status: 405, 
+          headers: { 'Allow': 'GET, DELETE' } 
+        });
+      }
+    }
+
     // Serve static assets from ASSETS binding
     try {
       if (!env.ASSETS) {
@@ -536,6 +554,8 @@ export default {
       console.error("[worker-scheduled] D1 Database (DB) binding not found.");
       return;
     }
+
+    // Cache cleanup removed - cluster cache has been eliminated
 
     const USGS_FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"; // Reverted to all_hour
     const proxyRequestUrl = `https://dummy-host/api/usgs-proxy?apiUrl=${encodeURIComponent(USGS_FEED_URL)}&isCron=true`; // Added isCron=true
