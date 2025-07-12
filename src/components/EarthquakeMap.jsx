@@ -106,11 +106,11 @@ const getTectonicPlateStyle = (feature) => {
 const getActiveFaultStyle = (feature) => {
   let color = 'rgba(255, 255, 255, 0.9)'; // Default white for unknown fault types
   const slipType = feature?.properties?.slip_type;
-  if (slipType === 'Normal') color = 'rgba(255, 20, 147, 0.9)'; // Deep pink for Normal faults (was red-orange)
-  else if (slipType === 'Reverse') color = 'rgba(50, 205, 50, 0.9)'; // Lime green for Reverse faults (was gold)
+  if (slipType === 'Normal') color = 'rgba(255, 20, 147, 0.9)'; // Deep pink for Normal faults
+  else if (slipType === 'Reverse') color = 'rgba(50, 205, 50, 0.9)'; // Lime green for Reverse faults
   else if (slipType === 'Dextral') color = 'rgba(0, 191, 255, 0.9)'; // Deep sky blue for Dextral (right-lateral)
   else if (slipType === 'Sinistral') color = 'rgba(138, 43, 226, 0.9)'; // Blue violet for Sinistral (left-lateral)
-  else if (slipType === 'Dextral-Normal') color = 'rgba(255, 20, 147, 0.9)'; // Deep pink for combined Dextral-Normal (was dark orange)
+  else if (slipType === 'Dextral-Normal') color = 'rgba(255, 140, 0, 0.9)'; // Orange for combined Dextral-Normal
   return { color, weight: 2.5, opacity: 0.9 };
 };
 
