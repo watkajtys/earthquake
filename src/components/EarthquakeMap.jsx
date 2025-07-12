@@ -6,6 +6,12 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 // import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
+import { 
+  calculateBoundingBoxFromPoints, 
+  filterGeoJSONByBoundingBox,
+  initializeSpatialIndex,
+  clearSpatialIndex
+} from '../utils/geoSpatialUtils.js';
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -153,6 +159,7 @@ const EarthquakeMap = ({
   const [isTectonicPlatesLoading, setIsTectonicPlatesLoading] = useState(true);
   const [activeFaultsDataJson, setActiveFaultsDataJson] = useState(null);
   const [isActiveFaultsLoading, setIsActiveFaultsLoading] = useState(true);
+  const [fullActiveFaultsData, setFullActiveFaultsData] = useState(null);
 
   const initialMapCenter = useMemo(() => [mapCenterLatitude, mapCenterLongitude], [mapCenterLatitude, mapCenterLongitude]);
   const highlightedQuakePosition = useMemo(() => {
@@ -240,7 +247,7 @@ const EarthquakeMap = ({
       try {
         const faultsData = await import('../assets/gem_active_faults_harmonized.json');
         if (isMounted) {
-          setActiveFaultsDataJson(faultsData.default);
+          setFullActiveFaultsData(faultsData.default);
         }
       } catch (error) {
         console.error("Error loading active faults data:", error);
@@ -255,6 +262,61 @@ const EarthquakeMap = ({
       isMounted = false;
     };
   }, []);
+
+  // Spatial filtering effect for active faults
+  useEffect(() => {
+    if (!fullActiveFaultsData) {
+      setActiveFaultsDataJson(null);
+      return;
+    }
+
+    // Calculate bounding box from all earthquake points on the map
+    const allEarthquakePoints = [];
+    
+    // Add highlighted earthquake position
+    if (highlightedQuakePosition) {
+      allEarthquakePoints.push(highlightedQuakePosition);
+    }
+    
+    // Add nearby earthquakes
+    nearbyQuakes.forEach(quake => {
+      if (quake.geometry && quake.geometry.coordinates) {
+        const lat = parseFloat(quake.geometry.coordinates[1]);
+        const lng = parseFloat(quake.geometry.coordinates[0]);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          allEarthquakePoints.push([lat, lng]);
+        }
+      }
+    });
+    
+    // If no earthquake points, use map center as fallback
+    if (allEarthquakePoints.length === 0) {
+      allEarthquakePoints.push([mapCenterLatitude, mapCenterLongitude]);
+    }
+    
+    // Calculate bounding box with 100km buffer for fault filtering
+    const boundingBox = calculateBoundingBoxFromPoints(allEarthquakePoints, 100);
+    
+    if (boundingBox) {
+      // Filter faults to only those within the bounding box
+      const filteredFaults = filterGeoJSONByBoundingBox(fullActiveFaultsData, boundingBox);
+      setActiveFaultsDataJson(filteredFaults);
+      
+      // Log filtering results for debugging
+      const originalCount = fullActiveFaultsData.features.length;
+      const filteredCount = filteredFaults.features.length;
+      console.log(`Active faults filtered: ${originalCount} → ${filteredCount} (${Math.round(filteredCount/originalCount*100)}%)`);
+    } else {
+      // Fallback: no filtering
+      setActiveFaultsDataJson(fullActiveFaultsData);
+    }
+  }, [
+    fullActiveFaultsData, 
+    highlightedQuakePosition, 
+    nearbyQuakes, 
+    mapCenterLatitude, 
+    mapCenterLongitude
+  ]);
 
   return (
     <MapContainer
