@@ -2,7 +2,7 @@
  * @file Generates the main sitemap index file (sitemap-index.xml).
  * This sitemap lists all individual sitemap files, including paginated earthquake sitemaps.
  */
-import { escapeXml } from '../utils/xml-utils.js'; // For error messages
+import { escapeXml } from '../../utils/xml-utils.js'; // For error messages
 
 // Constants adapted from earthquakes-sitemap.js
 const SITEMAP_PAGE_SIZE = 40000;
