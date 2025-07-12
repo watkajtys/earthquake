@@ -25,6 +25,7 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * Featured Quakes: Highlights notable recent or historical earthquakes.
 * Educational Snippets: Provides brief explanations on earthquake concepts like magnitude, depth, and intensity.
 * Dedicated 'Learn' Page: Provides educational content and detailed explanations about earthquake science and terminology.
+* **Regional Faulting Display**: Incorporates and displays data on regional fault lines, enhancing geological context and understanding. This feature was added as part of the vibe process using the Claude code CLI.
 * Responsive Sidebar: Dynamically loads and displays detailed analysis panels.
 
 ## Data Source
@@ -145,7 +146,7 @@ When working with AI agents like Jules, effective collaboration is key. Here are
     *   Using AI agents for ongoing development is part of an innovative and experimental approach to software engineering.
     *   Patience, clear communication, and a collaborative mindset are crucial for achieving the best results.
 
-This ongoing collaboration aims to push the boundaries of what LLMs can achieve in practical, non-trivial application development, providing valuable insights into their strengths and areas for continued improvement. The Global Seismic Activity Monitor is therefore not just a tool for visualizing earthquakes, but also a living experiment in the evolving landscape of AI-assisted software creation.
+This ongoing collaboration aims to push the boundaries of what LLMs can achieve in practical, non-trivial application development, providing valuable insights into their strengths and areas for continued improvement. Tools like the Claude code CLI are actively used in this "vibe process" for implementing new features and enhancements. The Global Seismic Activity Monitor is therefore not just a tool for visualizing earthquakes, but also a living experiment in the evolving landscape of AI-assisted software creation.
 
 The project reflects the spirit of innovation and agile creation championed by **Built By Vibes**.
 
