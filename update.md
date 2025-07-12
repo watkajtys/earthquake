@@ -152,3 +152,76 @@ This section outlines recently implemented features and ongoing enhancements, pa
 
 ## 8. Overall Conclusion
 Addressing the initial recommendations for performance optimization and historical data loading will build a strong foundation. The future enhancements discussed offer significant opportunities to deepen the application's value for regional analysis and education, transforming it into an even more comprehensive seismic information platform.
+
+## 9. Prioritized Action Plan (Agentic Todo List)
+
+### Tier 1: Critical Optimizations & Stability
+
+*   **[ ] Optimize Clustering Algorithm:** Refactor the `findActiveClusters` function for better performance (e.g., using spatial indexing or DBSCAN).
+    *   *Context:* `functions/api/calculate-clusters.POST.js`
+    *   *Verify:* Ensure `ClusterCache` D1 caching is effective.
+*   **[ ] Optimize Cluster Sitemap Generation:** Re-engineer `handleClustersSitemapRequest` to eliminate external API calls.
+    *   *Context:* `src/worker.js`, `functions/utils/d1ClusterUtils.js`
+    *   **[ ] Sub-task: Store Canonical Slugs in D1:** Modify cluster creation logic (`storeClusterDefinition`) to generate and store final, canonical URL slugs in `ClusterDefinitions` table.
+        *   *Context:* `functions/utils/d1ClusterUtils.js`, callers of `storeClusterDefinition`
+*   **[ ] Enhance Scheduled Task Reliability:** Implement comprehensive monitoring, logging, and alerting for the scheduled USGS data fetching.
+    *   *Context:* `src/worker.js` (cron), `functions/routes/api/usgs-proxy.js`
+*   **[ ] Verify KV Diffing Logic:** Ensure the logic comparing new USGS data with `USGS_LAST_RESPONSE_KV` correctly identifies new/updated events.
+    *   *Context:* `functions/routes/api/usgs-proxy.js`
+
+### Tier 2: Historical Data & Foundational Improvements
+
+*   **[ ] Develop Batch Ingestion for Historical Quakes:** Create a secure Cloudflare Worker/script to fetch, parse, and batch-load historical USGS earthquake data into `EarthquakeEvents` D1 table.
+    *   *Context:* New Worker/script, `src/utils/d1Utils.js` (using `upsertEarthquakeFeaturesToD1`)
+*   **[ ] Develop Batch Generation for Historical Clusters:** Create a similar batch process to query historical quakes from D1, run clustering, and store definitions in `ClusterDefinitions`.
+    *   *Context:* New Worker/script, `functions/api/calculate-clusters.POST.js` (adapted), `functions/utils/d1ClusterUtils.js` (using `storeClusterDefinition`)
+*   **[ ] Review `updatedAt` Timestamp Handling:** Confirm the interaction between application-set `updatedAt` and database triggers for `ClusterDefinitions` is correct and meets requirements.
+    *   *Context:* `functions/utils/d1ClusterUtils.js`, `migrations/0006...sql`, `migrations/0010...sql`
+*   **[ ] Migrate Fault Data to D1:** Create a new `Faults` D1 table and populate it with data from existing JSON assets.
+    *   *Context:* New migration script, `src/assets/gem_active_faults_harmonized.json`, `src/assets/local_active_faults.json`
+    *   *Note:* This builds upon "Implemented Feature (via Claude code CLI): Initial Fault Data Integration and Display."
+
+### Tier 3: Enhancing Existing Features & Preparing for New Ones
+
+*   **[ ] Implement Server-Side Fault Proximity Analysis:** Develop a Worker function to query the new `Faults` D1 table and find nearby fault segments for given earthquake coordinates.
+    *   *Context:* New Worker function, `Faults` D1 table
+*   **[ ] Link Earthquakes to Faults in UI/Data:** Use the server-side fault proximity analysis to associate earthquakes with specific faults and display this information.
+    *   *Context:* Earthquake detail views, relevant API responses
+*   **[ ] Periodic Database Indexing Review:** As historical data is loaded and new query patterns emerge, review and adjust D1 table indexes.
+    *   *Context:* `EarthquakeEvents`, `ClusterDefinitions`, `Faults` D1 tables
+
+### Tier 4: New User-Facing Features (Phased Approach)
+
+*   **Regional Analysis - Phase 1:**
+    *   **[ ] Enhance Client-Side Fault Display:** Further improve the overlay of major fault lines on maps/globe, allowing user interaction (click for info).
+        *   *Context:* React components for map/globe views, `Faults` D1 data
+        *   *Note:* Builds upon "Implemented Feature (via Claude code CLI): Initial Fault Data Integration and Display."
+    *   **[ ] Develop Basic Regional Pages/Views:** Create dynamic pages for specific regions, aggregating recent seismicity and displaying nearby major faults.
+        *   *Context:* New React components, routing, server-side logic for data aggregation.
+*   **Educational Features - Phase 1:**
+    *   **[ ] Enhance Quake-Fault Correlation in UI:** Prominently link displayed earthquake details to specific known faults based on proximity analysis.
+        *   *Context:* Earthquake detail components
+        *   *Note:* Builds upon "Progress (via Claude code CLI): Groundwork for Fault Correlation."
+    *   **[ ] Implement Simple Contextualized Explanations:** For local events, provide brief, tailored explanations about local geology or preparedness.
+        *   *Context:* Earthquake detail components, potentially new content management.
+*   **Advanced Cluster Analysis - Phase 1:**
+    *   **[ ] Integrate Fault Data into Cluster Definitions:** Tag clusters with associated major faults based on proximity of member quakes.
+        *   *Context:* `functions/api/calculate-clusters.POST.js` (or batch equivalent), `ClusterDefinitions` table
+
+### Tier 5: Further Enhancements & Advanced Features
+
+*   **Regional Analysis - Phase 2:**
+    *   **[ ] Implement Server-Side Regional Aggregation:** Create processes to pre-calculate and store regional seismic summaries/statistics.
+        *   *Context:* New D1 table for regional stats, new/updated Worker functions.
+*   **Educational Features - Phase 2:**
+    *   **[ ] Develop Interactive Learning Modules:** Create engaging educational content (scenario visualizations, fault mechanics explorer, seismic sequence analysis).
+        *   *Context:* "Learn" section, new React components, potentially new data structures.
+*   **Advanced Cluster Analysis - Phase 2:**
+    *   **[ ] Explore Time-Based Clustering Parameters:** Investigate incorporating time-based parameters to better identify aftershock sequences vs. background seismicity.
+        *   *Context:* `functions/api/calculate-clusters.POST.js`
+*   **[ ] Client-Side Rendering Performance:** Continuously monitor and optimize rendering for large datasets (virtualization, LOD, WebGL).
+    *   *Context:* React components, especially map/globe and list views.
+*   **[ ] User-Defined Regions & Alerts (Advanced):** Consider allowing user accounts, custom region definitions, and notifications.
+    *   *Context:* Significant new infrastructure for user management, notifications.
+*   **[ ] Educational API Endpoint (Advanced):** Develop a public API for processed data (regional summaries, fault info).
+    *   *Context:* New API endpoints, documentation, usage policies.
