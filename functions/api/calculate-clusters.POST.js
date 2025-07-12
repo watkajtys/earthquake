@@ -12,6 +12,7 @@ import { calculateDistance } from '../utils/mathUtils.js';
 import { storeClusterDefinition } from '../utils/d1ClusterUtils.js';
 import { randomUUID } from 'node:crypto';
 import { CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE } from '../../src/constants/appConstants.js';
+import { findActiveClustersOptimized } from '../utils/spatialClusterUtils.js';
 
 // Constants for defining significant clusters -- REMOVED
 // const MIN_QUAKES_FOR_DEFINITION = 5; // No longer needed, using CLUSTER_MIN_QUAKES from appConstants
@@ -541,7 +542,18 @@ export async function onRequestPost(context) {
 
     if (!env.DB) {
       console.warn("D1 Database (env.DB) not available. Proceeding without cache or definition storage.");
-      clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+      // Try spatial optimization first, fallback to original algorithm if it fails
+      try {
+        if (earthquakes.length >= 100) { // Use spatial optimization for larger datasets
+          console.log(`Using spatial optimization for ${earthquakes.length} earthquakes`);
+          clusters = findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes);
+        } else {
+          clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+        }
+      } catch (optimizationError) {
+        console.warn('Spatial optimization failed, falling back to original algorithm:', optimizationError.message);
+        clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+      }
       responseHeaders['X-Cache-Hit'] = 'false';
       responseHeaders['X-Cache-Info'] = 'DB not configured';
       return new Response(JSON.stringify(clusters), { status: 200, headers: responseHeaders });
@@ -572,7 +584,18 @@ export async function onRequestPost(context) {
       // Proceed to recalculate
     }
 
-    clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+    // Try spatial optimization first, fallback to original algorithm if it fails
+    try {
+      if (earthquakes.length >= 100) { // Use spatial optimization for larger datasets
+        console.log(`Using spatial optimization for ${earthquakes.length} earthquakes`);
+        clusters = findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes);
+      } else {
+        clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+      }
+    } catch (optimizationError) {
+      console.warn('Spatial optimization failed, falling back to original algorithm:', optimizationError.message);
+      clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+    }
     const clusterDataString = JSON.stringify(clusters);
 
     try {
