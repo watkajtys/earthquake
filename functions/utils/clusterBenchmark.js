@@ -5,7 +5,7 @@
  */
 
 import { findActiveClusters } from '../api/calculate-clusters.POST.js';
-import { calculateDistance } from './mathUtils.js';
+import { calculateDistance, setDistanceCalculationProfiler } from './mathUtils.js';
 
 // Benchmark configuration
 const BENCHMARK_CONFIG = {
@@ -256,6 +256,8 @@ export class ClusterBenchmarkSuite {
   constructor() {
     this.profiler = new PerformanceProfiler();
     setGlobalProfiler(this.profiler);
+    // Set up distance calculation tracking
+    setDistanceCalculationProfiler(this.profiler);
   }
   
   /**
@@ -348,7 +350,7 @@ export class ClusterBenchmarkSuite {
       performance: {
         timePerEarthquake: result.executionTime / earthquakeCount,
         distanceCalcsPerQuake: result.distanceCalculations / earthquakeCount,
-        avgDistanceCalcTime: result.distanceCalculationTime / result.distanceCalculations
+        avgDistanceCalcTime: result.distanceCalculations > 0 ? result.distanceCalculationTime / result.distanceCalculations : null
       }
     };
   }
