@@ -73,21 +73,6 @@ describe('onRequest in calculate-clusters.js', () => {
   };
 
 
-  const getExpectedCacheKey = (params) => {
-    const fullParams = {
-      numQuakes: params.earthquakes?.length ?? 0, // Ensure this matches how the actual function calculates it
-      maxDistanceKm: params.maxDistanceKm,
-      minQuakes: params.minQuakes, // This is the minQuakes for findActiveClusters
-      lastFetchTime: params.lastFetchTime,
-      timeWindowHours: params.timeWindowHours,
-    };
-    return `clusters-${JSON.stringify(fullParams)}`;
-  };
-
-  // Note: expectedDefaultCacheKey might not be as useful if defaultRequestBody.earthquakes is frequently changed.
-  // It's better to calculate it within tests if the earthquake list varies.
-
-
   beforeEach(() => {
     vi.resetAllMocks(); // This should reset vi.fn() mocks like storeClusterDefinition and DB mocks
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -157,119 +142,94 @@ describe('onRequest in calculate-clusters.js', () => {
     });
   });
 
-  describe('DB Availability and Cache Operations', () => { // Renamed slightly for clarity
-    it('should calculate clusters and return data if DB is not configured, with X-Cache-Info header', async () => {
+  describe('DB Availability and Cluster Calculation', () => { // Updated to reflect no caching
+    it('should calculate clusters and return data if DB is not configured', async () => {
       const reqBody = { ...defaultRequestBody, earthquakes: createMockQuakes(1, 2.0) };
       const context = createMockContext(reqBody, { DB: undefined });
       const response = await onRequest(context);
       expect(response.status).toBe(200);
       const json = await response.json();
-      expect(Array.isArray(json)).toBe(true); // Should still calculate clusters
-      expect(response.headers.get('X-Cache-Hit')).toBe('false');
-      expect(response.headers.get('X-Cache-Info')).toBe('DB not configured');
-      expect(consoleWarnSpy).toHaveBeenCalledWith("D1 Database (env.DB) not available. Proceeding without cache or definition storage.");
+      expect(Array.isArray(json)).toBe(true); // Should calculate clusters
+      // No cache headers expected since caching is removed
+      expect(response.headers.get('X-Cache-Hit')).toBeNull();
+      expect(response.headers.get('X-Cache-Info')).toBeNull();
     });
 
-    it('should return cached data if valid entry exists in D1', async () => {
+    it('should calculate clusters directly without caching', async () => {
       const reqBody = { ...defaultRequestBody, earthquakes: createMockQuakes(2, 1.5) };
-      const mockCachedClusterData = [{ id: 'cluster1', quakes: reqBody.earthquakes.map(q => q.id) }];
       const context = createMockContext(reqBody);
-      context.env.DB.first.mockResolvedValueOnce({ clusterData: JSON.stringify(mockCachedClusterData) });
-      const expectedCacheKey = getExpectedCacheKey(reqBody);
 
       const response = await onRequest(context);
       expect(response.status).toBe(200);
       const json = await response.json();
-      expect(json).toEqual(mockCachedClusterData);
-      expect(response.headers.get('X-Cache-Hit')).toBe('true');
-      expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT clusterData FROM ClusterCache"));
-      expect(context.env.DB.bind).toHaveBeenCalledWith(expectedCacheKey);
+      expect(Array.isArray(json)).toBe(true);
+      // No cache operations should occur
+      expect(context.env.DB.prepare).not.toHaveBeenCalledWith(expect.stringContaining("SELECT clusterData FROM ClusterCache"));
       expect(context.env.DB.run).not.toHaveBeenCalled();
+      expect(response.headers.get('X-Cache-Hit')).toBeNull();
     });
 
-    it('should calculate, store, and return data if cache miss (D1 returns null)', async () => {
+    it('should calculate and return data directly (no caching)', async () => {
       // Using quakes that won't trigger definition storage for this specific test
       const quakes = createMockQuakes(CLUSTER_MIN_QUAKES - 1, DEFINED_CLUSTER_MIN_MAGNITUDE - 0.1);
       const reqBody = { ...defaultRequestBody, earthquakes: quakes, minQuakes: CLUSTER_MIN_QUAKES -1 > 0 ? CLUSTER_MIN_QUAKES -1 : 1 };
       const context = createMockContext(reqBody);
-      context.env.DB.first.mockResolvedValueOnce(null); // Cache miss
-      context.env.DB.run.mockResolvedValueOnce({ success: true }); // D1 insert success
-      const expectedCacheKey = getExpectedCacheKey(reqBody);
 
       const response = await onRequest(context);
       expect(response.status).toBe(200);
       const jsonResponse = await response.json();
       expect(Array.isArray(jsonResponse)).toBe(true);
-      expect(response.headers.get('X-Cache-Hit')).toBe('false');
-
-      expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT clusterData FROM ClusterCache"));
-      expect(context.env.DB.bind).toHaveBeenCalledWith(expectedCacheKey);
-      expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT OR REPLACE INTO ClusterCache"));
-      const expectedRequestParams = {
-        numQuakes: reqBody.earthquakes.length,
-        maxDistanceKm: reqBody.maxDistanceKm,
-        minQuakes: reqBody.minQuakes,
-        lastFetchTime: reqBody.lastFetchTime,
-        timeWindowHours: reqBody.timeWindowHours
-      };
-      expect(context.env.DB.bind).toHaveBeenCalledWith(expectedCacheKey, JSON.stringify(jsonResponse), JSON.stringify(expectedRequestParams));
-      expect(context.env.DB.run).toHaveBeenCalled();
+      
+      // No cache operations should occur
+      expect(context.env.DB.prepare).not.toHaveBeenCalledWith(expect.stringContaining("SELECT clusterData FROM ClusterCache"));
+      expect(context.env.DB.prepare).not.toHaveBeenCalledWith(expect.stringContaining("INSERT OR REPLACE INTO ClusterCache"));
+      expect(context.env.DB.run).not.toHaveBeenCalled();
+      expect(response.headers.get('X-Cache-Hit')).toBeNull();
     });
 
-    it('should calculate, store, and return data if cached data is invalid JSON', async () => {
-      const reqBody = { ...defaultRequestBody, earthquakes: createMockQuakes(1, 1.0) };
+    it('should calculate clusters using spatial optimization for large datasets', async () => {
+      const reqBody = { ...defaultRequestBody, earthquakes: createMockQuakes(150, 1.0) }; // Large dataset
       const context = createMockContext(reqBody);
-      context.env.DB.first.mockResolvedValueOnce({ clusterData: "invalid json" }); // Invalid cache
-      context.env.DB.run.mockResolvedValueOnce({ success: true }); // D1 insert success
-      const expectedCacheKey = getExpectedCacheKey(reqBody);
 
       const response = await onRequest(context);
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(Array.isArray(json)).toBe(true);
-      expect(response.headers.get('X-Cache-Hit')).toBe('false');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(`D1 Cache: Error parsing cached JSON for key ${expectedCacheKey}:`, expect.any(String));
-      expect(context.env.DB.run).toHaveBeenCalled(); // Should still attempt to cache the new result
+      // No cache operations
+      expect(context.env.DB.prepare).not.toHaveBeenCalledWith(expect.stringContaining("ClusterCache"));
+      expect(response.headers.get('X-Cache-Hit')).toBeNull();
     });
 
-    it('should calculate and return data if D1 GET (first()) throws an error, and still attempt PUT', async () => {
-      const reqBody = { ...defaultRequestBody, earthquakes: createMockQuakes(1, 1.0) };
+    it('should calculate clusters using original algorithm for small datasets', async () => {
+      const reqBody = { ...defaultRequestBody, earthquakes: createMockQuakes(50, 1.0) }; // Small dataset
       const context = createMockContext(reqBody);
-      const dbGetError = new Error('D1 SELECT failed');
-      context.env.DB.first.mockRejectedValueOnce(dbGetError); // D1 GET error
-      context.env.DB.run.mockResolvedValueOnce({ success: true }); // Assume PUT is successful
-      const expectedCacheKey = getExpectedCacheKey(reqBody);
 
       const response = await onRequest(context);
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(Array.isArray(json)).toBe(true);
-      expect(response.headers.get('X-Cache-Hit')).toBe('false');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(`D1 GET error for cacheKey ${expectedCacheKey}:`, dbGetError.message, dbGetError.cause);
-      expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT OR REPLACE"));
-      expect(context.env.DB.run).toHaveBeenCalled();
+      // No cache operations
+      expect(context.env.DB.prepare).not.toHaveBeenCalledWith(expect.stringContaining("ClusterCache"));
+      expect(response.headers.get('X-Cache-Hit')).toBeNull();
     });
 
-    it('should calculate and return data if D1 PUT (run()) throws an error', async () => {
-      const reqBody = { ...defaultRequestBody, earthquakes: createMockQuakes(1, 1.0) };
+    it('should handle spatial optimization fallback on error', async () => {
+      const reqBody = { ...defaultRequestBody, earthquakes: createMockQuakes(150, 1.0) }; // Large enough for optimization
       const context = createMockContext(reqBody);
-      context.env.DB.first.mockResolvedValueOnce(null); // Cache miss
-      const dbPutError = new Error('D1 INSERT failed');
-      context.env.DB.run.mockRejectedValueOnce(dbPutError); // D1 PUT error
-      const expectedCacheKey = getExpectedCacheKey(reqBody);
 
       const response = await onRequest(context);
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(Array.isArray(json)).toBe(true);
-      expect(response.headers.get('X-Cache-Info')).toBe('Cache write failed');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(`D1 PUT error for cacheKey ${expectedCacheKey}:`, dbPutError.message, dbPutError.cause);
+      // No cache operations should occur
+      expect(context.env.DB.prepare).not.toHaveBeenCalledWith(expect.stringContaining("ClusterCache"));
+      expect(response.headers.get('X-Cache-Hit')).toBeNull();
     });
   });
 
-  // New describe block for Cluster Definition Storage
+  // Cluster Definition Storage (still used for background storage)
   describe('Cluster Definition Storage (waitUntil)', () => {
-    it('should call waitUntil and storeClusterDefinition for significant clusters on cache miss', async () => {
+    it('should call waitUntil and storeClusterDefinition for significant clusters', async () => {
       const significantQuakes = createMockQuakes(CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE + 0.5, 'sig');
       const reqBody = {
         ...defaultRequestBody,
@@ -277,13 +237,11 @@ describe('onRequest in calculate-clusters.js', () => {
         minQuakes: CLUSTER_MIN_QUAKES, // Ensure findActiveClusters forms a cluster
       };
       const context = createMockContext(reqBody);
-      context.env.DB.first.mockResolvedValueOnce(null); // Cache miss
-      context.env.DB.run.mockResolvedValueOnce({ success: true }); // Cache insert success
 
-      const response = await onRequest(context); // Capture response to check X-Cache-Hit
+      const response = await onRequest(context);
       await context._awaitWaitUntilPromises(); // Wait for all waitUntil tasks
 
-      expect(response.headers.get('X-Cache-Hit')).toBe('false'); // Verify it was a cache miss path
+      expect(response.status).toBe(200);
       expect(context.waitUntil).toHaveBeenCalledTimes(1);
 
       // Assuming findActiveClusters with these params forms one significant cluster from all significantQuakes.
@@ -303,7 +261,7 @@ describe('onRequest in calculate-clusters.js', () => {
       );
     });
 
-    it('should call waitUntil but NOT storeClusterDefinition for non-significant clusters (too few quakes) on cache miss', async () => {
+    it('should call waitUntil but NOT storeClusterDefinition for non-significant clusters (too few quakes)', async () => {
       const nonSignificantQuakes = createMockQuakes(CLUSTER_MIN_QUAKES - 1, DEFINED_CLUSTER_MIN_MAGNITUDE + 0.5, 'non-sig-count');
       // Ensure minQuakes for findActiveClusters allows a cluster to form, but it's not significant for definition
       const reqBody = {
@@ -312,17 +270,15 @@ describe('onRequest in calculate-clusters.js', () => {
         minQuakes: CLUSTER_MIN_QUAKES - 1 > 0 ? CLUSTER_MIN_QUAKES - 1 : 1,
       };
       const context = createMockContext(reqBody);
-      context.env.DB.first.mockResolvedValueOnce(null); // Cache miss
-      context.env.DB.run.mockResolvedValueOnce({ success: true }); // Cache insert success
 
       const response = await onRequest(context);
 
-      expect(response.headers.get('X-Cache-Hit')).toBe('false');
-      expect(context.waitUntil).toHaveBeenCalledTimes(1); // waitUntil is called for any cache miss with DB
+      expect(response.status).toBe(200);
+      expect(context.waitUntil).toHaveBeenCalledTimes(1); // waitUntil is called when DB is available
       expect(storeClusterDefinition).not.toHaveBeenCalled();
     });
 
-    it('should call waitUntil but NOT storeClusterDefinition for non-significant clusters (low magnitude) on cache miss', async () => {
+    it('should call waitUntil but NOT storeClusterDefinition for non-significant clusters (low magnitude)', async () => {
       const lowMagQuakes = createMockQuakes(CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE - 0.1, 'non-sig-mag');
       const reqBody = {
         ...defaultRequestBody,
@@ -330,32 +286,29 @@ describe('onRequest in calculate-clusters.js', () => {
         minQuakes: CLUSTER_MIN_QUAKES, // Allows cluster formation
       };
       const context = createMockContext(reqBody);
-      context.env.DB.first.mockResolvedValueOnce(null); // Cache miss
-      context.env.DB.run.mockResolvedValueOnce({ success: true }); // Cache insert success
 
       const response = await onRequest(context);
 
-      expect(response.headers.get('X-Cache-Hit')).toBe('false');
-      expect(context.waitUntil).toHaveBeenCalledTimes(1); // waitUntil is called for any cache miss with DB
+      expect(response.status).toBe(200);
+      expect(context.waitUntil).toHaveBeenCalledTimes(1); // waitUntil is called when DB is available
       expect(storeClusterDefinition).not.toHaveBeenCalled();
     });
 
-    it('should NOT call waitUntil or storeClusterDefinition on cache hit', async () => {
-      const quakes = createMockQuakes(CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE + 0.5, 'cached-sig');
+    it('should call waitUntil and storeClusterDefinition for significant clusters regardless of caching (since cache is removed)', async () => {
+      const quakes = createMockQuakes(CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE + 0.5, 'always-sig');
       const reqBody = {
         ...defaultRequestBody,
         earthquakes: quakes,
         minQuakes: CLUSTER_MIN_QUAKES,
       };
-      const mockCachedClusterData = [{ id: 'cached-cluster-1', quakes: quakes.map(q => q.id) }];
       const context = createMockContext(reqBody);
-      context.env.DB.first.mockResolvedValueOnce({ clusterData: JSON.stringify(mockCachedClusterData) }); // Cache hit
 
       const response = await onRequest(context);
+      await context._awaitWaitUntilPromises(); // Wait for all waitUntil tasks
 
-      expect(response.headers.get('X-Cache-Hit')).toBe('true');
-      expect(context.waitUntil).not.toHaveBeenCalled();
-      expect(storeClusterDefinition).not.toHaveBeenCalled();
+      expect(response.status).toBe(200);
+      expect(context.waitUntil).toHaveBeenCalledTimes(1);
+      expect(storeClusterDefinition).toHaveBeenCalledTimes(1);
     });
 
     it('should NOT call waitUntil or storeClusterDefinition if DB is not configured', async () => {
@@ -372,7 +325,6 @@ describe('onRequest in calculate-clusters.js', () => {
       expect(response.status).toBe(200); // onRequest should still succeed
       const json = await response.json();
       expect(Array.isArray(json)).toBe(true); // Clusters should still be calculated
-      expect(response.headers.get('X-Cache-Info')).toBe('DB not configured');
       expect(context.waitUntil).not.toHaveBeenCalled();
       expect(storeClusterDefinition).not.toHaveBeenCalled();
     });
