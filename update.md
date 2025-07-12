@@ -91,51 +91,49 @@ To significantly improve the Global Seismic Activity Monitor, the following acti
 
 These changes will lead to a faster, more reliable, and data-rich application.
 
-## 7. Future Enhancements & Educational Opportunities
+## 7. Recent Developments & Future Enhancements
 
-Beyond the immediate optimizations and historical data loading, several enhancements can further enrich the application, particularly for regional analysis and educational purposes:
+This section outlines recently implemented features and ongoing enhancements, particularly focusing on regional analysis and educational opportunities.
 
 ### 7.1. Enhanced Regional Quake Processing & Display
--   **Dedicated Regional Pages/Views:**
-    -   Develop dynamic pages for specific seismically active or user-interested regions (e.g., `/region/california`, `/region/japan`).
+-   **Implemented Feature (via Claude code CLI): Initial Regional Faulting Display.**
+    -   The application now incorporates and displays data on regional fault lines, enhancing geological context. This provides a foundational layer for more detailed regional analysis.
+-   **Future Directions:**
+    -   **Dedicated Regional Pages/Views:** Develop dynamic pages for specific seismically active or user-interested regions (e.g., `/region/california`, `/region/japan`).
     -   These pages could aggregate:
         -   Recent seismicity specific to the defined region.
         -   Links to significant historical earthquakes and clusters within that region.
         -   Region-specific statistics (e.g., frequency by magnitude, typical depths, seismicity rate changes).
-        -   Prominent display of major nearby faults and their characteristics.
--   **Server-Side Regional Aggregation:**
+        -   Prominent display of major nearby faults and their characteristics, building upon the initial fault display.
+-   **Server-Side Regional Aggregation (Future):**
     -   To support these regional pages efficiently, implement server-side processes to pre-calculate and store regional summaries. This could involve:
         -   A new D1 table for regional statistics, updated periodically.
         -   Extending `ClusterDefinitions` or creating a related table to link clusters to broader regions.
--   **Spatial Querying:**
+-   **Spatial Querying (Future):**
     -   Define regions using latitude/longitude bounding boxes for querying `EarthquakeEvents` in D1.
     -   Monitor Cloudflare D1 for potential future support of native spatial extensions, which would greatly simplify and optimize these queries.
 
 ### 7.2. Processing Local Seismicity for Educational Purposes
--   **Interactive Learning Modules:**
-    -   Integrate interactive educational elements into the "Learn" section or on regional/earthquake detail pages:
+-   **Progress (via Claude code CLI): Groundwork for Fault Correlation.**
+    -   The new regional faulting display (see 7.1) is a first step towards better correlation of seismic events with known faults, which is key for educational purposes.
+-   **Future Directions:**
+    -   **Interactive Learning Modules:** Integrate interactive educational elements into the "Learn" section or on regional/earthquake detail pages:
         -   **Scenario Visualizations:** E.g., "What if an M7.0 occurred on the [Local Fault Name]?" linking to ShakeMap scenarios (if available from USGS) or educational diagrams showing potential impact.
         -   **Fault Mechanics Explorer:** Visualizations of different fault types (strike-slip, normal, thrust) with examples of recent or local quakes that correspond to these types.
         -   **Seismic Sequence Analysis:** For notable local sequences, provide timelines illustrating foreshocks, the mainshock, and aftershock decay, explaining the concepts.
--   **Correlating Quakes with Known Faults:**
-    -   When displaying earthquake details, if the event can be reliably associated with a known fault (see section 7.3), prominently display this link.
+    -   **Correlating Quakes with Known Faults:** Building on the current fault display, enhance the system to prominently link displayed earthquake details to specific known faults when a reliable association can be made (see section 7.3).
     -   Provide educational pop-ups or links to information about the specific fault's history, slip rate, and hazard potential.
--   **Contextualized Explanations:**
+-   **Contextualized Explanations (Future):**
     -   For local events, tailor explanations to the specific area, discussing typical geological conditions, how building codes might reflect seismic risk, and links to local emergency preparedness resources.
 
 ### 7.3. Incorporating Nearby Fault Data
--   **Fault Data Integration & Storage:**
-    -   Utilize and expand upon existing fault datasets (e.g., `src/assets/gem_active_faults_harmonized.json`, `src/assets/local_active_faults.json`).
-    -   Load these fault geometries and attributes (name, slip type, length, last rupture date if available) into a dedicated D1 table (e.g., `Faults`).
--   **Server-Side Fault Proximity Analysis:**
-    -   Develop a server-side Cloudflare Worker function that, given an earthquake's coordinates, can query the `Faults` D1 table to find nearby fault segments.
-    -   This would initially rely on distance calculations based on coordinates.
--   **Client-Side Display & Interaction:**
-    -   Overlay major fault lines on the main 3D globe and on 2D regional/detail maps.
-    -   Allow users to click on fault lines to get more information (name, type, etc.).
--   **Linking Earthquakes to Faults:**
-    -   When an earthquake's details are fetched or processed, the server-side logic should attempt to identify the nearest major fault(s).
-    -   Display this association in the earthquake detail view, e.g., "Likely associated with the [Fault Name]."
+-   **Implemented Feature (via Claude code CLI): Initial Fault Data Integration and Display.**
+    -   Existing fault datasets (e.g., `src/assets/gem_active_faults_harmonized.json`, `src/assets/local_active_faults.json`) are now being utilized for display, providing users with visual context of regional tectonic structures.
+-   **Future Directions:**
+    -   **Enhanced Fault Data Storage & Management:** Load these fault geometries and attributes (name, slip type, length, last rupture date if available) into a dedicated D1 table (e.g., `Faults`) for more robust querying and management.
+    -   **Server-Side Fault Proximity Analysis:** Develop a server-side Cloudflare Worker function that, given an earthquake's coordinates, can query the `Faults` D1 table to find nearby fault segments. This would initially rely on distance calculations based on coordinates.
+    -   **Client-Side Display & Interaction:** Further enhance the overlay of major fault lines on the main 3D globe and on 2D regional/detail maps. Allow users to click on fault lines to get more information (name, type, etc.).
+    -   **Linking Earthquakes to Faults:** When an earthquake's details are fetched or processed, the server-side logic should attempt to identify the nearest major fault(s) using the enhanced fault data and proximity analysis. Display this association in the earthquake detail view, e.g., "Likely associated with the [Fault Name]."
 
 ### 7.4. Other Potential Optimizations & Features
 -   **Advanced Cluster Analysis:**
