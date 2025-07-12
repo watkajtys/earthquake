@@ -172,6 +172,23 @@ class SpatialGrid {
           cells.add(this._getCellKey(lat, lng));
         }
       });
+    } else if (feature.geometry.type === 'Point') {
+      // Add support for Point geometries (earthquakes)
+      const [lng, lat] = feature.geometry.coordinates;
+      if (lng >= this.bounds.west && lng <= this.bounds.east &&
+          lat >= this.bounds.south && lat <= this.bounds.north) {
+        cells.add(this._getCellKey(lat, lng));
+      }
+    } else if (feature.geometry.type === 'MultiLineString') {
+      // Add support for MultiLineString geometries
+      feature.geometry.coordinates.forEach(lineString => {
+        lineString.forEach(([lng, lat]) => {
+          if (lng >= this.bounds.west && lng <= this.bounds.east &&
+              lat >= this.bounds.south && lat <= this.bounds.north) {
+            cells.add(this._getCellKey(lat, lng));
+          }
+        });
+      });
     }
     
     cells.forEach(cellKey => {
