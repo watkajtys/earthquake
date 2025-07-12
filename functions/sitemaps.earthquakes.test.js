@@ -1,7 +1,7 @@
 import { onRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-import { MIN_FEELABLE_MAGNITUDE } from '../routes/sitemaps/earthquakes-sitemap.js'; // Reverted to standard relative path
+import { MIN_FEELABLE_MAGNITUDE } from './routes/sitemaps/earthquakes-sitemap.js'; // Reverted to standard relative path
 
 // --- Mocks for Cloudflare Environment ---
 const mockCache = {
