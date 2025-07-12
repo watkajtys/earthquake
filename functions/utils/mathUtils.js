@@ -5,6 +5,13 @@
  * Please ensure any changes made here are reflected in the source file and vice-versa.
  */
 
+// Global profiler for instrumented distance calculations
+let globalProfiler = null;
+
+export function setDistanceCalculationProfiler(profiler) {
+  globalProfiler = profiler;
+}
+
 // Copied from /common/mathUtils.js
 /**
  * Calculates the distance between two geographical coordinates using the Haversine formula.
@@ -15,6 +22,8 @@
  * @returns {number} Distance in kilometers.
  */
 export function calculateDistance(lat1, lon1, lat2, lon2) {
+    const startTime = globalProfiler ? performance.now() : 0;
+    
     const R = 6371; // Radius of the Earth in kilometers
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -24,5 +33,11 @@ export function calculateDistance(lat1, lon1, lat2, lon2) {
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c;
+    
+    if (globalProfiler) {
+        const endTime = performance.now();
+        globalProfiler.trackDistanceCalculation(endTime - startTime);
+    }
+    
     return distance;
 }
