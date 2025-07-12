@@ -1,0 +1,1206 @@
+{
+  "metadata": {
+    "timestamp": "2025-07-12T17:12:56.340Z",
+    "config": {
+      "datasets": [
+        {
+          "size": 100,
+          "name": "Small"
+        },
+        {
+          "size": 500,
+          "name": "Medium"
+        },
+        {
+          "size": 1000,
+          "name": "Large"
+        },
+        {
+          "size": 2500,
+          "name": "X-Large"
+        },
+        {
+          "size": 5000,
+          "name": "XX-Large"
+        }
+      ],
+      "clusterParams": [
+        {
+          "distance": 50,
+          "minQuakes": 3,
+          "name": "Tight"
+        },
+        {
+          "distance": 100,
+          "minQuakes": 3,
+          "name": "Standard"
+        },
+        {
+          "distance": 200,
+          "minQuakes": 2,
+          "name": "Loose"
+        }
+      ],
+      "distributions": [
+        {
+          "name": "California",
+          "type": "clustered"
+        },
+        {
+          "name": "Global",
+          "type": "scattered"
+        },
+        {
+          "name": "Mixed",
+          "type": "realistic"
+        }
+      ]
+    },
+    "options": {
+      "quick": true,
+      "config": {
+        "datasets": [
+          {
+            "size": 100,
+            "name": "Small"
+          },
+          {
+            "size": 500,
+            "name": "Medium"
+          },
+          {
+            "size": 1000,
+            "name": "Large"
+          }
+        ]
+      }
+    }
+  },
+  "benchmarks": [
+    {
+      "testName": "Small_California_Tight",
+      "executionTime": 5.814531999999986,
+      "memoryUsed": 530544,
+      "peakMemory": 5449672,
+      "distanceCalculations": 796,
+      "distanceCalculationTime": 1.2894200000009732,
+      "result": {
+        "clustersFound": 4,
+        "totalEarthquakes": 70,
+        "avgClusterSize": 17.5,
+        "largestCluster": 26
+      },
+      "parameters": {
+        "earthquakeCount": 100,
+        "distribution": "clustered",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.058145319999999855,
+        "distanceCalcsPerQuake": 7.96,
+        "avgDistanceCalcTime": 0.001619874371860519
+      }
+    },
+    {
+      "testName": "Small_California_Standard",
+      "executionTime": 2.013508999999999,
+      "memoryUsed": 589088,
+      "peakMemory": 5314400,
+      "distanceCalculations": 480,
+      "distanceCalculationTime": 0.578113000000485,
+      "result": {
+        "clustersFound": 3,
+        "totalEarthquakes": 75,
+        "avgClusterSize": 25,
+        "largestCluster": 29
+      },
+      "parameters": {
+        "earthquakeCount": 100,
+        "distribution": "clustered",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.02013508999999999,
+        "distanceCalcsPerQuake": 4.8,
+        "avgDistanceCalcTime": 0.0012044020833343438
+      }
+    },
+    {
+      "testName": "Small_California_Loose",
+      "executionTime": 3.3242360000000417,
+      "memoryUsed": -437296,
+      "peakMemory": 5035104,
+      "distanceCalculations": 492,
+      "distanceCalculationTime": 0.5244340000000989,
+      "result": {
+        "clustersFound": 9,
+        "totalEarthquakes": 94,
+        "avgClusterSize": 10.444444444444445,
+        "largestCluster": 27
+      },
+      "parameters": {
+        "earthquakeCount": 100,
+        "distribution": "clustered",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.033242360000000415,
+        "distanceCalcsPerQuake": 4.92,
+        "avgDistanceCalcTime": 0.0010659227642278433
+      }
+    },
+    {
+      "testName": "Small_Global_Tight",
+      "executionTime": 9.431309999999996,
+      "memoryUsed": 243312,
+      "peakMemory": 5383128,
+      "distanceCalculations": 4950,
+      "distanceCalculationTime": 3.570534999999836,
+      "result": {
+        "clustersFound": 0,
+        "totalEarthquakes": 0,
+        "avgClusterSize": 0,
+        "largestCluster": 0
+      },
+      "parameters": {
+        "earthquakeCount": 100,
+        "distribution": "scattered",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.09431309999999997,
+        "distanceCalcsPerQuake": 49.5,
+        "avgDistanceCalcTime": 0.0007213202020201689
+      }
+    },
+    {
+      "testName": "Small_Global_Standard",
+      "executionTime": 6.318635000000029,
+      "memoryUsed": -425120,
+      "peakMemory": 5061176,
+      "distanceCalculations": 4950,
+      "distanceCalculationTime": 1.1568699999968999,
+      "result": {
+        "clustersFound": 0,
+        "totalEarthquakes": 0,
+        "avgClusterSize": 0,
+        "largestCluster": 0
+      },
+      "parameters": {
+        "earthquakeCount": 100,
+        "distribution": "scattered",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.0631863500000003,
+        "distanceCalcsPerQuake": 49.5,
+        "avgDistanceCalcTime": 0.00023371111111048483
+      }
+    },
+    {
+      "testName": "Small_Global_Loose",
+      "executionTime": 6.819832000000019,
+      "memoryUsed": 1513760,
+      "peakMemory": 6677904,
+      "distanceCalculations": 4870,
+      "distanceCalculationTime": 1.6453650000010498,
+      "result": {
+        "clustersFound": 1,
+        "totalEarthquakes": 2,
+        "avgClusterSize": 2,
+        "largestCluster": 2
+      },
+      "parameters": {
+        "earthquakeCount": 100,
+        "distribution": "scattered",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.0681983200000002,
+        "distanceCalcsPerQuake": 48.7,
+        "avgDistanceCalcTime": 0.0003378572895279363
+      }
+    },
+    {
+      "testName": "Small_Mixed_Tight",
+      "executionTime": 5.586018999999965,
+      "memoryUsed": 1030048,
+      "peakMemory": 5827808,
+      "distanceCalculations": 2880,
+      "distanceCalculationTime": 1.1702970000015398,
+      "result": {
+        "clustersFound": 3,
+        "totalEarthquakes": 30,
+        "avgClusterSize": 10,
+        "largestCluster": 10
+      },
+      "parameters": {
+        "earthquakeCount": 100,
+        "distribution": "realistic",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.05586018999999965,
+        "distanceCalcsPerQuake": 28.8,
+        "avgDistanceCalcTime": 0.00040635312500053464
+      }
+    },
+    {
+      "testName": "Small_Mixed_Standard",
+      "executionTime": 5.828093000000024,
+      "memoryUsed": -835856,
+      "peakMemory": 5106776,
+      "distanceCalculations": 3428,
+      "distanceCalculationTime": 1.0797030000029508,
+      "result": {
+        "clustersFound": 3,
+        "totalEarthquakes": 23,
+        "avgClusterSize": 7.666666666666667,
+        "largestCluster": 9
+      },
+      "parameters": {
+        "earthquakeCount": 100,
+        "distribution": "realistic",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.05828093000000024,
+        "distanceCalcsPerQuake": 34.28,
+        "avgDistanceCalcTime": 0.00031496586931241275
+      }
+    },
+    {
+      "testName": "Small_Mixed_Loose",
+      "executionTime": 4.412747999999965,
+      "memoryUsed": 907200,
+      "peakMemory": 6134576,
+      "distanceCalculations": 2409,
+      "distanceCalculationTime": 0.8011920000007535,
+      "result": {
+        "clustersFound": 3,
+        "totalEarthquakes": 37,
+        "avgClusterSize": 12.333333333333334,
+        "largestCluster": 13
+      },
+      "parameters": {
+        "earthquakeCount": 100,
+        "distribution": "realistic",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.04412747999999965,
+        "distanceCalcsPerQuake": 24.09,
+        "avgDistanceCalcTime": 0.00033258281444614095
+      }
+    },
+    {
+      "testName": "Medium_California_Tight",
+      "executionTime": 43.86806200000001,
+      "memoryUsed": -1431296,
+      "peakMemory": 5332448,
+      "distanceCalculations": 6653,
+      "distanceCalculationTime": 2.6232519999991837,
+      "result": {
+        "clustersFound": 13,
+        "totalEarthquakes": 403,
+        "avgClusterSize": 31,
+        "largestCluster": 134
+      },
+      "parameters": {
+        "earthquakeCount": 500,
+        "distribution": "clustered",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.08773612400000001,
+        "distanceCalcsPerQuake": 13.306,
+        "avgDistanceCalcTime": 0.00039429610701926707
+      }
+    },
+    {
+      "testName": "Medium_California_Standard",
+      "executionTime": 6.094383999999991,
+      "memoryUsed": -37296,
+      "peakMemory": 5907120,
+      "distanceCalculations": 4759,
+      "distanceCalculationTime": 1.9323169999998413,
+      "result": {
+        "clustersFound": 24,
+        "totalEarthquakes": 468,
+        "avgClusterSize": 19.5,
+        "largestCluster": 119
+      },
+      "parameters": {
+        "earthquakeCount": 500,
+        "distribution": "clustered",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.012188767999999982,
+        "distanceCalcsPerQuake": 9.518,
+        "avgDistanceCalcTime": 0.0004060342508930114
+      }
+    },
+    {
+      "testName": "Medium_California_Loose",
+      "executionTime": 3.642643000000021,
+      "memoryUsed": -596568,
+      "peakMemory": 5749176,
+      "distanceCalculations": 2067,
+      "distanceCalculationTime": 0.3527880000032724,
+      "result": {
+        "clustersFound": 18,
+        "totalEarthquakes": 499,
+        "avgClusterSize": 27.72222222222222,
+        "largestCluster": 151
+      },
+      "parameters": {
+        "earthquakeCount": 500,
+        "distribution": "clustered",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.007285286000000042,
+        "distanceCalcsPerQuake": 4.134,
+        "avgDistanceCalcTime": 0.00017067634252698229
+      }
+    },
+    {
+      "testName": "Medium_Global_Tight",
+      "executionTime": 84.726516,
+      "memoryUsed": -679376,
+      "peakMemory": 5440864,
+      "distanceCalculations": 122441,
+      "distanceCalculationTime": 29.3565359999983,
+      "result": {
+        "clustersFound": 0,
+        "totalEarthquakes": 0,
+        "avgClusterSize": 0,
+        "largestCluster": 0
+      },
+      "parameters": {
+        "earthquakeCount": 500,
+        "distribution": "scattered",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.169453032,
+        "distanceCalcsPerQuake": 244.882,
+        "avgDistanceCalcTime": 0.00023976066840354374
+      }
+    },
+    {
+      "testName": "Medium_Global_Standard",
+      "executionTime": 73.21146699999997,
+      "memoryUsed": 1543600,
+      "peakMemory": 7354976,
+      "distanceCalculations": 118600,
+      "distanceCalculationTime": 25.089625999997224,
+      "result": {
+        "clustersFound": 2,
+        "totalEarthquakes": 6,
+        "avgClusterSize": 3,
+        "largestCluster": 3
+      },
+      "parameters": {
+        "earthquakeCount": 500,
+        "distribution": "scattered",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.14642293399999995,
+        "distanceCalcsPerQuake": 237.2,
+        "avgDistanceCalcTime": 0.00021154827993252298
+      }
+    },
+    {
+      "testName": "Medium_Global_Loose",
+      "executionTime": 76.36550499999998,
+      "memoryUsed": 3799688,
+      "peakMemory": 9561880,
+      "distanceCalculations": 106578,
+      "distanceCalculationTime": 25.64129099998445,
+      "result": {
+        "clustersFound": 42,
+        "totalEarthquakes": 95,
+        "avgClusterSize": 2.261904761904762,
+        "largestCluster": 6
+      },
+      "parameters": {
+        "earthquakeCount": 500,
+        "distribution": "scattered",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.15273100999999997,
+        "distanceCalcsPerQuake": 213.156,
+        "avgDistanceCalcTime": 0.00024058709114436796
+      }
+    },
+    {
+      "testName": "Medium_Mixed_Tight",
+      "executionTime": 41.57266600000003,
+      "memoryUsed": 3537392,
+      "peakMemory": 9572296,
+      "distanceCalculations": 61321,
+      "distanceCalculationTime": 13.01103500000579,
+      "result": {
+        "clustersFound": 4,
+        "totalEarthquakes": 153,
+        "avgClusterSize": 38.25,
+        "largestCluster": 61
+      },
+      "parameters": {
+        "earthquakeCount": 500,
+        "distribution": "realistic",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.08314533200000006,
+        "distanceCalcsPerQuake": 122.642,
+        "avgDistanceCalcTime": 0.00021217910666828315
+      }
+    },
+    {
+      "testName": "Medium_Mixed_Standard",
+      "executionTime": 42.581683999999996,
+      "memoryUsed": 3956168,
+      "peakMemory": 10080944,
+      "distanceCalculations": 61071,
+      "distanceCalculationTime": 13.822069000007332,
+      "result": {
+        "clustersFound": 5,
+        "totalEarthquakes": 153,
+        "avgClusterSize": 30.6,
+        "largestCluster": 51
+      },
+      "parameters": {
+        "earthquakeCount": 500,
+        "distribution": "realistic",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.08516336799999999,
+        "distanceCalcsPerQuake": 122.142,
+        "avgDistanceCalcTime": 0.00022632786428922617
+      }
+    },
+    {
+      "testName": "Medium_Mixed_Loose",
+      "executionTime": 38.510493999999994,
+      "memoryUsed": 3344392,
+      "peakMemory": 9770936,
+      "distanceCalculations": 55028,
+      "distanceCalculationTime": 12.260078999991492,
+      "result": {
+        "clustersFound": 37,
+        "totalEarthquakes": 221,
+        "avgClusterSize": 5.972972972972973,
+        "largestCluster": 56
+      },
+      "parameters": {
+        "earthquakeCount": 500,
+        "distribution": "realistic",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.07702098799999998,
+        "distanceCalcsPerQuake": 110.056,
+        "avgDistanceCalcTime": 0.00022279710329271447
+      }
+    },
+    {
+      "testName": "Large_California_Tight",
+      "executionTime": 31.933015999999952,
+      "memoryUsed": 1016688,
+      "peakMemory": 8016008,
+      "distanceCalculations": 21312,
+      "distanceCalculationTime": 3.559780999991631,
+      "result": {
+        "clustersFound": 50,
+        "totalEarthquakes": 874,
+        "avgClusterSize": 17.48,
+        "largestCluster": 235
+      },
+      "parameters": {
+        "earthquakeCount": 1000,
+        "distribution": "clustered",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.03193301599999995,
+        "distanceCalcsPerQuake": 21.312,
+        "avgDistanceCalcTime": 0.00016703176614074844
+      }
+    },
+    {
+      "testName": "Large_California_Standard",
+      "executionTime": 13.683267999999998,
+      "memoryUsed": 1620624,
+      "peakMemory": 10518880,
+      "distanceCalculations": 9570,
+      "distanceCalculationTime": 1.7364559999989524,
+      "result": {
+        "clustersFound": 44,
+        "totalEarthquakes": 976,
+        "avgClusterSize": 22.181818181818183,
+        "largestCluster": 250
+      },
+      "parameters": {
+        "earthquakeCount": 1000,
+        "distribution": "clustered",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.013683267999999998,
+        "distanceCalcsPerQuake": 9.57,
+        "avgDistanceCalcTime": 0.00018144785788912774
+      }
+    },
+    {
+      "testName": "Large_California_Loose",
+      "executionTime": 5.8279039999999895,
+      "memoryUsed": 2795248,
+      "peakMemory": 10365280,
+      "distanceCalculations": 3775,
+      "distanceCalculationTime": 0.5986109999954579,
+      "result": {
+        "clustersFound": 17,
+        "totalEarthquakes": 999,
+        "avgClusterSize": 58.76470588235294,
+        "largestCluster": 275
+      },
+      "parameters": {
+        "earthquakeCount": 1000,
+        "distribution": "clustered",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.00582790399999999,
+        "distanceCalcsPerQuake": 3.775,
+        "avgDistanceCalcTime": 0.0001585724503299226
+      }
+    },
+    {
+      "testName": "Large_Global_Tight",
+      "executionTime": 322.2132270000001,
+      "memoryUsed": 675496,
+      "peakMemory": 8121328,
+      "distanceCalculations": 484855,
+      "distanceCalculationTime": 100.75501999998039,
+      "result": {
+        "clustersFound": 2,
+        "totalEarthquakes": 6,
+        "avgClusterSize": 3,
+        "largestCluster": 3
+      },
+      "parameters": {
+        "earthquakeCount": 1000,
+        "distribution": "scattered",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.3222132270000001,
+        "distanceCalcsPerQuake": 484.855,
+        "avgDistanceCalcTime": 0.00020780443637784574
+      }
+    },
+    {
+      "testName": "Large_Global_Standard",
+      "executionTime": 308.42121700000007,
+      "memoryUsed": 1301536,
+      "peakMemory": 10162808,
+      "distanceCalculations": 460528,
+      "distanceCalculationTime": 109.67736900007162,
+      "result": {
+        "clustersFound": 5,
+        "totalEarthquakes": 17,
+        "avgClusterSize": 3.4,
+        "largestCluster": 5
+      },
+      "parameters": {
+        "earthquakeCount": 1000,
+        "distribution": "scattered",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.3084212170000001,
+        "distanceCalcsPerQuake": 460.528,
+        "avgDistanceCalcTime": 0.00023815570171644638
+      }
+    },
+    {
+      "testName": "Large_Global_Loose",
+      "executionTime": 301.9349550000002,
+      "memoryUsed": -1516824,
+      "peakMemory": 9385808,
+      "distanceCalculations": 380624,
+      "distanceCalculationTime": 107.24549000000047,
+      "result": {
+        "clustersFound": 126,
+        "totalEarthquakes": 305,
+        "avgClusterSize": 2.4206349206349205,
+        "largestCluster": 15
+      },
+      "parameters": {
+        "earthquakeCount": 1000,
+        "distribution": "scattered",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.30193495500000017,
+        "distanceCalcsPerQuake": 380.624,
+        "avgDistanceCalcTime": 0.000281762290344278
+      }
+    },
+    {
+      "testName": "Large_Mixed_Tight",
+      "executionTime": 216.2879200000002,
+      "memoryUsed": 5358744,
+      "peakMemory": 15560344,
+      "distanceCalculations": 269503,
+      "distanceCalculationTime": 67.34827299999324,
+      "result": {
+        "clustersFound": 6,
+        "totalEarthquakes": 268,
+        "avgClusterSize": 44.666666666666664,
+        "largestCluster": 88
+      },
+      "parameters": {
+        "earthquakeCount": 1000,
+        "distribution": "realistic",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.21628792000000022,
+        "distanceCalcsPerQuake": 269.503,
+        "avgDistanceCalcTime": 0.0002498980456618043
+      }
+    },
+    {
+      "testName": "Large_Mixed_Standard",
+      "executionTime": 187.83502999999973,
+      "memoryUsed": -2021696,
+      "peakMemory": 14355776,
+      "distanceCalculations": 239413,
+      "distanceCalculationTime": 54.43166499999188,
+      "result": {
+        "clustersFound": 9,
+        "totalEarthquakes": 300,
+        "avgClusterSize": 33.333333333333336,
+        "largestCluster": 101
+      },
+      "parameters": {
+        "earthquakeCount": 1000,
+        "distribution": "realistic",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.18783502999999974,
+        "distanceCalcsPerQuake": 239.413,
+        "avgDistanceCalcTime": 0.00022735467581122112
+      }
+    },
+    {
+      "testName": "Large_Mixed_Loose",
+      "executionTime": 184.43391900000006,
+      "memoryUsed": 952584,
+      "peakMemory": 16124288,
+      "distanceCalculations": 212797,
+      "distanceCalculationTime": 45.40589200011027,
+      "result": {
+        "clustersFound": 79,
+        "totalEarthquakes": 459,
+        "avgClusterSize": 5.810126582278481,
+        "largestCluster": 96
+      },
+      "parameters": {
+        "earthquakeCount": 1000,
+        "distribution": "realistic",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.18443391900000006,
+        "distanceCalcsPerQuake": 212.797,
+        "avgDistanceCalcTime": 0.00021337656076030336
+      }
+    },
+    {
+      "testName": "X-Large_California_Tight",
+      "executionTime": 147.06874800000014,
+      "memoryUsed": 6452672,
+      "peakMemory": 17522272,
+      "distanceCalculations": 71145,
+      "distanceCalculationTime": 13.497110999951019,
+      "result": {
+        "clustersFound": 131,
+        "totalEarthquakes": 2392,
+        "avgClusterSize": 18.259541984732824,
+        "largestCluster": 545
+      },
+      "parameters": {
+        "earthquakeCount": 2500,
+        "distribution": "clustered",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.05882749920000006,
+        "distanceCalcsPerQuake": 28.458,
+        "avgDistanceCalcTime": 0.0001897127134717973
+      }
+    },
+    {
+      "testName": "X-Large_California_Standard",
+      "executionTime": 123.17836800000032,
+      "memoryUsed": 5626448,
+      "peakMemory": 17947784,
+      "distanceCalculations": 26090,
+      "distanceCalculationTime": 4.264952999967591,
+      "result": {
+        "clustersFound": 56,
+        "totalEarthquakes": 2482,
+        "avgClusterSize": 44.32142857142857,
+        "largestCluster": 614
+      },
+      "parameters": {
+        "earthquakeCount": 2500,
+        "distribution": "clustered",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.04927134720000013,
+        "distanceCalcsPerQuake": 10.436,
+        "avgDistanceCalcTime": 0.0001634707934061936
+      }
+    },
+    {
+      "testName": "X-Large_California_Loose",
+      "executionTime": 93.4599860000003,
+      "memoryUsed": -6698264,
+      "peakMemory": 13441192,
+      "distanceCalculations": 10878,
+      "distanceCalculationTime": 2.7335399999692527,
+      "result": {
+        "clustersFound": 19,
+        "totalEarthquakes": 2499,
+        "avgClusterSize": 131.52631578947367,
+        "largestCluster": 684
+      },
+      "parameters": {
+        "earthquakeCount": 2500,
+        "distribution": "clustered",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.03738399440000012,
+        "distanceCalcsPerQuake": 4.3512,
+        "avgDistanceCalcTime": 0.000251290678430709
+      }
+    },
+    {
+      "testName": "X-Large_Global_Tight",
+      "executionTime": 2022.9797650000005,
+      "memoryUsed": -4576464,
+      "peakMemory": 10715472,
+      "distanceCalculations": 2955714,
+      "distanceCalculationTime": 605.4279449991877,
+      "result": {
+        "clustersFound": 8,
+        "totalEarthquakes": 31,
+        "avgClusterSize": 3.875,
+        "largestCluster": 9
+      },
+      "parameters": {
+        "earthquakeCount": 2500,
+        "distribution": "scattered",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.8091919060000002,
+        "distanceCalcsPerQuake": 1182.2856,
+        "avgDistanceCalcTime": 0.00020483306064091037
+      }
+    },
+    {
+      "testName": "X-Large_Global_Standard",
+      "executionTime": 1556.6396299999997,
+      "memoryUsed": -5168328,
+      "peakMemory": 7460192,
+      "distanceCalculations": 2649099,
+      "distanceCalculationTime": 494.56149199986703,
+      "result": {
+        "clustersFound": 38,
+        "totalEarthquakes": 138,
+        "avgClusterSize": 3.6315789473684212,
+        "largestCluster": 10
+      },
+      "parameters": {
+        "earthquakeCount": 2500,
+        "distribution": "scattered",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.6226558519999998,
+        "distanceCalcsPerQuake": 1059.6396,
+        "avgDistanceCalcTime": 0.00018669045286713218
+      }
+    },
+    {
+      "testName": "X-Large_Global_Loose",
+      "executionTime": 1500.4410100000005,
+      "memoryUsed": 7618584,
+      "peakMemory": 16924552,
+      "distanceCalculations": 1917834,
+      "distanceCalculationTime": 422.1762769992265,
+      "result": {
+        "clustersFound": 448,
+        "totalEarthquakes": 1181,
+        "avgClusterSize": 2.6361607142857144,
+        "largestCluster": 28
+      },
+      "parameters": {
+        "earthquakeCount": 2500,
+        "distribution": "scattered",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.6001764040000002,
+        "distanceCalcsPerQuake": 767.1336,
+        "avgDistanceCalcTime": 0.00022013181380621394
+      }
+    },
+    {
+      "testName": "X-Large_Mixed_Tight",
+      "executionTime": 1232.1866909999999,
+      "memoryUsed": 116304,
+      "peakMemory": 19079912,
+      "distanceCalculations": 1502591,
+      "distanceCalculationTime": 334.3413349991997,
+      "result": {
+        "clustersFound": 13,
+        "totalEarthquakes": 749,
+        "avgClusterSize": 57.61538461538461,
+        "largestCluster": 247
+      },
+      "parameters": {
+        "earthquakeCount": 2500,
+        "distribution": "realistic",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.49287467639999993,
+        "distanceCalcsPerQuake": 601.0364,
+        "avgDistanceCalcTime": 0.0002225098746093912
+      }
+    },
+    {
+      "testName": "X-Large_Mixed_Standard",
+      "executionTime": 836.669011,
+      "memoryUsed": -4436656,
+      "peakMemory": 16681208,
+      "distanceCalculations": 1294068,
+      "distanceCalculationTime": 236.72756900010063,
+      "result": {
+        "clustersFound": 33,
+        "totalEarthquakes": 863,
+        "avgClusterSize": 26.151515151515152,
+        "largestCluster": 261
+      },
+      "parameters": {
+        "earthquakeCount": 2500,
+        "distribution": "realistic",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.3346676044,
+        "distanceCalcsPerQuake": 517.6272,
+        "avgDistanceCalcTime": 0.0001829328667427837
+      }
+    },
+    {
+      "testName": "X-Large_Mixed_Loose",
+      "executionTime": 684.5614979999991,
+      "memoryUsed": 6372152,
+      "peakMemory": 25101896,
+      "distanceCalculations": 985910,
+      "distanceCalculationTime": 175.10447400028897,
+      "result": {
+        "clustersFound": 323,
+        "totalEarthquakes": 1564,
+        "avgClusterSize": 4.842105263157895,
+        "largestCluster": 269
+      },
+      "parameters": {
+        "earthquakeCount": 2500,
+        "distribution": "realistic",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.27382459919999963,
+        "distanceCalcsPerQuake": 394.364,
+        "avgDistanceCalcTime": 0.0001776069560104766
+      }
+    },
+    {
+      "testName": "XX-Large_California_Tight",
+      "executionTime": 211.0689710000006,
+      "memoryUsed": 12825240,
+      "peakMemory": 27848600,
+      "distanceCalculations": 136039,
+      "distanceCalculationTime": 18.818235999895478,
+      "result": {
+        "clustersFound": 186,
+        "totalEarthquakes": 4931,
+        "avgClusterSize": 26.510752688172044,
+        "largestCluster": 1200
+      },
+      "parameters": {
+        "earthquakeCount": 5000,
+        "distribution": "clustered",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.04221379420000012,
+        "distanceCalcsPerQuake": 27.2078,
+        "avgDistanceCalcTime": 0.00013832971427234453
+      }
+    },
+    {
+      "testName": "XX-Large_California_Standard",
+      "executionTime": 73.80404099999942,
+      "memoryUsed": 13290944,
+      "peakMemory": 30563640,
+      "distanceCalculations": 42704,
+      "distanceCalculationTime": 5.695049999942057,
+      "result": {
+        "clustersFound": 63,
+        "totalEarthquakes": 4990,
+        "avgClusterSize": 79.2063492063492,
+        "largestCluster": 1256
+      },
+      "parameters": {
+        "earthquakeCount": 5000,
+        "distribution": "clustered",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.014760808199999883,
+        "distanceCalcsPerQuake": 8.5408,
+        "avgDistanceCalcTime": 0.00013336104346061393
+      }
+    },
+    {
+      "testName": "XX-Large_California_Loose",
+      "executionTime": 33.49810199999956,
+      "memoryUsed": 4325904,
+      "peakMemory": 23947648,
+      "distanceCalculations": 20117,
+      "distanceCalculationTime": 2.670297000231585,
+      "result": {
+        "clustersFound": 20,
+        "totalEarthquakes": 5000,
+        "avgClusterSize": 250,
+        "largestCluster": 1365
+      },
+      "parameters": {
+        "earthquakeCount": 5000,
+        "distribution": "clustered",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.006699620399999912,
+        "distanceCalcsPerQuake": 4.0234,
+        "avgDistanceCalcTime": 0.0001327383307765365
+      }
+    },
+    {
+      "testName": "XX-Large_Global_Tight",
+      "executionTime": 6749.612926000002,
+      "memoryUsed": -387648,
+      "peakMemory": 27245008,
+      "distanceCalculations": 11287094,
+      "distanceCalculationTime": 2058.2598820015337,
+      "result": {
+        "clustersFound": 40,
+        "totalEarthquakes": 153,
+        "avgClusterSize": 3.825,
+        "largestCluster": 11
+      },
+      "parameters": {
+        "earthquakeCount": 5000,
+        "distribution": "scattered",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 1.3499225852000003,
+        "distanceCalcsPerQuake": 2257.4188,
+        "avgDistanceCalcTime": 0.00018235516440294851
+      }
+    },
+    {
+      "testName": "XX-Large_Global_Standard",
+      "executionTime": 5358.809547000001,
+      "memoryUsed": -774080,
+      "peakMemory": 30155336,
+      "distanceCalculations": 9321290,
+      "distanceCalculationTime": 1643.950066999645,
+      "result": {
+        "clustersFound": 140,
+        "totalEarthquakes": 538,
+        "avgClusterSize": 3.842857142857143,
+        "largestCluster": 27
+      },
+      "parameters": {
+        "earthquakeCount": 5000,
+        "distribution": "scattered",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 1.0717619094000002,
+        "distanceCalcsPerQuake": 1864.258,
+        "avgDistanceCalcTime": 0.00017636508112070807
+      }
+    },
+    {
+      "testName": "XX-Large_Global_Loose",
+      "executionTime": 4214.411540999998,
+      "memoryUsed": -3621776,
+      "peakMemory": 30256784,
+      "distanceCalculations": 5781765,
+      "distanceCalculationTime": 1103.5860960023747,
+      "result": {
+        "clustersFound": 1184,
+        "totalEarthquakes": 3352,
+        "avgClusterSize": 2.831081081081081,
+        "largestCluster": 55
+      },
+      "parameters": {
+        "earthquakeCount": 5000,
+        "distribution": "scattered",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.8428823081999995,
+        "distanceCalcsPerQuake": 1156.353,
+        "avgDistanceCalcTime": 0.00019087356473367124
+      }
+    },
+    {
+      "testName": "XX-Large_Mixed_Tight",
+      "executionTime": 4974.862475999998,
+      "memoryUsed": 2456320,
+      "peakMemory": 36805040,
+      "distanceCalculations": 5662067,
+      "distanceCalculationTime": 1270.9898109974893,
+      "result": {
+        "clustersFound": 54,
+        "totalEarthquakes": 1612,
+        "avgClusterSize": 29.85185185185185,
+        "largestCluster": 485
+      },
+      "parameters": {
+        "earthquakeCount": 5000,
+        "distribution": "realistic",
+        "maxDistance": 50,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.9949724951999996,
+        "distanceCalcsPerQuake": 1132.4134,
+        "avgDistanceCalcTime": 0.0002244745268817005
+      }
+    },
+    {
+      "testName": "XX-Large_Mixed_Standard",
+      "executionTime": 4884.403397999999,
+      "memoryUsed": -6646320,
+      "peakMemory": 34229384,
+      "distanceCalculations": 4767083,
+      "distanceCalculationTime": 1206.6575019980883,
+      "result": {
+        "clustersFound": 109,
+        "totalEarthquakes": 1864,
+        "avgClusterSize": 17.10091743119266,
+        "largestCluster": 481
+      },
+      "parameters": {
+        "earthquakeCount": 5000,
+        "distribution": "realistic",
+        "maxDistance": 100,
+        "minQuakes": 3
+      },
+      "performance": {
+        "timePerEarthquake": 0.9768806795999997,
+        "distanceCalcsPerQuake": 953.4166,
+        "avgDistanceCalcTime": 0.0002531228220691958
+      }
+    },
+    {
+      "testName": "XX-Large_Mixed_Loose",
+      "executionTime": 2752.209289999999,
+      "memoryUsed": -28290264,
+      "peakMemory": 10022536,
+      "distanceCalculations": 3088707,
+      "distanceCalculationTime": 626.203628994168,
+      "result": {
+        "clustersFound": 714,
+        "totalEarthquakes": 3574,
+        "avgClusterSize": 5.0056022408963585,
+        "largestCluster": 531
+      },
+      "parameters": {
+        "earthquakeCount": 5000,
+        "distribution": "realistic",
+        "maxDistance": 200,
+        "minQuakes": 2
+      },
+      "performance": {
+        "timePerEarthquake": 0.5504418579999998,
+        "distanceCalcsPerQuake": 617.7414,
+        "avgDistanceCalcTime": 0.0002027397318664956
+      }
+    }
+  ]
+}
