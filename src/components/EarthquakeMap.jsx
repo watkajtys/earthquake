@@ -401,12 +401,27 @@ const EarthquakeMap = ({
           style={getActiveFaultStyle}
           onEachFeature={(feature, layer) => {
             if (feature.properties) {
+              const slipType = feature.properties.slip_type;
+              let slipDescription = slipType || 'Unknown';
+              
+              if (slipType === 'Normal') {
+                slipDescription = 'Normal (pulls apart)';
+              } else if (slipType === 'Reverse') {
+                slipDescription = 'Reverse (pushes together)';
+              } else if (slipType === 'Dextral') {
+                slipDescription = 'Dextral (slides right)';
+              } else if (slipType === 'Sinistral') {
+                slipDescription = 'Sinistral (slides left)';
+              } else if (slipType === 'Dextral-Normal') {
+                slipDescription = 'Dextral-Normal (slides right + pulls apart)';
+              }
+              
               const popupContent = `
                 <div>
                   <strong>${feature.properties.name || 'Unknown Fault'}</strong><br/>
-                  <strong>Slip Type:</strong> ${feature.properties.slip_type || 'Unknown'}<br/>
+                  <strong>Fault Type:</strong> ${slipDescription}<br/>
                   <strong>Net Slip Rate:</strong> ${feature.properties.net_slip_rate || 'Unknown'}<br/>
-                  <strong>Catalog:</strong> ${feature.properties.catalog_name || 'Unknown'}
+                  <strong>Data Source:</strong> ${feature.properties.catalog_name || 'Unknown'}
                 </div>
               `;
               layer.bindPopup(popupContent);
