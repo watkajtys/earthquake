@@ -3,7 +3,10 @@
     "allow": [
       "Bash(curl:*)",
       "Bash(npm install:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npm test:*)",
+      "Bash(grep:*)",
+      "Bash(npx vitest run:*)"
     ],
     "deny": []
   }
