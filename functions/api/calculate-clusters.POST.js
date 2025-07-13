@@ -154,7 +154,6 @@ function generateTitle(quakeCount, locationName, maxMagnitude) {
  * @returns {string} A description string for the cluster.
  */
 function generateDescription(quakeCount, locationName, maxMagnitude, durationHours) {
-  const safeLocation = locationName || "Unknown Location";
   const durationStr = durationHours > 0 ? `approx ${durationHours.toFixed(1)} hours` : "a short period";
   return `A cluster of ${quakeCount} earthquakes occurred near ${locationName}. Strongest: M${maxMagnitude.toFixed(1)}. Duration: ${durationStr}.`;
 }
@@ -466,7 +465,7 @@ export async function onRequestPost(context) {
 
   try {
     const { env, request } = context; // Destructure request from context
-    const { earthquakes, maxDistanceKm, minQuakes, lastFetchTime, timeWindowHours } = await request.json();
+    const { earthquakes, maxDistanceKm, minQuakes } = await request.json();
 
     // Input Validation
     if (!Array.isArray(earthquakes)) {
@@ -525,90 +524,25 @@ export async function onRequestPost(context) {
       });
     }
 
-    let roundedLastFetchTime = lastFetchTime;
-    if (typeof lastFetchTime === 'number' && lastFetchTime > 0) {
-      const tenMinutesInMillis = 10 * 60 * 1000;
-      roundedLastFetchTime = Math.floor(lastFetchTime / tenMinutesInMillis) * tenMinutesInMillis;
-      // Optional: Log the rounding for debugging or observation.
-      // In a Cloudflare Worker, you might use `console.log` if appropriate,
-      // or this could be removed/commented out in production if too verbose.
-      console.log(`[Cache Key Stability] Original lastFetchTime: ${lastFetchTime}, Rounded to: ${roundedLastFetchTime}`);
-    }
-
-    const requestParams = { numQuakes: earthquakes.length, maxDistanceKm, minQuakes, lastFetchTime: roundedLastFetchTime, timeWindowHours };
-    const cacheKey = `clusters-${JSON.stringify(requestParams)}`;
     const responseHeaders = { 'Content-Type': 'application/json' };
     let clusters; // Declare clusters here to be accessible for definition storage
 
-    if (!env.DB) {
-      console.warn("D1 Database (env.DB) not available. Proceeding without cache or definition storage.");
-      // Try spatial optimization first, fallback to original algorithm if it fails
-      try {
-        if (earthquakes.length >= 100) { // Use spatial optimization for larger datasets
-          console.log(`Using spatial optimization for ${earthquakes.length} earthquakes`);
-          clusters = findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes);
-        } else {
-          clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
-        }
-      } catch (optimizationError) {
-        console.warn('Spatial optimization failed, falling back to original algorithm:', optimizationError.message);
-        clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
-      }
-      responseHeaders['X-Cache-Hit'] = 'false';
-      responseHeaders['X-Cache-Info'] = 'DB not configured';
-      return new Response(JSON.stringify(clusters), { status: 200, headers: responseHeaders });
-    }
-
-    // DB is available, proceed with caching logic
-    const cacheQuery = "SELECT clusterData FROM ClusterCache WHERE cacheKey = ? AND createdAt > datetime('now', '-1 hour')";
-    const selectStmt = env.DB.prepare(cacheQuery);
-    const insertQuery = "INSERT OR REPLACE INTO ClusterCache (cacheKey, clusterData, requestParams) VALUES (?, ?, ?)";
-    const insertStmt = env.DB.prepare(insertQuery);
-
-    try {
-      const cachedResult = await selectStmt.bind(cacheKey).first();
-      if (cachedResult && cachedResult.clusterData) {
-        try {
-          clusters = JSON.parse(cachedResult.clusterData);
-          responseHeaders['X-Cache-Hit'] = 'true';
-          // Note: We return cached clusters directly. Definitions for these would have been stored when first calculated.
-          // If re-storage or update of definitions on cache hit is desired, logic would be added here.
-          return new Response(JSON.stringify(clusters), { status: 200, headers: responseHeaders });
-        } catch (parseError) {
-          console.error(`D1 Cache: Error parsing cached JSON for key ${cacheKey}:`, parseError.message);
-          // Proceed to recalculate if parsing fails
-        }
-      }
-    } catch (dbGetError) {
-      console.error(`D1 GET error for cacheKey ${cacheKey}:`, dbGetError.message, dbGetError.cause);
-      // Proceed to recalculate
-    }
-
-    // Try spatial optimization first, fallback to original algorithm if it fails
+    // Calculate clusters using spatial optimization (no caching)
     try {
       if (earthquakes.length >= 100) { // Use spatial optimization for larger datasets
-        console.log(`Using spatial optimization for ${earthquakes.length} earthquakes`);
+        console.log(`[cluster-calculation] Using spatial optimization for ${earthquakes.length} earthquakes`);
         clusters = findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes);
       } else {
+        console.log(`[cluster-calculation] Using original algorithm for ${earthquakes.length} earthquakes`);
         clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
       }
     } catch (optimizationError) {
-      console.warn('Spatial optimization failed, falling back to original algorithm:', optimizationError.message);
+      console.warn('[cluster-calculation] Spatial optimization failed, falling back to original algorithm:', optimizationError.message);
       clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
     }
-    const clusterDataString = JSON.stringify(clusters);
 
-    try {
-      await insertStmt.bind(cacheKey, clusterDataString, JSON.stringify(requestParams)).run();
-      responseHeaders['X-Cache-Hit'] = 'false'; // Stored now, so it's a "miss" for this request
-    } catch (dbPutError) {
-      console.error(`D1 PUT error for cacheKey ${cacheKey}:`, dbPutError.message, dbPutError.cause);
-      // Do not re-throw, proceed with returning calculated clusters
-      responseHeaders['X-Cache-Info'] = 'Cache write failed';
-    }
-
-    // If DB is available and clusters were calculated (not from cache), store definitions in background.
-    if (env.DB && clusters && clusters.length > 0 && responseHeaders['X-Cache-Hit'] === 'false') {
+    // Store cluster definitions in background if DB is available
+    if (env.DB && clusters && clusters.length > 0) {
         // Using context.ctx.waitUntil as 'context' here is { request, env, ctx }
         // CLUSTER_MIN_QUAKES and DEFINED_CLUSTER_MIN_MAGNITUDE are imported and available in the module scope.
         if (context.ctx && typeof context.ctx.waitUntil === 'function') {
@@ -622,7 +556,7 @@ export async function onRequestPost(context) {
         }
     }
 
-    return new Response(clusterDataString, { status: 200, headers: responseHeaders });
+    return new Response(JSON.stringify(clusters), { status: 200, headers: responseHeaders });
 
   } catch (error) {
     // Handle JSON parsing errors specifically for the main request body
