@@ -59,8 +59,6 @@ describe('onRequest in calculate-clusters.js', () => {
     earthquakes: [baseMockEarthquake], // Will be overridden in tests needing specific quake counts/mags
     maxDistanceKm: 100,
     minQuakes: 1, // Default minQuakes for basic clustering, will use CLUSTER_MIN_QUAKES for definition check
-    lastFetchTime: '2024-01-01T00:00:00Z',
-    timeWindowHours: 24,
   };
 
   // Function to create a list of mock earthquakes
@@ -342,18 +340,17 @@ describe('onRequest in calculate-clusters.js', () => {
       expect(json.details).toContain("Unexpected token in JSON");
     });
 
-    it('should handle generic error during processing (e.g. in findActiveClusters due to unexpected data shape not caught by validation)', async () => {
-      const reqBody = { ...defaultRequestBody, earthquakes: createMockQuakes(1, 1.0) }; // Use createMockQuakes
-      const context = createMockContext(reqBody);
-      const prepareError = new Error("Catastrophic D1 prepare failure");
-      context.env.DB.prepare.mockImplementation(() => { throw prepareError; });
+    it('should handle JSON parsing error during request processing', async () => {
+      const context = createMockContext(null);
+      const jsonError = new SyntaxError("Unexpected end of JSON input");
+      context.request.json.mockRejectedValueOnce(jsonError);
 
-      const response = await onRequest(context); // Changed from onRequestPost
+      const response = await onRequest(context);
       expect(response.status).toBe(500);
       const json = await response.json();
       expect(json.error).toBe('Internal server error');
-      expect(json.details).toBe(prepareError.message);
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Unhandled error in onRequest:', prepareError.message, expect.any(String));
+      expect(json.details).toBe(jsonError.message);
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Unhandled error in onRequest:', jsonError.message, expect.any(String));
     });
   });
 });
