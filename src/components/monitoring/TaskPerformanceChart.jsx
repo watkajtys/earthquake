@@ -38,8 +38,14 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
 
   const { summary, performance, trends, clustering } = metricsData;
 
+  // Debug logging
+  console.log('TaskPerformanceChart - metricsData:', metricsData);
+  console.log('TaskPerformanceChart - performance:', performance);
+  console.log('TaskPerformanceChart - clustering:', clustering);
+
   // Create simple bar chart visualization for daily breakdown
   const dailyData = performance?.dailyBreakdown || [];
+  console.log('TaskPerformanceChart - dailyData:', dailyData);
   const maxEarthquakes = dailyData.length > 0 ? Math.max(...dailyData.map(d => d.earthquakeCount), 1) : 1;
 
   const getTrendColor = (trend) => {
