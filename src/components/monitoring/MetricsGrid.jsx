@@ -141,18 +141,18 @@ export default function MetricsGrid({ metricsData, healthData, timeRange, loadin
       {/* Additional Details */}
       {metricsData && (
         <div className="mt-6 pt-4 border-t border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-base">
             <div className="flex justify-between">
-              <span className="text-gray-600">Total Earthquakes:</span>
-              <span className="font-medium">{metrics.totalEarthquakes || 0}</span>
+              <span className="text-gray-700 font-medium">Total Earthquakes:</span>
+              <span className="font-semibold text-gray-900">{metrics.totalEarthquakes || 0}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Data Span:</span>
-              <span className="font-medium">{metrics.dataSpanHours || 0} hours</span>
+              <span className="text-gray-700 font-medium">Data Span:</span>
+              <span className="font-semibold text-gray-900">{metrics.dataSpanHours || 0} hours</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Last Update:</span>
-              <span className="font-medium">
+              <span className="text-gray-700 font-medium">Last Update:</span>
+              <span className="font-semibold text-gray-900">
                 {metrics.lastUpdate ? new Date(metrics.lastUpdate).toLocaleTimeString() : 'Unknown'}
               </span>
             </div>

@@ -197,25 +197,25 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
           <h3 className="text-md font-medium text-gray-900 mb-3">Trend Analysis</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Current Period:</span>
-              <span className="font-medium">{trends?.currentPeriodEarthquakes || 0} earthquakes</span>
+              <span className="text-base text-gray-700 font-medium">Current Period:</span>
+              <span className="font-semibold text-gray-900">{trends?.currentPeriodEarthquakes || 0} earthquakes</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Previous Period:</span>
-              <span className="font-medium">{trends?.previousPeriodEarthquakes || 0} earthquakes</span>
+              <span className="text-base text-gray-700 font-medium">Previous Period:</span>
+              <span className="font-semibold text-gray-900">{trends?.previousPeriodEarthquakes || 0} earthquakes</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Change:</span>
+              <span className="text-base text-gray-700 font-medium">Change:</span>
               <div className="flex items-center space-x-1">
                 {getTrendIcon(trends?.trend)}
-                <span className={`font-medium ${getTrendColor(trends?.trend)}`}>
+                <span className={`font-semibold ${getTrendColor(trends?.trend)}`}>
                   {trends?.percentChange > 0 ? '+' : ''}{trends?.percentChange || 0}%
                 </span>
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Trend:</span>
-              <span className={`font-medium capitalize ${getTrendColor(trends?.trend)}`}>
+              <span className="text-base text-gray-700 font-medium">Trend:</span>
+              <span className={`font-semibold capitalize ${getTrendColor(trends?.trend)}`}>
                 {trends?.trend || 'stable'}
               </span>
             </div>
@@ -227,20 +227,20 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
           <h3 className="text-md font-medium text-gray-900 mb-3">Performance Metrics</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Avg Magnitude:</span>
-              <span className="font-medium">{(performance?.avgMagnitude || 0).toFixed(1)}</span>
+              <span className="text-base text-gray-700 font-medium">Avg Magnitude:</span>
+              <span className="font-semibold text-gray-900">{(performance?.avgMagnitude || 0).toFixed(1)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Total Events:</span>
-              <span className="font-medium">{performance?.totalEarthquakesInPeriod || 0}</span>
+              <span className="text-base text-gray-700 font-medium">Total Events:</span>
+              <span className="font-semibold text-gray-900">{performance?.totalEarthquakesInPeriod || 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Unique Locations:</span>
-              <span className="font-medium">{performance?.avgUniqueLocations || 0}</span>
+              <span className="text-base text-gray-700 font-medium">Unique Locations:</span>
+              <span className="font-semibold text-gray-900">{performance?.avgUniqueLocations || 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Active Days:</span>
-              <span className="font-medium">{performance?.activeDaysInRange || 0}</span>
+              <span className="text-base text-gray-700 font-medium">Active Days:</span>
+              <span className="font-semibold text-gray-900">{performance?.activeDaysInRange || 0}</span>
             </div>
           </div>
         </div>
