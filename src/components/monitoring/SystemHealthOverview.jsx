@@ -157,7 +157,7 @@ export default function SystemHealthOverview({ healthData, loading }) {
             
             <div className="space-y-1">
               {Object.entries(component.metrics).map(([key, value]) => (
-                <div key={key} className="flex justify-between text-xs text-gray-600">
+                <div key={key} className="flex justify-between text-sm text-gray-700">
                   <span>{key}:</span>
                   <span className="font-mono">{value}</span>
                 </div>
@@ -172,33 +172,33 @@ export default function SystemHealthOverview({ healthData, loading }) {
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 text-center">
           <div className="space-y-1">
             <p className="text-2xl font-bold text-gray-900">{metrics.healthyComponents || 0}</p>
-            <p className="text-xs text-green-600 font-medium">Healthy</p>
+            <p className="text-sm text-green-700 font-medium">Healthy</p>
           </div>
           <div className="space-y-1">
             <p className="text-2xl font-bold text-gray-900">{metrics.degradedComponents || 0}</p>
-            <p className="text-xs text-yellow-600 font-medium">Degraded</p>
+            <p className="text-sm text-yellow-700 font-medium">Degraded</p>
           </div>
           <div className="space-y-1">
             <p className="text-2xl font-bold text-gray-900">{metrics.unhealthyComponents || 0}</p>
-            <p className="text-xs text-red-600 font-medium">Unhealthy</p>
+            <p className="text-sm text-red-700 font-medium">Unhealthy</p>
           </div>
           <div className="space-y-1">
             <p className="text-2xl font-bold text-gray-900">{metrics.databaseResponseTime || 0}ms</p>
-            <p className="text-xs text-gray-600 font-medium">DB Response</p>
+            <p className="text-sm text-gray-700 font-medium">DB Response</p>
           </div>
           <div className="space-y-1">
             <p className="text-2xl font-bold text-gray-900">{metrics.usgsApiResponseTime || 0}ms</p>
-            <p className="text-xs text-gray-600 font-medium">API Response</p>
+            <p className="text-sm text-gray-700 font-medium">API Response</p>
           </div>
           <div className="space-y-1">
             <p className="text-2xl font-bold text-gray-900">{metrics.kvResponseTime || 0}ms</p>
-            <p className="text-xs text-gray-600 font-medium">KV Response</p>
+            <p className="text-sm text-gray-700 font-medium">KV Response</p>
           </div>
         </div>
       </div>
 
       {/* Timestamp */}
-      <div className="text-xs text-gray-500 text-right mt-4">
+      <div className="text-sm text-gray-600 text-right mt-4">
         Last checked: {healthData.timestamp ? new Date(healthData.timestamp).toLocaleString() : 'Unknown'}
       </div>
     </div>
