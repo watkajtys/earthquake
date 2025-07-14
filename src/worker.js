@@ -7,6 +7,9 @@ import { onRequestPost as handlePostCalculateClusters } from '../functions/api/c
 // Import the KV-enabled proxy handler
 import { handleUsgsProxy as kvEnabledUsgsProxyHandler } from '../functions/routes/api/usgs-proxy.js';
 
+// Import enhanced logging for scheduled tasks
+import { createScheduledTaskLogger } from './utils/scheduledTaskLogger.js';
+
 // Import the get-earthquakes handler
 import { onRequestGet as handleGetEarthquakes } from '../functions/api/get-earthquakes.js';
 
@@ -548,63 +551,151 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    console.log(`[worker-scheduled] Cron Triggered at ${new Date(event.scheduledTime).toISOString()}`);
+    // Initialize enhanced logging for this scheduled task execution
+    const logger = createScheduledTaskLogger('usgs-data-sync', event.scheduledTime);
+    
+    logger.addContext('environment', {
+      hasDB: !!env.DB,
+      hasUsgsKV: !!env.USGS_LAST_RESPONSE_KV,
+      workerVersion: 'scheduled-v1.0'
+    });
 
+    // Check for required environment bindings
     if (!env.DB) {
-      console.error("[worker-scheduled] D1 Database (DB) binding not found.");
+      logger.logError('MISSING_BINDING', 'D1 Database (DB) binding not found', { binding: 'DB' }, true);
+      logger.logTaskCompletion(false, { error: 'Missing required DB binding' });
       return;
     }
 
-    // Cache cleanup removed - cluster cache has been eliminated
+    logger.logMilestone('Environment validation passed', { 
+      dbAvailable: true, 
+      kvAvailable: !!env.USGS_LAST_RESPONSE_KV 
+    });
 
-    const USGS_FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"; // Reverted to all_hour
-    const proxyRequestUrl = `https://dummy-host/api/usgs-proxy?apiUrl=${encodeURIComponent(USGS_FEED_URL)}&isCron=true`; // Added isCron=true
-    // Note: 'dummy-host' is used because new Request() requires a full URL.
-    // The host itself doesn't matter when calling the handler directly as below,
-    // but the URL structure (pathname, searchParams) is important.
+    const USGS_FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson";
+    const proxyRequestUrl = `https://dummy-host/api/usgs-proxy?apiUrl=${encodeURIComponent(USGS_FEED_URL)}&isCron=true`;
+    
+    logger.addContext('apiEndpoint', {
+      usgsUrl: USGS_FEED_URL,
+      proxyUrl: proxyRequestUrl,
+      feedType: 'all_hour'
+    });
 
-    console.log(`[worker-scheduled] Cron Triggered. Will invoke KV-enabled proxy for URL: ${USGS_FEED_URL}`);
+    logger.logMilestone('Starting USGS data fetch process', { usgsUrl: USGS_FEED_URL });
 
     try {
+      // Create timer for proxy request setup
+      const setupTimer = logger.createTimer('proxy-request-setup');
+      
       // Construct a Request object as expected by the kvEnabledUsgsProxyHandler
       const scheduledRequest = new Request(proxyRequestUrl, {
         method: "GET",
         headers: {
           "User-Agent": "CloudflareWorker-ScheduledTask/1.0",
-          // Add any other headers the proxy might expect or that are useful for logging/tracing
+          "X-Execution-ID": logger.executionId, // Add execution ID for tracing
         }
       });
 
-      // Call the KV-enabled proxy handler directly.
-      // The handler function `kvEnabledUsgsProxyHandler` expects an object similar to the Pages Function context.
-      // We pass `ctx.waitUntil` for any background tasks the proxy needs to perform (like KV writes).
+      setupTimer({ success: true, requestMethod: 'GET' });
+      logger.logMilestone('Request object created', { userAgent: 'CloudflareWorker-ScheduledTask/1.0' });
+
+      // Track proxy call timing
+      const proxyStartTime = Date.now();
+
+      // Call the KV-enabled proxy handler directly with enhanced error handling
       ctx.waitUntil(
-        kvEnabledUsgsProxyHandler({ // This is handleUsgsProxy
+        kvEnabledUsgsProxyHandler({
           request: scheduledRequest,
           env: env,
-          executionContext: ctx, // Pass the entire ctx object
-          // 'params' and 'next' are not used by this specific handler, so not passed.
+          executionContext: ctx,
+          logger: logger // Pass logger to proxy handler for enhanced logging
         })
         .then(response => {
-          // Log the outcome of the proxy call from the scheduled task
+          const proxyEndTime = Date.now();
+          
+          // Log the proxy API call with detailed metrics
+          logger.logApiCall(
+            USGS_FEED_URL, 
+            proxyStartTime, 
+            proxyEndTime, 
+            response.status,
+            null, // Response size not easily available here
+            'GET'
+          );
+
           if (response.ok) {
-            console.log(`[worker-scheduled] KV-enabled proxy call successful (Status: ${response.status}) for ${USGS_FEED_URL}. KV store and D1 should be updated if changes were found.`);
+            logger.logMilestone('USGS proxy call successful', { 
+              status: response.status,
+              duration: proxyEndTime - proxyStartTime
+            });
+            
+            // Try to extract metrics from response headers if available
+            const cacheInfo = response.headers.get('X-Cache-Info');
+            const processingInfo = response.headers.get('X-Processing-Info');
+            
+            if (cacheInfo || processingInfo) {
+              logger.addContext('responseHeaders', { cacheInfo, processingInfo });
+            }
+            
+            logger.logTaskCompletion(true, { 
+              proxyStatus: response.status,
+              proxyDuration: proxyEndTime - proxyStartTime,
+              message: 'USGS data synchronization completed successfully'
+            });
           } else {
-            // Attempt to read the error response body if possible
+            // Handle non-200 responses with detailed error logging
             response.text().then(text => {
-              console.error(`[worker-scheduled] KV-enabled proxy call failed (Status: ${response.status}) for ${USGS_FEED_URL}. Response: ${text}`);
-            }).catch(() => {
-              console.error(`[worker-scheduled] KV-enabled proxy call failed (Status: ${response.status}) for ${USGS_FEED_URL}. Unable to read response body.`);
+              logger.logError('PROXY_HTTP_ERROR', `HTTP ${response.status}`, {
+                status: response.status,
+                statusText: response.statusText,
+                responseBody: text,
+                duration: proxyEndTime - proxyStartTime
+              }, true);
+              
+              logger.logTaskCompletion(false, { 
+                error: `Proxy returned HTTP ${response.status}`,
+                responseBody: text
+              });
+            }).catch(textError => {
+              logger.logError('PROXY_HTTP_ERROR', `HTTP ${response.status} (unable to read response)`, {
+                status: response.status,
+                statusText: response.statusText,
+                textError: textError.message,
+                duration: proxyEndTime - proxyStartTime
+              }, true);
+              
+              logger.logTaskCompletion(false, { 
+                error: `Proxy returned HTTP ${response.status}, unable to read response body`
+              });
             });
           }
         })
         .catch(err => {
-          console.error(`[worker-scheduled] Error invoking kvEnabledUsgsProxyHandler: ${err.message}`, err.stack);
+          const proxyEndTime = Date.now();
+          
+          logger.logError('PROXY_EXECUTION_ERROR', err, {
+            duration: proxyEndTime - proxyStartTime,
+            proxyUrl: proxyRequestUrl,
+            usgsUrl: USGS_FEED_URL
+          }, true);
+          
+          logger.logTaskCompletion(false, { 
+            error: 'Proxy handler execution failed',
+            errorMessage: err.message
+          });
         })
       );
 
     } catch (error) {
-      console.error(`[worker-scheduled] Unhandled error setting up scheduled proxy call: ${error.message}`, error.stack);
+      logger.logError('SETUP_ERROR', error, {
+        stage: 'request-setup',
+        usgsUrl: USGS_FEED_URL
+      }, true);
+      
+      logger.logTaskCompletion(false, { 
+        error: 'Failed to setup scheduled proxy call',
+        errorMessage: error.message
+      });
     }
   }
 };
