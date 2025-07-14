@@ -4,8 +4,6 @@
  * Provides comprehensive health check of all system components
  */
 
-import { validateEarthquakeFeature } from '../../src/utils/earthquakeValidation.js';
-
 /**
  * System health check endpoint
  * GET /api/system-health
