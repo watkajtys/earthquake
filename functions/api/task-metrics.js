@@ -68,12 +68,12 @@ export async function onRequestGet(context) {
     const summaryQuery = await env.DB.prepare(`
       SELECT 
         COUNT(*) as totalEarthquakes,
-        COUNT(DISTINCT DATE(datetime(time/1000, 'unixepoch'))) as activeDays,
-        MIN(time) as oldestRecord,
-        MAX(time) as newestRecord,
-        AVG(CASE WHEN time > ? THEN 1 ELSE 0 END) as recentDataRatio
+        COUNT(DISTINCT DATE(datetime(event_time/1000, 'unixepoch'))) as activeDays,
+        MIN(event_time) as oldestRecord,
+        MAX(event_time) as newestRecord,
+        AVG(CASE WHEN event_time > ? THEN 1 ELSE 0 END) as recentDataRatio
       FROM EarthquakeEvents
-      WHERE time > ?
+      WHERE event_time > ?
     `).bind(timeRangeStart, timeRangeStart - (7 * 24 * 60 * 60 * 1000)) // Look back 7 days for context
       .first();
 
@@ -95,14 +95,14 @@ export async function onRequestGet(context) {
     // Analyze data ingestion patterns as a proxy for task performance
     const performanceQuery = await env.DB.prepare(`
       SELECT 
-        DATE(datetime(time/1000, 'unixepoch')) as date,
+        DATE(datetime(event_time/1000, 'unixepoch')) as date,
         COUNT(*) as earthquakeCount,
-        AVG(mag) as avgMagnitude,
-        MAX(mag) as maxMagnitude,
-        COUNT(DISTINCT ROUND(lat, 1) || ',' || ROUND(lon, 1)) as uniqueLocations
+        AVG(magnitude) as avgMagnitude,
+        MAX(magnitude) as maxMagnitude,
+        COUNT(DISTINCT ROUND(latitude, 1) || ',' || ROUND(longitude, 1)) as uniqueLocations
       FROM EarthquakeEvents
-      WHERE time > ?
-      GROUP BY DATE(datetime(time/1000, 'unixepoch'))
+      WHERE event_time > ?
+      GROUP BY DATE(datetime(event_time/1000, 'unixepoch'))
       ORDER BY date DESC
       LIMIT 24
     `).bind(timeRangeStart)
@@ -131,12 +131,12 @@ export async function onRequestGet(context) {
     const errorAnalysisQuery = await env.DB.prepare(`
       WITH gaps AS (
         SELECT 
-          time,
-          LAG(time) OVER (ORDER BY time) as prev_time,
-          time - LAG(time) OVER (ORDER BY time) as gap_ms
+          event_time,
+          LAG(event_time) OVER (ORDER BY event_time) as prev_time,
+          event_time - LAG(event_time) OVER (ORDER BY event_time) as gap_ms
         FROM EarthquakeEvents
-        WHERE time > ?
-        ORDER BY time
+        WHERE event_time > ?
+        ORDER BY event_time
       )
       SELECT 
         COUNT(*) as totalGaps,
@@ -191,10 +191,10 @@ export async function onRequestGet(context) {
     const prevTimeRangeStart = timeRangeStart - timeRangeMs;
     const trendsQuery = await env.DB.prepare(`
       SELECT 
-        COUNT(CASE WHEN time > ? THEN 1 END) as currentPeriod,
-        COUNT(CASE WHEN time BETWEEN ? AND ? THEN 1 END) as previousPeriod
+        COUNT(CASE WHEN event_time > ? THEN 1 END) as currentPeriod,
+        COUNT(CASE WHEN event_time BETWEEN ? AND ? THEN 1 END) as previousPeriod
       FROM EarthquakeEvents
-      WHERE time > ?
+      WHERE event_time > ?
     `).bind(timeRangeStart, prevTimeRangeStart, timeRangeStart, prevTimeRangeStart)
       .first();
 
