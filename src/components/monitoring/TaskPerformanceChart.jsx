@@ -40,6 +40,17 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
 
   // Create simple bar chart visualization for daily breakdown
   const dailyData = performance?.dailyBreakdown || [];
+  
+  // Debug logging to understand data structure
+  if (dailyData.length === 0) {
+    console.log('TaskPerformanceChart - No daily data available');
+    console.log('Performance object:', performance);
+    console.log('Full metricsData:', metricsData);
+  } else {
+    console.log('TaskPerformanceChart - Daily data found:', dailyData.length, 'entries');
+    console.log('Sample daily data:', dailyData.slice(0, 3));
+  }
+  
   const maxEarthquakes = dailyData.length > 0 ? Math.max(...dailyData.map(d => d?.earthquakeCount || 0), 1) : 1;
 
   const getTrendColor = (trend) => {
