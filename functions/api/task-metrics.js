@@ -65,63 +65,109 @@ export async function onRequestGet(context) {
 
     // Summary Statistics
     // Use earthquake data freshness as a proxy for task execution success
-    const summaryQuery = await env.DB.prepare(`
-      SELECT 
-        COUNT(*) as totalEarthquakes,
-        COUNT(DISTINCT DATE(datetime(event_time/1000, 'unixepoch'))) as activeDays,
-        MIN(event_time) as oldestRecord,
-        MAX(event_time) as newestRecord,
-        AVG(CASE WHEN event_time > ? THEN 1 ELSE 0 END) as recentDataRatio
-      FROM EarthquakeEvents
-      WHERE event_time > ?
-    `).bind(timeRangeStart, timeRangeStart - (7 * 24 * 60 * 60 * 1000)) // Look back 7 days for context
-      .first();
+    try {
+      const summaryQuery = await env.DB.prepare(`
+        SELECT 
+          COUNT(*) as totalEarthquakes,
+          COUNT(DISTINCT DATE(datetime(event_time/1000, 'unixepoch'))) as activeDays,
+          MIN(event_time) as oldestRecord,
+          MAX(event_time) as newestRecord,
+          AVG(CASE WHEN event_time > ? THEN 1 ELSE 0 END) as recentDataRatio
+        FROM EarthquakeEvents
+        WHERE event_time > ?
+      `).bind(timeRangeStart, timeRangeStart - (7 * 24 * 60 * 60 * 1000)) // Look back 7 days for context
+        .first();
 
-    if (summaryQuery) {
-      const dataFreshnessMinutes = (now - summaryQuery.newestRecord) / (1000 * 60);
-      const dataSpanHours = (summaryQuery.newestRecord - summaryQuery.oldestRecord) / (1000 * 60 * 60);
-      
+      if (summaryQuery && summaryQuery.totalEarthquakes > 0) {
+        const currentTime = Date.now();
+        const dataFreshnessMinutes = summaryQuery.newestRecord ? (currentTime - summaryQuery.newestRecord) / (1000 * 60) : 999;
+        const dataSpanHours = (summaryQuery.newestRecord && summaryQuery.oldestRecord) ? 
+          (summaryQuery.newestRecord - summaryQuery.oldestRecord) / (1000 * 60 * 60) : 0;
+        
+        metrics.summary = {
+          totalEarthquakes: summaryQuery.totalEarthquakes || 0,
+          dataFreshnessMinutes: Math.round(dataFreshnessMinutes),
+          dataSpanHours: Math.round(dataSpanHours * 10) / 10,
+          activeDays: summaryQuery.activeDays || 0,
+          lastUpdate: summaryQuery.newestRecord ? new Date(summaryQuery.newestRecord).toISOString() : null,
+          dataHealthScore: dataFreshnessMinutes < 10 ? 100 : Math.max(0, 100 - (dataFreshnessMinutes - 10) * 2)
+        };
+      } else {
+        // Default summary when no data available
+        metrics.summary = {
+          totalEarthquakes: 0,
+          dataFreshnessMinutes: 0,
+          dataSpanHours: 0,
+          activeDays: 0,
+          lastUpdate: null,
+          dataHealthScore: 0
+        };
+      }
+    } catch (summaryError) {
+      console.error('[task-metrics] Summary analysis error:', summaryError);
       metrics.summary = {
-        totalEarthquakes: summaryQuery.totalEarthquakes || 0,
-        dataFreshnessMinutes: Math.round(dataFreshnessMinutes),
-        dataSpanHours: Math.round(dataSpanHours * 10) / 10,
-        activeDays: summaryQuery.activeDays || 0,
-        lastUpdate: summaryQuery.newestRecord ? new Date(summaryQuery.newestRecord).toISOString() : null,
-        dataHealthScore: dataFreshnessMinutes < 10 ? 100 : Math.max(0, 100 - (dataFreshnessMinutes - 10) * 2)
+        totalEarthquakes: 0,
+        dataFreshnessMinutes: 999,
+        dataSpanHours: 0,
+        activeDays: 0,
+        lastUpdate: null,
+        dataHealthScore: 0
       };
     }
 
     // Performance Metrics
     // Analyze data ingestion patterns as a proxy for task performance
-    const performanceQuery = await env.DB.prepare(`
-      SELECT 
-        DATE(datetime(event_time/1000, 'unixepoch')) as date,
-        COUNT(*) as earthquakeCount,
-        AVG(magnitude) as avgMagnitude,
-        MAX(magnitude) as maxMagnitude,
-        COUNT(DISTINCT ROUND(latitude, 1) || ',' || ROUND(longitude, 1)) as uniqueLocations
-      FROM EarthquakeEvents
-      WHERE event_time > ?
-      GROUP BY DATE(datetime(event_time/1000, 'unixepoch'))
-      ORDER BY date DESC
-      LIMIT 24
-    `).bind(now - (30 * 24 * 60 * 60 * 1000)) // Look back 30 days for chart data
-      .all();
+    try {
+      const performanceQuery = await env.DB.prepare(`
+        SELECT 
+          DATE(datetime(event_time/1000, 'unixepoch')) as date,
+          COUNT(*) as earthquakeCount,
+          AVG(magnitude) as avgMagnitude,
+          MAX(magnitude) as maxMagnitude,
+          COUNT(DISTINCT ROUND(latitude, 1) || ',' || ROUND(longitude, 1)) as uniqueLocations
+        FROM EarthquakeEvents
+        WHERE event_time > ?
+        GROUP BY DATE(datetime(event_time/1000, 'unixepoch'))
+        ORDER BY date DESC
+        LIMIT 24
+      `).bind(Date.now() - (30 * 24 * 60 * 60 * 1000)) // Look back 30 days for chart data
+        .all();
 
-    if (performanceQuery.results) {
-      const dailyData = performanceQuery.results;
-      const avgDailyEarthquakes = dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0) / dailyData.length;
-      
+      if (performanceQuery.results && performanceQuery.results.length > 0) {
+        const dailyData = performanceQuery.results;
+        const avgDailyEarthquakes = dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0) / dailyData.length;
+        
+        metrics.performance = {
+          avgDailyEarthquakes: Math.round(avgDailyEarthquakes),
+          activeDaysInRange: dailyData.length,
+          avgMagnitude: Math.round((dailyData.reduce((sum, day) => sum + (day.avgMagnitude || 0), 0) / dailyData.length) * 100) / 100,
+          avgUniqueLocations: Math.round(dailyData.reduce((sum, day) => sum + day.uniqueLocations, 0) / dailyData.length),
+          totalEarthquakesInPeriod: dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0)
+        };
+        
+        // Always include daily breakdown for the dashboard chart
+        metrics.performance.dailyBreakdown = dailyData;
+      } else {
+        // Default performance metrics when no data available
+        metrics.performance = {
+          avgDailyEarthquakes: 0,
+          activeDaysInRange: 0,
+          avgMagnitude: 0,
+          avgUniqueLocations: 0,
+          totalEarthquakesInPeriod: 0,
+          dailyBreakdown: []
+        };
+      }
+    } catch (performanceError) {
+      console.error('[task-metrics] Performance analysis error:', performanceError);
       metrics.performance = {
-        avgDailyEarthquakes: Math.round(avgDailyEarthquakes),
-        activeDaysInRange: dailyData.length,
-        avgMagnitude: Math.round((dailyData.reduce((sum, day) => sum + (day.avgMagnitude || 0), 0) / dailyData.length) * 100) / 100,
-        avgUniqueLocations: Math.round(dailyData.reduce((sum, day) => sum + day.uniqueLocations, 0) / dailyData.length),
-        totalEarthquakesInPeriod: dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0)
+        avgDailyEarthquakes: 0,
+        activeDaysInRange: 0,
+        avgMagnitude: 0,
+        avgUniqueLocations: 0,
+        totalEarthquakesInPeriod: 0,
+        dailyBreakdown: []
       };
-      
-      // Always include daily breakdown for the dashboard chart
-      metrics.performance.dailyBreakdown = dailyData;
     }
 
     // System Health Analysis (simplified and more robust)
