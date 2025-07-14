@@ -164,13 +164,18 @@ describe('EarthquakeSpatialIndex', () => {
     });
 
     it('should track distance calculations saved', () => {
-      // Insert many earthquakes
-      for (let i = 0; i < 100; i++) {
-        const eq = createMockEarthquake(i, 34 + Math.random(), -118 + Math.random());
+      // Insert many earthquakes across a wider area to ensure spatial optimization benefits
+      // Create clusters in different regions to test spatial partitioning
+      for (let i = 0; i < 200; i++) {
+        // Spread earthquakes across a larger geographic area
+        const lat = 30 + Math.random() * 10; // 30-40 degrees latitude  
+        const lng = -125 + Math.random() * 15; // -125 to -110 degrees longitude
+        const eq = createMockEarthquake(i, lat, lng);
         spatialIndex.insert(eq);
       }
       
-      spatialIndex.findWithinRadius(34.5, -118.5, 50);
+      // Search in a small area to demonstrate spatial optimization
+      spatialIndex.findWithinRadius(34.5, -118.5, 10); // Smaller radius
       
       const stats = spatialIndex.getStats();
       expect(stats.distanceCalculationsSaved).toBeGreaterThan(0);
@@ -238,9 +243,21 @@ describe('buildEarthquakeSpatialIndex', () => {
 
 describe('findActiveClustersOptimized', () => {
   it('should find clusters using spatial optimization', () => {
-    // Create two distinct clusters
-    const cluster1 = createClusteredEarthquakes(34.0, -118.0, 5, 0.05); // LA area
-    const cluster2 = createClusteredEarthquakes(37.7, -122.4, 4, 0.05); // SF area
+    // Create two distinct clusters with unique IDs
+    const cluster1 = [];
+    for (let i = 0; i < 5; i++) {
+      const lat = 34.0 + (Math.random() - 0.5) * 0.05;
+      const lng = -118.0 + (Math.random() - 0.5) * 0.05;
+      cluster1.push(createMockEarthquake(`cluster1-${i}`, lat, lng, 5.0 + Math.random()));
+    }
+    
+    const cluster2 = [];
+    for (let i = 0; i < 4; i++) {
+      const lat = 37.7 + (Math.random() - 0.5) * 0.05;
+      const lng = -122.4 + (Math.random() - 0.5) * 0.05;
+      cluster2.push(createMockEarthquake(`cluster2-${i}`, lat, lng, 5.0 + Math.random()));
+    }
+    
     const isolated = [createMockEarthquake('isolated', 35.0, -115.0, 3.0)]; // Isolated
     
     const allEarthquakes = [...cluster1, ...cluster2, ...isolated];
