@@ -120,43 +120,49 @@ export async function onRequestGet(context) {
         totalEarthquakesInPeriod: dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0)
       };
       
-      if (includeDetails) {
-        metrics.performance.dailyBreakdown = dailyData;
-      }
+      // Always include daily breakdown for the dashboard chart
+      metrics.performance.dailyBreakdown = dailyData;
     }
 
-    // Error Analysis (using data gaps as error indicators)
-    const errorAnalysisQuery = await env.DB.prepare(`
-      WITH gaps AS (
-        SELECT 
-          event_time,
-          LAG(event_time) OVER (ORDER BY event_time) as prev_time,
-          event_time - LAG(event_time) OVER (ORDER BY event_time) as gap_ms
-        FROM EarthquakeEvents
-        WHERE event_time > ?
-        ORDER BY event_time
-      )
+    // System Health Analysis (based on data freshness and consistency)
+    const now = Date.now();
+    const healthAnalysisQuery = await env.DB.prepare(`
       SELECT 
-        COUNT(*) as totalGaps,
-        AVG(gap_ms) as avgGapMs,
-        MAX(gap_ms) as maxGapMs,
-        COUNT(CASE WHEN gap_ms > ? THEN 1 END) as significantGaps
-      FROM gaps
-      WHERE gap_ms IS NOT NULL
-    `).bind(timeRangeStart, 10 * 60 * 1000) // Gaps longer than 10 minutes are significant
+        COUNT(*) as totalRecords,
+        MAX(retrieved_at) as lastDataUpdate,
+        COUNT(CASE WHEN retrieved_at > ? THEN 1 END) as recentUpdates,
+        COUNT(CASE WHEN event_time > retrieved_at THEN 1 END) as futureTimestamps
+      FROM EarthquakeEvents
+      WHERE retrieved_at > ?
+    `).bind(now - (60 * 60 * 1000), timeRangeStart) // Last hour vs time range
       .first();
 
-    if (errorAnalysisQuery) {
-      const avgGapMinutes = (errorAnalysisQuery.avgGapMs || 0) / (1000 * 60);
-      const maxGapMinutes = (errorAnalysisQuery.maxGapMs || 0) / (1000 * 60);
+    if (healthAnalysisQuery) {
+      const dataFreshnessMinutes = healthAnalysisQuery.lastDataUpdate ? 
+        (now - healthAnalysisQuery.lastDataUpdate) / (1000 * 60) : 999;
+      const updateFrequency = healthAnalysisQuery.recentUpdates || 0;
+      
+      // Calculate a simple error rate based on data freshness
+      let errorRate = 0;
+      if (dataFreshnessMinutes > 60) errorRate = 25; // High error if data is over 1 hour old
+      else if (dataFreshnessMinutes > 30) errorRate = 10; // Medium error if over 30 min
+      else if (dataFreshnessMinutes > 10) errorRate = 5; // Low error if over 10 min
       
       metrics.errors = {
-        totalDataGaps: errorAnalysisQuery.totalGaps || 0,
-        avgGapMinutes: Math.round(avgGapMinutes * 10) / 10,
-        maxGapMinutes: Math.round(maxGapMinutes),
-        significantGaps: errorAnalysisQuery.significantGaps || 0,
-        errorRate: errorAnalysisQuery.totalGaps > 0 ? 
-          Math.round((errorAnalysisQuery.significantGaps / errorAnalysisQuery.totalGaps) * 100) : 0
+        dataFreshnessMinutes: Math.round(dataFreshnessMinutes),
+        recentUpdates: updateFrequency,
+        errorRate: errorRate,
+        dataHealthStatus: dataFreshnessMinutes < 10 ? 'healthy' : 
+                         dataFreshnessMinutes < 30 ? 'warning' : 'error',
+        futureTimestamps: healthAnalysisQuery.futureTimestamps || 0
+      };
+    } else {
+      metrics.errors = {
+        dataFreshnessMinutes: 999,
+        recentUpdates: 0,
+        errorRate: 50,
+        dataHealthStatus: 'error',
+        futureTimestamps: 0
       };
     }
 
@@ -172,12 +178,20 @@ export async function onRequestGet(context) {
     `).bind(new Date(timeRangeStart).toISOString(), new Date(now - (7 * 24 * 60 * 60 * 1000)).toISOString()) // Look back 7 days for clusters
       .first();
 
-    if (clusterMetricsQuery) {
+    if (clusterMetricsQuery && clusterMetricsQuery.totalClusters > 0) {
       metrics.clustering = {
         totalClusters: clusterMetricsQuery.totalClusters || 0,
         recentClusters: clusterMetricsQuery.recentClusters || 0,
         avgQuakesPerCluster: Math.round((clusterMetricsQuery.avgQuakesPerCluster || 0) * 10) / 10,
         avgSignificanceScore: Math.round((clusterMetricsQuery.avgSignificanceScore || 0) * 100) / 100
+      };
+    } else {
+      // Default clustering data when no clusters exist
+      metrics.clustering = {
+        totalClusters: 0,
+        recentClusters: 0,
+        avgQuakesPerCluster: 0,
+        avgSignificanceScore: 0
       };
     }
 
