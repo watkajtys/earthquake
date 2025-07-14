@@ -22,6 +22,10 @@ import { handleEarthquakesSitemap as handlePaginatedEarthquakesSitemap } from '.
 // Import the cache stats handler
 import { onRequestGet as handleGetCacheStats, onRequestDelete as handleDeleteCacheStats } from '../functions/api/cache-stats.js';
 
+// Import monitoring API handlers
+import { onRequestGet as handleGetSystemHealth } from '../functions/api/system-health.js';
+import { onRequestGet as handleGetTaskMetrics } from '../functions/api/task-metrics.js';
+
 // === Cache Management Functions ===
 // Cache management functions removed - cluster cache has been eliminated
 
@@ -532,6 +536,14 @@ export default {
           headers: { 'Allow': 'GET, DELETE' } 
         });
       }
+    }
+
+    if (pathname === '/api/system-health' && request.method === 'GET') {
+      return handleGetSystemHealth({ request, env, ctx });
+    }
+
+    if (pathname === '/api/task-metrics' && request.method === 'GET') {
+      return handleGetTaskMetrics({ request, env, ctx });
     }
 
     // Serve static assets from ASSETS binding
