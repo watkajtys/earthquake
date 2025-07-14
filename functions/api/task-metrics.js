@@ -111,15 +111,13 @@ export async function onRequestGet(context) {
     if (performanceQuery.results) {
       const dailyData = performanceQuery.results;
       const avgDailyEarthquakes = dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0) / dailyData.length;
-      const maxDailyEarthquakes = Math.max(...dailyData.map(day => day.earthquakeCount));
       
       metrics.performance = {
         avgDailyEarthquakes: Math.round(avgDailyEarthquakes),
-        maxDailyEarthquakes,
         activeDaysInRange: dailyData.length,
-        avgMagnitude: dailyData.reduce((sum, day) => sum + (day.avgMagnitude || 0), 0) / dailyData.length,
-        maxMagnitude: Math.max(...dailyData.map(day => day.maxMagnitude || 0)),
-        avgUniqueLocations: Math.round(dailyData.reduce((sum, day) => sum + day.uniqueLocations, 0) / dailyData.length)
+        avgMagnitude: Math.round((dailyData.reduce((sum, day) => sum + (day.avgMagnitude || 0), 0) / dailyData.length) * 100) / 100,
+        avgUniqueLocations: Math.round(dailyData.reduce((sum, day) => sum + day.uniqueLocations, 0) / dailyData.length),
+        totalEarthquakesInPeriod: dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0)
       };
       
       if (includeDetails) {
@@ -181,9 +179,7 @@ export async function onRequestGet(context) {
         totalClusters: clusterMetricsQuery.totalClusters || 0,
         recentClusters: clusterMetricsQuery.recentClusters || 0,
         avgQuakesPerCluster: Math.round((clusterMetricsQuery.avgQuakesPerCluster || 0) * 10) / 10,
-        maxQuakesPerCluster: clusterMetricsQuery.maxQuakesPerCluster || 0,
-        avgSignificanceScore: Math.round((clusterMetricsQuery.avgSignificanceScore || 0) * 100) / 100,
-        maxSignificanceScore: Math.round((clusterMetricsQuery.maxSignificanceScore || 0) * 100) / 100
+        avgSignificanceScore: Math.round((clusterMetricsQuery.avgSignificanceScore || 0) * 100) / 100
       };
     }
 
