@@ -33,7 +33,7 @@ export async function onRequestGet(context) {
     
     if (env.DB) {
       // Test database connectivity with a simple query
-      const dbTest = await env.DB.prepare('SELECT COUNT(*) as count FROM EarthquakeEvents WHERE time > ?')
+      const dbTest = await env.DB.prepare('SELECT COUNT(*) as count FROM EarthquakeEvents WHERE event_time > ?')
         .bind(Date.now() - (24 * 60 * 60 * 1000)) // Last 24 hours
         .first();
       
@@ -159,9 +159,9 @@ export async function onRequestGet(context) {
       
       // Check for recent earthquake data updates
       const recentDataCheck = await env.DB.prepare(`
-        SELECT COUNT(*) as count, MAX(time) as lastEarthquake
+        SELECT COUNT(*) as count, MAX(event_time) as lastEarthquake
         FROM EarthquakeEvents 
-        WHERE time > ?
+        WHERE event_time > ?
       `).bind(Date.now() - (2 * 60 * 60 * 1000)) // Last 2 hours
         .first();
       
