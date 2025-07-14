@@ -124,69 +124,85 @@ export async function onRequestGet(context) {
       metrics.performance.dailyBreakdown = dailyData;
     }
 
-    // System Health Analysis (based on data freshness and consistency)
+    // System Health Analysis (simplified and more robust)
     const now = Date.now();
-    const healthAnalysisQuery = await env.DB.prepare(`
-      SELECT 
-        COUNT(*) as totalRecords,
-        MAX(retrieved_at) as lastDataUpdate,
-        COUNT(CASE WHEN retrieved_at > ? THEN 1 END) as recentUpdates,
-        COUNT(CASE WHEN event_time > retrieved_at THEN 1 END) as futureTimestamps
-      FROM EarthquakeEvents
-      WHERE retrieved_at > ?
-    `).bind(now - (60 * 60 * 1000), timeRangeStart) // Last hour vs time range
-      .first();
+    try {
+      const healthAnalysisQuery = await env.DB.prepare(`
+        SELECT 
+          COUNT(*) as totalRecords,
+          MAX(retrieved_at) as lastDataUpdate,
+          MIN(retrieved_at) as firstDataUpdate
+        FROM EarthquakeEvents
+        WHERE retrieved_at > ?
+      `).bind(timeRangeStart)
+        .first();
 
-    if (healthAnalysisQuery) {
-      const dataFreshnessMinutes = healthAnalysisQuery.lastDataUpdate ? 
-        (now - healthAnalysisQuery.lastDataUpdate) / (1000 * 60) : 999;
-      const updateFrequency = healthAnalysisQuery.recentUpdates || 0;
-      
-      // Calculate a simple error rate based on data freshness
-      let errorRate = 0;
-      if (dataFreshnessMinutes > 60) errorRate = 25; // High error if data is over 1 hour old
-      else if (dataFreshnessMinutes > 30) errorRate = 10; // Medium error if over 30 min
-      else if (dataFreshnessMinutes > 10) errorRate = 5; // Low error if over 10 min
-      
-      metrics.errors = {
-        dataFreshnessMinutes: Math.round(dataFreshnessMinutes),
-        recentUpdates: updateFrequency,
-        errorRate: errorRate,
-        dataHealthStatus: dataFreshnessMinutes < 10 ? 'healthy' : 
-                         dataFreshnessMinutes < 30 ? 'warning' : 'error',
-        futureTimestamps: healthAnalysisQuery.futureTimestamps || 0
-      };
-    } else {
+      if (healthAnalysisQuery && healthAnalysisQuery.totalRecords > 0) {
+        const dataFreshnessMinutes = healthAnalysisQuery.lastDataUpdate ? 
+          (now - healthAnalysisQuery.lastDataUpdate) / (1000 * 60) : 999;
+        
+        // Calculate a simple error rate based on data freshness
+        let errorRate = 0;
+        if (dataFreshnessMinutes > 60) errorRate = 25;
+        else if (dataFreshnessMinutes > 30) errorRate = 10;
+        else if (dataFreshnessMinutes > 10) errorRate = 5;
+        
+        metrics.errors = {
+          dataFreshnessMinutes: Math.round(dataFreshnessMinutes),
+          totalRecords: healthAnalysisQuery.totalRecords,
+          errorRate: errorRate,
+          dataHealthStatus: dataFreshnessMinutes < 10 ? 'healthy' : 
+                           dataFreshnessMinutes < 30 ? 'warning' : 'error'
+        };
+      } else {
+        // No data found - likely a new system
+        metrics.errors = {
+          dataFreshnessMinutes: 0,
+          totalRecords: 0,
+          errorRate: 0,
+          dataHealthStatus: 'no_data'
+        };
+      }
+    } catch (healthError) {
+      console.error('[task-metrics] Health analysis error:', healthError);
       metrics.errors = {
         dataFreshnessMinutes: 999,
-        recentUpdates: 0,
+        totalRecords: 0,
         errorRate: 50,
-        dataHealthStatus: 'error',
-        futureTimestamps: 0
+        dataHealthStatus: 'error'
       };
     }
 
     // Cluster Analysis Performance (if cluster definitions exist)
-    const clusterMetricsQuery = await env.DB.prepare(`
-      SELECT 
-        COUNT(*) as totalClusters,
-        AVG(quakeCount) as avgQuakesPerCluster,
-        AVG(significanceScore) as avgSignificanceScore,
-        COUNT(CASE WHEN updatedAt > ? THEN 1 END) as recentClusters
-      FROM ClusterDefinitions
-      WHERE createdAt > ?
-    `).bind(new Date(timeRangeStart).toISOString(), new Date(now - (7 * 24 * 60 * 60 * 1000)).toISOString()) // Look back 7 days for clusters
-      .first();
+    try {
+      const clusterMetricsQuery = await env.DB.prepare(`
+        SELECT 
+          COUNT(*) as totalClusters,
+          AVG(quakeCount) as avgQuakesPerCluster,
+          AVG(significanceScore) as avgSignificanceScore,
+          COUNT(CASE WHEN updatedAt > ? THEN 1 END) as recentClusters
+        FROM ClusterDefinitions
+        WHERE createdAt > ?
+      `).bind(new Date(timeRangeStart).toISOString(), new Date(now - (7 * 24 * 60 * 60 * 1000)).toISOString())
+        .first();
 
-    if (clusterMetricsQuery && clusterMetricsQuery.totalClusters > 0) {
-      metrics.clustering = {
-        totalClusters: clusterMetricsQuery.totalClusters || 0,
-        recentClusters: clusterMetricsQuery.recentClusters || 0,
-        avgQuakesPerCluster: Math.round((clusterMetricsQuery.avgQuakesPerCluster || 0) * 10) / 10,
-        avgSignificanceScore: Math.round((clusterMetricsQuery.avgSignificanceScore || 0) * 100) / 100
-      };
-    } else {
-      // Default clustering data when no clusters exist
+      if (clusterMetricsQuery && clusterMetricsQuery.totalClusters > 0) {
+        metrics.clustering = {
+          totalClusters: clusterMetricsQuery.totalClusters || 0,
+          recentClusters: clusterMetricsQuery.recentClusters || 0,
+          avgQuakesPerCluster: Math.round((clusterMetricsQuery.avgQuakesPerCluster || 0) * 10) / 10,
+          avgSignificanceScore: Math.round((clusterMetricsQuery.avgSignificanceScore || 0) * 100) / 100
+        };
+      } else {
+        metrics.clustering = {
+          totalClusters: 0,
+          recentClusters: 0,
+          avgQuakesPerCluster: 0,
+          avgSignificanceScore: 0
+        };
+      }
+    } catch (clusterError) {
+      console.error('[task-metrics] Cluster analysis error:', clusterError);
       metrics.clustering = {
         totalClusters: 0,
         recentClusters: 0,
@@ -196,27 +212,44 @@ export async function onRequestGet(context) {
     }
 
     // Trends Analysis (compare with previous period)
-    const prevTimeRangeStart = timeRangeStart - timeRangeMs;
-    const trendsQuery = await env.DB.prepare(`
-      SELECT 
-        COUNT(CASE WHEN event_time > ? THEN 1 END) as currentPeriod,
-        COUNT(CASE WHEN event_time BETWEEN ? AND ? THEN 1 END) as previousPeriod
-      FROM EarthquakeEvents
-      WHERE event_time > ?
-    `).bind(timeRangeStart, prevTimeRangeStart, timeRangeStart, prevTimeRangeStart)
-      .first();
+    try {
+      const prevTimeRangeStart = timeRangeStart - timeRangeMs;
+      const trendsQuery = await env.DB.prepare(`
+        SELECT 
+          COUNT(CASE WHEN event_time > ? THEN 1 END) as currentPeriod,
+          COUNT(CASE WHEN event_time BETWEEN ? AND ? THEN 1 END) as previousPeriod
+        FROM EarthquakeEvents
+        WHERE event_time > ?
+      `).bind(timeRangeStart, prevTimeRangeStart, timeRangeStart, prevTimeRangeStart)
+        .first();
 
-    if (trendsQuery) {
-      const currentCount = trendsQuery.currentPeriod || 0;
-      const previousCount = trendsQuery.previousPeriod || 0;
-      const percentChange = previousCount > 0 ? 
-        Math.round(((currentCount - previousCount) / previousCount) * 100) : 0;
-      
+      if (trendsQuery) {
+        const currentCount = trendsQuery.currentPeriod || 0;
+        const previousCount = trendsQuery.previousPeriod || 0;
+        const percentChange = previousCount > 0 ? 
+          Math.round(((currentCount - previousCount) / previousCount) * 100) : 0;
+        
+        metrics.trends = {
+          currentPeriodEarthquakes: currentCount,
+          previousPeriodEarthquakes: previousCount,
+          percentChange,
+          trend: percentChange > 10 ? 'increasing' : percentChange < -10 ? 'decreasing' : 'stable'
+        };
+      } else {
+        metrics.trends = {
+          currentPeriodEarthquakes: 0,
+          previousPeriodEarthquakes: 0,
+          percentChange: 0,
+          trend: 'stable'
+        };
+      }
+    } catch (trendsError) {
+      console.error('[task-metrics] Trends analysis error:', trendsError);
       metrics.trends = {
-        currentPeriodEarthquakes: currentCount,
-        previousPeriodEarthquakes: previousCount,
-        percentChange,
-        trend: percentChange > 10 ? 'increasing' : percentChange < -10 ? 'decreasing' : 'stable'
+        currentPeriodEarthquakes: 0,
+        previousPeriodEarthquakes: 0,
+        percentChange: 0,
+        trend: 'stable'
       };
     }
 
