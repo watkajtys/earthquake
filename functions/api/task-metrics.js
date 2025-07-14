@@ -76,8 +76,6 @@ export async function onRequestGet(context) {
       `).bind(timeRangeStart)
         .first();
 
-      console.log('[task-metrics] Summary query for timeRange:', timeRange, 'timeRangeStart:', new Date(timeRangeStart).toISOString());
-      console.log('[task-metrics] Summary result:', summaryQuery);
 
       if (summaryQuery && summaryQuery.totalEarthquakes > 0) {
         const currentTime = Date.now();
@@ -121,7 +119,6 @@ export async function onRequestGet(context) {
     try {
       // First check if we have any data at all
       const dataCheckQuery = await env.DB.prepare('SELECT COUNT(*) as total FROM EarthquakeEvents').first();
-      console.log('[task-metrics] Total earthquakes in database:', dataCheckQuery?.total || 0);
       
       if (dataCheckQuery && dataCheckQuery.total > 0) {
         // Query for daily breakdown - use appropriate time range based on selection
@@ -148,24 +145,26 @@ export async function onRequestGet(context) {
         `).bind(Date.now() - (lookbackDays * 24 * 60 * 60 * 1000))
           .all();
 
-        console.log('[task-metrics] Daily data query results:', performanceQuery.results?.length || 0, 'days');
-        console.log('[task-metrics] First few results:', JSON.stringify(performanceQuery.results?.slice(0, 3), null, 2));
 
         if (performanceQuery.results && performanceQuery.results.length > 0) {
-          const dailyData = performanceQuery.results;
-          const avgDailyEarthquakes = dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0) / dailyData.length;
+          const dailyData = performanceQuery.results.filter(day => 
+            day && day.date && typeof day.earthquakeCount === 'number'
+          );
+          const avgDailyEarthquakes = dailyData.length > 0 ? 
+            dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0) / dailyData.length : 0;
           
           metrics.performance = {
             avgDailyEarthquakes: Math.round(avgDailyEarthquakes),
             activeDaysInRange: dailyData.length,
-            avgMagnitude: Math.round((dailyData.reduce((sum, day) => sum + (day.avgMagnitude || 0), 0) / dailyData.length) * 100) / 100,
-            avgUniqueLocations: Math.round(dailyData.reduce((sum, day) => sum + day.uniqueLocations, 0) / dailyData.length),
+            avgMagnitude: dailyData.length > 0 ? 
+              Math.round((dailyData.reduce((sum, day) => sum + (day.avgMagnitude || 0), 0) / dailyData.length) * 100) / 100 : 0,
+            avgUniqueLocations: dailyData.length > 0 ? 
+              Math.round(dailyData.reduce((sum, day) => sum + (day.uniqueLocations || 0), 0) / dailyData.length) : 0,
             totalEarthquakesInPeriod: dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0)
           };
           
           // Always include daily breakdown for the dashboard chart
           metrics.performance.dailyBreakdown = dailyData;
-          console.log('[task-metrics] Daily breakdown data:', dailyData.length, 'days with data');
         } else {
           // Try a broader query to see if there's any recent data at all
           const recentDataQuery = await env.DB.prepare(`
@@ -176,7 +175,6 @@ export async function onRequestGet(context) {
             FROM EarthquakeEvents
           `).first();
           
-          console.log('[task-metrics] Recent data check:', recentDataQuery);
           
           metrics.performance = {
             avgDailyEarthquakes: 0,
@@ -193,7 +191,6 @@ export async function onRequestGet(context) {
           };
         }
       } else {
-        console.log('[task-metrics] No earthquake data found in database');
         metrics.performance = {
           avgDailyEarthquakes: 0,
           activeDaysInRange: 0,
@@ -269,7 +266,6 @@ export async function onRequestGet(context) {
     try {
       // First check if ClusterDefinitions table exists and has data
       const clusterCheckQuery = await env.DB.prepare('SELECT COUNT(*) as total FROM ClusterDefinitions').first();
-      console.log('[task-metrics] Total clusters in database:', clusterCheckQuery?.total || 0);
       
       if (clusterCheckQuery && clusterCheckQuery.total > 0) {
         // Simple query to get cluster metrics
@@ -282,7 +278,6 @@ export async function onRequestGet(context) {
           FROM ClusterDefinitions
         `).first();
 
-        console.log('[task-metrics] Cluster metrics:', clusterMetricsQuery);
 
         if (clusterMetricsQuery) {
           metrics.clustering = {
@@ -300,7 +295,6 @@ export async function onRequestGet(context) {
           };
         }
       } else {
-        console.log('[task-metrics] No cluster data found in database');
         metrics.clustering = {
           totalClusters: 0,
           recentClusters: 0,
