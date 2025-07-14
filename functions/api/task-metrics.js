@@ -123,7 +123,15 @@ export async function onRequestGet(context) {
       console.log('[task-metrics] Total earthquakes in database:', dataCheckQuery?.total || 0);
       
       if (dataCheckQuery && dataCheckQuery.total > 0) {
-        // Query for daily breakdown - look for any data in the last 30 days
+        // Query for daily breakdown - use appropriate time range based on selection
+        let lookbackDays;
+        switch (timeRange) {
+          case 'week': lookbackDays = 30; break;  // Show more history for weekly view
+          case 'day': lookbackDays = 14; break;   // Show 2 weeks for daily view
+          case 'hour': 
+          default: lookbackDays = 7; break;       // Show week for hourly view
+        }
+        
         const performanceQuery = await env.DB.prepare(`
           SELECT 
             DATE(datetime(event_time/1000, 'unixepoch')) as date,
@@ -136,10 +144,11 @@ export async function onRequestGet(context) {
           GROUP BY DATE(datetime(event_time/1000, 'unixepoch'))
           ORDER BY date DESC
           LIMIT 24
-        `).bind(Date.now() - (30 * 24 * 60 * 60 * 1000))
+        `).bind(Date.now() - (lookbackDays * 24 * 60 * 60 * 1000))
           .all();
 
         console.log('[task-metrics] Daily data query results:', performanceQuery.results?.length || 0, 'days');
+        console.log('[task-metrics] First few results:', JSON.stringify(performanceQuery.results?.slice(0, 3), null, 2));
 
         if (performanceQuery.results && performanceQuery.results.length > 0) {
           const dailyData = performanceQuery.results;
