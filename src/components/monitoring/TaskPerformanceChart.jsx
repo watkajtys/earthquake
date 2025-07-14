@@ -38,17 +38,9 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
 
   const { summary, performance, trends, clustering } = metricsData;
 
-  // Debug logging
-  console.log('TaskPerformanceChart - metricsData:', metricsData);
-  console.log('TaskPerformanceChart - performance:', performance);
-  console.log('TaskPerformanceChart - clustering:', clustering);
-
   // Create simple bar chart visualization for daily breakdown
   const dailyData = performance?.dailyBreakdown || [];
-  console.log('TaskPerformanceChart - dailyData length:', dailyData.length);
-  console.log('TaskPerformanceChart - dailyData sample:', dailyData.slice(0, 3));
-  console.log('TaskPerformanceChart - performance object:', performance);
-  const maxEarthquakes = dailyData.length > 0 ? Math.max(...dailyData.map(d => d.earthquakeCount), 1) : 1;
+  const maxEarthquakes = dailyData.length > 0 ? Math.max(...dailyData.map(d => d?.earthquakeCount || 0), 1) : 1;
 
   const getTrendColor = (trend) => {
     switch (trend) {
@@ -125,7 +117,7 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xl font-bold text-purple-900">{performance?.avgDailyEarthquakes || 0}</p>
+              <p className="text-2xl font-bold text-purple-900">{Math.round(performance?.avgDailyEarthquakes || 0)}</p>
               <p className="text-sm text-purple-700">Avg Daily Earthquakes</p>
             </div>
             <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,7 +125,7 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
             </svg>
           </div>
           <div className="mt-2 text-xs text-purple-600">
-            Locations: {performance?.avgUniqueLocations || 0}
+            Locations: {Math.round(performance?.avgUniqueLocations || 0)}
           </div>
         </div>
 
@@ -161,10 +153,14 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
             <>
               <div className="flex items-end justify-between space-x-1 h-32">
                 {dailyData.slice(0, 14).map((day, index) => {
+                  if (!day || typeof day.earthquakeCount !== 'number' || !day.date) {
+                    return null;
+                  }
+                  
                   const height = (day.earthquakeCount / maxEarthquakes) * 100;
                   const isRecent = index < 3;
                   return (
-                    <div key={day.date} className="flex-1 flex flex-col items-center">
+                    <div key={day.date || index} className="flex-1 flex flex-col items-center">
                       <div
                         className={`w-full rounded-t transition-all hover:opacity-80 ${
                           isRecent ? 'bg-blue-500' : 'bg-gray-400'
@@ -172,12 +168,12 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
                         style={{ height: `${Math.max(height, 2)}%` }}
                         title={`${day.date}: ${day.earthquakeCount} earthquakes`}
                       ></div>
-                      <div className="text-sm text-gray-700 mt-1 text-center">
+                      <div className="text-xs text-gray-600 mt-1 text-center">
                         {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </div>
                     </div>
                   );
-                })}
+                }).filter(Boolean)}
               </div>
               <div className="flex justify-between text-sm text-gray-600 mt-2">
                 <span>Recent Days (blue bars)</span>
