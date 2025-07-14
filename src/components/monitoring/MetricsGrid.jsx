@@ -121,7 +121,7 @@ export default function MetricsGrid({ metricsData, healthData, timeRange, loadin
             className={`rounded-lg border p-4 transition-all hover:shadow-md ${metric.color}`}
           >
             <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-medium uppercase tracking-wide opacity-75">
+              <div className="text-xs font-medium uppercase tracking-wide text-gray-700">
                 {metric.title}
               </div>
               {metric.icon}
@@ -130,7 +130,7 @@ export default function MetricsGrid({ metricsData, healthData, timeRange, loadin
               <div className="text-2xl font-bold">
                 {typeof metric.value === 'number' ? Math.round(metric.value) : metric.value}
               </div>
-              <div className="text-sm font-medium ml-1 opacity-75">
+              <div className="text-sm font-medium ml-1 text-gray-600">
                 {metric.unit}
               </div>
             </div>

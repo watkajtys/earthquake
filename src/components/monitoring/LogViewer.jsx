@@ -13,44 +13,39 @@ export default function LogViewer({ systemHealth, autoRefresh }) {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('all');
 
-  // Generate mock logs based on system health for demonstration
-  // In a real implementation, this would fetch actual logs from an endpoint
+  // Fetch real system logs from the Worker logs API
   useEffect(() => {
-    if (!systemHealth) return;
-
-    const generateMockLogs = () => {
-      const mockLogs = [];
-      const now = Date.now();
-      
-      // Generate logs based on system health
-      Object.entries(systemHealth.components || {}).forEach(([component, status], index) => {
-        const timestamp = now - (index * 30000); // 30 seconds apart
-        
-        mockLogs.push({
-          id: `log-${timestamp}-${component}`,
-          timestamp: new Date(timestamp).toISOString(),
-          level: status.status === 'healthy' ? 'info' : status.status === 'degraded' ? 'warn' : 'error',
-          component: component,
-          message: status.message || `${component} status check`,
-          details: status
-        });
-      });
-
-      // Add some general system logs
-      mockLogs.push({
-        id: `log-${now}-system`,
-        timestamp: new Date(now).toISOString(),
-        level: 'info',
-        component: 'system',
-        message: `System health check completed - Overall status: ${systemHealth.overall}`,
-        details: { healthScore: systemHealth.metrics?.healthScore }
-      });
-
-      return mockLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const fetchLogs = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch('/api/system-logs?limit=50');
+        if (response.ok) {
+          const data = await response.json();
+          setLogs(data.logs || []);
+        } else {
+          console.error('Failed to fetch logs:', response.status);
+          setLogs([]);
+        }
+      } catch (error) {
+        console.error('Error fetching logs:', error);
+        setLogs([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setLogs(generateMockLogs());
-  }, [systemHealth]);
+    fetchLogs();
+    
+    // Auto-refresh logs if autoRefresh is enabled
+    let interval;
+    if (autoRefresh) {
+      interval = setInterval(fetchLogs, 30000); // Refresh every 30 seconds
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoRefresh]);
 
   const getLevelColor = (level) => {
     switch (level) {
@@ -143,7 +138,25 @@ export default function LogViewer({ systemHealth, autoRefresh }) {
       <div className="space-y-2 max-h-96 overflow-y-auto">
         {filteredLogs.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <p>No logs available</p>
+            <div className="mb-4">
+              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p className="text-lg font-medium text-gray-600 mb-2">Live Logs Interface</p>
+            <p className="text-sm text-gray-500 mb-4">Real-time Worker logs are accessed via external tools</p>
+            <div className="bg-gray-50 rounded-lg p-4 text-left max-w-md mx-auto">
+              <p className="text-sm font-medium text-gray-700 mb-2">No recent logs available</p>
+              <div className="space-y-1 text-sm text-gray-600">
+                <p>• System activity logs will appear here</p>
+                <p>• Based on database and API operations</p>
+                <p>• Auto-refreshes when enabled</p>
+              </div>
+              <div className="mt-3 pt-2 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Additional log access:</p>
+                <p className="text-sm text-gray-600">• <code className="bg-gray-200 px-1 rounded">wrangler tail</code> - Complete execution logs</p>
+              </div>
+            </div>
           </div>
         ) : (
           filteredLogs.map((log, index) => (
@@ -158,10 +171,10 @@ export default function LogViewer({ systemHealth, autoRefresh }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs font-medium uppercase tracking-wide opacity-75">
+                      <span className="text-sm font-medium uppercase tracking-wide text-gray-700">
                         {log.component}
                       </span>
-                      <span className="text-xs opacity-60">
+                      <span className="text-sm text-gray-600">
                         {new Date(log.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
@@ -182,7 +195,7 @@ export default function LogViewer({ systemHealth, autoRefresh }) {
                       <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-800">
                         View details
                       </summary>
-                      <pre className="text-xs text-gray-600 mt-1 p-2 bg-white rounded border overflow-x-auto">
+                      <pre className="text-sm text-gray-700 mt-1 p-2 bg-white rounded border overflow-x-auto">
                         {JSON.stringify(log.details, null, 2)}
                       </pre>
                     </details>
@@ -216,12 +229,16 @@ export default function LogViewer({ systemHealth, autoRefresh }) {
         </div>
       </div>
 
-      {/* Note about real implementation */}
+      {/* Note about enhanced logging implementation */}
       <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-xs text-blue-800">
-          <strong>Note:</strong> This is a demonstration log viewer. In production, this would connect to real log streams 
-          from Cloudflare Workers using tools like <code>wrangler tail</code> or Logpush integrations.
+        <p className="text-sm text-blue-800 mb-2">
+          <strong>Real System Logs:</strong> Displaying actual operational logs from your Worker infrastructure.
         </p>
+        <div className="text-sm text-blue-700 space-y-1">
+          <p><strong>Log Sources:</strong> Database activity, API connectivity, health checks, system events</p>
+          <p><strong>Enhanced Logging:</strong> Powered by <code className="bg-blue-100 px-1 rounded mx-1">scheduledTaskLogger.js</code></p>
+          <p><strong>Complete Logs:</strong> <code className="bg-blue-100 px-1 rounded">wrangler tail</code> for full execution details</p>
+        </div>
       </div>
     </div>
   );

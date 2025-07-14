@@ -25,6 +25,7 @@ import { onRequestGet as handleGetCacheStats, onRequestDelete as handleDeleteCac
 // Import monitoring API handlers
 import { onRequestGet as handleGetSystemHealth } from '../functions/api/system-health.js';
 import { onRequestGet as handleGetTaskMetrics } from '../functions/api/task-metrics.js';
+import { onRequestGet as handleGetSystemLogs } from '../functions/api/system-logs.js';
 
 // === Cache Management Functions ===
 // Cache management functions removed - cluster cache has been eliminated
@@ -544,6 +545,10 @@ export default {
 
     if (pathname === '/api/task-metrics' && request.method === 'GET') {
       return handleGetTaskMetrics({ request, env, ctx });
+    }
+
+    if (pathname === '/api/system-logs' && request.method === 'GET') {
+      return handleGetSystemLogs({ request, env, ctx });
     }
 
     // Serve static assets from ASSETS binding

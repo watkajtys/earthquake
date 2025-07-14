@@ -40,7 +40,7 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
 
   // Create simple bar chart visualization for daily breakdown
   const dailyData = performance?.dailyBreakdown || [];
-  const maxEarthquakes = Math.max(...dailyData.map(d => d.earthquakeCount), 1);
+  const maxEarthquakes = dailyData.length > 0 ? Math.max(...dailyData.map(d => d.earthquakeCount), 1) : 1;
 
   const getTrendColor = (trend) => {
     switch (trend) {
@@ -125,7 +125,7 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
             </svg>
           </div>
           <div className="mt-2 text-xs text-purple-600">
-            Max: {performance?.maxDailyEarthquakes || 0}
+            Locations: {performance?.avgUniqueLocations || 0}
           </div>
         </div>
 
@@ -146,37 +146,49 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
       </div>
 
       {/* Daily Activity Chart */}
-      {dailyData.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-md font-medium text-gray-900 mb-3">Daily Activity Breakdown</h3>
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="flex items-end justify-between space-x-1 h-32">
-              {dailyData.slice(0, 14).map((day, index) => {
-                const height = (day.earthquakeCount / maxEarthquakes) * 100;
-                const isRecent = index < 3;
-                return (
-                  <div key={day.date} className="flex-1 flex flex-col items-center">
-                    <div
-                      className={`w-full rounded-t transition-all hover:opacity-80 ${
-                        isRecent ? 'bg-blue-500' : 'bg-gray-400'
-                      }`}
-                      style={{ height: `${Math.max(height, 2)}%` }}
-                      title={`${day.date}: ${day.earthquakeCount} earthquakes`}
-                    ></div>
-                    <div className="text-xs text-gray-600 mt-1 transform -rotate-45 origin-top-left">
-                      {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+      <div className="mb-6">
+        <h3 className="text-md font-medium text-gray-900 mb-3">Daily Activity Breakdown</h3>
+        <div className="bg-gray-50 rounded-lg p-4">
+          {dailyData.length > 0 ? (
+            <>
+              <div className="flex items-end justify-between space-x-1 h-32">
+                {dailyData.slice(0, 14).map((day, index) => {
+                  const height = (day.earthquakeCount / maxEarthquakes) * 100;
+                  const isRecent = index < 3;
+                  return (
+                    <div key={day.date} className="flex-1 flex flex-col items-center">
+                      <div
+                        className={`w-full rounded-t transition-all hover:opacity-80 ${
+                          isRecent ? 'bg-blue-500' : 'bg-gray-400'
+                        }`}
+                        style={{ height: `${Math.max(height, 2)}%` }}
+                        title={`${day.date}: ${day.earthquakeCount} earthquakes`}
+                      ></div>
+                      <div className="text-sm text-gray-700 mt-1 text-center">
+                        {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <div className="flex justify-between text-sm text-gray-600 mt-2">
+                <span>Recent Days (blue bars)</span>
+                <span>Peak: {maxEarthquakes} earthquakes</span>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <div className="mb-2">
+                <svg className="w-12 h-12 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-gray-600">No daily breakdown data available</p>
+              <p className="text-sm text-gray-500">Daily activity will appear as data is collected</p>
             </div>
-            <div className="flex justify-between text-xs text-gray-500 mt-2">
-              <span>Recent Days</span>
-              <span>Max: {maxEarthquakes} earthquakes</span>
-            </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Trends and Analysis */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -219,8 +231,8 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
               <span className="font-medium">{(performance?.avgMagnitude || 0).toFixed(1)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Max Magnitude:</span>
-              <span className="font-medium">{(performance?.maxMagnitude || 0).toFixed(1)}</span>
+              <span className="text-sm text-gray-600">Total Events:</span>
+              <span className="font-medium">{performance?.totalEarthquakesInPeriod || 0}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Unique Locations:</span>
@@ -235,7 +247,7 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
       </div>
 
       {/* Timestamp */}
-      <div className="text-xs text-gray-500 text-right mt-4">
+      <div className="text-sm text-gray-600 text-right mt-4">
         Generated: {metricsData.metadata?.generatedAt ? new Date(metricsData.metadata.generatedAt).toLocaleString() : 'Unknown'}
       </div>
     </div>

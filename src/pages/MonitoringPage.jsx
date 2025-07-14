@@ -181,7 +181,7 @@ export default function MonitoringPage() {
 
           {/* Last Updated */}
           {lastUpdated && (
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-base text-gray-700 mt-2">
               Last updated: {lastUpdated.toLocaleTimeString()}
             </p>
           )}

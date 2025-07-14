@@ -105,7 +105,7 @@ export async function onRequestGet(context) {
       GROUP BY DATE(datetime(event_time/1000, 'unixepoch'))
       ORDER BY date DESC
       LIMIT 24
-    `).bind(timeRangeStart)
+    `).bind(now - (30 * 24 * 60 * 60 * 1000)) // Look back 30 days for chart data
       .all();
 
     if (performanceQuery.results) {
@@ -165,13 +165,11 @@ export async function onRequestGet(context) {
       SELECT 
         COUNT(*) as totalClusters,
         AVG(quakeCount) as avgQuakesPerCluster,
-        MAX(quakeCount) as maxQuakesPerCluster,
         AVG(significanceScore) as avgSignificanceScore,
-        MAX(significanceScore) as maxSignificanceScore,
         COUNT(CASE WHEN updatedAt > ? THEN 1 END) as recentClusters
       FROM ClusterDefinitions
       WHERE createdAt > ?
-    `).bind(new Date(timeRangeStart).toISOString(), new Date(timeRangeStart).toISOString())
+    `).bind(new Date(timeRangeStart).toISOString(), new Date(now - (7 * 24 * 60 * 60 * 1000)).toISOString()) // Look back 7 days for clusters
       .first();
 
     if (clusterMetricsQuery) {
