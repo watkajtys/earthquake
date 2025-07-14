@@ -45,7 +45,9 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
 
   // Create simple bar chart visualization for daily breakdown
   const dailyData = performance?.dailyBreakdown || [];
-  console.log('TaskPerformanceChart - dailyData:', dailyData);
+  console.log('TaskPerformanceChart - dailyData length:', dailyData.length);
+  console.log('TaskPerformanceChart - dailyData sample:', dailyData.slice(0, 3));
+  console.log('TaskPerformanceChart - performance object:', performance);
   const maxEarthquakes = dailyData.length > 0 ? Math.max(...dailyData.map(d => d.earthquakeCount), 1) : 1;
 
   const getTrendColor = (trend) => {

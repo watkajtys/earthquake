@@ -63,20 +63,21 @@ export async function onRequestGet(context) {
       });
     }
 
-    // Summary Statistics
-    // Use earthquake data freshness as a proxy for task execution success
+    // Summary Statistics for the selected time range
     try {
       const summaryQuery = await env.DB.prepare(`
         SELECT 
           COUNT(*) as totalEarthquakes,
           COUNT(DISTINCT DATE(datetime(event_time/1000, 'unixepoch'))) as activeDays,
           MIN(event_time) as oldestRecord,
-          MAX(event_time) as newestRecord,
-          AVG(CASE WHEN event_time > ? THEN 1 ELSE 0 END) as recentDataRatio
+          MAX(event_time) as newestRecord
         FROM EarthquakeEvents
         WHERE event_time > ?
-      `).bind(timeRangeStart, timeRangeStart - (7 * 24 * 60 * 60 * 1000)) // Look back 7 days for context
+      `).bind(timeRangeStart)
         .first();
+
+      console.log('[task-metrics] Summary query for timeRange:', timeRange, 'timeRangeStart:', new Date(timeRangeStart).toISOString());
+      console.log('[task-metrics] Summary result:', summaryQuery);
 
       if (summaryQuery && summaryQuery.totalEarthquakes > 0) {
         const currentTime = Date.now();
@@ -216,8 +217,7 @@ export async function onRequestGet(context) {
       };
     }
 
-    // System Health Analysis (simplified and more robust)
-    const now = Date.now();
+    // System Health Analysis - check data freshness regardless of time range
     try {
       const healthAnalysisQuery = await env.DB.prepare(`
         SELECT 
@@ -226,12 +226,12 @@ export async function onRequestGet(context) {
           MIN(retrieved_at) as firstDataUpdate
         FROM EarthquakeEvents
         WHERE retrieved_at > ?
-      `).bind(timeRangeStart)
+      `).bind(Date.now() - (24 * 60 * 60 * 1000)) // Always check last 24h for health
         .first();
 
       if (healthAnalysisQuery && healthAnalysisQuery.totalRecords > 0) {
         const dataFreshnessMinutes = healthAnalysisQuery.lastDataUpdate ? 
-          (now - healthAnalysisQuery.lastDataUpdate) / (1000 * 60) : 999;
+          (Date.now() - healthAnalysisQuery.lastDataUpdate) / (1000 * 60) : 999;
         
         // Calculate a simple error rate based on data freshness
         let errorRate = 0;
@@ -320,15 +320,15 @@ export async function onRequestGet(context) {
       };
     }
 
-    // Trends Analysis (compare with previous period)
+    // Trends Analysis (compare with previous period of same duration)
     try {
       const prevTimeRangeStart = timeRangeStart - timeRangeMs;
       const trendsQuery = await env.DB.prepare(`
         SELECT 
-          COUNT(CASE WHEN event_time > ? THEN 1 END) as currentPeriod,
-          COUNT(CASE WHEN event_time BETWEEN ? AND ? THEN 1 END) as previousPeriod
+          COUNT(CASE WHEN event_time >= ? THEN 1 END) as currentPeriod,
+          COUNT(CASE WHEN event_time >= ? AND event_time < ? THEN 1 END) as previousPeriod
         FROM EarthquakeEvents
-        WHERE event_time > ?
+        WHERE event_time >= ?
       `).bind(timeRangeStart, prevTimeRangeStart, timeRangeStart, prevTimeRangeStart)
         .first();
 
