@@ -118,44 +118,80 @@ export async function onRequestGet(context) {
     // Performance Metrics
     // Analyze data ingestion patterns as a proxy for task performance
     try {
-      const performanceQuery = await env.DB.prepare(`
-        SELECT 
-          DATE(datetime(event_time/1000, 'unixepoch')) as date,
-          COUNT(*) as earthquakeCount,
-          AVG(magnitude) as avgMagnitude,
-          MAX(magnitude) as maxMagnitude,
-          COUNT(DISTINCT ROUND(latitude, 1) || ',' || ROUND(longitude, 1)) as uniqueLocations
-        FROM EarthquakeEvents
-        WHERE event_time > ?
-        GROUP BY DATE(datetime(event_time/1000, 'unixepoch'))
-        ORDER BY date DESC
-        LIMIT 24
-      `).bind(Date.now() - (30 * 24 * 60 * 60 * 1000)) // Look back 30 days for chart data
-        .all();
+      // First check if we have any data at all
+      const dataCheckQuery = await env.DB.prepare('SELECT COUNT(*) as total FROM EarthquakeEvents').first();
+      console.log('[task-metrics] Total earthquakes in database:', dataCheckQuery?.total || 0);
+      
+      if (dataCheckQuery && dataCheckQuery.total > 0) {
+        // Query for daily breakdown - look for any data in the last 30 days
+        const performanceQuery = await env.DB.prepare(`
+          SELECT 
+            DATE(datetime(event_time/1000, 'unixepoch')) as date,
+            COUNT(*) as earthquakeCount,
+            AVG(magnitude) as avgMagnitude,
+            MAX(magnitude) as maxMagnitude,
+            COUNT(DISTINCT ROUND(latitude, 1) || ',' || ROUND(longitude, 1)) as uniqueLocations
+          FROM EarthquakeEvents
+          WHERE event_time > ?
+          GROUP BY DATE(datetime(event_time/1000, 'unixepoch'))
+          ORDER BY date DESC
+          LIMIT 24
+        `).bind(Date.now() - (30 * 24 * 60 * 60 * 1000))
+          .all();
 
-      if (performanceQuery.results && performanceQuery.results.length > 0) {
-        const dailyData = performanceQuery.results;
-        const avgDailyEarthquakes = dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0) / dailyData.length;
-        
-        metrics.performance = {
-          avgDailyEarthquakes: Math.round(avgDailyEarthquakes),
-          activeDaysInRange: dailyData.length,
-          avgMagnitude: Math.round((dailyData.reduce((sum, day) => sum + (day.avgMagnitude || 0), 0) / dailyData.length) * 100) / 100,
-          avgUniqueLocations: Math.round(dailyData.reduce((sum, day) => sum + day.uniqueLocations, 0) / dailyData.length),
-          totalEarthquakesInPeriod: dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0)
-        };
-        
-        // Always include daily breakdown for the dashboard chart
-        metrics.performance.dailyBreakdown = dailyData;
+        console.log('[task-metrics] Daily data query results:', performanceQuery.results?.length || 0, 'days');
+
+        if (performanceQuery.results && performanceQuery.results.length > 0) {
+          const dailyData = performanceQuery.results;
+          const avgDailyEarthquakes = dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0) / dailyData.length;
+          
+          metrics.performance = {
+            avgDailyEarthquakes: Math.round(avgDailyEarthquakes),
+            activeDaysInRange: dailyData.length,
+            avgMagnitude: Math.round((dailyData.reduce((sum, day) => sum + (day.avgMagnitude || 0), 0) / dailyData.length) * 100) / 100,
+            avgUniqueLocations: Math.round(dailyData.reduce((sum, day) => sum + day.uniqueLocations, 0) / dailyData.length),
+            totalEarthquakesInPeriod: dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0)
+          };
+          
+          // Always include daily breakdown for the dashboard chart
+          metrics.performance.dailyBreakdown = dailyData;
+          console.log('[task-metrics] Daily breakdown data:', dailyData.length, 'days with data');
+        } else {
+          // Try a broader query to see if there's any recent data at all
+          const recentDataQuery = await env.DB.prepare(`
+            SELECT 
+              COUNT(*) as total,
+              MAX(event_time) as lastEvent,
+              MIN(event_time) as firstEvent
+            FROM EarthquakeEvents
+          `).first();
+          
+          console.log('[task-metrics] Recent data check:', recentDataQuery);
+          
+          metrics.performance = {
+            avgDailyEarthquakes: 0,
+            activeDaysInRange: 0,
+            avgMagnitude: 0,
+            avgUniqueLocations: 0,
+            totalEarthquakesInPeriod: 0,
+            dailyBreakdown: [],
+            debugInfo: {
+              totalInDb: recentDataQuery?.total || 0,
+              lastEvent: recentDataQuery?.lastEvent,
+              firstEvent: recentDataQuery?.firstEvent
+            }
+          };
+        }
       } else {
-        // Default performance metrics when no data available
+        console.log('[task-metrics] No earthquake data found in database');
         metrics.performance = {
           avgDailyEarthquakes: 0,
           activeDaysInRange: 0,
           avgMagnitude: 0,
           avgUniqueLocations: 0,
           totalEarthquakesInPeriod: 0,
-          dailyBreakdown: []
+          dailyBreakdown: [],
+          debugInfo: { message: 'No data in database' }
         };
       }
     } catch (performanceError) {
@@ -166,7 +202,8 @@ export async function onRequestGet(context) {
         avgMagnitude: 0,
         avgUniqueLocations: 0,
         totalEarthquakesInPeriod: 0,
-        dailyBreakdown: []
+        dailyBreakdown: [],
+        debugInfo: { error: performanceError.message }
       };
     }
 
@@ -219,32 +256,48 @@ export async function onRequestGet(context) {
       };
     }
 
-    // Cluster Analysis Performance (if cluster definitions exist)
+    // Cluster Analysis Performance (simplified query)
     try {
-      const clusterMetricsQuery = await env.DB.prepare(`
-        SELECT 
-          COUNT(*) as totalClusters,
-          AVG(quakeCount) as avgQuakesPerCluster,
-          AVG(significanceScore) as avgSignificanceScore,
-          COUNT(CASE WHEN updatedAt > ? THEN 1 END) as recentClusters
-        FROM ClusterDefinitions
-        WHERE createdAt > ?
-      `).bind(new Date(timeRangeStart).toISOString(), new Date(now - (7 * 24 * 60 * 60 * 1000)).toISOString())
-        .first();
+      // First check if ClusterDefinitions table exists and has data
+      const clusterCheckQuery = await env.DB.prepare('SELECT COUNT(*) as total FROM ClusterDefinitions').first();
+      console.log('[task-metrics] Total clusters in database:', clusterCheckQuery?.total || 0);
+      
+      if (clusterCheckQuery && clusterCheckQuery.total > 0) {
+        // Simple query to get cluster metrics
+        const clusterMetricsQuery = await env.DB.prepare(`
+          SELECT 
+            COUNT(*) as totalClusters,
+            AVG(quakeCount) as avgQuakesPerCluster,
+            MAX(quakeCount) as maxQuakesPerCluster,
+            COUNT(CASE WHEN updatedAt > datetime('now', '-7 days') THEN 1 END) as recentClusters
+          FROM ClusterDefinitions
+        `).first();
 
-      if (clusterMetricsQuery && clusterMetricsQuery.totalClusters > 0) {
-        metrics.clustering = {
-          totalClusters: clusterMetricsQuery.totalClusters || 0,
-          recentClusters: clusterMetricsQuery.recentClusters || 0,
-          avgQuakesPerCluster: Math.round((clusterMetricsQuery.avgQuakesPerCluster || 0) * 10) / 10,
-          avgSignificanceScore: Math.round((clusterMetricsQuery.avgSignificanceScore || 0) * 100) / 100
-        };
+        console.log('[task-metrics] Cluster metrics:', clusterMetricsQuery);
+
+        if (clusterMetricsQuery) {
+          metrics.clustering = {
+            totalClusters: clusterMetricsQuery.totalClusters || 0,
+            recentClusters: clusterMetricsQuery.recentClusters || 0,
+            avgQuakesPerCluster: Math.round((clusterMetricsQuery.avgQuakesPerCluster || 0) * 10) / 10,
+            maxQuakesPerCluster: clusterMetricsQuery.maxQuakesPerCluster || 0
+          };
+        } else {
+          metrics.clustering = {
+            totalClusters: 0,
+            recentClusters: 0,
+            avgQuakesPerCluster: 0,
+            maxQuakesPerCluster: 0
+          };
+        }
       } else {
+        console.log('[task-metrics] No cluster data found in database');
         metrics.clustering = {
           totalClusters: 0,
           recentClusters: 0,
           avgQuakesPerCluster: 0,
-          avgSignificanceScore: 0
+          maxQuakesPerCluster: 0,
+          debugInfo: { message: 'No clusters in database' }
         };
       }
     } catch (clusterError) {
@@ -253,7 +306,8 @@ export async function onRequestGet(context) {
         totalClusters: 0,
         recentClusters: 0,
         avgQuakesPerCluster: 0,
-        avgSignificanceScore: 0
+        maxQuakesPerCluster: 0,
+        debugInfo: { error: clusterError.message }
       };
     }
 
