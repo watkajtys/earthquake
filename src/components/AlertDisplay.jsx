@@ -15,7 +15,7 @@ import { getMagnitudeColorStyle, formatTimeAgo } from '../utils/utils'; // Added
  * @param {Object} props.ALERT_LEVELS - ALERT_LEVELS is still used for text and description, but not for PAGER colors.
  * @returns {JSX.Element|null} The AlertDisplay component or null if there are no alerts to display.
  */
-const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning, ALERT_LEVELS }) => {
+const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning }) => {
   const { tsunamiTriggeringQuake, activeAlertTriggeringQuakes } = useEarthquakeDataState();
   const navigate = useNavigate();
 

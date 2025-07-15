@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react'; // waitFor might not be needed if not waiting for async in remaining test
+import { render, screen } from '@testing-library/react'; // waitFor might not be needed if not waiting for async in remaining test
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { server } from '../mocks/server.js'; // MSW server

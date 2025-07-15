@@ -1,6 +1,6 @@
 // Import D1 utility functions
 // Note: Adjusted path assuming worker.js is in src/ and d1Utils.js is in src/utils/
-import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js'; // Used by the KV-enabled proxy too.
+// import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js'; // Used by the KV-enabled proxy too.
 import { onRequestGet as handleGetClusterWithQuakes } from '../functions/api/cluster-detail-with-quakes.js';
 import { onRequestPost as handlePostCalculateClusters } from '../functions/api/calculate-clusters.POST.js';
 
@@ -46,18 +46,18 @@ const jsonErrorResponse = (message, status, sourceName, upstreamStatus = undefin
   });
 };
 
-function slugify(text) {
-  if (!text) return 'unknown-location';
-  const slug = text
-    .toString()
-    .toLowerCase()
-    .replace(/[\s,()/]+/g, '-') // Removed unnecessary escapes
-    .replace(/[^\w-]+/g, '')
-    .replace(/--+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
-  return slug || 'unknown-location';
-}
+// function slugify(text) {
+//   if (!text) return 'unknown-location';
+//   const slug = text
+//     .toString()
+//     .toLowerCase()
+//     .replace(/[\s,()/]+/g, '-') // Removed unnecessary escapes
+//     .replace(/[^\w-]+/g, '')
+//     .replace(/--+/g, '-')
+//     .replace(/^-+/, '')
+//     .replace(/-+$/, '');
+//   return slug || 'unknown-location';
+// }
 
 function escapeXml(unsafe) {
   if (typeof unsafe !== 'string') {

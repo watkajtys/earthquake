@@ -153,7 +153,7 @@ export async function onRequestGet(context) {
     if (env.USGS_LAST_RESPONSE_KV) {
       try {
         const kvTestStart = Date.now();
-        const kvTest = await env.USGS_LAST_RESPONSE_KV.get('health-check');
+        const _kvTest = await env.USGS_LAST_RESPONSE_KV.get('health-check');
         const kvResponseTime = Date.now() - kvTestStart;
         
         const kvLogLevel = kvResponseTime < 50 ? 'info' : kvResponseTime < 200 ? 'warn' : 'error';

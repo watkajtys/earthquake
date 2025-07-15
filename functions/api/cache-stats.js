@@ -200,7 +200,7 @@ async function collectCacheStatistics(db) {
 function safeParseJSON(jsonString) {
   try {
     return JSON.parse(jsonString);
-  } catch (error) {
+  } catch {
     return { error: 'Invalid JSON', raw: jsonString };
   }
 }

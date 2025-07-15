@@ -224,7 +224,7 @@ export async function handleUsgsProxy(context) { // context contains { request, 
       if (oldFeaturesFromKV && Array.isArray(oldFeaturesFromKV)) {
         const comparisonStartTime = Date.now();
         console.log(`[usgs-proxy-kv] Comparing ${totalNewFeaturesFetched} new features against ${oldFeaturesFromKV.length} old features from KV.`);
-        const newFeaturesMap = new Map(responseDataForLogic.features.map(f => [f.id, f]));
+        const _newFeaturesMap = new Map(responseDataForLogic.features.map(f => [f.id, f]));
         const oldFeaturesMap = new Map(oldFeaturesFromKV.map(f => [f.id, f]));
 
         featuresToUpsert = responseDataForLogic.features.filter(newFeature => {

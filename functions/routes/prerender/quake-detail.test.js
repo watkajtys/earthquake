@@ -66,7 +66,7 @@ describe('handleQuakeDetailPrerender', () => {
   describe('Successful Render', () => {
     it('should render correctly when properties.title is provided', async () => {
       const eventId = 'usTest1';
-      const mockData = {
+      const _mockData = {
         ...baseMockGeoJson,
         id: eventId,
         properties: {

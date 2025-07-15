@@ -1,5 +1,5 @@
 import { fetchUsgsData } from './usgsApiService';
-import { vi, describe, it, expect, beforeAll, afterEach, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server'; // Corrected path
 
@@ -45,7 +45,7 @@ describe('fetchUsgsData', () => {
   });
 
   it('should handle network errors (fetch rejects)', async () => {
-    const networkErrorMessage = 'Simulated network failure'; // This won't be the actual message from service
+    const _networkErrorMessage = 'Simulated network failure'; // This won't be the actual message from service
     server.use(
       http.get('/api/usgs-proxy', () => {
         // Simulate a server error that might represent a network issue from proxy's perspective

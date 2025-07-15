@@ -70,7 +70,7 @@ export async function onRequestGet(context) {
     
     if (env.USGS_LAST_RESPONSE_KV) {
       // Test KV connectivity with a lightweight operation
-      const kvTest = await env.USGS_LAST_RESPONSE_KV.get('health-check', { type: 'text' });
+      const _kvTest = await env.USGS_LAST_RESPONSE_KV.get('health-check', { type: 'text' });
       const kvDuration = Date.now() - kvStartTime;
       
       // Write a test value to verify write capability
@@ -154,8 +154,8 @@ export async function onRequestGet(context) {
       `).bind(new Date(Date.now() - (2 * 60 * 60 * 1000)).toISOString()) // Last 2 hours
         .first();
       
-      const recentClusterCount = recentClusters?.count || 0;
-      const lastClusterUpdate = recentClusters?.lastUpdate;
+      const _recentClusterCount = recentClusters?.count || 0;
+      const _lastClusterUpdate = recentClusters?.lastUpdate;
       
       // Check for recent earthquake data updates
       const recentDataCheck = await env.DB.prepare(`

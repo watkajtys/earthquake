@@ -6,7 +6,7 @@
  */
 
 import { execSync } from 'child_process';
-import { writeFileSync, readFileSync } from 'fs';
+import { writeFileSync } from 'fs';
 import { ClusterBenchmarkSuite } from '../functions/utils/clusterBenchmark.js';
 import { findActiveClusters } from '../functions/api/calculate-clusters.POST.js';
 import { findActiveClustersOptimized } from '../functions/utils/spatialClusterUtils.js';
@@ -25,7 +25,7 @@ class WranglerD1BenchmarkSuite {
   /**
    * Execute SQL query using wrangler d1
    */
-  async executeQuery(sql, params = []) {
+  async executeQuery(sql, _params = []) {
     try {
       // Create a temporary SQL file for complex queries
       const tempFile = `/tmp/d1-query-${Date.now()}.sql`;
@@ -37,7 +37,7 @@ class WranglerD1BenchmarkSuite {
       // Clean up temp file
       try {
         execSync(`rm ${tempFile}`);
-      } catch (e) {
+      } catch {
         // Ignore cleanup errors
       }
 

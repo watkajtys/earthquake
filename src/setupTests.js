@@ -11,7 +11,7 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
-import { expect } from 'vitest';
+import { expect, beforeAll, afterEach, afterAll } from 'vitest';
 import { toHaveNoViolations } from 'jest-axe';
 
 expect.extend(toHaveNoViolations);
