@@ -212,7 +212,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
     it('/sitemaps/earthquakes-1.xml should skip events with missing id or place from D1', async () => {
         const now = Date.now();
-        const mockEvents = {
+        const _mockEvents = {
             results: [
                 {
                     /* id missing */ magnitude: 5.5, place: "Valid Place",

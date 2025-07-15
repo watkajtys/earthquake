@@ -26,7 +26,7 @@ import { handleQuakeDetailPrerender } from './routes/prerender/quake-detail.js';
  * @returns {Promise<Response|undefined>} A promise that resolves to a Response object, or undefined if handled by `next()` or specific test conditions.
  */
 export async function onRequest(context) {
-  const { request, next, env } = context;
+  const { request, next } = context;
   const url = new URL(request.url);
   const { pathname, searchParams } = url;
 

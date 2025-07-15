@@ -128,7 +128,7 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
         // The SQL query `WHERE slug IS NOT NULL AND slug <> ''` handles invalid/missing slugs at DB level.
         it('should skip entries if D1 slug is missing or empty (handled by SQL, but defensive check in code)', async () => { // Unskipping this test
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
-            const d1Results = [
+            const _d1Results = [
                 { slug: null, updatedAt: "2023-01-01T00:00:00Z" }, // Will be filtered by SQL
                 { slug: "", updatedAt: "2023-01-01T00:00:00Z" },   // Will be filtered by SQL
                 { slug: "valid-slug-example", updatedAt: "2023-01-02T00:00:00Z" },

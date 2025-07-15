@@ -290,7 +290,7 @@ class ApiBenchmarkSuite {
     }
   }
 
-  printDetailedResults(apiResult, originalResult, optimizedResult, earthquakeCount) {
+  printDetailedResults(apiResult, originalResult, optimizedResult) {
     console.log('\n📊 DETAILED COMPARISON');
     console.log('=' .repeat(50));
     

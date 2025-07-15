@@ -219,7 +219,7 @@ export class EarthquakeSpatialIndex {
     
     // Cell size should be roughly the clustering distance
     // Convert km to degrees (approximate)
-    const avgLat = earthquakes.reduce((sum, eq) => {
+    const _avgLat = earthquakes.reduce((sum, eq) => {
       const coords = eq.geometry?.coordinates;
       return sum + (coords ? coords[1] : 0);
     }, 0) / earthquakes.length;

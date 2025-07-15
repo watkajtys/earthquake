@@ -9,7 +9,7 @@ const mockEventTime35DaysAgo = Date.now() - 35 * 24 * 60 * 60 * 1000;
 const mockFeature1 = { type: "Feature", id: "evt1", properties: { time: mockEventTimeRecent, mag: 5.0 }, geometry: { type: "Point", coordinates: [1, 1] } };
 const mockFeature2 = { type: "Feature", id: "evt2", properties: { time: mockEventTime2DaysAgo, mag: 4.5 }, geometry: { type: "Point", coordinates: [2, 2] } };
 const mockFeature3 = { type: "Feature", id: "evt3", properties: { time: mockEventTime8DaysAgo, mag: 6.0 }, geometry: { type: "Point", coordinates: [3, 3] } };
-const mockFeature4 = { type: "Feature", id: "evt4", properties: { time: mockEventTime35DaysAgo, mag: 3.0 }, geometry: { type: "Point", coordinates: [4, 4] } };
+const _mockFeature4 = { type: "Feature", id: "evt4", properties: { time: mockEventTime35DaysAgo, mag: 3.0 }, geometry: { type: "Point", coordinates: [4, 4] } };
 
 const mockDbResultsDay = [{ geojson_feature: JSON.stringify(mockFeature1) }];
 const mockDbResultsWeek = [

@@ -10,7 +10,7 @@
  * @param {Request} context.request - The incoming HTTP request. Not directly used but part of context.
  * @returns {Response} An XML response containing the static pages sitemap.
  */
-export function handleStaticPagesSitemap(context) {
+export function handleStaticPagesSitemap() {
   // Get current date in YYYY-MM-DD format
   const today = new Date();
   const year = today.getFullYear();

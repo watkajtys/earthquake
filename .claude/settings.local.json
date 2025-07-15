@@ -6,7 +6,8 @@
       "Bash(find:*)",
       "Bash(npm test:*)",
       "Bash(grep:*)",
-      "Bash(npx vitest run:*)"
+      "Bash(npx vitest run:*)",
+      "Bash(npm run lint:*)"
     ],
     "deny": []
   }

@@ -79,7 +79,7 @@ describe('Prerendering Handler: /quake/:id', () => {
     it('/quake/some-quake-id should trigger prerender for crawler', async () => {
         const quakeId = "usgs_event_abc123";
         const expectedFetchUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${quakeId}`;
-        const mockQuakeData = {
+        const _mockQuakeData = {
             properties: { mag: 5, place: "Test Place", time: Date.now(), detail: expectedFetchUrl, title: `M 5.0 - Test Place` },
             geometry: { coordinates: [0,0,10] },
             id: quakeId
