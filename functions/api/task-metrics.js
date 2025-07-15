@@ -145,19 +145,11 @@ export async function onRequestGet(context) {
         `).bind(Date.now() - (lookbackDays * 24 * 60 * 60 * 1000))
           .all();
 
-        console.log('[task-metrics] Daily breakdown query results:', performanceQuery.results?.length || 0, 'days');
-        console.log('[task-metrics] Sample results:', JSON.stringify(performanceQuery.results?.slice(0, 3), null, 2));
 
         if (performanceQuery.results && performanceQuery.results.length > 0) {
-          console.log('[task-metrics] Raw results before filtering:', performanceQuery.results.length);
           const dailyData = performanceQuery.results.filter(day => 
             day && day.date && typeof day.earthquakeCount === 'number'
           );
-          console.log('[task-metrics] Filtered results after validation:', dailyData.length);
-          
-          if (dailyData.length === 0 && performanceQuery.results.length > 0) {
-            console.log('[task-metrics] All data filtered out! Sample raw data:', performanceQuery.results[0]);
-          }
           
           const avgDailyEarthquakes = dailyData.length > 0 ? 
             dailyData.reduce((sum, day) => sum + day.earthquakeCount, 0) / dailyData.length : 0;
