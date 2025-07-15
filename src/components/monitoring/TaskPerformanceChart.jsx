@@ -169,7 +169,7 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
         <div className="bg-gray-50 rounded-lg p-4">
           {dailyData.length > 0 ? (
             <>
-              <div className="flex items-end justify-between space-x-1 h-32">
+              <div className="flex items-end justify-between space-x-1 h-32 relative">
                 {dailyData.slice(0, 14).map((day, index) => {
                   if (!day || typeof day.earthquakeCount !== 'number' || !day.date) {
                     console.log('Filtering out invalid day:', day, 'at index:', index);
@@ -177,15 +177,16 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
                   }
                   
                   const height = (day.earthquakeCount / maxEarthquakes) * 100;
+                  const heightPx = Math.max((height / 100) * 128, 4); // Convert % to pixels (128px = h-32)
                   const isRecent = index < 3;
-                  console.log(`Rendering bar ${index}: ${day.date} - ${day.earthquakeCount} earthquakes - ${height}% height`);
+                  console.log(`Rendering bar ${index}: ${day.date} - ${day.earthquakeCount} earthquakes - ${heightPx}px height`);
                   return (
-                    <div key={day.date || index} className="flex-1 flex flex-col items-center">
+                    <div key={day.date || index} className="flex-1 flex flex-col items-center justify-end h-full">
                       <div
                         className={`w-full rounded-t transition-all hover:opacity-80 ${
                           isRecent ? 'bg-blue-500' : 'bg-gray-400'
                         }`}
-                        style={{ height: `${Math.max(height, 2)}%` }}
+                        style={{ height: `${heightPx}px` }}
                         title={`${day.date}: ${day.earthquakeCount} earthquakes`}
                       ></div>
                       <div className="text-xs text-gray-600 mt-1 text-center">
