@@ -195,7 +195,9 @@ export class PerformanceProfiler {
   }
   
   _getMemoryUsage() {
+    // eslint-disable-next-line no-undef
     if (typeof process !== 'undefined' && process.memoryUsage) {
+      // eslint-disable-next-line no-undef
       return process.memoryUsage().heapUsed;
     }
     // Fallback for browser/worker environment
@@ -222,6 +224,7 @@ export class PerformanceProfiler {
       profiles: this.getAllProfiles(),
       environment: {
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Node.js',
+        // eslint-disable-next-line no-undef
         platform: typeof process !== 'undefined' ? process.platform : 'unknown'
       }
     };
@@ -322,7 +325,9 @@ export class ClusterBenchmarkSuite {
     const earthquakes = EarthquakeDataGenerator.generate(earthquakeCount, distribution);
     
     // Force garbage collection if available
-    if (global.gc) {
+    // eslint-disable-next-line no-undef
+    if (typeof global !== 'undefined' && global.gc) {
+      // eslint-disable-next-line no-undef
       global.gc();
     }
     
@@ -444,6 +449,7 @@ export class ClusterBenchmarkSuite {
 }
 
 // Example usage and standalone execution
+// eslint-disable-next-line no-undef
 if (typeof require !== 'undefined' && require.main === module) {
   // Run benchmark if executed directly
   const suite = new ClusterBenchmarkSuite();
@@ -454,6 +460,7 @@ if (typeof require !== 'undefined' && require.main === module) {
     
     // Save to file if in Node.js environment
     if (typeof require !== 'undefined') {
+      // eslint-disable-next-line no-undef
       const fs = require('fs');
       fs.writeFileSync('benchmark_results.json', suite.exportResults(results, 'json'));
       fs.writeFileSync('benchmark_results.csv', suite.exportResults(results, 'csv'));
