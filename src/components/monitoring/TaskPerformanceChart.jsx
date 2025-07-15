@@ -41,24 +41,7 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
   // Create simple bar chart visualization for daily breakdown
   const dailyData = performance?.dailyBreakdown || [];
   
-  // Debug logging to understand data structure
-  if (dailyData.length === 0) {
-    console.log('TaskPerformanceChart - No daily data available');
-    console.log('Performance object:', performance);
-    console.log('Full metricsData:', metricsData);
-  } else {
-    console.log('TaskPerformanceChart - Daily data found:', dailyData.length, 'entries');
-    console.log('Sample daily data:', dailyData.slice(0, 3));
-  }
-  
   const maxEarthquakes = dailyData.length > 0 ? Math.max(...dailyData.map(d => d?.earthquakeCount || 0), 1) : 1;
-  
-  if (dailyData.length > 0) {
-    console.log('Chart calculations - maxEarthquakes:', maxEarthquakes);
-    console.log('Chart calculations - sample heights:', dailyData.slice(0, 3).map(d => 
-      `${d.date}: ${d.earthquakeCount} -> ${(d.earthquakeCount / maxEarthquakes) * 100}%`
-    ));
-  }
 
   const getTrendColor = (trend) => {
     switch (trend) {
@@ -172,14 +155,12 @@ export default function TaskPerformanceChart({ metricsData, timeRange, loading }
               <div className="flex items-end justify-between space-x-1 h-32 relative">
                 {dailyData.slice(0, 14).map((day, index) => {
                   if (!day || typeof day.earthquakeCount !== 'number' || !day.date) {
-                    console.log('Filtering out invalid day:', day, 'at index:', index);
                     return null;
                   }
                   
                   const height = (day.earthquakeCount / maxEarthquakes) * 100;
                   const heightPx = Math.max((height / 100) * 128, 4); // Convert % to pixels (128px = h-32)
                   const isRecent = index < 3;
-                  console.log(`Rendering bar ${index}: ${day.date} - ${day.earthquakeCount} earthquakes - ${heightPx}px height`);
                   return (
                     <div key={day.date || index} className="flex-1 flex flex-col items-center justify-end h-full">
                       <div
