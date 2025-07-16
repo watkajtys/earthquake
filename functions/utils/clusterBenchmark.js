@@ -5,6 +5,7 @@
  */
 
 import { findActiveClusters } from '../api/calculate-clusters.POST.js';
+import { findActiveClustersOptimized } from './spatialClusterUtils.js';
 import { calculateDistance, setDistanceCalculationProfiler } from './mathUtils.js';
 
 // Benchmark configuration
@@ -271,7 +272,7 @@ export class ClusterBenchmarkSuite {
   async runFullSuite(options = {}) {
     console.log('🚀 Starting Cluster Algorithm Benchmark Suite');
     console.log('=' .repeat(60));
-    
+
     const results = {
       metadata: {
         timestamp: new Date().toISOString(),
@@ -280,72 +281,76 @@ export class ClusterBenchmarkSuite {
       },
       benchmarks: []
     };
-    
-    // Test each dataset size
-    for (const dataset of BENCHMARK_CONFIG.datasets) {
-      console.log(`\n📊 Testing ${dataset.name} dataset (${dataset.size} earthquakes)`);
-      
-      // Test each distribution type
-      for (const dist of BENCHMARK_CONFIG.distributions) {
-        console.log(`  🌍 Distribution: ${dist.name}`);
-        
-        // Test each clustering parameter set
-        for (const params of BENCHMARK_CONFIG.clusterParams) {
-          const testName = `${dataset.name}_${dist.name}_${params.name}`;
-          console.log(`    ⚙️  Params: ${params.name} (${params.distance}km, min=${params.minQuakes})`);
-          
-          const result = await this.runSingleBenchmark(
-            dataset.size,
-            dist.type,
-            params.distance,
-            params.minQuakes,
-            testName
-          );
-          
-          results.benchmarks.push(result);
-          
-          // Log immediate results
-          console.log(`    ⏱️  Time: ${result.executionTime.toFixed(2)}ms`);
-          console.log(`    💾 Memory: ${(result.memoryUsed / 1024 / 1024).toFixed(2)}MB`);
-          console.log(`    🔢 Distance calcs: ${result.distanceCalculations}`);
-          console.log(`    🎯 Clusters found: ${result.result?.clustersFound || 0}`);
+
+    const algorithms = [
+      { name: 'Original O(N^2)', func: findActiveClusters },
+      { name: 'Spatial Index', func: findActiveClustersOptimized }
+    ];
+
+    for (const algorithm of algorithms) {
+      console.log(`\n\n🚀 Testing Algorithm: ${algorithm.name}`);
+      console.log('-'.repeat(60));
+
+      for (const dataset of BENCHMARK_CONFIG.datasets) {
+        console.log(`\n📊 Testing ${dataset.name} dataset (${dataset.size} earthquakes)`);
+
+        for (const dist of BENCHMARK_CONFIG.distributions) {
+          console.log(`  🌍 Distribution: ${dist.name}`);
+
+          for (const params of BENCHMARK_CONFIG.clusterParams) {
+            const testName = `${algorithm.name}_${dataset.name}_${dist.name}_${params.name}`;
+            console.log(`    ⚙️  Params: ${params.name} (${params.distance}km, min=${params.minQuakes})`);
+
+            const result = await this.runSingleBenchmark(
+              algorithm.func,
+              dataset.size,
+              dist.type,
+              params.distance,
+              params.minQuakes,
+              testName,
+              algorithm.name
+            );
+
+            results.benchmarks.push(result);
+
+            console.log(`    ⏱️  Time: ${result.executionTime.toFixed(2)}ms`);
+            console.log(`    💾 Memory: ${(result.memoryUsed / 1024 / 1024).toFixed(2)}MB`);
+            console.log(`    🔢 Distance calcs: ${result.distanceCalculations}`);
+            console.log(`    🎯 Clusters found: ${result.result?.clustersFound || 0}`);
+          }
         }
       }
     }
-    
+
     console.log('\n✅ Benchmark suite completed');
     return results;
   }
-  
+
   /**
    * Runs a single benchmark test
    */
-  async runSingleBenchmark(earthquakeCount, distribution, maxDistance, minQuakes, testName) {
-    // Generate test data
+  async runSingleBenchmark(algorithmFunc, earthquakeCount, distribution, maxDistance, minQuakes, testName, algorithmName) {
     const earthquakes = EarthquakeDataGenerator.generate(earthquakeCount, distribution);
-    
-    // Force garbage collection if available
-    // eslint-disable-next-line no-undef
+
     if (typeof global !== 'undefined' && global.gc) {
-      // eslint-disable-next-line no-undef
       global.gc();
     }
-    
-    // Run the benchmark
+
     this.profiler.startProfile(testName);
-    
+
     let clusters;
     try {
-      clusters = findActiveClusters(earthquakes, maxDistance, minQuakes);
+      clusters = algorithmFunc(earthquakes, maxDistance, minQuakes);
     } catch (error) {
       console.error(`❌ Benchmark failed for ${testName}:`, error);
       clusters = [];
     }
-    
+
     const result = this.profiler.endProfile(testName, clusters);
-    
+
     return {
       ...result,
+      algorithm: algorithmName,
       parameters: {
         earthquakeCount,
         distribution,
@@ -411,12 +416,13 @@ export class ClusterBenchmarkSuite {
   
   _exportToCSV(results) {
     const headers = [
-      'TestName', 'DatasetSize', 'Distribution', 'MaxDistance', 'MinQuakes',
-      'ExecutionTime(ms)', 'MemoryUsed(MB)', 'DistanceCalculations', 
+      'Algorithm', 'TestName', 'DatasetSize', 'Distribution', 'MaxDistance', 'MinQuakes',
+      'ExecutionTime(ms)', 'MemoryUsed(MB)', 'DistanceCalculations',
       'ClustersFound', 'TimePerEarthquake(ms)'
     ];
-    
+
     const rows = results.benchmarks.map(b => [
+      b.algorithm,
       b.testName,
       b.parameters.earthquakeCount,
       b.parameters.distribution,
@@ -428,22 +434,34 @@ export class ClusterBenchmarkSuite {
       b.result?.clustersFound || 0,
       b.performance.timePerEarthquake.toFixed(4)
     ]);
-    
+
     return [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
   }
-  
+
   _exportToMarkdown(results) {
     let md = '# Cluster Algorithm Benchmark Results\n\n';
     md += `**Timestamp:** ${results.metadata.timestamp}\n\n`;
-    
-    md += '## Performance Summary\n\n';
-    md += '| Dataset | Distribution | Params | Time (ms) | Memory (MB) | Clusters |\n';
-    md += '|---------|--------------|--------|-----------|-------------|----------|\n';
-    
-    results.benchmarks.forEach(b => {
-      md += `| ${b.parameters.earthquakeCount} | ${b.parameters.distribution} | ${b.parameters.maxDistance}km/${b.parameters.minQuakes} | ${b.executionTime.toFixed(2)} | ${(b.memoryUsed/1024/1024).toFixed(2)} | ${b.result?.clustersFound || 0} |\n`;
-    });
-    
+
+    // Group results by algorithm for better comparison
+    const groupedByAlgorithm = results.benchmarks.reduce((acc, b) => {
+      if (!acc[b.algorithm]) {
+        acc[b.algorithm] = [];
+      }
+      acc[b.algorithm].push(b);
+      return acc;
+    }, {});
+
+    for (const algorithmName in groupedByAlgorithm) {
+      md += `## Algorithm: ${algorithmName}\n\n`;
+      md += '| Dataset | Distribution | Params | Time (ms) | Memory (MB) | Clusters | Distance Calcs |\n';
+      md += '|---------|--------------|--------|-----------|-------------|----------|----------------|\n';
+
+      groupedByAlgorithm[algorithmName].forEach(b => {
+        md += `| ${b.parameters.earthquakeCount} | ${b.parameters.distribution} | ${b.parameters.maxDistance}km/${b.parameters.minQuakes} | ${b.executionTime.toFixed(2)} | ${(b.memoryUsed / 1024 / 1024).toFixed(2)} | ${b.result?.clustersFound || 0} | ${b.distanceCalculations} |\n`;
+      });
+      md += '\n';
+    }
+
     return md;
   }
 }

@@ -56,72 +56,6 @@ export function calculateBoundingBox(centerLat, centerLng, bufferKm) {
 }
 
 /**
- * Calculates a bounding box that encompasses all provided earthquake points with a buffer.
- * 
- * @param {Array} earthquakePoints - Array of [lat, lng] coordinate pairs
- * @param {number} bufferKm - Buffer distance in kilometers around the bounding box
- * @returns {Object|null} Bounding box or null if no valid points
- */
-export function calculateBoundingBoxFromPoints(earthquakePoints, bufferKm = 50) {
-  if (!earthquakePoints || earthquakePoints.length === 0) {
-    return null;
-  }
-  
-  // Filter out invalid points
-  const validPoints = earthquakePoints.filter(point => 
-    Array.isArray(point) && 
-    point.length >= 2 && 
-    typeof point[0] === 'number' && 
-    typeof point[1] === 'number' &&
-    !isNaN(point[0]) && !isNaN(point[1])
-  );
-  
-  if (validPoints.length === 0) {
-    return null;
-  }
-  
-  // Find min/max coordinates
-  let minLat = validPoints[0][0];
-  let maxLat = validPoints[0][0];
-  let minLng = validPoints[0][1];
-  let maxLng = validPoints[0][1];
-  
-  validPoints.forEach(([lat, lng]) => {
-    minLat = Math.min(minLat, lat);
-    maxLat = Math.max(maxLat, lat);
-    minLng = Math.min(minLng, lng);
-    maxLng = Math.max(maxLng, lng);
-  });
-  
-  // Add buffer
-  const centerLat = (minLat + maxLat) / 2;
-  const latDegreesPerKm = 1 / 110.574;
-  const lngDegreesPerKm = 1 / (110.574 * Math.cos(centerLat * Math.PI / 180));
-  
-  const latBuffer = bufferKm * latDegreesPerKm;
-  const lngBuffer = bufferKm * lngDegreesPerKm;
-  
-  return {
-    north: maxLat + latBuffer,
-    south: minLat - latBuffer,
-    east: maxLng + lngBuffer,
-    west: minLng - lngBuffer
-  };
-}
-
-/**
- * Checks if a coordinate pair is within a bounding box.
- * 
- * @param {number} lat - Latitude to check
- * @param {number} lng - Longitude to check
- * @param {Object} bbox - Bounding box with north, south, east, west properties
- * @returns {boolean} True if point is within bounding box
- */
-export function isPointInBoundingBox(lat, lng, bbox) {
-  return lat >= bbox.south && lat <= bbox.north && lng >= bbox.west && lng <= bbox.east;
-}
-
-/**
  * Checks if a LineString geometry intersects with a bounding box.
  * Uses a simple approach checking if any coordinate is within the bounding box.
  * 
@@ -373,13 +307,36 @@ export function initializeSpatialIndex(geoJson) {
   let minLng = Infinity, maxLng = -Infinity;
   
   geoJson.features.forEach(feature => {
-    if (feature.geometry && feature.geometry.type === 'LineString') {
-      feature.geometry.coordinates.forEach(([lng, lat]) => {
-        minLat = Math.min(minLat, lat);
-        maxLat = Math.max(maxLat, lat);
-        minLng = Math.min(minLng, lng);
-        maxLng = Math.max(maxLng, lng);
-      });
+    if (!feature.geometry) return;
+
+    const processCoordinates = (coords, isMulti) => {
+      if (isMulti) {
+        coords.forEach(line => line.forEach(([lng, lat]) => {
+          minLat = Math.min(minLat, lat);
+          maxLat = Math.max(maxLat, lat);
+          minLng = Math.min(minLng, lng);
+          maxLng = Math.max(maxLng, lng);
+        }));
+      } else {
+        coords.forEach(([lng, lat]) => {
+          minLat = Math.min(minLat, lat);
+          maxLat = Math.max(maxLat, lat);
+          minLng = Math.min(minLng, lng);
+          maxLng = Math.max(maxLng, lng);
+        });
+      }
+    };
+
+    if (feature.geometry.type === 'LineString') {
+      processCoordinates(feature.geometry.coordinates, false);
+    } else if (feature.geometry.type === 'MultiLineString') {
+      processCoordinates(feature.geometry.coordinates, true);
+    } else if (feature.geometry.type === 'Point') {
+      const [lng, lat] = feature.geometry.coordinates;
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
     }
   });
   
