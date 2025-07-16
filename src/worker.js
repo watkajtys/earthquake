@@ -27,6 +27,10 @@ import { onRequestGet as handleGetSystemHealth } from '../functions/api/system-h
 import { onRequestGet as handleGetTaskMetrics } from '../functions/api/task-metrics.js';
 import { onRequestGet as handleGetSystemLogs } from '../functions/api/system-logs.js';
 
+// Import fault API handlers
+import { onRequestGet as handleGetNearbyFaults } from '../functions/api/get-nearby-faults.js';
+import { onRequestGet as handleGetFaultContext } from '../functions/api/fault-context.js';
+
 // === Cache Management Functions ===
 // Cache management functions removed - cluster cache has been eliminated
 
@@ -549,6 +553,31 @@ export default {
 
     if (pathname === '/api/system-logs' && request.method === 'GET') {
       return handleGetSystemLogs({ request, env, ctx });
+    }
+
+    if (pathname === '/api/get-nearby-faults' && request.method === 'GET') {
+      return handleGetNearbyFaults({ request, env, ctx });
+    }
+
+    if (pathname.startsWith('/api/fault-context/') && request.method === 'GET') {
+      const parts = pathname.split('/');
+      if (parts.length === 4 && parts[3]) {
+        // Create a new request with the earthquake ID as a parameter
+        const earthquakeId = decodeURIComponent(parts[3]);
+        const contextRequest = { 
+          ...request, 
+          params: { earthquakeId } 
+        };
+        return handleGetFaultContext({ request: contextRequest, env, ctx, params: { earthquakeId } });
+      } else {
+        return new Response(JSON.stringify({
+          error: "Invalid fault context path",
+          message: "Please provide a valid earthquake ID"
+        }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
     }
 
     // Serve static assets from ASSETS binding

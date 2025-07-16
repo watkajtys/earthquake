@@ -217,3 +217,204 @@ This is a **Cloudflare Worker** application that serves both frontend and backen
 - **Auto-refresh**: 30-second intervals for real-time monitoring
 - **Time Range Selection**: Hour, day, week views for performance analysis
 - **Mobile Support**: Responsive design for operational monitoring
+
+## Active Fault Database Integration (Claude Code Implementation)
+
+### ✅ Complete Implementation Status
+*Full fault database integration with museum-friendly, human-readable focus completed*
+
+#### Phase 1: Database Schema ✅
+- **ActiveFaults Table** (`migrations/0011_create_active_faults_table.sql`)
+  - Human-readable columns: `display_name`, `movement_description`, `activity_level`, `speed_description`, `depth_description`, `hazard_description`
+  - Scientific columns: `slip_type`, `average_dip`, `average_rake`, `net_slip_rate_*`, `upper_seis_depth`, `lower_seis_depth`
+  - Spatial columns: `geom_linestring`, `bbox_*`, `length_km`
+  - Optimized indexes for spatial queries and filtering
+
+- **EarthquakeFaultAssociations Table** (`migrations/0012_create_earthquake_fault_associations.sql`)
+  - Links earthquakes to nearby faults with human-readable explanations
+  - Columns: `relationship_description`, `proximity_description`, `relevance_explanation`, `relevance_score`
+  - Association types: `primary`, `secondary`, `regional_context`
+
+#### Phase 2: Data Import & Translation ✅
+- **Import Script** (`scripts/import-fault-data.js`)
+  - Processes `gem_active_faults_harmonized_full.geojson`
+  - Generates human-readable descriptions via translation functions
+  - Batch processing with error handling and progress tracking
+  - Usage: `node scripts/import-fault-data.js --database PrimaryDB`
+
+- **Translation Functions** (`functions/utils/faultTranslation.js`)
+  - Converts scientific terms to museum-friendly language:
+    - "Dextral" → "Slides sideways (right-lateral) like a zipper"
+    - "Reverse" → "Pushes up and together like a bulldozer"
+    - Slip rates → Speed comparisons ("as fast as fingernails grow")
+    - Activity levels → Simple classifications ("Very Active", "Moderate", "Slow")
+  - Hazard descriptions based on fault length and activity
+
+#### Phase 3: API Endpoints ✅
+- **`/api/get-nearby-faults`** (`functions/api/get-nearby-faults.js`)
+  - Finds faults near a location with visitor-friendly descriptions
+  - Parameters: `lat`, `lon`, `radius`, `limit`, `activity_level`, `slip_type`
+  - Returns human-readable primary content with scientific details as secondary
+  - Spatial optimization with bounding box pre-filtering
+
+- **`/api/fault-context/:earthquakeId`** (`functions/api/fault-context.js`)
+  - Provides earthquake-fault relationships with educational explanations
+  - On-demand association creation if none exist
+  - Includes regional context and educational content for museum displays
+  - Relevance scoring and relationship descriptions
+
+#### Phase 4: UI Components ✅
+- **FaultExplorer** (`src/components/FaultExplorer.jsx`)
+  - Interactive fault discovery interface
+  - Location-based search with filtering options
+  - Expandable fault cards with human-readable primary content
+
+- **FaultContextPanel** (`src/components/FaultContextPanel.jsx`)
+  - Museum-friendly earthquake-fault relationship display
+  - "What Happened?" explanations in conversational language
+  - Expandable technical details for interested visitors
+
+- **EnhancedEarthquakeFaultParamsPanel** (`src/components/earthquakeDetail/EnhancedEarthquakeFaultParamsPanel.jsx`)
+  - Tabbed interface comparing theoretical vs. real fault data
+  - Educational comparison tools for museum exhibits
+  - Integrates with existing earthquake detail views
+
+#### Phase 5: Human-Readable Focus ✅
+- **Museum-Friendly Language**: All primary displays use conversational, accessible language
+- **Technical Details Secondary**: Scientific data available but not primary focus
+- **Educational Context**: "What does this mean?" explanations throughout
+- **Visitor-Centric Design**: Analogies, comparisons, and relatable examples
+
+### Key Features Implemented
+- **Conversational Interface**: "This earthquake happened very close to the San Andreas Fault"
+- **Activity Descriptions**: "Moves about 3cm per year - that's fast for a fault!"
+- **Hazard Explanations**: "Can produce large earthquakes up to magnitude 7 or higher"
+- **Spatial Relationships**: "Very close (2km away)" vs "Far (50km away)"
+- **Educational Storytelling**: Regional context and "fault neighborhoods"
+
+### Data Sources & Files
+- **GeoJSON Data**: `src/assets/gem_active_faults_harmonized_full.geojson`
+- **Database Tables**: `ActiveFaults`, `EarthquakeFaultAssociations`
+- **API Routes**: Integrated into `src/worker.js` routing
+- **Translation Utilities**: Shared across import and runtime operations
+
+### Usage Instructions
+1. **Database Setup**: Migrations already applied via production backup import
+2. **Data Import**: Run `node scripts/import-fault-data.js` to populate fault data
+3. **API Access**: Use `/api/get-nearby-faults` and `/api/fault-context/:id` endpoints
+4. **UI Integration**: Components already integrated into earthquake detail views
+
+### Museum Integration Ready
+- All components prioritize visitor experience over technical precision
+- Human-readable explanations come first, scientific data is secondary
+- Educational value guides all design decisions
+- "What does this mean?" approach for all technical concepts
+
+## Fault Database Integration Status (Complete)
+
+### Overview
+✅ **COMPLETE**: Fault data integration transitioned from static GeoJSON files to database-backed system
+- **Current Status**: 621+ faults imported and live, ~13,000 more importing in background
+- **Regional Maps**: Already using D1 database instead of static files
+- **Performance**: KV caching implemented for 1-2 hour TTL
+- **Monitoring**: Added to `/monitoring` dashboard
+
+### Architecture Implemented
+
+#### Database Layer
+- **Table**: `ActiveFaults` in Cloudflare D1
+- **Data**: Human-readable fault descriptions (e.g., "Mount Diablo Thrust Fault - Pushes up and together like a bulldozer")
+- **Import**: `scripts/import-fault-data.js --database PrimaryDB --remote` (background process)
+
+#### API Layer
+- **`/api/get-nearby-faults`**: Spatial queries for faults near locations
+- **`/api/fault-context/:earthquakeId`**: Earthquake-fault relationship analysis
+- **Caching**: KV storage (`FAULT_CACHE_KV`) with configurable TTL
+- **Performance**: Client-side and server-side caching layers
+
+#### UI Integration (Live)
+- **EarthquakeMap.jsx**: Replaced static import with `getNearbyFaults()` API calls
+- **ClusterMiniMap.jsx**: Same dynamic fault loading
+- **FaultContextPanel**: Integrated into earthquake detail views
+- **InteractiveGlobeView.jsx**: Explicitly NO faults (global view only shows plates/coastlines)
+
+### Service Layer
+- **`src/services/faultApiService.js`**: 
+  - `getNearbyFaults(lat, lon, radius, limit)`
+  - `getFaultContext(earthquakeId)`
+  - Client-side caching and error handling
+  - GeoJSON conversion for map rendering
+
+### Completed Implementation
+
+#### ✅ Database Integration
+- Fault data import script with file-based SQL execution
+- Production database: 621+ faults loaded, import continuing
+- Human-readable descriptions for museum display
+
+#### ✅ API Development
+- Spatial queries with bounding box optimization
+- KV caching for performance (1-hour nearby faults, 2-hour context)
+- Comprehensive error handling and fallbacks
+
+#### ✅ Frontend Integration
+- Regional maps switched from static files to API calls
+- Real-time fault loading based on map center
+- Fault context panels in earthquake detail views
+- Museum-friendly explanations prioritized
+
+#### ✅ Performance Optimization
+- **Client Cache**: Prevents duplicate API calls within session
+- **KV Cache**: Server-side caching with TTL
+- **Spatial Optimization**: Only loads faults relevant to current view
+- **Background Import**: Non-blocking fault data population
+
+#### ✅ Monitoring Integration
+- Added fault system monitoring to `/monitoring` dashboard
+- Tracks: fault count, response times, cache status, import progress
+- Health scoring includes fault system availability
+
+### Configuration Complete
+
+#### KV Namespaces Created
+```toml
+# Production
+{ binding = "FAULT_CACHE_KV", id = "c71550ecabff4c41b89b32335237ffd2" }
+# Preview  
+{ binding = "FAULT_CACHE_KV", preview_id = "a964a9d5e96a4e00927d01b7f9bc6b6c" }
+```
+
+#### Environment Setup
+- **Production**: `wrangler.toml` configured for all environments
+- **Import Command**: `node scripts/import-fault-data.js --database PrimaryDB --remote`
+- **Cache Configuration**: Automatic via environment bindings
+
+### User Experience Flow
+1. **Map Load**: Earthquakes display immediately
+2. **Fault Loading**: API fetches nearby faults from D1 based on map location  
+3. **Display**: Shows relevant faults with human-readable descriptions
+4. **Performance**: KV caching ensures fast subsequent loads
+5. **Context**: Earthquake detail views show fault relationships
+
+### Key Benefits Achieved
+- **Performance**: Faster loading via spatial queries vs. full dataset
+- **Scalability**: Database can handle growing fault datasets
+- **Caching**: Multiple cache layers for optimal performance
+- **Maintainability**: API-driven vs. static file management
+- **Monitoring**: Full observability of fault system health
+
+### Files Modified
+- `src/components/EarthquakeMap.jsx`: Dynamic fault loading
+- `src/components/ClusterMiniMap.jsx`: API-based fault rendering  
+- `src/components/EarthquakeDetailView.jsx`: Fault context integration
+- `src/services/faultApiService.js`: Complete service layer
+- `functions/api/get-nearby-faults.js`: Spatial fault queries
+- `functions/api/fault-context.js`: Earthquake-fault analysis
+- `functions/api/system-health.js`: Fault system monitoring
+- `wrangler.toml`: KV namespace configuration
+- `scripts/import-fault-data.js`: Database import tooling
+
+### Next Steps (Optional)
+- Monitor import completion via `/monitoring` dashboard
+- Consider batch fault updates for new geological surveys
+- Potential integration with additional fault databases

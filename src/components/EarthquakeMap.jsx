@@ -7,11 +7,14 @@ import L from 'leaflet';
 // import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
 import { 
-  calculateBoundingBoxFromPoints, 
-  filterGeoJSONByBoundingBox,
   initializeSpatialIndex,
   clearSpatialIndex
 } from '../utils/geoSpatialUtils.js';
+import { 
+  getNearbyFaults, 
+  faultsToGeoJSON, 
+  getFaultStyle 
+} from '../services/faultApiService.js';
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -95,24 +98,6 @@ const getTectonicPlateStyle = (feature) => {
   return { color, weight: 1, opacity: 0.8 };
 };
 
-/**
- * Defines the styling for GEM active fault GeoJSON features.
- * The color of the fault line varies based on its slip type (Normal, Reverse, Dextral, Sinistral).
- *
- * @param {Object} feature - The GeoJSON feature representing an active fault.
- *                           Expected to have `feature.properties.slip_type`.
- * @returns {Object} A Leaflet path style options object for the feature.
- */
-const getActiveFaultStyle = (feature) => {
-  let color = 'rgba(255, 255, 255, 0.9)'; // Default white for unknown fault types
-  const slipType = feature?.properties?.slip_type;
-  if (slipType === 'Normal') color = 'rgba(255, 20, 147, 0.9)'; // Deep pink for Normal faults
-  else if (slipType === 'Reverse') color = 'rgba(50, 205, 50, 0.9)'; // Lime green for Reverse faults
-  else if (slipType === 'Dextral') color = 'rgba(0, 191, 255, 0.9)'; // Deep sky blue for Dextral (right-lateral)
-  else if (slipType === 'Sinistral') color = 'rgba(138, 43, 226, 0.9)'; // Blue violet for Sinistral (left-lateral)
-  else if (slipType === 'Dextral-Normal') color = 'rgba(255, 140, 0, 0.9)'; // Orange for combined Dextral-Normal
-  return { color, weight: 2.5, opacity: 0.9 };
-};
 
 /**
  * Renders an interactive Leaflet map to display earthquake information.
@@ -158,8 +143,8 @@ const EarthquakeMap = ({
   const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);
   const [isTectonicPlatesLoading, setIsTectonicPlatesLoading] = useState(true);
   const [activeFaultsDataJson, setActiveFaultsDataJson] = useState(null);
-  const [isActiveFaultsLoading, setIsActiveFaultsLoading] = useState(true);
-  const [fullActiveFaultsData, setFullActiveFaultsData] = useState(null);
+  const [isActiveFaultsLoading, setIsActiveFaultsLoading] = useState(false);
+  const [faultApiError, setFaultApiError] = useState(null);
 
   const initialMapCenter = useMemo(() => [mapCenterLatitude, mapCenterLongitude], [mapCenterLatitude, mapCenterLongitude]);
   const highlightedQuakePosition = useMemo(() => {
@@ -240,78 +225,73 @@ const EarthquakeMap = ({
     };
   }, []);
 
+  // Load active faults from database API based on current map view
   useEffect(() => {
     let isMounted = true;
+    
     const loadActiveFaults = async () => {
       setIsActiveFaultsLoading(true);
+      setFaultApiError(null);
+      
       try {
-        const faultsData = await import('../assets/gem_active_faults_harmonized.json');
+        // Calculate center point from all earthquake points on the map
+        const allEarthquakePoints = [];
+        
+        // Add highlighted earthquake position
+        if (highlightedQuakePosition) {
+          allEarthquakePoints.push(highlightedQuakePosition);
+        }
+        
+        // Add nearby earthquakes
+        nearbyQuakes.forEach(quake => {
+          if (quake.geometry && quake.geometry.coordinates) {
+            const lat = parseFloat(quake.geometry.coordinates[1]);
+            const lng = parseFloat(quake.geometry.coordinates[0]);
+            if (!isNaN(lat) && !isNaN(lng)) {
+              allEarthquakePoints.push([lat, lng]);
+            }
+          }
+        });
+        
+        // If no earthquake points, use map center as fallback
+        if (allEarthquakePoints.length === 0) {
+          allEarthquakePoints.push([mapCenterLatitude, mapCenterLongitude]);
+        }
+        
+        // Calculate center point for fault query
+        const centerLat = allEarthquakePoints.reduce((sum, point) => sum + point[0], 0) / allEarthquakePoints.length;
+        const centerLon = allEarthquakePoints.reduce((sum, point) => sum + point[1], 0) / allEarthquakePoints.length;
+        
+        // Fetch faults from database API with 100km radius
+        const faultData = await getNearbyFaults(centerLat, centerLon, 100, 100);
+        
         if (isMounted) {
-          setFullActiveFaultsData(faultsData.default);
+          // Convert to GeoJSON format for map display
+          const geoJsonData = faultsToGeoJSON(faultData.faults);
+          setActiveFaultsDataJson(geoJsonData);
+          
+          // Log loading results for debugging
+          console.log(`Active faults loaded from API: ${faultData.faults.length} faults`);
         }
       } catch (error) {
-        console.error("Error loading active faults data:", error);
+        console.error("Error loading active faults from API:", error);
+        if (isMounted) {
+          setFaultApiError(error.message);
+          setActiveFaultsDataJson(null);
+        }
       } finally {
         if (isMounted) {
           setIsActiveFaultsLoading(false);
         }
       }
     };
+
     loadActiveFaults();
+    
     return () => {
       isMounted = false;
     };
-  }, []);
-
-  // Spatial filtering effect for active faults
-  useEffect(() => {
-    if (!fullActiveFaultsData) {
-      setActiveFaultsDataJson(null);
-      return;
-    }
-
-    // Calculate bounding box from all earthquake points on the map
-    const allEarthquakePoints = [];
-    
-    // Add highlighted earthquake position
-    if (highlightedQuakePosition) {
-      allEarthquakePoints.push(highlightedQuakePosition);
-    }
-    
-    // Add nearby earthquakes
-    nearbyQuakes.forEach(quake => {
-      if (quake.geometry && quake.geometry.coordinates) {
-        const lat = parseFloat(quake.geometry.coordinates[1]);
-        const lng = parseFloat(quake.geometry.coordinates[0]);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          allEarthquakePoints.push([lat, lng]);
-        }
-      }
-    });
-    
-    // If no earthquake points, use map center as fallback
-    if (allEarthquakePoints.length === 0) {
-      allEarthquakePoints.push([mapCenterLatitude, mapCenterLongitude]);
-    }
-    
-    // Calculate bounding box with 100km buffer for fault filtering
-    const boundingBox = calculateBoundingBoxFromPoints(allEarthquakePoints, 100);
-    
-    if (boundingBox) {
-      // Filter faults to only those within the bounding box
-      const filteredFaults = filterGeoJSONByBoundingBox(fullActiveFaultsData, boundingBox);
-      setActiveFaultsDataJson(filteredFaults);
-      
-      // Log filtering results for debugging
-      const originalCount = fullActiveFaultsData.features.length;
-      const filteredCount = filteredFaults.features.length;
-      console.log(`Active faults filtered: ${originalCount} → ${filteredCount} (${Math.round(filteredCount/originalCount*100)}%)`);
-    } else {
-      // Fallback: no filtering
-      setActiveFaultsDataJson(fullActiveFaultsData);
-    }
   }, [
-    fullActiveFaultsData, 
     highlightedQuakePosition, 
     nearbyQuakes, 
     mapCenterLatitude, 
@@ -398,36 +378,43 @@ const EarthquakeMap = ({
       {!isActiveFaultsLoading && activeFaultsDataJson && (
         <GeoJSON 
           data={activeFaultsDataJson} 
-          style={getActiveFaultStyle}
+          style={(feature) => getFaultStyle(feature.properties)}
           onEachFeature={(feature, layer) => {
             if (feature.properties) {
-              const slipType = feature.properties.slip_type;
-              let slipDescription = slipType || 'Unknown';
+              const props = feature.properties;
               
-              if (slipType === 'Normal') {
-                slipDescription = 'Normal (pulls apart)';
-              } else if (slipType === 'Reverse') {
-                slipDescription = 'Reverse (pushes together)';
-              } else if (slipType === 'Dextral') {
-                slipDescription = 'Dextral (slides right)';
-              } else if (slipType === 'Sinistral') {
-                slipDescription = 'Sinistral (slides left)';
-              } else if (slipType === 'Dextral-Normal') {
-                slipDescription = 'Dextral-Normal (slides right + pulls apart)';
-              }
-              
+              // Create popup content with human-readable information
               const popupContent = `
-                <div>
-                  <strong>${feature.properties.name || 'Unknown Fault'}</strong><br/>
-                  <strong>Fault Type:</strong> ${slipDescription}<br/>
-                  <strong>Net Slip Rate:</strong> ${feature.properties.net_slip_rate || 'Unknown'}<br/>
-                  <strong>Data Source:</strong> ${feature.properties.catalog_name || 'Unknown'}
+                <div style="font-size: 14px; max-width: 250px;">
+                  <h4 style="margin: 0 0 8px 0; color: #333;">${props.display_name || props.name || 'Active Fault'}</h4>
+                  <p style="margin: 0 0 4px 0;"><strong>Movement:</strong> ${props.movement_description || 'Unknown'}</p>
+                  <p style="margin: 0 0 4px 0;"><strong>Activity:</strong> ${props.activity_level || 'Unknown'}</p>
+                  <p style="margin: 0 0 4px 0;"><strong>Speed:</strong> ${props.speed_description || 'Unknown'}</p>
+                  ${props.distance_km ? `<p style="margin: 0 0 4px 0;"><strong>Distance:</strong> ${props.proximity_description || props.distance_km + ' km away'}</p>` : ''}
+                  ${props.hazard_description ? `<p style="margin: 0;"><strong>Hazard:</strong> ${props.hazard_description}</p>` : ''}
                 </div>
               `;
+              
               layer.bindPopup(popupContent);
             }
           }}
         />
+      )}
+      
+      {faultApiError && (
+        <div style={{ 
+          position: 'absolute', 
+          top: '10px', 
+          left: '10px', 
+          background: 'rgba(255, 0, 0, 0.8)', 
+          color: 'white', 
+          padding: '5px', 
+          borderRadius: '3px', 
+          fontSize: '12px', 
+          zIndex: 1000 
+        }}>
+          Fault data unavailable: {faultApiError}
+        </div>
       )}
     </MapContainer>
   );

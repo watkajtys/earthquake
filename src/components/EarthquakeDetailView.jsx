@@ -28,7 +28,7 @@ import EarthquakeLocationPanel from './earthquakeDetail/EarthquakeLocationPanel'
 import EarthquakeImpactPanel from './earthquakeDetail/EarthquakeImpactPanel';
 import EarthquakeCitizenSciencePanel from './earthquakeDetail/EarthquakeCitizenSciencePanel';
 import EarthquakeFaultDiagramPanel from './earthquakeDetail/EarthquakeFaultDiagramPanel';
-import EarthquakeFaultParamsPanel from './earthquakeDetail/EarthquakeFaultParamsPanel';
+import EnhancedEarthquakeFaultParamsPanel from './earthquakeDetail/EnhancedEarthquakeFaultParamsPanel';
 import EarthquakeMwwPanel from './earthquakeDetail/EarthquakeMwwPanel';
 import EarthquakeMagnitudeComparisonPanel from './earthquakeDetail/EarthquakeMagnitudeComparisonPanel';
 import EarthquakeStressAxesPanel from './earthquakeDetail/EarthquakeStressAxesPanel';
@@ -481,9 +481,10 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                                 diagramContainerClass={diagramContainerClass}
                                 highlightClass={highlightClass}
                             />
-                            <EarthquakeFaultParamsPanel
+                            <EnhancedEarthquakeFaultParamsPanel
                                 selectedFaultPlaneKey={selectedFaultPlaneKey}
                                 selectedFaultPlane={selectedFaultPlane}
+                                earthquake={detailData}
                                 // isValidNumber, formatNumber are now imported by child
                                 exhibitPanelClass={exhibitPanelClass}
                                 exhibitTitleClass={exhibitTitleClass}

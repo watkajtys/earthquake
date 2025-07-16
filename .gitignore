@@ -27,4 +27,8 @@ dist-ssr
 coverage
 coverage/
 
+# Large data files (exclude from Git but keep locally for import)
+src/assets/gem_active_faults_harmonized_full.geojson
+full_fault_import.sql
+
 .wrangler
