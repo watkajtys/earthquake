@@ -20,7 +20,7 @@ export const getMagnitudeColor = (magnitude) => {
     if (magnitude < 5.0) return '#FACC15'; // yellow-400
     if (magnitude < 6.0) return '#FB923C'; // orange-400
     if (magnitude < 7.0) return '#F87171'; // red-400 (Magnitude 6.x)
-    return '#1E293B'; // slate-800 (Magnitude 7.0+)
+    return '#E879F9'; // fuchsia-400 (Magnitude 7.0+)
 };
 
 /**
@@ -37,7 +37,7 @@ export const getMagnitudeColorStyle = (magnitude) => {
     if (magnitude < 5.0) return 'bg-yellow-400 text-slate-900';     // text-slate-900 for contrast
     if (magnitude < 6.0) return 'bg-orange-400 text-slate-900';     // text-slate-900 for contrast
     if (magnitude < 7.0) return 'bg-red-400 text-slate-900';       // Magnitude 6.x, text-slate-900 for contrast
-    return 'bg-slate-800 text-white';                             // Magnitude 7.0+, text-white for contrast
+    return 'bg-fuchsia-400 text-white';                           // Magnitude 7.0+, text-white for contrast
 };
 
 // Add other utility functions here as the app grows
