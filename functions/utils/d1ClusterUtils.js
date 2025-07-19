@@ -1,39 +1,49 @@
 // functions/utils/d1ClusterUtils.js
 
 /**
- * @file functions/utils/d1ClusterUtils.js
- * @description Utility functions for interacting with ClusterDefinitions in D1.
+ * @file Utility functions for interacting with the `ClusterDefinitions` D1 database table.
+ * @module functions/utils/d1ClusterUtils
+ *
+ * @description
+ * This module centralizes the logic for creating and updating cluster definitions in the
+ * D1 database. It provides a robust, validated interface for database interactions,
+ * ensuring that all data written to the `ClusterDefinitions` table is well-formed.
+ *
+ * The primary function, `storeClusterDefinition`, handles the `INSERT OR REPLACE` logic,
+ * making it the single point of entry for persisting cluster data.
  */
-
 /**
- * Stores (inserts or replaces) a cluster definition in the D1 database.
+ * Stores (inserts or replaces) a complete cluster definition in the D1 database.
+ *
+ * This function takes a comprehensive `clusterData` object, performs validation on all
+ * required fields and their types, and then executes an `INSERT OR REPLACE` SQL query
+ * against the `ClusterDefinitions` table. This "upsert" behavior ensures that if a
+ * definition with the given `id` already exists, it will be updated with the new data;
+ * otherwise, a new record will be created.
+ *
+ * It is designed to be a safe and reliable way to manage cluster data, abstracting the
+ * raw SQL and validation logic away from the calling functions.
  *
  * @async
- * @param {object} db - The D1 database binding.
- * @param {object} clusterData - An object containing all the fields for a cluster definition.
- * @param {string} clusterData.id - Unique identifier for the cluster (primary key).
- * @param {string} [clusterData.stableKey] - Stable identifier for the cluster, used for lookups.
- * @param {string} clusterData.slug - SEO-friendly slug.
- * @param {string} clusterData.strongestQuakeId - ID of the most significant quake.
- * @param {Array<string>} clusterData.earthquakeIds - Array of earthquake IDs.
- * @param {string} [clusterData.title] - SEO-friendly title.
- * @param {string} [clusterData.description] - Meta description for SEO.
- * @param {string} [clusterData.locationName] - General location name.
- * @param {number} clusterData.maxMagnitude - Maximum magnitude in the cluster.
- * @param {number} [clusterData.meanMagnitude] - Mean magnitude of quakes in the cluster.
- * @param {number} [clusterData.minMagnitude] - Minimum magnitude of quakes in the cluster.
- * @param {string} [clusterData.depthRange] - E.g., "5-15km".
- * @param {number} [clusterData.centroidLat] - Latitude of the cluster's centroid.
- * @param {number} [clusterData.centroidLon] - Longitude of the cluster's centroid.
- * @param {number} [clusterData.radiusKm] - Approximate radius of the cluster.
- * @param {number} clusterData.startTime - Timestamp of the earliest quake.
- * @param {number} clusterData.endTime - Timestamp of the latest quake.
- * @param {number} [clusterData.durationHours] - Duration of the cluster in hours.
- * @param {number} clusterData.quakeCount - Number of earthquakes in the cluster.
- * @param {number} [clusterData.significanceScore] - Significance score of the cluster.
- * @param {number} [clusterData.version=1] - Version number of the cluster definition.
- * @returns {Promise<object>} An object indicating success (e.g., `{ success: true, id: clusterData.id }`)
- *                            or failure (e.g., `{ success: false, error: message }`).
+ * @function storeClusterDefinition
+ * @param {D1Database} db - The D1 database binding from the Cloudflare environment.
+ * @param {object} clusterData - An object containing all the fields for the cluster definition.
+ *   This object must conform to the schema of the `ClusterDefinitions` table.
+ * @param {string} clusterData.id - The unique identifier (primary key) for the cluster.
+ * @param {string} [clusterData.stableKey] - A stable identifier for the cluster used for lookups.
+ * @param {string} clusterData.slug - A URL-friendly slug for the cluster.
+ * @param {Array<string>} clusterData.earthquakeIds - An array of earthquake IDs belonging to the cluster.
+ * @param {number} clusterData.maxMagnitude - The magnitude of the strongest quake in the cluster.
+ * @param {number} clusterData.startTime - The timestamp of the earliest quake in the cluster.
+ * @param {number} clusterData.endTime - The timestamp of the latest quake in the cluster.
+ * @param {number} clusterData.quakeCount - The total number of quakes in the cluster.
+ * @param {string} clusterData.strongestQuakeId - The ID of the strongest quake.
+ * @param {string} [clusterData.title] - An optional SEO-friendly title.
+ * @param {string} [clusterData.description] - An optional meta description.
+ * // ... other optional fields from the schema ...
+ * @returns {Promise<object>} A promise that resolves to an object indicating the outcome.
+ *   On success, it returns `{ success: true, id: clusterData.id }`.
+ *   On failure, it returns `{ success: false, error: 'Error message' }`.
  */
 export async function storeClusterDefinition(db, clusterData) {
   if (!db || !db.prepare) {

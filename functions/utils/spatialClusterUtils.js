@@ -1,17 +1,45 @@
 /**
- * @file spatialClusterUtils.js
- * @description Spatial indexing utilities for earthquake clustering optimization
- * Extends the existing SpatialGrid to support Point geometries for clustering
+ * @file Spatial indexing utilities for optimizing earthquake clustering.
+ * @module functions/utils/spatialClusterUtils
+ *
+ * @description
+ * This module provides an optimized approach to earthquake clustering by implementing a spatial
+ * index (`EarthquakeSpatialIndex`). The standard clustering algorithm has a time complexity
+ * of O(N²), which can be slow for large datasets. This implementation uses a grid-based
+ * spatial index to dramatically reduce the number of distance calculations required,
+ * significantly improving performance.
+ *
+ * The core components are:
+ * - **`EarthquakeSpatialIndex`**: A class that divides a geographical area into a grid and
+ *   stores earthquake data in the corresponding grid cells. This allows for efficient
+ *   queries to find earthquakes within a certain radius of a point.
+ * - **`buildEarthquakeSpatialIndex`**: A factory function that creates and populates an
+ *   `EarthquakeSpatialIndex` from an array of earthquakes.
+ * - **`findActiveClustersOptimized`**: A drop-in replacement for the original `findActiveClusters`
+ *   function that leverages the spatial index to perform clustering much more efficiently.
+ *
+ * These utilities are critical for handling large earthquake datasets in a performant manner.
  */
-
 import { calculateBoundingBox, isPointInBoundingBox } from '../../src/utils/geoSpatialUtils.js';
 import { calculateDistance } from './mathUtils.js';
 
 /**
- * Enhanced spatial grid specifically for earthquake Point geometries
- * Extends the existing SpatialGrid concept while maintaining compatibility
+ * An enhanced spatial grid index tailored for earthquake Point geometries.
+ *
+ * This class creates a 2D grid over a defined geographical area and stores earthquake
+ * objects in cells corresponding to their locations. This structure allows for highly
+ * efficient searching of nearby earthquakes, which is the primary bottleneck in the
+ * clustering algorithm.
+ *
+ * @class EarthquakeSpatialIndex
  */
 export class EarthquakeSpatialIndex {
+  /**
+   * Creates an instance of EarthquakeSpatialIndex.
+   * @param {object} bounds - An object defining the geographical boundaries of the index
+   *   (e.g., `{ north, south, east, west }`).
+   * @param {number} [cellSize=1.0] - The size of each grid cell in decimal degrees.
+   */
   constructor(bounds, cellSize = 1.0) {
     this.bounds = bounds;
     this.cellSize = cellSize;
@@ -234,10 +262,18 @@ export class EarthquakeSpatialIndex {
 }
 
 /**
- * Build spatial index from earthquake array
- * @param {Array} earthquakes - Array of earthquake objects
- * @param {number} maxDistanceKm - Maximum clustering distance (for cell size optimization)
- * @returns {EarthquakeSpatialIndex} Populated spatial index
+ * Builds and populates an `EarthquakeSpatialIndex` from an array of earthquake objects.
+ *
+ * This factory function automatically calculates the optimal bounding box and grid cell
+ * size based on the provided earthquake data and clustering parameters. It then creates
+ * an index and inserts all valid earthquakes from the input array into it.
+ *
+ * @function buildEarthquakeSpatialIndex
+ * @param {Array<object>} earthquakes - An array of earthquake GeoJSON Feature objects.
+ * @param {number} [maxDistanceKm=100] - The maximum clustering distance, used to help
+ *   determine an optimal cell size for the index.
+ * @returns {EarthquakeSpatialIndex|null} A populated spatial index instance, or `null` if
+ *   the input data is invalid or empty.
  */
 export function buildEarthquakeSpatialIndex(earthquakes, maxDistanceKm = 100) {
   if (!earthquakes || earthquakes.length === 0) {
@@ -297,12 +333,25 @@ export function buildEarthquakeSpatialIndex(earthquakes, maxDistanceKm = 100) {
 }
 
 /**
- * Optimized clustering algorithm using spatial indexing
- * Drop-in replacement for the O(N²) algorithm in findActiveClusters
- * @param {Array} earthquakes - Array of earthquake objects
- * @param {number} maxDistanceKm - Maximum distance for clustering
- * @param {number} minQuakes - Minimum earthquakes per cluster
- * @returns {Array} Array of clusters (arrays of earthquakes)
+ * An optimized earthquake clustering algorithm that uses a spatial index.
+ *
+ * This function serves as a drop-in, performant replacement for the standard O(N²)
+ * `findActiveClusters` algorithm. It begins by building a spatial index from the
+ * earthquake data. Then, for each potential cluster center, it uses the index to
+ * efficiently query for nearby earthquakes, drastically reducing the number of
+ * pairwise distance calculations needed.
+ *
+ * The core logic of iterating through sorted earthquakes and forming clusters remains
+ * the same as the original function to ensure consistent output, but the performance
+* is significantly improved for large datasets.
+ *
+ * @function findActiveClustersOptimized
+ * @param {Array<object>} earthquakes - An array of earthquake GeoJSON Feature objects.
+ * @param {number} maxDistanceKm - The maximum distance in kilometers for two earthquakes
+ *   to be considered part of the same cluster.
+ * @param {number} minQuakes - The minimum number of earthquakes required to form a cluster.
+ * @returns {Array<Array<object>>} An array of clusters, where each cluster is an array of
+ *   earthquake objects.
  */
 export function findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes) {
   if (!earthquakes || earthquakes.length === 0) {
@@ -391,12 +440,16 @@ export function findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuake
 }
 
 /**
- * Benchmark comparison function
- * Compares spatial optimized vs original O(N²) algorithm
- * @param {Array} earthquakes - Test earthquakes
- * @param {number} maxDistanceKm - Clustering distance
- * @param {number} minQuakes - Minimum cluster size
- * @returns {Object} Comparison results
+ * A utility function for benchmarking and comparing the performance of the optimized
+ * clustering algorithm against the original.
+ *
+ * @async
+ * @function benchmarkClusteringComparison
+ * @param {Array<object>} earthquakes - An array of earthquake objects for the test.
+ * @param {number} maxDistanceKm - The `maxDistanceKm` parameter for clustering.
+ * @param {number} minQuakes - The `minQuakes` parameter for clustering.
+ * @returns {Promise<object>} A promise that resolves to an object containing the results
+ *   and performance metrics of the optimized algorithm run.
  */
 export async function benchmarkClusteringComparison(earthquakes, maxDistanceKm, minQuakes) {
   console.time('Optimized Spatial Clustering');

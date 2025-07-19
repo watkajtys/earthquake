@@ -13,12 +13,16 @@
  * Successful Response (200 OK):
  *  - Body: A JSON array of GeoJSON feature objects, where each feature represents an earthquake.
  *          The `geojson_feature` column from the D1 table is parsed for each event.
- *  - Headers: `Content-Type: application/json`, `X-Data-Source: D1`.
+ *  - Headers:
+ *    - `Content-Type: application/json`
+ *    - `X-Data-Source: D1`
+ *    - `Cache-Control: public, s-maxage=60` - Instructs Cloudflare's edge to cache the response for 60 seconds.
  *
  * Error Responses:
- *  - 400 Bad Request: If the `timeWindow` parameter is invalid. Body includes an error message.
- *  - 500 Internal Server Error: If the database is unavailable, or if there's an error during query
- *    preparation, execution, or data processing. Body includes an error message.
+ *  - 400 Bad Request: If the `timeWindow` parameter is invalid. Body contains an error message.
+ *  - 500 Internal Server Error: If the database binding is unavailable, or if there's any other error during
+ *    the process (e.g., statement preparation, query execution, data parsing). The response body
+ *    will contain a descriptive error message.
  *
  * @param {object} context - The Cloudflare Pages Function context object.
  * @param {Request} context.request - The incoming request object from the client.

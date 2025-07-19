@@ -1,5 +1,6 @@
 /**
  * @file Utility functions for detecting web crawlers.
+ * @module functions/utils/crawler-utils
  */
 
 /**

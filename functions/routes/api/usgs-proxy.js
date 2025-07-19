@@ -1,25 +1,62 @@
 /**
- * @file Proxies requests to the USGS Earthquake API, with caching and optional D1 database interaction.
+ * @file Cloudflare Function to proxy requests to the USGS Earthquake API.
+ * @module functions/routes/api/usgs-proxy
+ *
+ * @description
+ * This function serves as a robust, caching proxy for the USGS Earthquake API. It is the
+ * primary mechanism for fetching fresh earthquake data. The proxy is designed to be called
+ * by other functions, particularly the scheduled task runner (`/functions/background/process-clusters`),
+ * to ensure that all data fetching goes through a centralized, managed service.
+ *
+ * Key Features:
+ * - **Proxying**: Forwards requests to a specified USGS API URL.
+ * - **Server-Side Caching**: Caches successful responses from the USGS API to reduce redundant
+ *   API calls and improve performance. Cache is bypassed for cron-triggered requests.
+ * - **Differential Upsert**: Compares newly fetched data with the previous successful fetch
+ *   (stored in KV storage) to identify only new or updated earthquake features. This minimizes
+ *   unnecessary database writes.
+ * - **D1 Database Integration**: Upserts the new or updated features into the `EarthquakeEvents`
+ *   D1 table.
+ * - **KV Storage for State**: Uses KV to store the last set of fetched features, enabling the
+ *   differential comparison.
+ * - **Enhanced Logging**: When triggered by a cron job, it uses an enhanced logger to provide
+ *   detailed, structured logs about each step of the process.
+ *
+ * This function is not intended to be called directly by end-users but is a critical
+ * infrastructural component.
  */
-
 import { upsertEarthquakeFeaturesToD1 } from '../../../src/utils/d1Utils.js';
 import { getFeaturesFromKV, setFeaturesToKV } from '../../../src/utils/kvUtils.js'; // Import KV utils
 
 const USGS_LAST_RESPONSE_KEY = "usgs_last_response_features"; // Define a constant for the KV key
 
 /**
- * Handles requests to the `/api/usgs-proxy` endpoint.
- * It fetches data from a specified USGS API URL, caches the response,
- * and can optionally interact with a D1 database (e.g., for upserting data).
+ * Handles proxied requests to the USGS Earthquake API, with integrated caching and database operations.
  *
- * @param {object} context - The Cloudflare Pages function context.
- * @param {Request} context.request - The incoming HTTP request. Must include an `apiUrl` query parameter.
- * @param {object} context.env - Environment variables.
- * @param {string} [context.env.WORKER_CACHE_DURATION_SECONDS] - Optional cache duration in seconds.
- * @param {object} [context.env.DB] - Optional D1 database binding.
- * @param {function} context.waitUntil - Function to extend the lifetime of the request for background tasks like caching.
- * @returns {Promise<Response>} A promise that resolves to a Response object, either from the cache or fetched from the USGS API.
- * Error responses are returned as JSON with appropriate status codes.
+ * This function orchestrates the entire data fetching and processing pipeline:
+ * 1.  **Request Handling**: It expects an `apiUrl` query parameter specifying the USGS endpoint to call.
+ *     It also checks for an `isCron` parameter to enable special handling for scheduled tasks.
+ * 2.  **Cache Logic**: For non-cron requests, it first attempts to serve the response from the
+ *     Cloudflare cache. For cron requests, it bypasses the cache to fetch fresh data.
+ * 3.  **API Fetching**: It calls the specified USGS API, handling potential errors gracefully.
+ * 4.  **Data Comparison**: If KV is configured, it retrieves the previously stored feature set and
+ *     compares it against the newly fetched data to determine which earthquakes are new or updated.
+ * 5.  **Database Upsert**: It takes the list of new/updated features and upserts them into the
+ *     `EarthquakeEvents` D1 table.
+ * 6.  **KV Update**: If the database upsert is successful, it updates the KV store with the latest
+ *     full set of features for the next differential check.
+ * 7.  **Response and Caching**: It returns the fetched data to the original caller and, for non-cron
+ *     requests, caches the response for future requests.
+ *
+ * @async
+ * @function handleUsgsProxy
+ * @param {object} context - The Cloudflare Pages Function context.
+ * @param {Request} context.request - The incoming HTTP request.
+ * @param {object} context.env - Environment variables, including bindings for `DB` and `USGS_LAST_RESPONSE_KV`.
+ * @param {object} context.executionContext - The execution context, providing `waitUntil` for background tasks.
+ * @param {object} [context.logger] - An optional enhanced logger instance for structured logging.
+ * @returns {Promise<Response>} A `Response` object containing the fetched GeoJSON data, or a JSON
+ *   error object if the process fails.
  */
 export async function handleUsgsProxy(context) { // context contains { request, env, executionContext, logger? }
   const { request, env, executionContext, logger } = context; // executionContext is the original ctx from worker

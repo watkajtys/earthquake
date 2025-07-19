@@ -1,19 +1,49 @@
 /**
- * @file functions/api/system-health.js
- * @description System health monitoring endpoint for performance dashboard
- * Provides comprehensive health check of all system components
+ * @file Cloudflare Function for comprehensive system health monitoring.
+ * @module functions/api/system-health
+ *
+ * @description
+ * This endpoint provides a detailed, real-time health assessment of the entire application
+ * ecosystem. It is designed to be used by monitoring dashboards, status pages, or alerting
+ * systems to quickly diagnose the operational status of all critical components.
+ *
+ * The health check performs a series of non-intrusive tests on the following components:
+ * - **D1 Database**: Verifies connectivity and recent data availability.
+ * - **KV Storage**: Checks for the presence of the binding and performs a read/write test.
+ * - **USGS API**: Makes a live request to the USGS feed to ensure it is reachable and returning data.
+ * - **Scheduled Tasks**: Infers the health of background tasks by checking the freshness of
+ *   data in the D1 database.
+ *
+ * The function aggregates the results into a single JSON report, which includes an overall
+ * health status (`healthy`, `degraded`, `unhealthy`), detailed status for each component,
+.
+ *
+ * The HTTP status code of the response reflects the overall system health:
+ * - `200 OK`: All components are healthy.
+ * - `207 Multi-Status`: Some non-critical components are degraded.
+ * - `503 Service Unavailable`: One or more critical components are unhealthy.
  */
-
 /**
- * System health check endpoint
- * GET /api/system-health
- * 
- * Returns overall system health including:
- * - Database connectivity and performance
- * - KV storage status
- * - USGS API availability
- * - Recent task execution status
- * - Error rates and system metrics
+ * Handles GET requests to the `/api/system-health` endpoint.
+ *
+ * This function orchestrates a series of checks across all major system components to build
+ * a comprehensive health report. It sequentially tests the D1 database, KV storage, the
+ * external USGS API, and the status of recent data processing tasks.
+ *
+ * For each component, it records its status (`healthy`, `degraded`, `unhealthy`), response
+ * time, and other relevant metrics. These individual results are compiled into a final
+ * `healthReport` object.
+ *
+ * Based on the component statuses, it calculates an overall health score and determines the
+ * most appropriate HTTP status code for the response. The response is explicitly marked as
+ * non-cacheable to ensure the data is always fresh.
+ *
+ * @async
+ * @function onRequestGet
+ * @param {object} context - The Cloudflare Pages Function context.
+ * @param {object} context.env - The environment object containing bindings for `DB` and `USGS_LAST_RESPONSE_KV`.
+ * @returns {Promise<Response>} A `Response` object containing the detailed health report in JSON
+ *   format. The HTTP status code of the response indicates the overall system health.
  */
 export async function onRequestGet(context) {
   const { env } = context;

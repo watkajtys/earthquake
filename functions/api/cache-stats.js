@@ -1,12 +1,39 @@
 /**
- * @file functions/api/cache-stats.js
- * @description Cache performance monitoring endpoint for cluster caching system
- * Provides metrics on cache hit rates, performance, and usage statistics
+ * @file Cloudflare Function for monitoring and managing the cluster cache.
+ * @module functions/api/cache-stats
+ *
+ * @description
+ * This module provides a set of administrative endpoints for interacting with the `ClusterCache`
+ * D1 database table. It allows for retrieving detailed performance statistics, fetching the most
+ * frequently used cache keys, and cleaning up expired cache entries.
+ *
+ * These endpoints are essential for monitoring the health and effectiveness of the caching
+ * strategy, identifying potential optimizations, and performing routine maintenance.
+ *
+ * The provided endpoints are:
+ * - `GET /api/cache-stats`: Returns a comprehensive report of cache statistics.
+ * - `GET /api/cache-stats/top-keys`: Returns the most frequently used cache keys.
+ * - `DELETE /api/cache-stats`: Deletes expired entries from the cache.
+ *
+ * All endpoints in this module are intended for administrative use.
  */
-
 /**
- * GET /api/cache-stats
- * Returns comprehensive cache performance metrics
+ * Handles GET requests to `/api/cache-stats`.
+ *
+ * This function serves as the main entry point for retrieving a comprehensive performance
+ * report of the `ClusterCache`. It calls the `collectCacheStatistics` helper function to
+ * perform the actual data aggregation from the D1 database and then returns the results
+ * as a JSON response.
+ *
+ * The response is cached at the edge for 60 seconds to reduce load on the database for
+ * frequent requests.
+ *
+ * @async
+ * @function onRequestGet
+ * @param {object} context - The Cloudflare Pages Function context.
+ * @param {object} context.env - The environment object containing the D1 database binding (`DB`).
+ * @returns {Promise<Response>} A `Response` object containing a JSON payload with detailed
+ *   cache statistics, or a JSON error object if the operation fails.
  */
 export async function onRequestGet(context) {
   const { env } = context;
@@ -44,7 +71,27 @@ export async function onRequestGet(context) {
 }
 
 /**
- * Collect comprehensive cache performance statistics
+ * Collects a comprehensive set of performance and usage statistics for the `ClusterCache` table.
+ *
+ * This function executes a series of parallel SQL queries against the D1 database to gather
+ * metrics related to the cache's size, efficiency, health, and usage patterns. It calculates
+ * derived metrics such as cache efficiency, a composite health score, and storage sizes.
+ *
+ * The collected statistics include:
+ * - Total, active, and expired entry counts.
+ * - Overall storage size and average entry size.
+ * - Recent cache creation activity.
+ * - The most frequently used request parameters (top cache keys).
+ * - The age distribution of cache entries.
+ *
+ * Finally, it generates a set of actionable recommendations based on the collected metrics
+ * to guide cache optimization efforts.
+ *
+ * @async
+ * @function collectCacheStatistics
+ * @param {D1Database} db - The D1 database instance.
+ * @returns {Promise<object>} A promise that resolves to a detailed statistics object, including
+ *   metadata, health, overview, storage, activity, distribution, and recommendations.
  */
 async function collectCacheStatistics(db) {
   const now = new Date().toISOString();
@@ -206,7 +253,19 @@ function safeParseJSON(jsonString) {
 }
 
 /**
- * Generate cache optimization recommendations
+ * Generates a list of actionable recommendations based on cache performance metrics.
+ *
+ * This function analyzes the provided metrics to identify potential issues or areas for
+ * improvement in the caching strategy. The recommendations are tailored to specific
+ * conditions, such as a high number of expired entries, low cache efficiency, or large
+ * storage footprint.
+ *
+ * @function generateCacheRecommendations
+ * @param {object} metrics - An object containing key performance indicators of the cache,
+ *   such as `expiredEntries`, `cacheEfficiency`, and `totalDataSizeMB`.
+ * @returns {Array<object>} An array of recommendation objects. Each object includes a `type`,
+ *   `priority`, `message`, and suggested `action`. If the cache is healthy, it returns a
+ *   single informational message.
  */
 function generateCacheRecommendations(metrics) {
   const recommendations = [];
@@ -276,8 +335,21 @@ function generateCacheRecommendations(metrics) {
 }
 
 /**
- * GET /api/cache-stats/top-keys
- * Returns the top 10 most frequent cache keys
+ * Handles GET requests to `/api/cache-stats/top-keys`.
+ *
+ * This endpoint provides a quick way to identify the most frequently used cache keys over the
+ * last 7 days. It queries the `ClusterCache` table to find the top 10 `requestParams` values
+ * based on their frequency of occurrence.
+ *
+ * The results can be used for cache warming strategies or to understand the most common
+ * user queries. The response is cached at the edge for 1 hour.
+ *
+ * @async
+ * @function onGetTopKeys
+ * @param {object} context - The Cloudflare Pages Function context.
+ * @param {object} context.env - The environment object containing the D1 database binding (`DB`).
+ * @returns {Promise<Response>} A `Response` object containing a JSON array of the top 10
+ *   cache keys and their frequencies, or a JSON error object.
  */
 export async function onGetTopKeys(context) {
   const { env } = context;
@@ -325,8 +397,26 @@ export async function onGetTopKeys(context) {
 }
 
 /**
- * DELETE /api/cache-stats
- * Cleanup expired cache entries
+ * Handles DELETE requests to `/api/cache-stats` for cleaning up expired cache entries.
+ *
+ * This function performs a maintenance task by deleting all entries from the `ClusterCache`
+ * table that have exceeded their Time-To-Live (TTL), which is currently defined as 1 hour.
+ *
+ * The process is as follows:
+ * 1.  It first queries the database to count how many entries are expired.
+ * 2.  If there are no expired entries, it returns a success message indicating no action was needed.
+ * 3.  If expired entries exist, it executes a `DELETE` statement to remove them.
+ * 4.  It returns a success response including the number of entries that were deleted.
+ *
+ * This endpoint is critical for managing the size of the cache and ensuring that stale data
+ * does not accumulate.
+ *
+ * @async
+ * @function onRequestDelete
+ * @param {object} context - The Cloudflare Pages Function context.
+ * @param {object} context.env - The environment object containing the D1 database binding (`DB`).
+ * @returns {Promise<Response>} A `Response` object with a JSON payload confirming the cleanup
+ *   operation and the number of deleted entries, or a JSON error object.
  */
 export async function onRequestDelete(context) {
   const { env } = context;

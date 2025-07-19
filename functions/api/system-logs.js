@@ -1,24 +1,53 @@
 /**
- * @file functions/api/system-logs.js
- * @description System logs endpoint for accessing Worker execution logs
- * Provides access to structured logs from the enhanced logging system
+ * @file Cloudflare Function for generating and retrieving system operational logs.
+ * @module functions/api/system-logs
+ *
+ * @description
+ * This endpoint provides a synthetic, real-time view of the system's operational status by
+ * generating structured log entries based on the current state and recent activity of various
+ * system components. Since Cloudflare Workers do not provide a direct API for querying console
+ * logs, this function infers system behavior and creates a log-like output.
+ *
+ * It is an administrative tool designed for quick operational visibility without needing to
+ * access the Cloudflare Dashboard or use `wrangler tail`.
+ *
+ * The generated logs cover:
+ * - **Data Ingestion**: Inferred from the latest records in the `EarthquakeEvents` table.
+ * - **Cluster Analysis**: Inferred from recent updates to the `ClusterDefinitions` table.
+ * - **Component Health**: Generated from live health checks on the D1 database, KV storage,
+ *   and the external USGS API.
+ *
+ * The endpoint supports filtering by log level (`level`), component (`component`), time
+ * (`since`), and can limit the number of returned entries (`limit`).
+ *
+ * @note The logs are generated on-the-fly and are not persisted. They represent a snapshot
+ * of the system's state at the time of the request.
  */
-
 /**
- * System logs endpoint
- * GET /api/system-logs
- * 
- * Returns recent system logs including:
- * - Scheduled task execution logs
- * - API call performance logs
- * - Database operation logs
- * - Error logs and system events
- * 
- * Query parameters:
- * - level: error|warn|info|debug (default: all)
- * - limit: number of logs to return (default: 50, max: 200)
- * - component: filter by component (scheduled, api, database, kv)
- * - since: timestamp to filter logs from (ISO string or unix timestamp)
+ * Handles GET requests to the `/api/system-logs` endpoint.
+ *
+ * This function generates a structured array of log entries by querying the state of various
+ * parts of the application. It checks for recent data ingestion, cluster processing activity,
+ * and the health of the database, KV store, and external API. Each of these checks produces
+ * one or more log entries with a level (`info`, `warn`, `error`), a component name, and
+ * detailed metadata.
+ *
+ * The function accepts several query parameters to filter the generated logs:
+ * - `level`: Filters logs to a specific level (e.g., `error`).
+ * - `component`: Filters logs to a specific component (e.g., `database`).
+ * - `limit`: Restricts the number of returned log entries.
+ * - `since`: Defines the start time for activity to be considered.
+ *
+ * After generating and filtering the logs, it returns them in a JSON response, along with
+ * metadata about the request and a note explaining the synthetic nature of the logs.
+ *
+ * @async
+ * @function onRequestGet
+ * @param {object} context - The Cloudflare Pages Function context.
+ * @param {Request} context.request - The incoming HTTP request object.
+ * @param {object} context.env - The environment object with bindings for `DB` and `USGS_LAST_RESPONSE_KV`.
+ * @returns {Promise<Response>} A `Response` object containing a JSON payload with the filtered
+ *   log entries and metadata.
  */
 export async function onRequestGet(context) {
   const { env, request } = context;

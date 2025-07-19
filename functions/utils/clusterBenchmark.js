@@ -1,9 +1,27 @@
 /**
- * @file clusterBenchmark.js
- * @description Performance benchmarking suite for earthquake clustering algorithms
- * Tests current O(N²) algorithm and future optimizations
+ * @file Performance benchmarking suite for earthquake clustering algorithms.
+ * @module functions/utils/clusterBenchmark
+ *
+ * @description
+ * This module provides a comprehensive suite for benchmarking the performance of earthquake
+ * clustering algorithms. It is designed to be run in a Node.js environment to test the
+ * efficiency, memory usage, and behavior of different algorithms under various conditions.
+ *
+ * The suite includes:
+ * - **`EarthquakeDataGenerator`**: A class for generating realistic mock earthquake datasets
+ *   of varying sizes and geographical distributions.
+ * - **`PerformanceProfiler`**: A utility class for measuring execution time, memory usage,
+ *   and other performance metrics of the clustering process.
+ * - **`ClusterBenchmarkSuite`**: The main class that orchestrates the benchmark tests, running
+ *   them against different datasets and parameters, and exporting the results in various
+ *   formats (JSON, CSV, Markdown).
+ *
+ * This tool is crucial for evaluating the impact of code changes on the performance of the
+ * core clustering logic and for comparing different algorithm implementations (e.g., the
+ * standard O(N²) algorithm vs. optimized versions).
+ *
+ * @see {@link ../api/calculate-clusters.POST.js} for the `findActiveClusters` function that is benchmarked.
  */
-
 import { findActiveClusters } from '../api/calculate-clusters.POST.js';
 import { calculateDistance, setDistanceCalculationProfiler } from './mathUtils.js';
 
@@ -37,15 +55,23 @@ const REGIONS = {
 };
 
 /**
- * Generates mock earthquake data for benchmarking
+ * A utility class for generating mock earthquake data for benchmarking purposes.
+ *
+ * This class can create datasets of varying sizes and with different geographical
+ * distributions to simulate real-world scenarios.
+ *
+ * @class EarthquakeDataGenerator
  */
 export class EarthquakeDataGenerator {
   /**
-   * Creates realistic earthquake dataset
-   * @param {number} count Number of earthquakes to generate
-   * @param {string} distribution Distribution type: 'clustered', 'scattered', 'realistic'
-   * @param {Object} options Additional options
-   * @returns {Array} Array of earthquake objects
+   * Generates a realistic dataset of mock earthquakes.
+   *
+   * @static
+   * @param {number} count - The number of earthquake objects to generate.
+   * @param {string} [distribution='realistic'] - The geographical distribution of the earthquakes.
+   *   Valid options are 'clustered', 'scattered', or 'realistic'.
+   * @param {object} [options={}] - Additional options, such as the region for a 'clustered' distribution.
+   * @returns {Array<object>} An array of mock earthquake GeoJSON Feature objects.
    */
   static generate(count, distribution = 'realistic', options = {}) {
     const earthquakes = [];
@@ -149,7 +175,12 @@ export class EarthquakeDataGenerator {
 }
 
 /**
- * Performance measurement utilities
+ * A utility class for measuring and profiling the performance of code execution.
+ *
+ * This profiler tracks execution time, memory usage, and custom metrics (like the number
+ * of distance calculations) for named performance tests.
+ *
+ * @class PerformanceProfiler
  */
 export class PerformanceProfiler {
   constructor() {
@@ -157,6 +188,10 @@ export class PerformanceProfiler {
     this.memoryBaseline = null;
   }
   
+  /**
+   * Starts a new performance profile for a given test.
+   * @param {string} testName - A unique name for the test being profiled.
+   */
   startProfile(testName) {
     this.memoryBaseline = this._getMemoryUsage();
     
@@ -253,7 +288,13 @@ export function instrumentedCalculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Main benchmark suite
+ * The main class for running the earthquake clustering algorithm benchmark suite.
+ *
+ * This class orchestrates the entire benchmarking process, from data generation to
+ * performance profiling and results reporting. It can run a full suite of tests based
+ * on a predefined configuration or execute single, targeted tests.
+ *
+ * @class ClusterBenchmarkSuite
  */
 export class ClusterBenchmarkSuite {
   constructor() {
@@ -264,9 +305,14 @@ export class ClusterBenchmarkSuite {
   }
   
   /**
-   * Runs comprehensive benchmark suite
-   * @param {Object} options Benchmark options
-   * @returns {Object} Complete benchmark results
+   * Runs the comprehensive benchmark suite based on the predefined `BENCHMARK_CONFIG`.
+   *
+   * This method iterates through all configured dataset sizes, distributions, and clustering
+   * parameters, running a benchmark for each combination.
+   *
+   * @param {object} [options={}] - Optional configuration to override parts of the benchmark run.
+   * @returns {Promise<object>} A promise that resolves to an object containing the complete
+   *   benchmark results, including metadata and an array of individual benchmark profiles.
    */
   async runFullSuite(options = {}) {
     console.log('🚀 Starting Cluster Algorithm Benchmark Suite');
@@ -318,7 +364,14 @@ export class ClusterBenchmarkSuite {
   }
   
   /**
-   * Runs a single benchmark test
+   * Runs a single benchmark test with specified parameters.
+   *
+   * @param {number} earthquakeCount - The number of earthquakes to generate for the test.
+   * @param {string} distribution - The geographical distribution of the generated earthquakes.
+   * @param {number} maxDistance - The `maxDistanceKm` parameter for the clustering algorithm.
+   * @param {number} minQuakes - The `minQuakes` parameter for the clustering algorithm.
+   * @param {string} testName - A unique name for this specific benchmark test.
+   * @returns {Promise<object>} A promise that resolves to a detailed profile object for the test run.
    */
   async runSingleBenchmark(earthquakeCount, distribution, maxDistance, minQuakes, testName) {
     // Generate test data
@@ -394,7 +447,12 @@ export class ClusterBenchmarkSuite {
   }
   
   /**
-   * Exports results to various formats
+   * Exports the benchmark results to a specified format.
+   *
+   * @param {object} results - The results object returned from `runFullSuite`.
+   * @param {string} [format='json'] - The desired output format. Supported formats are
+   *   'json', 'csv', and 'markdown'.
+   * @returns {string} The benchmark results formatted as a string.
    */
   exportResults(results, format = 'json') {
     switch (format) {

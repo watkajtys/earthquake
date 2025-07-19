@@ -1,25 +1,47 @@
 // functions/api/cluster-detail-with-quakes.js
 
 /**
- * @file functions/api/cluster-detail-with-quakes.js
- * @description Cloudflare Worker module for retrieving a specific cluster definition
- * along with the GeoJSON feature data for all its associated earthquakes.
+ * @file Cloudflare Function for retrieving a detailed cluster definition along with its associated earthquakes.
+ * @module functions/api/cluster-detail-with-quakes
+ *
+ * @description
+ * This API endpoint is responsible for fetching a complete, detailed view of a specific
+ * earthquake cluster. It serves as a data source for detailed cluster view pages.
+ *
+ * The function takes a cluster identifier from the URL and performs a two-step data retrieval process:
+ * 1.  **Fetch Cluster Definition**: It retrieves the main definition of the cluster from the
+ *     `ClusterDefinitions` D1 table. The lookup is primarily performed using the `strongestQuakeId`
+ *     to align with user-facing URLs, with a fallback to the canonical `id` for robustness.
+ * 2.  **Fetch Associated Earthquakes**: It then takes the array of earthquake IDs stored in the
+ *     cluster definition and fetches the full GeoJSON data for each of those earthquakes from the
+ *     `EarthquakeEvents` D1 table.
+ *
+ * The final output is a single JSON object that combines the cluster's metadata with an array
+ * of its constituent earthquake features. The response is cached at the edge to improve
+ * performance for repeated requests for the same cluster.
  */
-
 /**
- * Handles GET requests to retrieve a cluster definition and its constituent earthquake GeoJSON data.
- * - Expects a URL query parameter `id` (the cluster's ID).
- * - Fetches the cluster definition from `ClusterDefinitions`.
- * - Fetches the GeoJSON features for each earthquake ID listed in the cluster definition
- *   from the `EarthquakeEvents` table.
- * - Combines this data and returns it as a single JSON object.
+ * Handles GET requests to retrieve a cluster definition and its associated earthquake GeoJSON data.
+ *
+ * This function orchestrates the retrieval of a cluster's full details. It expects a single
+ * URL query parameter, `id`, which is used to identify the cluster. The lookup logic first
+ * attempts to find the cluster by treating the `id` as the `strongestQuakeId` and, if that
+ * fails, as a fallback, it tries the canonical `id` of the cluster.
+ *
+ * Once the cluster definition is found, it parses the `earthquakeIds` array and executes a
+ * second query to fetch the GeoJSON features for all associated quakes from the `EarthquakeEvents`
+ * table. These features are then embedded into the response object under the `quakes` key.
+ *
+ * The combined data is returned as a single JSON object. The response is configured with a
+ * `Cache-Control` header to be cached at the Cloudflare edge for 5 minutes.
  *
  * @async
- * @param {object} context - The Cloudflare Worker request context.
- * @param {Request} context.request - The incoming HTTP request.
- * @param {object} context.env - Environment variables, expected to contain `DB` (D1 Database binding).
- * @returns {Promise<Response>} A `Response` object containing the combined cluster and earthquake data,
- *                            or an error response.
+ * @function onRequestGet
+ * @param {object} context - The Cloudflare Pages Function context.
+ * @param {Request} context.request - The incoming HTTP request object.
+ * @param {object} context.env - The environment object containing the D1 database binding (`DB`).
+ * @returns {Promise<Response>} A `Response` object containing the combined cluster and earthquake
+ *   data as a JSON payload, or a JSON error object if the cluster is not found or an error occurs.
  */
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -140,7 +162,18 @@ export async function onRequestGet(context) {
   }
 }
 
-// Allow both onRequest and onRequestGet for flexibility with Cloudflare Pages/Functions routing
+/**
+ * Provides a flexible request handler for Cloudflare Pages, supporting various routing configurations.
+ *
+ * This function acts as a wrapper that ensures the endpoint correctly handles GET requests
+ * by delegating to `onRequestGet`. It returns a `405 Method Not Allowed` for any other
+ * HTTP method, making the endpoint's behavior explicit.
+ *
+ * @async
+ * @function onRequest
+ * @param {object} context - The Cloudflare Pages Function context.
+ * @returns {Promise<Response>} A `Response` object.
+ */
 export async function onRequest(context) {
     if (context.request.method === 'GET') {
         return onRequestGet(context);

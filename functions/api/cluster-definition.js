@@ -1,33 +1,48 @@
 // functions/api/cluster-definition.js
 
 /**
- * @file functions/api/cluster-definition.js
- * @description Cloudflare Worker module for managing earthquake cluster definitions.
- * This function handles POST requests to create or update cluster definitions
- * and GET requests to retrieve specific cluster definitions from a D1 database,
- * supporting the comprehensive schema of the ClusterDefinitions table.
+ * @file Cloudflare Function for managing earthquake cluster definitions.
+ * @module functions/api/cluster-definition
+ *
+ * @description
+ * This module provides an API endpoint for creating, updating, and retrieving detailed
+ * definitions of earthquake clusters. It interacts directly with the `ClusterDefinitions`
+ * D1 database table, which stores persistent, curated information about significant
+ * seismic events.
+ *
+ * The endpoint supports two primary HTTP methods:
+ * - `POST`: For creating a new cluster definition or updating an existing one. This method
+ *   expects a comprehensive JSON payload and performs detailed validation before calling
+ *   a utility function to interact with the database.
+ * - `GET`: For retrieving a single, complete cluster definition by its unique ID.
+ *
+ * This API is a key component of the system's administrative and data management capabilities,
+ * allowing for the explicit control and curation of cluster data.
+ *
+ * @see {@link ../utils/d1ClusterUtils.js} for the underlying database storage logic.
  */
-
 /**
- * Handles incoming HTTP requests for the /api/cluster-definition endpoint.
- * - **POST**: Creates or replaces a cluster definition in the D1 database.
- *   Expects a JSON payload with fields: `id`*, `slug`*, `strongestQuakeId`*, `earthquakeIds`* (Array<string>),
- *   `title`, `description`, `locationName`, `maxMagnitude`*, `meanMagnitude`, `minMagnitude`,
- *   `depthRange`, `centroidLat`, `centroidLon`, `radiusKm`, `startTime`*, `endTime`*, `durationHours`,
- *   `quakeCount`*, `significanceScore`, `version` (optional). Fields marked with * are mandatory.
- *   Returns a 201 status on successful creation/update, 400 for invalid input, or 500 for server errors.
- * - **GET**: Retrieves a specific cluster definition from the D1 database.
- *   Expects an `id` URL query parameter specifying the primary key `id`.
- *   Returns JSON data of the full cluster definition (including all fields from the ClusterDefinitions table,
- *   with `earthquakeIds` as an array) with a 200 status if found,
- *   404 if not found, 400 for missing `id` parameter, or 500 for server errors.
- * - Other HTTP methods will result in a 405 Method Not Allowed response.
+ * Handles HTTP requests for the `/api/cluster-definition` endpoint, routing based on the method.
+ *
+ * - **POST**: Creates or updates a cluster definition. It expects a detailed JSON payload
+ *   representing a single cluster. The function performs rigorous validation on all required
+ *   and optional fields before passing the data to `storeClusterDefinition` for database
+ *   persistence. It returns a `201 Created` status on success.
+ *
+ * - **GET**: Retrieves a specific cluster definition by its primary key `id`, which must be
+ *   provided as a URL query parameter. It queries the `ClusterDefinitions` table and returns
+ *   the full record, parsing the `earthquakeIds` JSON string into an array. It returns
+ *   a `200 OK` with the data if found, or a `404 Not Found` if the ID does not exist.
+ *
+ * Any other HTTP method will result in a `405 Method Not Allowed` response.
  *
  * @async
- * @param {object} context - The Cloudflare Worker request context object (commonly includes 'request', 'env', 'ctx').
+ * @function onRequest
+ * @param {object} context - The Cloudflare Pages Function context.
  * @param {Request} context.request - The incoming HTTP request object.
- * @param {object} context.env - Environment variables, expected to contain `DB` (D1 Database binding).
- * @returns {Promise<Response>} A `Response` object.
+ * @param {object} context.env - The environment object containing the D1 database binding (`DB`).
+ * @returns {Promise<Response>} A `Response` object, either with the requested data for a GET,
+ *   a success message for a POST, or an error response.
  */
 import { storeClusterDefinition } from '../utils/d1ClusterUtils.js';
 

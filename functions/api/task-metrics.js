@@ -1,22 +1,51 @@
 /**
- * @file functions/api/task-metrics.js
- * @description Task performance metrics endpoint for monitoring dashboard
- * Provides insights into scheduled task execution and performance
+ * @file Cloudflare Function for generating and retrieving task performance metrics.
+ * @module functions/api/task-metrics
+ *
+ * @description
+ * This administrative endpoint is designed to provide deep insights into the performance and
+ * health of the system's background data processing tasks. Since scheduled tasks in Cloudflare
+ * Workers do not have a dedicated metrics API, this function infers their performance by
+ * analyzing the data they produce in the D1 database.
+ *
+ * It aggregates data from the `EarthquakeEvents` and `ClusterDefinitions` tables to generate
+ * a rich set of metrics, including:
+ * - **Summary Statistics**: A high-level overview of data freshness and volume.
+ * - **Performance Analysis**: A breakdown of data ingestion patterns over time.
+ * - **Error & Health Metrics**: An inferred error rate based on data staleness.
+ * - **Clustering Performance**: Metrics on the output of the cluster analysis process.
+ * - **Trend Analysis**: A comparison of data volume against a previous time period.
+ *
+ * The endpoint supports filtering by time range (`hour`, `day`, `week`) to allow for both
+ * real-time and historical analysis. It is a key tool for monitoring the reliability and
+ * efficiency of the entire data pipeline.
  */
-
 /**
- * Task metrics endpoint
- * GET /api/task-metrics
- * 
- * Returns performance metrics for scheduled tasks including:
- * - Recent execution statistics
- * - Performance trends
- * - Error analysis
- * - Resource utilization
- * 
- * Query parameters:
- * - timeRange: hour|day|week (default: hour)
- * - includeDetails: true|false (default: false)
+ * Handles GET requests to the `/api/task-metrics` endpoint.
+ *
+ * This function generates a comprehensive JSON report on the performance of background tasks
+ * by querying and analyzing data in the D1 database. It accepts a `timeRange` query parameter
+ * to define the primary window for analysis.
+ *
+ * The function is structured into several sub-sections, each responsible for a different
+ * aspect of the analysis:
+ * 1.  **Summary Statistics**: Calculates total records, data freshness, and an overall health score.
+ * 2.  **Performance Metrics**: Analyzes the daily volume of ingested data to understand task throughput.
+ * 3.  **Error Analysis**: Infers an "error rate" based on how up-to-date the data is.
+ * 4.  **Clustering Metrics**: Gathers statistics on the cluster definitions being generated.
+ * 5.  **Trend Analysis**: Compares the volume of data in the current period to the previous
+ *     period to identify trends.
+ *
+ * The final report is returned as a JSON object, cached at the edge for 60 seconds to
+ * balance data freshness with performance.
+ *
+ * @async
+ * @function onRequestGet
+ * @param {object} context - The Cloudflare Pages Function context.
+ * @param {Request} context.request - The incoming HTTP request object.
+ * @param {object} context.env - The environment object containing the D1 database binding (`DB`).
+ * @returns {Promise<Response>} A `Response` object containing the detailed metrics report as a
+ *   JSON payload, or a JSON error object if the process fails.
  */
 export async function onRequestGet(context) {
   const { env, request } = context;

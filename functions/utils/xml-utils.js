@@ -1,5 +1,6 @@
 /**
  * @file Utility functions for XML manipulation.
+ * @module functions/utils/xml-utils
  */
 
 /**
