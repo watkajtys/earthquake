@@ -73,6 +73,21 @@ const infoData = {
         title: "What is 'RMS Error (rms)'?",
         content: "'RMS Error' (Root Mean Square error) is a statistical measure of the difference between the observed seismic wave arrival times and the arrival times predicted by the earthquake location model. A smaller RMS value (typically less than 1.0 second) indicates a better fit of the data to the calculated location and origin time.",
         icon: "⏱️" // Stopwatch
+    },
+    clusterAlgorithm: {
+        title: "Cluster Calculation Algorithm",
+        content: "The current earthquake clustering algorithm has a time complexity of roughly O(N^2), which can be slow for large datasets. We are investigating more efficient algorithms like DBSCAN and spatial indexing to improve performance.",
+        icon: "⚙️"
+    },
+    clusterSitemap: {
+        title: "Cluster Sitemap Generation",
+        content: "The sitemap generation for clusters is slow because it makes an external API call for each cluster. We are re-engineering this process to pre-generate and store the canonical slugs in our database, which will eliminate the need for external API calls during sitemap generation.",
+        icon: "🗺️"
+    },
+    scheduledFetching: {
+        title: "Scheduled Data Fetching",
+        content: "We have a scheduled task that fetches the latest earthquake data from the USGS every minute. We are implementing comprehensive monitoring and logging to ensure the reliability of this process.",
+        icon: "⏰"
     }
 };
 
