@@ -28,6 +28,53 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * **Regional Faulting Display**: Incorporates and displays data on regional fault lines, enhancing geological context and understanding. This feature was added as part of the vibe process using the Claude code CLI.
 * Responsive Sidebar: Dynamically loads and displays detailed analysis panels.
 
+## Application Performance and Data Strategy
+
+### Critical Bottlenecks & Recommended Optimizations
+
+- **Cluster Calculation Algorithm:** The current `findActiveClusters` function has a time complexity of approximately O(N^2), making it inefficient for large datasets. It is recommended to implement a more efficient algorithm like DBSCAN or use spatial indexing (e.g., k-d trees) to optimize neighbor searches.
+- **Cluster Sitemap Generation:** The `handleClustersSitemapRequest` function makes an individual API call to USGS for each cluster, causing slow sitemap generation and potential rate limiting. To fix this, the canonical URL slug for each cluster should be generated and stored in the `ClusterDefinitions` D1 table at the time of its creation, eliminating the need for external calls during sitemap generation.
+- **Scheduled Data Fetching:** The scheduled cron job for fetching data from USGS needs comprehensive monitoring and logging to ensure data currency and prevent outdated information from being displayed.
+
+### Server-Side Processing Strategy
+
+The application centralizes data-intensive operations on server-side Cloudflare Workers, which is a robust and scalable approach. Key server-side responsibilities include:
+- **USGS Data Proxy & Initial Processing:** Fetching, caching, and diffing data from USGS.
+- **Earthquake Data Storage & Retrieval:** Managing data in the `EarthquakeEvents` D1 table.
+- **Real-time Cluster Calculation:** Performing on-demand cluster analysis.
+- **Persistent Cluster Definition Storage:** Storing significant cluster details in the `ClusterDefinitions` D1 table.
+- **Sitemap Generation & Prerendering:** Dynamically creating sitemaps and serving static HTML for crawlers.
+
+### Strategy for Loading Historical Earthquake Data
+
+A batch ingestion process is proposed to incorporate historical data. This involves:
+- **Data Acquisition:** Sourcing historical GeoJSON files from USGS.
+- **Batch Ingestion Mechanism:** Creating a new Cloudflare Worker HTTP function to fetch, parse, and process historical data in chunks, using `upsertEarthquakeFeaturesToD1` for efficient loading into the D1 table.
+- **Historical Cluster Generation:** Developing a similar batch process to generate and store cluster definitions for historical data.
+
+## Future Enhancements
+
+### Enhanced Regional Quake Processing & Display
+- **Dedicated Regional Pages/Views:** Develop dynamic pages for specific regions (e.g., California, Japan) to aggregate recent seismicity, historical data, and region-specific statistics.
+- **Server-Side Regional Aggregation:** Implement server-side processes to pre-calculate and store regional summaries, potentially in a new D1 table.
+- **Spatial Querying:** Define regions using bounding boxes for queries and monitor Cloudflare D1 for native spatial extensions to optimize these queries.
+
+### Processing Local Seismicity for Educational Purposes
+- **Interactive Learning Modules:** Integrate interactive modules for scenario visualizations, fault mechanics, and seismic sequence analysis.
+- **Correlating Quakes with Known Faults:** Enhance the system to link earthquake details to specific known faults.
+- **Contextualized Explanations:** Tailor explanations to local areas, discussing geology, building codes, and preparedness resources.
+
+### Incorporating Nearby Fault Data
+- **Enhanced Fault Data Storage & Management:** Load fault geometries and attributes into a dedicated D1 table for robust querying.
+- **Server-Side Fault Proximity Analysis:** Develop a server-side function to find nearby fault segments for a given earthquake.
+- **Client-Side Display & Interaction:** Enhance the overlay of fault lines on maps and the globe, allowing users to click for more information.
+
+### Other Potential Optimizations & Features
+- **Advanced Cluster Analysis:** Explore time-based parameters in clustering to better identify earthquake sequences and incorporate fault data into cluster definitions.
+- **Client-Side Rendering Performance:** Continuously optimize rendering through techniques like virtualization, level of detail (LOD), and efficient WebGL practices.
+- **User-Defined Regions & Alerts:** Allow users to create custom regions of interest and receive notifications for significant quakes.
+- **Educational API Endpoint:** Develop a public API to provide access to processed data for educational and third-party use.
+
 ## Data Source
 
 * Earthquake data is sourced from the **U.S. Geological Survey (USGS) Earthquake Hazards Program** via their GeoJSON feeds.
@@ -64,7 +111,7 @@ This project utilizes distinct environments for development, staging, and produc
 *   **`production`**: This is the live environment that serves the application to end-users. It uses production-ready configurations, including the main D1 database and KV namespaces.
 *   **`staging`**: This environment is intended for pre-production testing. It mirrors the production setup and, importantly, **uses the same production D1 database and KV namespace bindings**. This allows for testing with live data to ensure changes are safe and performant before they are deployed to the live `production` environment. Use this environment with caution due to its use of live data.
 *   **`preview`**: Preview deployments are automatically generated for each commit pushed to a branch (other than the production branch). These are deployed as **Cloudflare Workers**, often orchestrated via a CI/CD pipeline (which might be integrated with **Cloudflare Pages** for build and preview URL generation, e.g., `*.pages.dev`). These environments use preview-specific D1 and KV namespaces, suitable for testing new features in isolation without affecting production or staging data.
-*   **`dev`**: This refers to the local development environment. For the frontend, **Vite** (usually via `npm run dev`) is used. For testing the Worker functions locally, `wrangler dev` is the command. This setup typically uses preview or development-specific bindings defined in `wrangler.toml` to avoid impacting live data.
+*   **`dev`**: This refers to the local development environment. For the frontend, **Vite** (usually via `npm run dev`) is used. For testing the Worker functions locally, `wrangler dev` is the command. This setup typically uses preview or development-specific bindings in `wrangler.toml` to avoid impacting live data.
 
 ### Manual Deployment Commands
 
