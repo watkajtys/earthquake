@@ -8,7 +8,10 @@ const memoCache = new Map();
 const CACHE_MAX_SIZE = 100;
 
 /**
- * Simple memoization function for caching expensive spatial calculations
+ * Simple memoization function for caching expensive spatial calculations.
+ * @param {Function} fn The function to memoize.
+ * @param {Function} keyFn A function to generate a unique key for the arguments.
+ * @returns {Function} The memoized function.
  */
 function memoize(fn, keyFn) {
   return function(...args) {
@@ -148,18 +151,32 @@ export function doesLineStringIntersectBoundingBox(coordinates, bbox) {
  * Simple spatial index using a grid system for faster lookups
  */
 class SpatialGrid {
+  /**
+   * @param {Object} bounds The bounding box of the grid.
+   * @param {number} cellSize The size of each cell in the grid.
+   */
   constructor(bounds, cellSize = 1.0) {
     this.bounds = bounds;
     this.cellSize = cellSize;
     this.grid = new Map();
   }
   
+  /**
+   * @param {number} lat The latitude of the point.
+   * @param {number} lng The longitude of the point.
+   * @returns {string} The key for the cell containing the point.
+   * @private
+   */
   _getCellKey(lat, lng) {
     const row = Math.floor((lat - this.bounds.south) / this.cellSize);
     const col = Math.floor((lng - this.bounds.west) / this.cellSize);
     return `${row},${col}`;
   }
   
+  /**
+   * @param {Object} feature The GeoJSON feature to insert.
+   * @param {string|number} id The ID of the feature.
+   */
   insert(feature, id) {
     if (!feature.geometry || !feature.geometry.coordinates) return;
     
@@ -199,6 +216,10 @@ class SpatialGrid {
     });
   }
   
+  /**
+   * @param {Object} bbox The bounding box to query.
+   * @returns {Array<Object>} An array of features within the bounding box.
+   */
   query(bbox) {
     const results = new Set();
     
@@ -225,8 +246,11 @@ class SpatialGrid {
 let globalSpatialIndex = null;
 
 /**
- * Simplifies LineString coordinates by removing points that don't significantly 
- * change the line's shape (Douglas-Peucker algorithm simplified)
+ * Simplifies LineString coordinates by removing points that don't significantly
+ * change the line's shape (Douglas-Peucker algorithm simplified).
+ * @param {Array<Array<number>>} coordinates The coordinates of the LineString.
+ * @param {number} tolerance The tolerance for simplification.
+ * @returns {Array<Array<number>>} The simplified coordinates.
  */
 function simplifyLineString(coordinates, tolerance = 0.001) {
   if (coordinates.length <= 2) return coordinates;
