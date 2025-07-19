@@ -117,7 +117,7 @@ const EarthquakeDetailModalComponent = () => {
         const descriptionTime = time ? new Date(time).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', timeZone: 'UTC'}) : 'Time Unknown';
         const pageDescription = `Detailed report of the M ${mag} earthquake that struck near ${place} on ${titleDate} at ${descriptionTime} (UTC). Magnitude: ${mag}, Depth: ${depth} km. Location: ${latitude?.toFixed(2)}, ${longitude?.toFixed(2)}. Stay updated with Earthquakes Live.`;
 
-        const pageKeywords = `earthquake, seismic event, M ${mag}, ${place ? place.split(', ').join(', ') : ''}, earthquake details, usgs event, ${usgsEventId}`;
+        const pageKeywords = `earthquake, seismic event, M ${mag}, ${place ? place.split(', ').join(', ') : ''}, earthquake magnitude, earthquake depth, earthquake location, seismic activity, tectonic plates, earthquake details, ${usgsEventId}`;
         // canonicalPageUrl uses detailUrlParam (which is params['*']) directly as per requirements.
         const canonicalPageUrl = `https://earthquakeslive.com/quake/${detailUrlParam}`;
 

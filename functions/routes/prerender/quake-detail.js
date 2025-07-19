@@ -97,7 +97,7 @@ export async function handleQuakeDetailPrerender(context, eventId) {
       },
       "identifier": "${eventId}",
       "sameAs": "${escapeXml(PbfPropertiesUrl)}",
-      "keywords": "${escapeXml(properties.place.split(', ')[0].toLowerCase())}, ${escapeXml(properties.place.split(', ').slice(1).join(' ').toLowerCase())}, m${properties.mag.toFixed(1)}, earthquake, seismic event, earthquake report, ${new Date(properties.time).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toLowerCase().replace(',', '')}"
+      "keywords": "earthquake, seismic event, m${properties.mag.toFixed(1)}, ${escapeXml(properties.place.toLowerCase())}, earthquake magnitude, earthquake depth, earthquake location, seismic activity, tectonic plates, earthquake report, ${new Date(properties.time).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toLowerCase().replace(',', '')}"
     }
   </script>
 </head>
