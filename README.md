@@ -193,6 +193,49 @@ For most frontend development and testing, the **Vite** development server (`npm
 *   Initially setting up new Worker routes or functionalities.
 *   Testing Worker behavior in complete isolation from the frontend.
 
+## Getting Started
+
+To get a local copy up and running, follow these simple steps.
+
+### Prerequisites
+
+* npm
+  ```sh
+  npm install npm@latest -g
+  ```
+
+### Installation
+
+1. Clone the repo
+   ```sh
+   git clone https://github.com/your_username_/Project-Name.git
+   ```
+2. Install NPM packages
+   ```sh
+   npm install
+   ```
+3. Run the development server
+   ```sh
+   npm run dev
+   ```
+
+## Project Status
+
+The project is currently in a stable, beta-release phase. Most core features are complete and functional. We are actively working on improving performance, adding more data visualizations, and expanding the educational content.
+
+## Contributing
+
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+Don't forget to give the project a star! Thanks again!
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
 ## Project Structure
 
 The `src/` directory contains the core source code for the application, organized as follows:
