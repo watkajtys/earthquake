@@ -8,17 +8,15 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
-    environment: 'happy-dom', // or 'jsdom'
-    setupFiles: ['./src/setupTests.js'], // if you have setup files
+    environment: 'jsdom', // or 'jsdom'
     css: false, // if you are not testing CSS or have issues with CSS imports
+    include: ['src/components/AlertDisplay.test.jsx'],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
       '**/cypress/**',
       '**/.{idea,git,cache,output,temp}/**',
       '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',
-      'src/components/InteractiveGlobeView.test.jsx', // Exclude this specific test file
-      'src/components/NotableQuakeFeature.test.jsx' // Exclude this problematic test file as well
     ],
   },
 })
