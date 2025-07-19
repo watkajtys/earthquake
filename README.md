@@ -303,27 +303,11 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
     npm run docs
     ```
 
-## Future Development
+## Future Plans
 
-This project is under continuous development with a focus on performance, data enrichment, and new features. The following is a summary of our development roadmap.
+We are constantly working to improve the Global Seismic Activity Monitor. Here are some of the features and improvements we are planning for the future:
 
-### Performance Optimizations
-
-- **Clustering Algorithm:** The current O(N^2) clustering algorithm will be replaced with a more performant solution using spatial indexing (e.g., k-d trees or quadtrees) to reduce computation time, especially for large datasets.
-- **Sitemap Generation:** The sitemap generation process will be optimized to eliminate external API calls, relying instead on pre-generated canonical slugs stored in our D1 database.
-
-### Historical Data Integration
-
-- A robust batch ingestion process will be developed to import historical earthquake data from USGS archives.
-- This will enable historical cluster analysis and provide a richer dataset for users to explore.
-
-### Server-Side Enhancements
-
-- **Regional Analysis:** We plan to introduce dedicated pages for specific seismic regions, offering aggregated statistics, historical data, and detailed fault information.
-- **Educational Content:** The application's educational content will be enhanced with interactive modules, fault mechanics explorers, and more detailed explanations of seismic events.
-
-### Advanced Fault Integration
-
-- Fault data will be moved from static JSON files to a dedicated D1 database table, enabling more complex server-side proximity analysis and richer associations between earthquakes and known faults.
-
-This roadmap is a living document, and priorities may shift as the project evolves. Our goal is to create a comprehensive and performant platform for global seismic activity analysis and education.
+*   **More Data Sources**: We are planning to add support for more data sources, such as the European-Mediterranean Seismological Centre (EMSC).
+*   **Custom Alerts**: We are planning to add the ability for users to create custom alerts for earthquakes in specific regions or with specific magnitudes.
+*   **More Map Layers**: We are planning to add more map layers, such as population density and infrastructure, to provide more context for seismic events.
+*   **Improved Performance**: We are always working to improve the performance of the application, and we are planning to make some changes to the backend to make it faster and more efficient.
