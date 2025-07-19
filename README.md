@@ -40,6 +40,9 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * **Vite**: Frontend build tool.
 * **JavaScript (ES6+)**
 * **Cloudflare Workers**: For hosting, deployment, and serverless backend functions.
+* **D3.js**: JavaScript library for producing dynamic, interactive data visualizations.
+* **Leaflet**: Open-source JavaScript library for mobile-friendly interactive maps.
+* **React Router**: For declarative routing in React applications.
 
 ## Deployment / Infrastructure
 
@@ -55,6 +58,8 @@ The application is deployed as a **Cloudflare Worker**, which handles both the s
     *   **Cost-Effectiveness**: A unified **Worker-based** architecture can be highly cost-effective.
     *   **Simplified DevOps**: CI/CD for the entire application (frontend and backend) is streamlined by deploying to **Cloudflare Workers**.
 
+*   **Deployment Command**: The `npm run deploy` script is a streamlined command that builds the application and deploys it to the `production` environment on Cloudflare Workers. It simplifies the deployment process by combining the build and deploy steps into a single command.
+
 ## Environments and Deployment
 
 This project utilizes distinct environments for development, staging, and production, managed through **Cloudflare Workers** and **Wrangler**.
@@ -68,32 +73,24 @@ This project utilizes distinct environments for development, staging, and produc
 
 ### Manual Deployment Commands
 
-Manual deployments to specific environments can be performed using npm or yarn scripts defined in `package.json`.
+Manual deployments to specific environments can be performed using npm scripts defined in `package.json`.
 
 *   **Deploying to Staging**:
     *   **Purpose**: Deploys the current state of your project to the `staging` environment on Cloudflare.
     *   **npm Command**: `npm run deploy:staging`
-    *   **Yarn Command**: `yarn deploy:staging`
     *   **Usage**: Run the appropriate command from your terminal to push changes to staging. This is useful for final testing before a production release.
     ```bash
     # Using npm
     npm run deploy:staging
-
-    # Or using Yarn
-    yarn deploy:staging
     ```
 
 *   **Deploying to Production**:
     *   **Purpose**: Deploys the current state of your project to the `production` (live) environment on Cloudflare.
     *   **npm Command**: `npm run deploy:production`
-    *   **Yarn Command**: `yarn deploy:production`
     *   **Usage**: Run the appropriate command from your terminal to push changes to production. This should only be done after changes have been thoroughly tested (e.g., in `staging` or preview deployments).
     ```bash
     # Using npm
     npm run deploy:production
-
-    # Or using Yarn
-    yarn deploy:production
     ```
 
 **Note on Automated Deployments:**
@@ -101,52 +98,9 @@ Typically, the `production` environment is connected to the main branch of the G
 
 ## Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
 
-This Global Seismic Activity Monitor was brought to life through a dynamic and iterative development process, affectionately termed "vibe-coding." The project was conceptualized and significantly shaped within Gemini Canvas, leveraging a conversational AI-assisted development workflow.
+This project was developed using a "vibe-coding" approach, which is a dynamic and iterative process that leverages conversational AI to quickly move from concept to a functional prototype. This method emphasizes a fluid, responsive, and experimental path to development, allowing for rapid exploration of different UI/UX ideas and quick pivots when a particular implementation isn't ideal.
 
-**How it worked:**
-
-* **Conversational Prototyping**: Initial ideas and feature requirements were discussed with Gemini. Based on these conversations, Gemini generated foundational React components and logic.
-* **Iterative Refinement**: Each feature, from basic globe setup to complex interactions like the ring highlights or data-driven UI updates, was built incrementally. The process involved:
-    * Describing the desired functionality or behavior.
-    * Reviewing and testing the code suggestions provided by Gemini.
-    * Identifying issues, bugs, or areas for improvement (like the ring animation or hover states).
-    * Providing feedback, error messages, and updated code snippets back to Gemini.
-    * Receiving revised code and explanations, and integrating them into the application.
-* **Agile & Exploratory**: This "vibe-coding" approach allowed for rapid exploration of different UI/UX ideas and quick pivots when a particular implementation wasn't ideal. For example, the globe hover-to-pause feature went through several iterations to achieve the desired precision.
-* **Focus on "Feel"**: Beyond just functional code, there was an emphasis on the "vibe" – ensuring the application felt responsive, informative, and visually engaging. This involved tweaking animations, color schemes, and data presentation based on iterative feedback.
-* **Collaborative Problem-Solving**: When bugs or unexpected behaviors arose (like the initial ring animation issues), the debugging process was also collaborative, with Gemini helping to diagnose problems based on error messages and observed behavior.
-
-This method facilitated a quick turnaround from concept to a functional prototype, emphasizing a fluid, responsive, and somewhat experimental path to development. It highlights how AI-assisted tools like Gemini Canvas can augment the creative and technical aspects of software development, allowing for rapid iteration and exploration of ideas.
-
-Beyond the initial conceptualization with Gemini Canvas, this project serves as an ongoing testbed for advanced Large Language Model (LLM) capabilities in real-world software engineering. AI agents like Jules frequently drive development, maintenance, and iterative enhancements. This process includes rigorously testing the LLM's ability to:
-* Understand complex requirements.
-* Generate and refactor code.
-* Debug issues.
-* Contribute to documentation (as demonstrated by this very README update).
-
-When working with AI agents like Jules, effective collaboration is key. Here are some tips and insights:
-
-*   **How to Interact Effectively:**
-    *   **Be specific:** Instead of vague requests like "improve the UI," provide detailed instructions, e.g., "change the color of the primary button to blue (hex code #007bff) and increase its padding to 12px."
-    *   **Provide context:** If reporting a bug, describe the steps to reproduce it, the expected behavior, and the actual outcome. Include error messages if any.
-    *   **Reference specifics:** Mention relevant files (e.g., `src/components/Globe.jsx`), functions (e.g., `handleMarkerClick`), or even line numbers if you have them.
-
-*   **Understanding Strengths:** AI agents like Jules excel at:
-    *   **Code Generation:** Creating boilerplate code, implementing well-defined functions, or building components based on clear specifications.
-    *   **Refactoring:** Assisting in improving code structure, enhancing readability, or optimizing performance when given specific guidelines or patterns to follow.
-    *   **Debugging Support:** Helping to identify potential causes of issues by analyzing code snippets and error messages. (Note: Jules cannot directly run code or use a debugger in this interactive context but can offer valuable suggestions based on the information provided).
-    *   **Documentation:** Generating or updating documentation, such as README files, code comments, or explanatory text.
-    *   **Answering Questions:** Providing information about the codebase, libraries used, or architectural decisions, based on its training data and the currently available code.
-
-*   **Embrace the Iterative Process:**
-    *   Working with AI is often a process of refinement. The initial output may not be perfect.
-    *   Be prepared to provide clear, constructive feedback and ask for revisions. Explain what was missed or how the output can be improved.
-
-*   **Experimental and Innovative Approach:**
-    *   Using AI agents for ongoing development is part of an innovative and experimental approach to software engineering.
-    *   Patience, clear communication, and a collaborative mindset are crucial for achieving the best results.
-
-This ongoing collaboration aims to push the boundaries of what LLMs can achieve in practical, non-trivial application development, providing valuable insights into their strengths and areas for continued improvement. Tools like the Claude code CLI are actively used in this "vibe process" for implementing new features and enhancements. The Global Seismic Activity Monitor is therefore not just a tool for visualizing earthquakes, but also a living experiment in the evolving landscape of AI-assisted software creation.
+Beyond the initial conceptualization, this project serves as an ongoing testbed for advanced Large Language Model (LLM) capabilities in real-world software engineering. AI agents are used to drive development, maintenance, and iterative enhancements. This process includes rigorously testing the LLM's ability to understand complex requirements, generate and refactor code, debug issues, and contribute to documentation.
 
 The project reflects the spirit of innovation and agile creation championed by **Built By Vibes**.
 
@@ -169,15 +123,18 @@ To set up and run this project locally, follow these steps:
     ```bash
     npm install
     ```
-    (or `yarn install` if you use Yarn)
 
-4.  **Run the development server**:
+4.  **Lint the code**:
+    ```bash
+    npm run lint
+    ```
+
+5.  **Run the development server**:
     ```bash
     npm run dev
     ```
-    (or `yarn dev`)
 
-5.  **Open your browser and navigate to the local URL provided by Vite (usually `http://localhost:5173` or similar).**
+6.  **Open your browser and navigate to the local URL provided by Vite (usually `http://localhost:5173` or similar).**
 
 **Developing Cloudflare Workers:**
 
@@ -192,49 +149,6 @@ For most frontend development and testing, the **Vite** development server (`npm
 *   Implementing or debugging complex Worker-specific logic.
 *   Initially setting up new Worker routes or functionalities.
 *   Testing Worker behavior in complete isolation from the frontend.
-
-## Getting Started
-
-To get a local copy up and running, follow these simple steps.
-
-### Prerequisites
-
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
-
-### Installation
-
-1. Clone the repo
-   ```sh
-   git clone https://github.com/your_username_/Project-Name.git
-   ```
-2. Install NPM packages
-   ```sh
-   npm install
-   ```
-3. Run the development server
-   ```sh
-   npm run dev
-   ```
-
-## Project Status
-
-The project is currently in a stable, beta-release phase. Most core features are complete and functional. We are actively working on improving performance, adding more data visualizations, and expanding the educational content.
-
-## Contributing
-
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Don't forget to give the project a star! Thanks again!
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
 
 ## Project Structure
 
