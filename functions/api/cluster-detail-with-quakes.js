@@ -8,7 +8,11 @@
 
 /**
  * Handles GET requests to retrieve a cluster definition and its constituent earthquake GeoJSON data.
- * - Expects a URL query parameter `id` (the cluster's ID).
+ * Expects a URL query parameter `id`. This `id` is first treated as a `strongestQuakeId`
+ * for lookup. If no match is found, it falls back to checking against the canonical `id`
+ * of the cluster definition. This dual-lookup approach supports both human-friendly URLs
+ * (using a significant quake ID) and direct references.
+ *
  * - Fetches the cluster definition from `ClusterDefinitions`.
  * - Fetches the GeoJSON features for each earthquake ID listed in the cluster definition
  *   from the `EarthquakeEvents` table.

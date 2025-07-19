@@ -196,17 +196,18 @@ function generateStableClusterKey(calculatedCluster, strongestQuakeInCalcCluster
 
 
 /**
- * Asynchronously stores definitions for significant earthquake clusters in the D1 database.
- * This function is intended to be run in the background (e.g., using `ctx.waitUntil`)
- * so it doesn't block the main response flow.
+ * Asynchronously creates or updates definitions for significant earthquake clusters in D1.
+ * Intended for background execution (`ctx.waitUntil`) to avoid blocking the main response.
  *
- * A cluster is considered "significant" if it meets criteria defined by
- * `CLUSTER_MIN_QUAKES_CONST` and `DEFINED_CLUSTER_MIN_MAGNITUDE_CONST`.
- * For each significant cluster, it generates a stable key. If a cluster with this key
- * already exists, it updates the existing record. Otherwise, it creates a new record.
+ * A cluster is "significant" if it meets `CLUSTER_MIN_QUAKES_CONST` and
+ * `DEFINED_CLUSTER_MIN_MAGNITUDE_CONST` criteria.
+ * It generates a stable key for each significant cluster. If a definition with this key exists,
+ * the function updates it; otherwise, it creates a new one. This ensures that a given
+ * seismically active region over a specific time window is represented by a single,
+ * evolving cluster definition.
  *
- * Logs information about the process, including counts of significant clusters,
- * successfully stored/updated definitions, and any errors encountered.
+ * Logs process details, including counts of significant clusters, created/updated
+ * definitions, and any errors.
  *
  * @async
  * @param {object} db - The D1 database instance (e.g., `env.DB`).
@@ -346,8 +347,10 @@ async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUA
 }
 
 /**
- * Finds clusters of earthquakes based on proximity.
+ * Finds clusters of earthquakes based on proximity. This implementation sorts earthquakes
+ * by magnitude in descending order to prioritize more significant events as cluster seeds.
  * (Duplicated from `src/utils/clusterUtils.js` - keep synchronized)
+ *
  * @param {Array<Object>} earthquakes - Array of earthquake objects. Each object is expected to have an `id`,
  *   `properties.mag` (magnitude), and `geometry.coordinates`.
  * @param {number} maxDistanceKm - Maximum geographic distance (in kilometers) for clustering.
@@ -443,22 +446,22 @@ export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
 /**
  * Handles POST requests to calculate earthquake clusters.
  * Expects a JSON payload with `earthquakes`, `maxDistanceKm`, and `minQuakes`.
- * Optional `lastFetchTime` and `timeWindowHours` can be included for caching key generation.
  *
- * The function performs input validation on the payload.
- * It then attempts to retrieve cached cluster data from a D1 database (`env.DB`, table `ClusterCache`)
- * based on the request parameters. Cache duration is 1 hour.
- * If no valid cache entry is found, it calculates clusters using `findActiveClusters`,
- * stores the new result in the D1 cache, and returns the clusters.
+ * This function performs input validation on the payload. For large datasets (>=100 earthquakes),
+ * it uses a spatially optimized clustering function (`findActiveClustersOptimized`). If the
+ * optimized function fails or for smaller datasets, it falls back to the standard
+ * `findActiveClusters` algorithm. This ensures both performance and reliability.
  *
- * Responses include an `X-Cache-Hit` header ('true' or 'false').
+ * After calculating clusters, it triggers a background process (`storeClusterDefinitionsInBackground`)
+ * to analyze and persist significant clusters in the D1 database.
  *
  * @async
  * @param {object} context - The Cloudflare Worker request context object (commonly includes 'request', 'env', 'ctx').
  * @param {Request} context.request - The incoming HTTP request object, expected to have a JSON body.
  * @param {object} context.env - Environment variables, expected to contain `DB` (D1 Database binding).
- * @returns {Promise<Response>} A `Response` object containing either the calculated cluster data (Array of arrays of earthquake objects)
- *   or an error response (405 for wrong method, 400 for bad request, 500 for internal server error).
+ * @param {object} context.ctx - The execution context, used for `waitUntil` to manage background tasks.
+ * @returns {Promise<Response>} A `Response` object containing the calculated cluster data
+ *   or an error response (400 for bad request, 500 for internal server error).
  */
 export async function onRequestPost(context) {
   // Method check removed as this file will be specifically routed for POST requests.

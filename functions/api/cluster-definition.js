@@ -11,7 +11,7 @@
 /**
  * Handles incoming HTTP requests for the /api/cluster-definition endpoint.
  * - **POST**: Creates or replaces a cluster definition in the D1 database.
- *   Expects a JSON payload with fields: `id`*, `slug`*, `strongestQuakeId`*, `earthquakeIds`* (Array<string>),
+ *   Expects a JSON payload with fields: `id`*, `stableKey`, `slug`*, `strongestQuakeId`*, `earthquakeIds`* (Array<string>),
  *   `title`, `description`, `locationName`, `maxMagnitude`*, `meanMagnitude`, `minMagnitude`,
  *   `depthRange`, `centroidLat`, `centroidLon`, `radiusKm`, `startTime`*, `endTime`*, `durationHours`,
  *   `quakeCount`*, `significanceScore`, `version` (optional). Fields marked with * are mandatory.

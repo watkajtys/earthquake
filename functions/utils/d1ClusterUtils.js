@@ -6,7 +6,8 @@
  */
 
 /**
- * Stores (inserts or replaces) a cluster definition in the D1 database.
+ * Validates and stores (inserts or replaces) a cluster definition in the D1 database.
+ * This function now includes comprehensive validation and logging.
  *
  * @async
  * @param {object} db - The D1 database binding.
@@ -32,6 +33,8 @@
  * @param {number} clusterData.quakeCount - Number of earthquakes in the cluster.
  * @param {number} [clusterData.significanceScore] - Significance score of the cluster.
  * @param {number} [clusterData.version=1] - Version number of the cluster definition.
+ * @param {number} [clusterData.createdAt] - Timestamp of creation (ms since epoch). If not provided, D1's default is used.
+ * @param {number} [clusterData.updatedAt] - Timestamp of last update (ms since epoch). Overwritten by the function.
  * @returns {Promise<object>} An object indicating success (e.g., `{ success: true, id: clusterData.id }`)
  *                            or failure (e.g., `{ success: false, error: message }`).
  */
