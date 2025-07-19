@@ -32,6 +32,9 @@ const LearnPage = () => {
                 <h1 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
                     Learn About Earthquakes
                 </h1>
+                <InfoSnippet topic="clusterAlgorithm" />
+                <InfoSnippet topic="clusterSitemap" />
+                <InfoSnippet topic="scheduledFetching" />
                 <InfoSnippet topic="magnitude" />
                 <InfoSnippet topic="depth" />
                 <InfoSnippet topic="intensity" />
@@ -64,6 +67,11 @@ const LearnPage = () => {
                         <li>
                             <Link to="/learn/plate-tectonics" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
                                 Plate Tectonics and Earthquakes
+                            </Link>
+                        </li>
+                        <li>
+                            <Link to="/learn/historical-data" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                Strategy for Loading Historical Data
                             </Link>
                         </li>
                     </ul>
