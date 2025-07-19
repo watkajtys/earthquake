@@ -34,6 +34,7 @@ import EarthquakeMagnitudeComparisonPanel from './earthquakeDetail/EarthquakeMag
 import EarthquakeStressAxesPanel from './earthquakeDetail/EarthquakeStressAxesPanel';
 import EarthquakeBeachballPanel from './earthquakeDetail/EarthquakeBeachballPanel';
 import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfoPanel';
+import SocialSharePanel from './earthquakeDetail/SocialSharePanel';
 
 /**
  * Orchestrates the display of comprehensive details for a single earthquake event.
@@ -535,6 +536,12 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                     <EarthquakeFurtherInfoPanel
                         properties={properties}
                         // isValidString is now imported by child
+                        exhibitPanelClass={exhibitPanelClass}
+                        exhibitTitleClass={exhibitTitleClass}
+                    />
+
+                    <SocialSharePanel
+                        properties={properties}
                         exhibitPanelClass={exhibitPanelClass}
                         exhibitTitleClass={exhibitTitleClass}
                     />

@@ -180,6 +180,11 @@ export const calculateMagnitudeDistribution = (earthquakes) => {
 
 /** @type {EarthquakeDataState} */
 export const initialState = {
+    filters: {
+        minMagnitude: null,
+        maxDepth: null,
+    },
+    searchTerm: '',
     isLoadingDaily: true,
     isLoadingWeekly: true,
     isLoadingMonthly: false,
@@ -223,6 +228,7 @@ export const initialState = {
     weeklyDataSource: null,
     monthlyDataSource: null,
     shouldFetchMonthlyData: false,
+    filteredGlobeEarthquakes: [],
 };
 
 // --- Context Object ---
@@ -237,6 +243,8 @@ export const EarthquakeDataContext = createContext(null);
  * @enum {string}
  */
 export const actionTypes = {
+    SET_SEARCH_TERM: 'SET_SEARCH_TERM',
+    SET_FILTER: 'SET_FILTER',
     SET_LOADING_FLAGS: 'SET_LOADING_FLAGS',
     SET_ERROR: 'SET_ERROR',
     /** Action type for when daily data has been fetched and processed.
@@ -288,6 +296,36 @@ export const actionTypes = {
 export function earthquakeReducer(state = initialState, action) {
     let newState;
     switch (action.type) {
+        case actionTypes.SET_SEARCH_TERM:
+            const searchTerm = action.payload;
+            const filteredBySearch = state.globeEarthquakes.filter(quake => {
+                const place = quake.properties.place.toLowerCase();
+                return place.includes(searchTerm.toLowerCase());
+            });
+            newState = { ...state, searchTerm, filteredGlobeEarthquakes: filteredBySearch };
+            break;
+        case actionTypes.SET_FILTER:
+            const { filterName, value } = action.payload;
+            const newFilters = { ...state.filters, [filterName]: value };
+            const filteredGlobeEarthquakes = state.globeEarthquakes.filter(quake => {
+                const mag = quake.properties.mag;
+                const depth = quake.geometry.coordinates[2];
+                const minMag = newFilters.minMagnitude;
+                const maxDepth = newFilters.maxDepth;
+                const place = quake.properties.place.toLowerCase();
+                if (minMag && mag < minMag) {
+                    return false;
+                }
+                if (maxDepth && depth > maxDepth) {
+                    return false;
+                }
+                if (state.searchTerm && !place.includes(state.searchTerm.toLowerCase())) {
+                    return false;
+                }
+                return true;
+            });
+            newState = { ...state, filters: newFilters, filteredGlobeEarthquakes };
+            break;
         case actionTypes.SET_LOADING_FLAGS:
             newState = { ...state, ...action.payload };
             break;
@@ -356,13 +394,33 @@ export function earthquakeReducer(state = initialState, action) {
             const sampledEarthquakesLast7Days = sampleArrayWithPriority(currentEarthquakesLast7Days, SCATTER_SAMPLING_THRESHOLD_7_DAYS, MAJOR_QUAKE_THRESHOLD);
             const magnitudeDistribution7Days = calculateMagnitudeDistribution(currentEarthquakesLast7Days);
 
+            const globeEarthquakes = [...deduplicatedLast72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900);
+            const filteredGlobeEarthquakes = globeEarthquakes.filter(quake => {
+                const mag = quake.properties.mag;
+                const depth = quake.geometry.coordinates[2];
+                const minMag = state.filters.minMagnitude;
+                const maxDepth = state.filters.maxDepth;
+                const place = quake.properties.place.toLowerCase();
+                if (minMag && mag < minMag) {
+                    return false;
+                }
+                if (maxDepth && depth > maxDepth) {
+                    return false;
+                }
+                if (state.searchTerm && !place.includes(state.searchTerm.toLowerCase())) {
+                    return false;
+                }
+                return true;
+            });
+
             newState = {
                 ...state,
                 isLoadingWeekly: false,
                 earthquakesLast72Hours: deduplicatedLast72HoursData,
                 prev24HourData: filterByTime(features, 48, 24, fetchTime),
                 earthquakesLast7Days: currentEarthquakesLast7Days,
-                globeEarthquakes: [...deduplicatedLast72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900),
+                globeEarthquakes,
+                filteredGlobeEarthquakes,
                 dailyCounts7Days,
                 sampledEarthquakesLast7Days,
                 magnitudeDistribution7Days,
@@ -395,6 +453,25 @@ export function earthquakeReducer(state = initialState, action) {
                 if (dayEntry14) dayEntry14.count++;
             });
 
+            const globeEarthquakes = [...state.earthquakesLast72Hours, ...features].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900);
+            const filteredGlobeEarthquakes = globeEarthquakes.filter(quake => {
+                const mag = quake.properties.mag;
+                const depth = quake.geometry.coordinates[2];
+                const minMag = state.filters.minMagnitude;
+                const maxDepth = state.filters.maxDepth;
+                const place = quake.properties.place.toLowerCase();
+                if (minMag && mag < minMag) {
+                    return false;
+                }
+                if (maxDepth && depth > maxDepth) {
+                    return false;
+                }
+                if (state.searchTerm && !place.includes(state.searchTerm.toLowerCase())) {
+                    return false;
+                }
+                return true;
+            });
+
             newState = {
                 ...state,
                 isLoadingMonthly: false,
@@ -413,6 +490,8 @@ export function earthquakeReducer(state = initialState, action) {
                 prev14DayData: filterMonthlyByTime(features, 28, 14, fetchTime),
                 ...majorQuakeUpdates,
                 monthlyDataSource: dataSource,
+                globeEarthquakes,
+                filteredGlobeEarthquakes,
             };
             break;
         }

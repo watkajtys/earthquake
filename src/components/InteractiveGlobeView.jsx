@@ -101,7 +101,7 @@ const InteractiveGlobeView = ({
     enableAutoRotation = true,
     globeAutoRotateSpeed = 0.1
 }) => {
-    const { globeEarthquakes, lastMajorQuake, previousMajorQuake } = useEarthquakeDataState(); // Get data from context
+    const { filteredGlobeEarthquakes, lastMajorQuake, previousMajorQuake } = useEarthquakeDataState(); // Get data from context
 
     const globeRef = useRef();
     const containerRef = useRef(null);
@@ -204,7 +204,7 @@ const InteractiveGlobeView = ({
     }, []); // Remove dependency on initialLayoutComplete
 
     useEffect(() => {
-        let allPointsData = (globeEarthquakes || []).map(quake => { // Use globeEarthquakes from context
+        let allPointsData = (filteredGlobeEarthquakes || []).map(quake => { // Use filteredGlobeEarthquakes from context
             const isHighlighted = quake.id === highlightedQuakeId;
             const magValue = parseFloat(quake.properties.mag) || 0;
             let pointRadius, pointColor, pointAltitude, pointLabel, pointType;
@@ -346,7 +346,7 @@ const InteractiveGlobeView = ({
         // }
         // --- END NEW ---
         setPoints(allPointsData);
-    }, [globeEarthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]); // Update dependency array
+    }, [filteredGlobeEarthquakes, getMagnitudeColorFunc, highlightedQuakeId, previousMajorQuake, activeClusters]); // Update dependency array
 
     useEffect(() => {
         let processedPaths = [];

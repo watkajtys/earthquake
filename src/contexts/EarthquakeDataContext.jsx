@@ -389,11 +389,12 @@ export const EarthquakeDataProvider = ({ children }) => {
         dailyDataSource: state.dailyDataSource,
         weeklyDataSource: state.weeklyDataSource,
         monthlyDataSource: state.monthlyDataSource,
+        dispatch,
     }), [
         state, isLoadingInitialData, currentLoadingMessage, loadMonthlyData,
         feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
         feelableQuakes30Days_ctx, significantQuakes30Days_ctx,
-        // state.dailyDataSource, state.weeklyDataSource, state.monthlyDataSource // These are part of 'state'
+        dispatch,
     ]);
 
     return (
@@ -418,6 +419,14 @@ export const useEarthquakeDataState = () => {
         throw new Error('useEarthquakeDataState must be used within an EarthquakeDataProvider');
     }
     return context;
+};
+
+export const useEarthquakeDataDispatch = () => {
+    const context = useContext(EarthquakeDataContext);
+    if (context === null) {
+        throw new Error('useEarthquakeDataDispatch must be used within an EarthquakeDataProvider');
+    }
+    return context.dispatch;
 };
 
 // Only export the provider and hook. Context is exported from utils.

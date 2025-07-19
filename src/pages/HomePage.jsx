@@ -34,7 +34,9 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 // FeedsPageLayoutComponent will be lazy loaded
 // EarthquakeDetailModalComponent will be lazy loaded
 const InteractiveGlobeView = lazy(() => import('../components/InteractiveGlobeView'));
-import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
+import SearchBar from '../components/SearchBar';
+import FilterPanel from '../components/FilterPanel';
+import { useEarthquakeDataState, useEarthquakeDataDispatch } from '../contexts/EarthquakeDataContext.jsx';
 import { useUIState } from '../contexts/UIStateContext.jsx';
 import { fetchActiveClusters } from '../services/clusterApiService.js';
 import {
@@ -194,6 +196,15 @@ function App() {
         globeFocusLng, setGlobeFocusLng,
         setFocusedNotableQuake
     } = useUIState();
+    const dispatch = useEarthquakeDataDispatch();
+
+    const handleFilterChange = (filterName, value) => {
+        dispatch({ type: 'SET_FILTER', payload: { filterName, value } });
+    };
+
+    const handleSearch = (searchTerm) => {
+        dispatch({ type: 'SET_SEARCH_TERM', payload: searchTerm });
+    };
 
     // const [registeredIdsThisSession, setRegisteredIdsThisSession] = useState(new Set()); // Removed
 
@@ -1113,6 +1124,8 @@ function App() {
                         implications are understood and accepted.
                     */}
                     <div className="flex-1 p-2 space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+                        <SearchBar onSearch={handleSearch} />
+                        <FilterPanel onFilterChange={handleFilterChange} />
                         {error && !showFullScreenLoader && (
                             <div
                                 className="bg-red-700 bg-opacity-40 border border-red-600 text-red-200 px-3 py-2 rounded-md text-xs"
