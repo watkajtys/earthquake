@@ -64,6 +64,8 @@ export const isValidNumber = (num) => {
  * Example: "Monday, January 1, 2023, 12:00:00 AM PST" (locale dependent).
  * @param {number} timestamp - The Unix timestamp in milliseconds.
  * @returns {string} A formatted date-time string, or 'N/A' if the timestamp is invalid.
+ * @example
+ * formatDate(1672560000000); // "Sunday, January 1, 2023 at 12:00:00 AM PST"
  */
 export const formatDate = (timestamp) => {
     if (!timestamp || !isValidNumber(timestamp)) return 'N/A'; // Added isValidNumber check
@@ -109,6 +111,9 @@ export const formatNumber = (num, precision = 1) => {
  *
  * @param {number|string|null|undefined} num - The number or numeric string to format.
  * @returns {string} The human-readable formatted large number string, or 'N/A'.
+ * @example
+ * formatLargeNumber(12345); // "12.35 thousand"
+ * formatLargeNumber(1234567); // "1.23 million"
  */
 export const formatLargeNumber = (num) => {
     if (!isValidNumber(num)) return 'N/A'; // Uses the utility isValidNumber
@@ -132,6 +137,8 @@ export const formatLargeNumber = (num) => {
  * Formats a Unix timestamp into a human-readable "time ago" string.
  * @param {number} timestamp - The Unix timestamp in milliseconds.
  * @returns {string} A human-readable string representing the time difference.
+ * @example
+ * formatTimeAgo(Date.now() - 60000); // "1 minute ago"
  */
 export function formatTimeAgo(timestamp) {
   if (timestamp === null || timestamp === undefined || typeof timestamp !== 'number' || isNaN(timestamp)) {

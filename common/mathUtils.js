@@ -11,6 +11,8 @@
  * @param {number} lat2 Latitude of the second point.
  * @param {number} lon2 Longitude of the second point.
  * @returns {number} Distance in kilometers.
+ * @example
+ * calculateDistance(34.0522, -118.2437, 36.7783, -119.4179); // returns approx. 279
  */
 export function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; // Radius of the Earth in kilometers

@@ -37,18 +37,19 @@ import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfo
 
 /**
  * Orchestrates the display of comprehensive details for a single earthquake event.
- * This component fetches detailed data for a specific earthquake from a provided USGS GeoJSON URL.
- * It then processes this data and passes relevant pieces to a collection of specialized child panel components,
- * each responsible for visualizing a particular aspect of the earthquake (e.g., location, energy, regional seismicity, fault mechanics).
+ * This component acts as a master controller that fetches detailed data for a specific
+ * earthquake via a USGS GeoJSON URL. Upon receiving the data, it processes and
+ * delegates rendering to a suite of specialized child panel components. Each panel
+ * is responsible for a specific aspect of the earthquake's data, such as its
+ * geographic location, energy release, regional seismic context, and fault mechanics.
+ * This modular approach keeps the main component focused on data management and
+ * state orchestration while individual panels handle the intricacies of their
+ * respective data visualizations.
  *
- * Key responsibilities include:
- * - Fetching and managing the state of detailed earthquake data (`detailUrl`).
- * - Handling loading and error states during data fetching.
- * - Invoking `onDataLoadedForSeo` callback with key event details for SEO purposes.
- * - Triggering `handleLoadMonthlyData` if necessary for broader regional context.
- * - Implementing accessibility features like focus trapping within the modal and an Escape key listener for closing.
- * - Utilizing `useMemo` and `useCallback` extensively to optimize performance due to the complexity and number of derived calculations.
- * - Wrapping its content in an `ErrorBoundary` to gracefully handle potential rendering errors in child components.
+ * The component manages loading and error states, provides data for SEO, and
+ * ensures accessibility with features like focus trapping and keyboard navigation.
+ * It is heavily optimized with `useMemo` and `useCallback` to handle the complex
+ * data processing and rendering pipeline efficiently.
  *
  * @component
  * @param {Object} props - The component's props.
@@ -66,6 +67,13 @@ import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfo
  * @param {boolean} [props.hasAttemptedMonthlyLoad] - Flag indicating if an attempt to load monthly data has already been made.
  * @param {boolean} [props.isLoadingMonthly] - Flag indicating if monthly data is currently being loaded.
  * @returns {JSX.Element} The EarthquakeDetailView component, typically rendered within a modal structure.
+ * @example
+ * <EarthquakeDetailView
+ *   detailUrl="https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ci39457561.geojson"
+ *   onClose={() => console.log('Close clicked')}
+ *   broaderEarthquakeData={[{...}]}
+ *   dataSourceTimespanDays={7}
+ * />
  */
 function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) {
     const [detailData, setDetailData] = useState(null);

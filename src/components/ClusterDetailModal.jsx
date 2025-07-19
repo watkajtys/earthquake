@@ -6,8 +6,13 @@ import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the n
 
 /**
  * A modal component to display detailed information about an earthquake cluster.
- * It includes a mini-map, summary statistics, and a list of individual earthquakes within the cluster.
- * The modal implements accessibility features like focus trapping and closing with the Escape key.
+ * This component provides a comprehensive view of a seismic cluster, including a
+ * mini-map to visualize the spatial distribution of the earthquakes, summary
+ * statistics such as quake count and maximum magnitude, and a detailed list of
+ * all individual earthquakes within the cluster. It is designed with accessibility
+ * in mind, featuring focus trapping and the ability to close the modal with the
+ * Escape key. The list of earthquakes is interactive, allowing users to select
+ * an individual event for more details.
  *
  * @component
  * @param {object} props - The component's props.
@@ -24,6 +29,20 @@ import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the n
  * @param {function} props.getMagnitudeColorStyle - Function that returns Tailwind CSS class string for magnitude-based coloring.
  * @param {function} [props.onIndividualQuakeSelect] - Optional callback function triggered when an individual earthquake item within the modal is selected. Receives the quake object as an argument.
  * @returns {JSX.Element | null} The rendered ClusterDetailModal component or null if no `cluster` data is provided.
+ * @example
+ * <ClusterDetailModal
+ *   cluster={{
+ *     locationName: 'Ridgecrest, CA',
+ *     quakeCount: 15,
+ *     maxMagnitude: 4.5,
+ *     timeRange: '2 days',
+ *     originalQuakes: [{...}]
+ *   }}
+ *   onClose={() => console.log('Close clicked')}
+ *   formatDate={(time) => new Date(time).toLocaleDateString()}
+ *   getMagnitudeColorStyle={(mag) => 'bg-yellow-500'}
+ *   onIndividualQuakeSelect={(quake) => console.log(quake.id)}
+ * />
  */
 function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
     const modalContentRef = React.useRef(null);

@@ -2,7 +2,11 @@ import React from 'react';
 
 /**
  * Renders a list of the latest feelable earthquakes.
- * Each item in the list is clickable and navigates to the earthquake details.
+ * This component provides a quick overview of recent seismic events that are
+ * likely to have been felt by people. Each item in the list is clickable,
+ * allowing users to navigate to a more detailed view of the earthquake. The
+ * component is designed to be a sidebar or a dashboard widget, offering a
+ * snapshot of the latest activity.
  *
  * @component
  * @param {Object} props - The component props.
@@ -12,6 +16,14 @@ import React from 'react';
  * @param {function} props.handleQuakeClick - A function to handle clicks on individual earthquake items, likely to show more details.
  * @param {function} props.navigate - A function used for programmatic navigation, typically from a routing library.
  * @returns {JSX.Element|null} The ActivityList component or null if there are no quakes to display.
+ * @example
+ * <ActivityList
+ *   latestFeelableQuakesSnippet={[{...}]}
+ *   getMagnitudeColorStyle={(mag) => 'bg-red-500'}
+ *   formatTimeAgo={(time) => '10 minutes ago'}
+ *   handleQuakeClick={(quake) => console.log(quake.id)}
+ *   navigate={(path) => console.log(`Navigating to ${path}`)}
+ * />
  */
 const ActivityList = ({ latestFeelableQuakesSnippet, getMagnitudeColorStyle, formatTimeAgo, handleQuakeClick, navigate }) => {
   if (!latestFeelableQuakesSnippet || latestFeelableQuakesSnippet.length === 0) {

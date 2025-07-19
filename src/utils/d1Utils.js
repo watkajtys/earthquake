@@ -3,7 +3,10 @@
  * Upserts (inserts or updates) earthquake feature data into a Cloudflare D1 database.
  * It iterates through a list of GeoJSON features, validates them, and attempts to
  * insert each into the `EarthquakeEvents` table. If a feature with the same ID
- * already exists, it updates the existing record.
+ * already exists, it updates the existing record. This function is designed to be
+ * robust, skipping features with invalid or missing critical data and logging
+ * appropriate warnings. It uses a batched approach to efficiently handle multiple
+ * upserts in a single transaction.
  *
  * @async
  * @param {object} db - The Cloudflare D1 database binding. This object is used to prepare and execute SQL statements.
@@ -11,8 +14,9 @@
  *                                   Each feature should conform to the USGS GeoJSON format.
  * @returns {Promise<object>} A promise that resolves to an object containing counts of successful
  *                            and failed upsert operations.
- * @returns {number} return.successCount - The number of features successfully upserted.
- * @returns {number} return.errorCount - The number of features that failed to upsert due to errors or invalid data.
+ * @property {number} return.successCount - The number of features successfully upserted.
+ * @property {number} return.errorCount - The number of features that failed to upsert due to errors or invalid data.
+ * @throws {Error} Throws an error if the `db.batch()` operation fails for reasons other than data validation (e.g., database connection issues, malformed SQL in the statement).
  */
 export async function upsertEarthquakeFeaturesToD1(db, features) {
   if (!db) {

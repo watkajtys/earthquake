@@ -116,14 +116,14 @@ const getActiveFaultStyle = (feature) => {
 
 /**
  * Renders an interactive Leaflet map to display earthquake information.
- * Key features include:
- * - Displaying a main highlighted earthquake with a pulsing icon.
- * - Showing nearby earthquakes with icons whose opacity varies by age.
- * - Optionally displaying tectonic plate boundaries (dynamically imported GeoJSON).
- * - Displaying GEM active faults with color-coded fault lines based on slip type.
- * - Ability to fit the map bounds to show all displayed quakes or center on a specific point.
- * - Customizable map zoom and center.
- * The component is memoized for performance optimization.
+ * This component is highly customizable and can display a main highlighted earthquake,
+ * a series of nearby quakes, tectonic plate boundaries, and active fault lines.
+ * The main earthquake is represented by a pulsing icon for emphasis. Nearby quakes'
+ * icons have their opacity adjusted based on age to visually distinguish recent events.
+ * Tectonic plates and active faults are loaded dynamically and styled for clarity.
+ * The map can either be centered on a specific point with a fixed zoom or can
+ * automatically adjust its bounds to fit all displayed earthquake markers.
+ * It is memoized to prevent unnecessary re-renders.
  *
  * @component
  * @param {Object} props - The component's props.
@@ -140,6 +140,17 @@ const getActiveFaultStyle = (feature) => {
  * @param {boolean} [props.fitMapToBounds=false] - If true, the map will adjust its bounds to show all plotted quakes. If false, it uses `defaultZoom`.
  * @param {number} [props.defaultZoom=8] - Default zoom level for the map if not fitting to bounds or if only one point is shown.
  * @returns {JSX.Element} The EarthquakeMap component.
+ * @example
+ * <EarthquakeMap
+ *   mapCenterLatitude={34.0522}
+ *   mapCenterLongitude={-118.2437}
+ *   highlightQuakeLatitude={34.0522}
+ *   highlightQuakeLongitude={-118.2437}
+ *   highlightQuakeMagnitude={5.5}
+ *   highlightQuakeTitle="M 5.5 - Greater Los Angeles area"
+ *   nearbyQuakes={[{...}]}
+ *   fitMapToBounds={true}
+ * />
  */
 const EarthquakeMap = ({
   mapCenterLatitude,

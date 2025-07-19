@@ -30,6 +30,13 @@ import { calculateDistance } from '../../common/mathUtils.js'; // Assuming utils
  *   initial earthquake of a cluster for it to be included in that cluster.
  * @param {number} minQuakes - Minimum number of earthquakes required to form a valid cluster.
  * @returns {Array<Array<Object>>} An array of clusters. Each cluster is an array of earthquake objects that meet the criteria.
+ * @example
+ * const earthquakes = [
+ *   { id: 'eq1', properties: { mag: 5.0 }, geometry: { coordinates: [10, 20] } },
+ *   { id: 'eq2', properties: { mag: 4.5 }, geometry: { coordinates: [10.1, 20.1] } },
+ *   { id: 'eq3', properties: { mag: 3.0 }, geometry: { coordinates: [50, 60] } }
+ * ];
+ * findActiveClusters(earthquakes, 20, 2); // returns [[eq1, eq2]]
  */
 export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
     const clusters = [];
