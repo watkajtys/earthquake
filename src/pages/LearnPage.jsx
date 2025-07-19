@@ -66,6 +66,21 @@ const LearnPage = () => {
                                 Plate Tectonics and Earthquakes
                             </Link>
                         </li>
+                        <li>
+                            <Link to="/learn/what-causes-earthquakes" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                What Causes Earthquakes?
+                            </Link>
+                        </li>
+                        <li>
+                            <Link to="/learn/how-are-earthquakes-measured" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                How Are Earthquakes Measured?
+                            </Link>
+                        </li>
+                        <li>
+                            <Link to="/learn/earthquake-safety" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                Earthquake Safety Tips
+                            </Link>
+                        </li>
                     </ul>
                 </div>
                  {/* ... other content from /learn route ... */}
