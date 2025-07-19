@@ -34,12 +34,13 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 
 ## Technologies Used
 
-* **React**: JavaScript library for building user interfaces.
-* **React Globe GL**: For 3D globe visualization using ThreeJS/WebGL.
-* **Tailwind CSS**: Utility-first CSS framework for styling.
-* **Vite**: Frontend build tool.
+* **React (v19.1.0)**: JavaScript library for building user interfaces.
+* **React Globe GL (v2.33.2)**: For 3D globe visualization using ThreeJS/WebGL.
+* **Tailwind CSS (v3.4.17)**: Utility-first CSS framework for styling.
+* **Vite (v6.3.5)**: Frontend build tool.
+* **Vitest (v3.2.4)**: A Vite-native unit test framework.
 * **JavaScript (ES6+)**
-* **Cloudflare Workers**: For hosting, deployment, and serverless backend functions.
+* **Cloudflare Workers (v4.19.1)**: For hosting, deployment, and serverless backend functions.
 
 ## Deployment / Infrastructure
 
@@ -73,27 +74,19 @@ Manual deployments to specific environments can be performed using npm or yarn s
 *   **Deploying to Staging**:
     *   **Purpose**: Deploys the current state of your project to the `staging` environment on Cloudflare.
     *   **npm Command**: `npm run deploy:staging`
-    *   **Yarn Command**: `yarn deploy:staging`
     *   **Usage**: Run the appropriate command from your terminal to push changes to staging. This is useful for final testing before a production release.
     ```bash
     # Using npm
     npm run deploy:staging
-
-    # Or using Yarn
-    yarn deploy:staging
     ```
 
 *   **Deploying to Production**:
     *   **Purpose**: Deploys the current state of your project to the `production` (live) environment on Cloudflare.
     *   **npm Command**: `npm run deploy:production`
-    *   **Yarn Command**: `yarn deploy:production`
     *   **Usage**: Run the appropriate command from your terminal to push changes to production. This should only be done after changes have been thoroughly tested (e.g., in `staging` or preview deployments).
     ```bash
     # Using npm
     npm run deploy:production
-
-    # Or using Yarn
-    yarn deploy:production
     ```
 
 **Note on Automated Deployments:**
@@ -169,13 +162,11 @@ To set up and run this project locally, follow these steps:
     ```bash
     npm install
     ```
-    (or `yarn install` if you use Yarn)
 
 4.  **Run the development server**:
     ```bash
     npm run dev
     ```
-    (or `yarn dev`)
 
 5.  **Open your browser and navigate to the local URL provided by Vite (usually `http://localhost:5173` or similar).**
 
@@ -229,12 +220,8 @@ The codebase includes comprehensive JSDoc comments within the `.jsx` files in th
 You can generate HTML documentation from these JSDoc comments using the `jsdoc` npm package.
 
 1.  **Install JSDoc and a template (e.g., Docdash)**:
-    You can install `jsdoc` globally or as a development dependency in your project. `docdash` is a popular clean template.
+    Install `jsdoc` and the `docdash` template as development dependencies in your project. `docdash` is a popular clean template.
     ```bash
-    # Global installation
-    npm install -g jsdoc docdash
-
-    # Or, as dev dependencies
     npm install --save-dev jsdoc docdash
     ```
 
@@ -276,7 +263,7 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
       }
     }
     ```
-    *Note: The `template` path in `jsdoc.json` assumes `docdash` is installed locally (i.e., in `node_modules`). If you installed `docdash` globally, you may need to provide the absolute path to the global `docdash` template directory or configure JSDoc to find global templates.*
+    *Note: The `template` path in `jsdoc.json` assumes `docdash` is installed as a dev dependency (i.e., in `node_modules`).*
 
 3.  **Run JSDoc**:
     Since `jsdoc` and `docdash` are listed as development dependencies in `package.json`, you can run JSDoc using `npx` after installing dependencies (`npm install`).
