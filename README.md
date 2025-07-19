@@ -302,3 +302,5 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
     ```bash
     npm run docs
     ```
+
+<!-- This is a test comment to show that I can make changes to the repository. -->
