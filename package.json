@@ -9,6 +9,7 @@
     "lint": "npx eslint .",
     "preview": "vite preview",
     "test": "vitest",
+    "test:no-cache": "vitest --no-cache",
     "docs": "npx jsdoc -c jsdoc.json",
     "deploy": "wrangler deploy src/worker.js",
     "deploy:staging": "npx wrangler deploy --env staging",

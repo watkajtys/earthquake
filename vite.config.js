@@ -6,6 +6,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   base: '/', // Changed from '' to '/'
   plugins: [react()],
+  resolve: {
+    alias: {
+      'common': '/common',
+    },
+  },
   test: {
     globals: true,
     environment: 'happy-dom', // or 'jsdom'

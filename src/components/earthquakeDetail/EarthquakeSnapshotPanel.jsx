@@ -17,6 +17,7 @@ function EarthquakeSnapshotPanel({
     energyJoules,             // Derived in parent: scalarMomentValue from momentTensorProductProps
     mmiValue,                 // Derived in parent: from shakemapProductProps or properties.mmi
     pagerAlertValue,          // Derived in parent: from losspagerProductProps or properties.alert
+    magnitudeToMMI,
     // Helper functions below are now imported
     // isValidString,
     // isValuePresent,
@@ -66,7 +67,21 @@ function EarthquakeSnapshotPanel({
                 <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Location</td><td className="py-1.5">{formatNumber(geometry.coordinates[1], 3)}°, {formatNumber(geometry.coordinates[0], 3)}°</td></tr>
             )}
             {isValidNumber(properties.mag) && (
-                <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Magnitude ({isValidString(properties.magType) ? properties.magType : 'Mww'})</td><td className="py-1.5">{formatNumber(properties.mag, 1)}</td></tr>
+                <tr className="border-b border-gray-200">
+                    <td className="py-1.5 pr-2 font-semibold text-slate-600">Magnitude ({isValidString(properties.magType) ? properties.magType : 'Mww'})</td>
+                    <td className="py-1.5">
+                        <div className="flex items-center">
+                            <p className="mr-2">{formatNumber(properties.mag, 1)}</p>
+                            <p>(MMI: {magnitudeToMMI(properties.mag)})</p>
+                            <div className="relative group">
+                                <span className="ml-2 text-xs text-gray-500 cursor-pointer">(What's MMI?)</span>
+                                <div className="absolute bottom-full mb-2 w-64 bg-black text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    The Modified Mercalli Intensity (MMI) scale describes the effects of an earthquake at a specific location.
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
             )}
             {geometry?.coordinates && isValidNumber(geometry.coordinates[2]) && ( // Depth can be 0
                 <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Depth</td><td className="py-1.5">{formatNumber(geometry.coordinates[2], 1)} km</td></tr>

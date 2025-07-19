@@ -4,7 +4,7 @@ import RegionalSeismicityChart from './RegionalSeismicityChart';
 import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
-import { calculateDistance } from '../../common/mathUtils.js'; // isValidNumber import removed, calculateDistance moved
+import { calculateDistance, magnitudeToMMI } from '../../common/mathUtils.js'; // isValidNumber import removed, calculateDistance moved
 // getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
 
 // Define REGIONAL_RADIUS_KM
@@ -389,6 +389,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         // isValidString, isValuePresent, isValidNumber, formatDate, formatNumber, formatLargeNumber are now imported by child
                         exhibitPanelClass={exhibitPanelClass}
                         exhibitTitleClass={exhibitTitleClass}
+                        magnitudeToMMI={magnitudeToMMI}
                     />
 
                     <EarthquakeRegionalMapPanel

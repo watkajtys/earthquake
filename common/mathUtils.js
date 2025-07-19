@@ -24,3 +24,35 @@ export function calculateDistance(lat1, lon1, lat2, lon2) {
     const distance = R * c;
     return distance;
 }
+
+/**
+ * Converts earthquake magnitude to a simplified Modified Mercalli Intensity (MMI) value.
+ * This is a simplified conversion and does not account for depth, distance, or local soil conditions.
+ * @param {number} magnitude The earthquake magnitude.
+ * @returns {string} The estimated MMI value as a Roman numeral string.
+ */
+export function magnitudeToMMI(magnitude) {
+    if (magnitude < 3.5) {
+        return "I";
+    } else if (magnitude < 4.2) {
+        return "II-III";
+    } else if (magnitude < 4.8) {
+        return "IV";
+    } else if (magnitude < 5.4) {
+        return "V";
+    } else if (magnitude < 6.1) {
+        return "VI";
+    } else if (magnitude < 6.5) {
+        return "VII";
+    } else if (magnitude < 7.0) {
+        return "VIII";
+    } else if (magnitude < 7.4) {
+        return "IX";
+    } else if (magnitude < 8.1) {
+        return "X";
+    } else if (magnitude < 8.9) {
+        return "XI";
+    } else {
+        return "XII";
+    }
+}
