@@ -1,3 +1,11 @@
+/**
+ * @file EarthquakeMap.jsx
+ * @description This component renders an interactive Leaflet map to display earthquake data.
+ * It is highly customizable and can show a primary highlighted earthquake, nearby quakes,
+ * and overlays for tectonic plates and active faults. The component is optimized for
+ an performance
+ * with features like dynamic data loading and spatial filtering.
+ */
 import React, { useRef, useEffect, memo, useState, useMemo } from 'react'; // Added useState and useMemo
 // PropTypes import removed
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
@@ -23,11 +31,21 @@ L.Icon.Default.mergeOptions({
 
 /**
  * Creates a custom Leaflet DivIcon for the main highlighted earthquake (epicenter).
- * The icon features a pulsing animation for enhanced visibility, with color determined by magnitude.
- * The pulsing animation CSS (`custom-pulsing-icon` and its keyframes) should be defined globally.
+ * This icon is designed to be highly visible, featuring a pulsing animation to draw attention.
+ * The color of the icon is dynamically determined by the earthquake's magnitude, providing
+ * an immediate visual cue about its intensity.
  *
- * @param {number} magnitude - The earthquake magnitude, used to determine the icon's color via `getMagnitudeColor`.
- * @returns {L.DivIcon} A Leaflet `L.DivIcon` instance configured for the epicenter.
+ * The SVG-based icon consists of a central circle and multiple expanding, fading rings that
+ * create the pulsing effect. The animation is defined using SMIL animations within the SVG,
+ * ensuring it is self-contained and performs well.
+ *
+ * Note: A corresponding CSS class (`custom-pulsing-icon`) is assigned, which can be used
+ * for additional styling if needed, but the core animation is handled by the SVG itself.
+ *
+ * @param {number} magnitude The magnitude of the earthquake. This value is passed to
+ *   `getMagnitudeColor` to select the appropriate color for the icon.
+ * @returns {L.DivIcon} A Leaflet `L.DivIcon` instance configured with the pulsing SVG
+ *   and appropriate styling for the epicenter marker.
  */
 const createEpicenterIcon = (magnitude) => {
   const fillColor = getMagnitudeColor(magnitude);
@@ -52,12 +70,23 @@ const createEpicenterIcon = (magnitude) => {
 
 /**
  * Creates a custom Leaflet DivIcon for displaying nearby earthquakes.
- * The icon's color is based on magnitude, and its opacity is reduced for older quakes
- * (less than 1 day: 1.0, <7 days: 0.8, <14 days: 0.6, otherwise: 0.4).
+ * This icon is a simple circle whose color is determined by the earthquake's magnitude
+ * and whose opacity is determined by its age. This provides a quick visual guide to both
+ * the strength and recency of surrounding seismic events.
  *
- * @param {number} magnitude - The earthquake magnitude, used for color coding.
- * @param {number} time - The timestamp of the earthquake, used to calculate its age and opacity.
- * @returns {L.DivIcon} A Leaflet `L.DivIcon` instance for a nearby quake.
+ * The opacity is tiered based on the age of the quake:
+ * - Less than 1 day old: 100% opacity
+ * - 1 to 7 days old: 80% opacity
+ * - 7 to 14 days old: 60% opacity
+ * - Over 14 days old: 40% opacity
+ *
+ * This temporal fading helps users focus on the most recent and potentially relevant
+ * seismic activity.
+ *
+ * @param {number} magnitude The magnitude of the earthquake, used for color coding via `getMagnitudeColor`.
+ * @param {number} time The timestamp (in milliseconds since the epoch) of the earthquake,
+ *   used to calculate its age and determine the icon's opacity.
+ * @returns {L.DivIcon} A Leaflet `L.DivIcon` instance for a nearby quake marker.
  */
 const createNearbyQuakeIcon = (magnitude, time) => {
   const fillColor = getMagnitudeColor(magnitude);
@@ -79,12 +108,20 @@ const createNearbyQuakeIcon = (magnitude, time) => {
 };
 
 /**
- * Defines the styling for tectonic plate boundary GeoJSON features.
- * The color of the boundary line varies based on its type (Convergent, Divergent, Transform).
+ * Determines the Leaflet path style for a tectonic plate boundary GeoJSON feature.
+ * The styling, specifically the line color, is determined by the `Boundary_Type`
+ * property of the feature. This allows for easy visual differentiation between
+ * different types of plate boundaries on the map.
  *
- * @param {Object} feature - The GeoJSON feature representing a tectonic plate boundary.
- *                           Expected to have `feature.properties.Boundary_Type`.
- * @returns {Object} A Leaflet path style options object for the feature.
+ * - Convergent boundaries are styled in crimson.
+ * - Divergent boundaries are styled in medium sea green.
+ * - Transform boundaries are styled in steel blue.
+ * - Other or undefined boundary types are given a default orange color.
+ *
+ * @param {object} feature The GeoJSON feature representing a tectonic plate boundary.
+ *   It is expected to have a `properties.Boundary_Type` string.
+ * @returns {object} A Leaflet path style options object (`L.PathOptions`) used to style
+ *   the GeoJSON layer. This object includes `color`, `weight`, and `opacity`.
  */
 const getTectonicPlateStyle = (feature) => {
   let color = 'rgba(255, 165, 0, 0.8)'; // Default for other/unknown types
@@ -96,12 +133,23 @@ const getTectonicPlateStyle = (feature) => {
 };
 
 /**
- * Defines the styling for GEM active fault GeoJSON features.
- * The color of the fault line varies based on its slip type (Normal, Reverse, Dextral, Sinistral).
+ * Determines the Leaflet path style for a GEM active fault GeoJSON feature.
+ * The line color is determined by the fault's `slip_type` property, providing a clear
+ * visual classification of the fault type on the map. A thicker line weight is used
+ * to distinguish these fault lines from tectonic plate boundaries.
  *
- * @param {Object} feature - The GeoJSON feature representing an active fault.
- *                           Expected to have `feature.properties.slip_type`.
- * @returns {Object} A Leaflet path style options object for the feature.
+ * Color legend for fault slip types:
+ * - **Normal**: Deep Pink
+ * - **Reverse**: Lime Green
+ * - **Dextral (right-lateral)**: Deep Sky Blue
+ * - **Sinistral (left-lateral)**: Blue Violet
+ * - **Dextral-Normal**: Orange
+ * - **Unknown/Other**: White (default)
+ *
+ * @param {object} feature The GeoJSON feature for an active fault. It is expected to have
+ *   a `properties.slip_type` string to determine the color.
+ * @returns {object} A Leaflet path style options object (`L.PathOptions`) with settings
+ *   for `color`, `weight`, and `opacity`.
  */
 const getActiveFaultStyle = (feature) => {
   let color = 'rgba(255, 255, 255, 0.9)'; // Default white for unknown fault types
@@ -115,15 +163,30 @@ const getActiveFaultStyle = (feature) => {
 };
 
 /**
- * Renders an interactive Leaflet map to display earthquake information.
- * Key features include:
- * - Displaying a main highlighted earthquake with a pulsing icon.
- * - Showing nearby earthquakes with icons whose opacity varies by age.
- * - Optionally displaying tectonic plate boundaries (dynamically imported GeoJSON).
- * - Displaying GEM active faults with color-coded fault lines based on slip type.
- * - Ability to fit the map bounds to show all displayed quakes or center on a specific point.
- * - Customizable map zoom and center.
- * The component is memoized for performance optimization.
+ * Renders an interactive Leaflet map for displaying earthquake information.
+ * This component is central to the application's UI, providing a geographical context
+ * for seismic events.
+ *
+ * Key Features:
+ * - **Main Earthquake Highlight**: Displays a primary earthquake with a distinctive,
+ *   pulsing icon for high visibility. The icon's color is determined by the quake's magnitude.
+ * - **Nearby Quakes Display**: Shows other recent earthquakes in the vicinity.
+ *   The opacity of each marker is time-sensitive, fading for older events to provide
+ *   a quick visual reference to their recency.
+ * - **Tectonic Plates Layer**: Dynamically loads and renders GeoJSON data for tectonic
+ *   plate boundaries, with styling based on the boundary type (Convergent, Divergent, Transform).
+ * - **Active Faults Layer**: Displays active fault lines from the GEM Global Active Faults
+ *   database. Faults are color-coded by their slip type (e.g., Normal, Reverse) for
+ *   detailed seismological context. This layer is spatially filtered to only show faults
+ *   within a certain radius of the displayed earthquakes, optimizing performance.
+ * - **Dynamic Viewport Control**: The map can either be centered on a specific coordinate
+ *   with a fixed zoom level or can automatically adjust its bounds to encompass all
+ *   displayed earthquakes, ensuring all relevant data points are visible.
+ * - **Interactive Popups**: Both earthquake markers and fault lines have popups that
+ *   provide additional details, such as magnitude, time, and links to more information.
+ * - **Performance Optimization**: The component is memoized with `React.memo` to prevent
+ *   unnecessary re-renders. Data layers like tectonic plates and active faults are loaded
+ *   asynchronously.
  *
  * @component
  * @param {Object} props - The component's props.

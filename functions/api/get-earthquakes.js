@@ -1,30 +1,69 @@
 /**
- * Cloudflare Pages Function handler for GET requests to /api/get-earthquakes.
+ * @function onRequestGet
+ * @description Handles GET requests for the /api/get-earthquakes endpoint. This Cloudflare
+ *   Pages Function retrieves earthquake data from the `EarthquakeEvents` D1 database.
+ *   It allows clients to specify a time window for the data ("day", "week", "month")
+ *   and returns a curated list of earthquake events as an array of GeoJSON features.
  *
- * @description This function serves earthquake data directly from the `EarthquakeEvents` D1 table.
- * It supports filtering by a time window and returns an array of GeoJSON features.
- * All responses include an `X-Data-Source: D1` header.
+ * @summary Fetches earthquake data from a D1 database based on a specified time window.
  *
- * Query Parameters:
- *  - `timeWindow` (string): Specifies the time window for earthquake events.
- *    Expected values: "day" (last 24 hours), "week" (last 7 days), "month" (last 30 days).
- *    Defaults to "day" if not specified or if an invalid value is provided (though invalid values return a 400 error).
+ * @param {object} context - The context object provided by Cloudflare Pages Functions.
+ * @param {Request} context.request - The incoming HTTP request object.
+ * @param {object} context.env - The environment object containing bindings, including the D1 database.
+ * @param {D1Database} context.env.DB - The D1 database instance (`EarthquakeEvents`).
  *
- * Successful Response (200 OK):
- *  - Body: A JSON array of GeoJSON feature objects, where each feature represents an earthquake.
- *          The `geojson_feature` column from the D1 table is parsed for each event.
- *  - Headers: `Content-Type: application/json`, `X-Data-Source: D1`.
+ * @returns {Promise<Response>} A `Response` object containing the query results or an error.
  *
- * Error Responses:
- *  - 400 Bad Request: If the `timeWindow` parameter is invalid. Body includes an error message.
- *  - 500 Internal Server Error: If the database is unavailable, or if there's an error during query
- *    preparation, execution, or data processing. Body includes an error message.
+ * @query {string} [timeWindow="day"] - The time window for fetching earthquake data.
+ *   Acceptable values:
+ *   - `"day"`: Fetches data from the last 24 hours.
+ *   - `"week"`: Fetches data from the last 7 days.
+ *   - `"month"`: Fetches data from the last 30 days.
+ *   If the parameter is missing or invalid, it defaults to `"day"`, with invalid values
+ *   triggering a 400 Bad Request error.
  *
- * @param {object} context - The Cloudflare Pages Function context object.
- * @param {Request} context.request - The incoming request object from the client.
- * @param {object} context.env - The environment object containing bindings.
- * @param {D1Database} context.env.DB - The D1 database binding for `EarthquakeEvents`.
- * @returns {Promise<Response>} A Response object containing the JSON data or an error message.
+ * @response {200} OK - Successfully retrieved the earthquake data.
+ *   The response body is a JSON array of GeoJSON `Feature` objects, sorted by event time
+ *   in descending order.
+ *   @header {string} Content-Type - `application/json`
+ *   @header {string} X-Data-Source - `D1`
+ *   @header {string} Cache-Control - `public, s-maxage=60` (caches the response for 60 seconds)
+ *
+ * @response {400} Bad Request - The `timeWindow` query parameter is invalid.
+ *   The response body contains a plain text error message.
+ *
+ * @response {500} Internal Server Error - An error occurred on the server.
+ *   This can be due to the database being unavailable, a failure in preparing or executing
+ *   the database query, or an issue with processing the query results. The response body
+ *   contains a plain text error message.
+ *
+ * @example
+ * // Request:
+ * GET /api/get-earthquakes?timeWindow=week
+ *
+ * // Response (200 OK):
+ * HTTP/1.1 200 OK
+ * Content-Type: application/json
+ * X-Data-Source: D1
+ * Cache-Control: public, s-maxage=60
+ *
+ * [
+ *   {
+ *     "type": "Feature",
+ *     "properties": {
+ *       "mag": 5.2,
+ *       "place": "15km N of Pisco, Peru",
+ *       "time": 1678886400000,
+ *       // ... other properties
+ *     },
+ *     "geometry": {
+ *       "type": "Point",
+ *       "coordinates": [-75.20, -13.57, 10.0]
+ *     },
+ *     "id": "us7000j3y"
+ *   },
+ *   // ... more features
+ * ]
  */
 export async function onRequestGet(context) {
   try {
