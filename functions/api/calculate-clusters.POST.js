@@ -166,6 +166,19 @@ function generateDescription(quakeCount, locationName, maxMagnitude, durationHou
 // It uses calculateDistance imported from '../utils/mathUtils.js' (synced from /common/mathUtils.js).
 // Algorithmic changes to core clustering logic should be synchronized with the frontend version where applicable.
 
+/**
+ * Finds clusters of earthquakes based on proximity using spatial indexing for optimization.
+ * @param {Array<Object>} earthquakes - Array of earthquake objects.
+ * @param {number} maxDistanceKm - Maximum distance for clustering.
+ * @param {number} minQuakes - Minimum earthquakes per cluster.
+ * @returns {Array<Array<Object>>} An array of clusters.
+ */
+export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
+  // This function is a wrapper around the findActiveClustersOptimized function.
+  // It's renamed to simplify the API contract.
+  return findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes);
+}
+
 // New helper function to generate a stable key for a cluster
 function generateStableClusterKey(calculatedCluster, strongestQuakeInCalcCluster) {
   const D_STABLE_KEY_VERSION = "v1"; // To allow for future changes in key generation logic
@@ -345,100 +358,6 @@ async function storeClusterDefinitionsInBackground(db, clusters, CLUSTER_MIN_QUA
   console.log(`storeClusterDefinitionsInBackground: Finished processing. Found ${significantClusterCount} significant clusters. Processed (stored/updated): ${processedCount}, Errors: ${errorCount}.`);
 }
 
-/**
- * Finds clusters of earthquakes based on proximity.
- * (Duplicated from `src/utils/clusterUtils.js` - keep synchronized)
- * @param {Array<Object>} earthquakes - Array of earthquake objects. Each object is expected to have an `id`,
- *   `properties.mag` (magnitude), and `geometry.coordinates`.
- * @param {number} maxDistanceKm - Maximum geographic distance (in kilometers) for clustering.
- * @param {number} minQuakes - Minimum number of earthquakes required to form a valid cluster.
- * @returns {Array<Array<Object>>} An array of clusters, where each cluster is an array of earthquake objects.
- */
-export function findActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
-    const clusters = [];
-    const processedQuakeIds = new Set();
-
-    // Filter out null or undefined earthquake objects first.
-    const validEarthquakes = earthquakes.filter(q => {
-        if (!q) {
-            // Not logging here for null/undefined as this is an API context,
-            // and the primary input validation in onRequestPost should catch this.
-            // If direct calls to findActiveClusters need this, it can be added.
-            return false;
-        }
-        return true;
-    });
-
-    const sortedEarthquakes = [...validEarthquakes].sort((a, b) => (b.properties?.mag || 0) - (a.properties?.mag || 0));
-
-    for (const quake of sortedEarthquakes) {
-        if (!quake.id || processedQuakeIds.has(quake.id)) {
-            if (!quake.id && !processedQuakeIds.has(quake.id)) {
-                console.warn(`Skipping quake with missing ID or invalid object in findActiveClusters.`);
-            }
-            continue;
-        }
-
-        const baseCoords = quake.geometry?.coordinates;
-        if (!Array.isArray(baseCoords) || baseCoords.length < 2) {
-            console.warn(`Skipping quake ${quake.id} due to invalid coordinates in findActiveClusters.`);
-            continue;
-        }
-        const baseLat = baseCoords[1];
-        const baseLon = baseCoords[0];
-
-        const newCluster = [quake]; // Initialize cluster with the current quake
-        processedQuakeIds.add(quake.id);
-
-
-        for (const otherQuake of sortedEarthquakes) {
-            if (otherQuake.id === quake.id || processedQuakeIds.has(otherQuake.id)) { // Check if same quake or already processed
-                continue;
-            }
-             if (!otherQuake.id ) { // Check for missing ID on otherQuake
-                console.warn(`Skipping potential cluster member with missing ID or invalid object.`);
-                continue;
-            }
-
-
-            const otherCoords = otherQuake.geometry?.coordinates;
-            if (!Array.isArray(otherCoords) || otherCoords.length < 2) {
-                console.warn(`Skipping potential cluster member ${otherQuake.id} due to invalid coordinates.`);
-                continue;
-            }
-            const dist = calculateDistance(baseLat, baseLon, otherCoords[1], otherCoords[0]);
-            if (dist <= maxDistanceKm) {
-                newCluster.push(otherQuake);
-                processedQuakeIds.add(otherQuake.id);
-            }
-        }
-        if (newCluster.length >= minQuakes) {
-             // Check if this new cluster is essentially a duplicate of an existing one (e.g. same set of quake IDs)
-            const newClusterQuakeIds = new Set(newCluster.map(q => q.id));
-            let isDuplicate = false;
-            for (const existingCluster of clusters) {
-                const existingClusterQuakeIds = new Set(existingCluster.map(q => q.id));
-                if (newClusterQuakeIds.size === existingClusterQuakeIds.size) {
-                    let allSame = true;
-                    for (const id of newClusterQuakeIds) {
-                        if (!existingClusterQuakeIds.has(id)) {
-                            allSame = false;
-                            break;
-                        }
-                    }
-                    if (allSame) {
-                        isDuplicate = true;
-                        break;
-                    }
-                }
-            }
-            if (!isDuplicate) {
-                clusters.push(newCluster);
-            }
-        }
-    }
-    return clusters;
-}
 
 /**
  * Handles POST requests to calculate earthquake clusters.
@@ -525,20 +444,17 @@ export async function onRequestPost(context) {
     }
 
     const responseHeaders = { 'Content-Type': 'application/json' };
-    let clusters; // Declare clusters here to be accessible for definition storage
+    let clusters;
 
-    // Calculate clusters using spatial optimization (no caching)
+    // Calculate clusters using the spatially optimized function
     try {
-      if (earthquakes.length >= 100) { // Use spatial optimization for larger datasets
-        console.log(`[cluster-calculation] Using spatial optimization for ${earthquakes.length} earthquakes`);
-        clusters = findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes);
-      } else {
-        console.log(`[cluster-calculation] Using original algorithm for ${earthquakes.length} earthquakes`);
-        clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
-      }
-    } catch (optimizationError) {
-      console.warn('[cluster-calculation] Spatial optimization failed, falling back to original algorithm:', optimizationError.message);
+      console.log(`[cluster-calculation] Using spatial optimization for ${earthquakes.length} earthquakes`);
       clusters = findActiveClusters(earthquakes, maxDistanceKm, minQuakes);
+    } catch (e) {
+      console.error('[cluster-calculation] Clustering failed:', e.message, e.stack);
+      return new Response(JSON.stringify({ error: 'Failed to calculate clusters.', details: e.message }), {
+        status: 500, headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     // Store cluster definitions in background if DB is available

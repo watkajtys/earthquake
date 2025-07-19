@@ -4,7 +4,7 @@
  * Extends the existing SpatialGrid to support Point geometries for clustering
  */
 
-import { calculateBoundingBox, isPointInBoundingBox } from '../../src/utils/geoSpatialUtils.js';
+import { SpatialGrid, calculateBoundingBox, isPointInBoundingBox } from '../../src/utils/geoSpatialUtils.js';
 import { calculateDistance } from './mathUtils.js';
 
 /**
@@ -414,4 +414,42 @@ export async function benchmarkClusteringComparison(earthquakes, maxDistanceKm, 
     }
     // original: { ... } - would include original results for comparison
   };
+}
+
+/**
+ * Creates a spatial index for a set of earthquakes.
+ * @param {Array} earthquakes - An array of earthquake objects.
+ * @returns {SpatialGrid} A spatial grid containing the earthquakes.
+ */
+export function createEarthquakeSpatialIndex(earthquakes) {
+  if (!earthquakes || earthquakes.length === 0) {
+    return null;
+  }
+
+  // Determine the bounds of the earthquakes.
+  let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+  for (const quake of earthquakes) {
+    const [lng, lat] = quake.geometry.coordinates;
+    minLat = Math.min(minLat, lat);
+    maxLat = Math.max(maxLat, lat);
+    minLng = Math.min(minLng, lng);
+    maxLng = Math.max(maxLng, lng);
+  }
+
+  const bounds = {
+    north: maxLat,
+    south: minLat,
+    east: maxLng,
+    west: minLng
+  };
+
+  // Create a spatial grid with a cell size of 1 degree.
+  const grid = new SpatialGrid(bounds, 1.0);
+
+  // Insert each earthquake into the grid.
+  for (const quake of earthquakes) {
+    grid.insert(quake, quake.id);
+  }
+
+  return grid;
 }

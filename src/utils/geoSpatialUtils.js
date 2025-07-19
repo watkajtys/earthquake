@@ -147,50 +147,45 @@ export function doesLineStringIntersectBoundingBox(coordinates, bbox) {
 /**
  * Simple spatial index using a grid system for faster lookups
  */
-class SpatialGrid {
+export class SpatialGrid {
   constructor(bounds, cellSize = 1.0) {
     this.bounds = bounds;
     this.cellSize = cellSize;
     this.grid = new Map();
   }
-  
+
   _getCellKey(lat, lng) {
     const row = Math.floor((lat - this.bounds.south) / this.cellSize);
     const col = Math.floor((lng - this.bounds.west) / this.cellSize);
     return `${row},${col}`;
   }
-  
+
   insert(feature, id) {
-    if (!feature.geometry || !feature.geometry.coordinates) return;
-    
+    if (!feature || !feature.geometry || !feature.geometry.coordinates) {
+      return;
+    }
+
+    const { type, coordinates } = feature.geometry;
     const cells = new Set();
-    
-    if (feature.geometry.type === 'LineString') {
-      feature.geometry.coordinates.forEach(([lng, lat]) => {
-        if (lng >= this.bounds.west && lng <= this.bounds.east &&
-            lat >= this.bounds.south && lat <= this.bounds.north) {
-          cells.add(this._getCellKey(lat, lng));
-        }
-      });
-    } else if (feature.geometry.type === 'Point') {
-      // Add support for Point geometries (earthquakes)
-      const [lng, lat] = feature.geometry.coordinates;
+
+    const addCell = (lat, lng) => {
       if (lng >= this.bounds.west && lng <= this.bounds.east &&
           lat >= this.bounds.south && lat <= this.bounds.north) {
         cells.add(this._getCellKey(lat, lng));
       }
-    } else if (feature.geometry.type === 'MultiLineString') {
-      // Add support for MultiLineString geometries
-      feature.geometry.coordinates.forEach(lineString => {
-        lineString.forEach(([lng, lat]) => {
-          if (lng >= this.bounds.west && lng <= this.bounds.east &&
-              lat >= this.bounds.south && lat <= this.bounds.north) {
-            cells.add(this._getCellKey(lat, lng));
-          }
-        });
+    };
+
+    if (type === 'Point') {
+      const [lng, lat] = coordinates;
+      addCell(lat, lng);
+    } else if (type === 'LineString') {
+      coordinates.forEach(([lng, lat]) => addCell(lat, lng));
+    } else if (type === 'MultiLineString') {
+      coordinates.forEach(lineString => {
+        lineString.forEach(([lng, lat]) => addCell(lat, lng));
       });
     }
-    
+
     cells.forEach(cellKey => {
       if (!this.grid.has(cellKey)) {
         this.grid.set(cellKey, new Set());
@@ -198,7 +193,7 @@ class SpatialGrid {
       this.grid.get(cellKey).add({ feature, id });
     });
   }
-  
+
   query(bbox) {
     const results = new Set();
     
