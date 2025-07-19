@@ -1,0 +1,1 @@
+I was unable to run the linter due to issues with the test environment. However, it is expected that the linter would report errors for all functions that are missing JSDoc comments, as per the new rule added to `eslint.config.js`.
