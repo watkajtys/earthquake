@@ -41,3 +41,29 @@ export function calculateDistance(lat1, lon1, lat2, lon2) {
     
     return distance;
 }
+
+/**
+ * Calculates the nth Fibonacci number.
+ * @param {number} n The index of the Fibonacci number to calculate.
+ * @returns {number} The nth Fibonacci number.
+ */
+export function fibonacci(n) {
+  if (n < 0) {
+    throw new Error("Fibonacci sequence is not defined for negative numbers");
+  }
+  if (n === 0) {
+    return 0;
+  }
+  if (n === 1) {
+    return 1;
+  }
+
+  let a = 0;
+  let b = 1;
+  for (let i = 2; i <= n; i++) {
+    const temp = b;
+    b = a + b;
+    a = temp;
+  }
+  return b;
+}
