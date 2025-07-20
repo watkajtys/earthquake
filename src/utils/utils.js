@@ -1,16 +1,20 @@
 // src/utils.js
 
 /**
- * @file utils.js
- * @description A collection of general-purpose utility functions used throughout the application,
- * including calculations, formatting, validation, and color utilities.
+ * @file Provides a collection of general-purpose utility functions for the application.
+ * @description This file includes functions for color generation, style management, data validation,
+ * and number/date formatting. These utilities are used across various components and services.
  */
 
 // Any algorithmic changes should be synchronized.
 /**
  * Returns a hex color code based on earthquake magnitude.
+ * The color scale is designed to visually represent the intensity of an earthquake.
  * @param {number | null | undefined} magnitude - The earthquake magnitude.
  * @returns {string} A hex color code string.
+ * @example
+ * // returns '#F87171'
+ * getMagnitudeColor(6.5);
  */
 export const getMagnitudeColor = (magnitude) => {
     if (magnitude === null || magnitude === undefined) return '#94A3B8'; // slate-400
@@ -25,8 +29,12 @@ export const getMagnitudeColor = (magnitude) => {
 
 /**
  * Returns Tailwind CSS class strings for background and text color based on earthquake magnitude.
+ * The color scheme is designed for optimal readability and visual consistency.
  * @param {number | null | undefined} magnitude - The earthquake magnitude.
- * @returns {string} Tailwind CSS class strings.
+ * @returns {string} Tailwind CSS class strings for styling.
+ * @example
+ * // returns 'bg-red-400 text-slate-900'
+ * getMagnitudeColorStyle(6.5);
  */
 export const getMagnitudeColorStyle = (magnitude) => {
     // Background colors align with getMagnitudeColor, text colors adjusted for contrast.
@@ -44,11 +52,14 @@ export const getMagnitudeColorStyle = (magnitude) => {
 
 /**
  * Checks if a value can be reasonably interpreted as a number.
- * Handles actual numbers, numeric strings. Rejects mixed alphanumeric strings (e.g., "12a"),
- * null, undefined, boolean, empty/whitespace strings, and arrays.
- *
+ * This function is robust against common non-numeric types and edge cases.
  * @param {*} num - The value to check.
- * @returns {boolean} True if the value is considered a valid number, false otherwise.
+ * @returns {boolean} True if the value is a valid number, otherwise false.
+ * @example
+ * // returns true
+ * isValidNumber("123");
+ * // returns false
+ * isValidNumber("12a");
  */
 export const isValidNumber = (num) => {
     // Handles actual numbers, numeric strings. Rejects mixed strings, null, undefined, empty/whitespace, arrays.
@@ -61,19 +72,25 @@ export const isValidNumber = (num) => {
 
 /**
  * Formats a Unix timestamp into a human-readable full date and long time string.
- * Example: "Monday, January 1, 2023, 12:00:00 AM PST" (locale dependent).
+ * The output format is locale-dependent.
  * @param {number} timestamp - The Unix timestamp in milliseconds.
- * @returns {string} A formatted date-time string, or 'N/A' if the timestamp is invalid.
+ * @returns {string} A formatted date-time string.
+ * @throws {Error} If the timestamp is not a valid number.
+ * @example
+ * // returns "Monday, January 1, 2023, 12:00:00 AM PST" (example output)
+ * formatDate(1672560000000);
  */
 export const formatDate = (timestamp) => {
-    if (!timestamp || !isValidNumber(timestamp)) return 'N/A'; // Added isValidNumber check
+    if (!timestamp || !isValidNumber(timestamp)) {
+        throw new Error('Invalid timestamp provided.');
+    }
     return new Date(timestamp).toLocaleString([], { dateStyle: 'full', timeStyle: 'long' });
 };
 
 /**
  * Checks if a value is a string and is not empty or just whitespace.
  * @param {*} str - The value to check.
- * @returns {boolean} True if the value is a non-empty string, false otherwise.
+ * @returns {boolean} True if the value is a non-empty string, otherwise false.
  */
 export const isValidString = (str) => {
     return typeof str === 'string' && str.trim() !== '';
@@ -82,7 +99,7 @@ export const isValidString = (str) => {
 /**
  * Checks if a value is present (i.e., not null and not undefined).
  * @param {*} value - The value to check.
- * @returns {boolean} True if the value is present, false otherwise.
+ * @returns {boolean} True if the value is present, otherwise false.
  */
 export const isValuePresent = (value) => {
     return value !== null && value !== undefined;
@@ -90,29 +107,30 @@ export const isValuePresent = (value) => {
 
 /**
  * Formats a number to a string with a specified number of decimal places.
- * Returns 'N/A' if the input cannot be parsed to a valid number.
  * @param {number|string|null|undefined} num - The number or numeric string to format.
  * @param {number} [precision=1] - The number of decimal places to use.
- * @returns {string} The formatted number as a string, or 'N/A'.
+ * @returns {string} The formatted number as a string.
+ * @throws {Error} If the input cannot be parsed to a valid number.
  */
 export const formatNumber = (num, precision = 1) => {
-    const number = parseFloat(num); // parseFloat(null) is NaN
-    if (Number.isNaN(number)) return 'N/A';
+    const number = parseFloat(num);
+    if (Number.isNaN(number)) {
+        throw new Error('Invalid number provided for formatting.');
+    }
     return number.toFixed(precision);
 };
 
 /**
- * Formats a large number into a human-readable string with suffixes (thousand, million, billion, etc.).
- * Uses `toLocaleString` for number formatting part, ensuring locale-specific digit grouping.
- * Returns 'N/A' if the input is not a valid number. Returns '0' if input is 0.
- * For very large numbers beyond quintillion, it falls back to exponential notation.
- *
+ * Formats a large number into a human-readable string with suffixes (e.g., thousand, million).
  * @param {number|string|null|undefined} num - The number or numeric string to format.
- * @returns {string} The human-readable formatted large number string, or 'N/A'.
+ * @returns {string} The human-readable formatted large number string.
+ * @throws {Error} If the input is not a valid number.
  */
 export const formatLargeNumber = (num) => {
-    if (!isValidNumber(num)) return 'N/A'; // Uses the utility isValidNumber
-    const actualNum = Number(num); // Ensure we are working with a number type
+    if (!isValidNumber(num)) {
+        throw new Error('Invalid number provided for large number formatting.');
+    }
+    const actualNum = Number(num);
     if (actualNum === 0) return '0';
 
     const numAbs = Math.abs(actualNum);
@@ -132,10 +150,11 @@ export const formatLargeNumber = (num) => {
  * Formats a Unix timestamp into a human-readable "time ago" string.
  * @param {number} timestamp - The Unix timestamp in milliseconds.
  * @returns {string} A human-readable string representing the time difference.
+ * @throws {Error} If the timestamp is not a valid number.
  */
 export function formatTimeAgo(timestamp) {
   if (timestamp === null || timestamp === undefined || typeof timestamp !== 'number' || isNaN(timestamp)) {
-    return "Invalid date";
+    throw new Error('Invalid timestamp provided for time ago formatting.');
   }
 
   const now = new Date().getTime();

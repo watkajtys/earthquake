@@ -43,11 +43,7 @@ import { isValidGeoJson, isValidFeatureArray } from '../utils/geoJsonUtils.js'; 
 
 /**
  * Provides earthquake data to its child components through context.
- * It fetches, processes, and manages earthquake data, prioritizing a D1 database source
- * via the `/api/get-earthquakes` endpoint, and falling back to the USGS API (via `usgsApiService`)
- * if D1 is unavailable or fails.
- * The context value also includes `dailyDataSource`, `weeklyDataSource`, and `monthlyDataSource`
- * to indicate the origin of the respective data sets.
+ * It fetches, processes, and manages earthquake data from various sources.
  *
  * @param {EarthquakeDataProviderProps} props - The props for the EarthquakeDataProvider.
  * @returns {JSX.Element} The EarthquakeDataProvider component.
@@ -57,11 +53,11 @@ export const EarthquakeDataProvider = ({ children }) => {
     const dataCacheRef = useRef({}); // Initialize cache
 
     /**
-     * Helper function to fetch earthquake data from the D1 database via the internal API.
+ * Fetches earthquake data from the D1 database.
      * @async
      * @param {('day'|'week'|'month')} timeWindow - The time window for which to fetch data.
      * @returns {Promise<{data: Array<object>|null, source: ('D1'|'D1_failed'), error: string|null}>}
-     *          An object containing the fetched data (array of GeoJSON features), the source, and any error message.
+ *          An object containing the fetched data, the source, and any error message.
      */
     const fetchFromD1 = async (timeWindow) => {
         try {
@@ -86,13 +82,7 @@ export const EarthquakeDataProvider = ({ children }) => {
 
     /**
      * Fetches and processes daily and weekly earthquake data.
-     * It first attempts to fetch data from the D1 database via the `/api/get-earthquakes` endpoint.
-     * If the D1 fetch is successful, `dailyDataSource` and `weeklyDataSource` are set to 'D1'.
-     * If the D1 fetch fails or returns an invalid response, it falls back to fetching data
-     * from the USGS API via `fetchUsgsData`. In this case, `dailyDataSource` and `weeklyDataSource`
-     * are set to 'USGS'.
-     * Manages loading states and aggregates errors from both potential sources.
-     * This function is typically called on initial application load and on a set refresh interval.
+ * It attempts to fetch data from D1 first, falling back to the USGS API on failure.
      * @async
      * @param {boolean} [isInitialFetch=false] - Indicates if this is the first data fetch attempt.
      * @returns {Promise<void>} A promise that resolves when the data fetch and processing are complete.
@@ -404,12 +394,10 @@ export const EarthquakeDataProvider = ({ children }) => {
 };
 
 /**
- * Custom hook to access the earthquake data state and action dispatchers.
+ * Custom hook to access the earthquake data state.
  * This hook must be used within a component that is a descendant of `EarthquakeDataProvider`.
  *
- * @returns {object} The earthquake data context, including state (like `earthquakesLast24Hours`,
- * `dailyDataSource`, `weeklyDataSource`, `monthlyDataSource`, loading flags, errors) and
- * functions like `loadMonthlyData`.
+ * @returns {object} The earthquake data context.
  * @throws {Error} If used outside of an EarthquakeDataProvider.
  */
 export const useEarthquakeDataState = () => {
