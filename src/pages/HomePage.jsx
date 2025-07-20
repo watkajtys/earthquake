@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState } from
 import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
+import JulesTask from '../components/JulesTask';
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
 // import InteractiveGlobeView from '../components/InteractiveGlobeView'; // Will be lazy loaded
 import NotableQuakeFeature from '../components/NotableQuakeFeature';
@@ -132,6 +133,10 @@ const GlobeLayout = (props) => {
         <NotableQuakeFeature
             onNotableQuakeSelect={handleNotableQuakeSelect}
             getMagnitudeColorFunc={getMagnitudeColor}
+        />
+        <JulesTask
+            title="Jules' Task"
+            onButtonClick={() => alert('Button clicked!')}
         />
         <div className="hidden md:block">
             <PreviousNotableQuakeFeature
