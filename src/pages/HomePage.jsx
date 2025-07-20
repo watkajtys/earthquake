@@ -13,7 +13,6 @@ import InfoSnippet from '../components/InfoSnippet';
 import GlobalLastMajorQuakeTimer from "../components/GlobalLastMajorQuakeTimer.jsx";
 import BottomNav from "../components/BottomNav.jsx";
 import ClusterSummaryItem from '../components/ClusterSummaryItem';
-import JulesTaskDisplay from '../components/JulesTaskDisplay';
 import ClusterDetailModal from '../components/ClusterDetailModal'; // This is for the cluster map point, not the route component
 // import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx'; // Removed static import, will use lazy loaded
 import { getMagnitudeColor, getMagnitudeColorStyle } from '../utils/utils.js';
@@ -157,7 +156,6 @@ const GlobeLayout = (props) => {
             </div>
         </div>
       </div>
-      <JulesTaskDisplay />
 
       <GlobalLastMajorQuakeTimer
         lastMajorQuake={lastMajorQuake}
