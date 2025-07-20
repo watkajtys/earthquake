@@ -1,18 +1,23 @@
 /**
- * @file mathUtils.js
- * @description Common math utility functions.
+ * @file Provides utility functions for mathematical calculations.
+ * @description This file contains common mathematical utility functions, including distance calculations.
  */
 
 // Original source: src/utils/utils.js
 /**
  * Calculates the distance between two geographical coordinates using the Haversine formula.
- * @param {number} lat1 Latitude of the first point.
- * @param {number} lon1 Longitude of the first point.
- * @param {number} lat2 Latitude of the second point.
- * @param {number} lon2 Longitude of the second point.
- * @returns {number} Distance in kilometers.
+ * This function is essential for mapping and location-based services.
+ * @param {number} lat1 Latitude of the first point. Must be a valid number.
+ * @param {number} lon1 Longitude of the first point. Must be a valid number.
+ * @param {number} lat2 Latitude of the second point. Must be a valid number.
+ * @param {number} lon2 Longitude of the second point. Must be a valid number.
+ * @returns {number} Distance between the two points in kilometers.
+ * @throws {Error} If any of the input coordinates are not valid numbers.
  */
 export function calculateDistance(lat1, lon1, lat2, lon2) {
+    if (typeof lat1 !== 'number' || typeof lon1 !== 'number' || typeof lat2 !== 'number' || typeof lon2 !== 'number') {
+        throw new Error('Invalid input: All coordinates must be numbers.');
+    }
     const R = 6371; // Radius of the Earth in kilometers
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
