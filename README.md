@@ -302,3 +302,9 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
     ```bash
     npm run docs
     ```
+
+## Future Enhancements
+
+- Implement user accounts and personalized settings.
+- Add support for more data sources, such as the European-Mediterranean Seismological Centre (EMSC).
+- Create a mobile-friendly version of the application.
