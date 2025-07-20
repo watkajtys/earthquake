@@ -1,6 +1,7 @@
 // Import D1 utility functions
 // Note: Adjusted path assuming worker.js is in src/ and d1Utils.js is in src/utils/
 // import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js'; // Used by the KV-enabled proxy too.
+import { handleJulesTask } from '../functions/background/jules-task.js';
 import { onRequestGet as handleGetClusterWithQuakes } from '../functions/api/cluster-detail-with-quakes.js';
 import { onRequestPost as handlePostCalculateClusters } from '../functions/api/calculate-clusters.POST.js';
 
@@ -567,6 +568,19 @@ export default {
     }
   },
 
+  /**
+   * Handles scheduled events.
+   *
+   * This function is triggered by a cron schedule. It performs two main tasks:
+   * 1.  **USGS Data Sync:** Fetches the latest earthquake data from the USGS API
+   *     and stores it in KV.
+   * 2.  **Jules's Task:** Runs a custom task defined in `functions/background/jules-task.js`.
+   *
+   * @param {ScheduledEvent} event - The scheduled event.
+   * @param {object} env - The environment object.
+   * @param {object} ctx - The execution context.
+   * @returns {Promise<void>}
+   */
   async scheduled(event, env, ctx) {
     // Initialize enhanced logging for this scheduled task execution
     const logger = createScheduledTaskLogger('usgs-data-sync', event.scheduledTime);
@@ -714,5 +728,8 @@ export default {
         errorMessage: error.message
       });
     }
+
+    // Jules's Task
+    ctx.waitUntil(handleJulesTask(env, ctx));
   }
 };
