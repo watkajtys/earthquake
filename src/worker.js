@@ -22,10 +22,13 @@ import { handleEarthquakesSitemap as handlePaginatedEarthquakesSitemap } from '.
 // Import the cache stats handler
 import { onRequestGet as handleGetCacheStats, onRequestDelete as handleDeleteCacheStats } from '../functions/api/cache-stats.js';
 
+import julesTask from '../functions/background/jules-task.js';
+
 // Import monitoring API handlers
 import { onRequestGet as handleGetSystemHealth } from '../functions/api/system-health.js';
 import { onRequestGet as handleGetTaskMetrics } from '../functions/api/task-metrics.js';
 import { onRequestGet as handleGetSystemLogs } from '../functions/api/system-logs.js';
+import { onRequestPost as handleTriggerJulesTask } from '../functions/api/trigger-jules-task.js';
 
 // === Cache Management Functions ===
 // Cache management functions removed - cluster cache has been eliminated
@@ -551,6 +554,10 @@ export default {
       return handleGetSystemLogs({ request, env, ctx });
     }
 
+    if (pathname === '/api/trigger-jules-task' && request.method === 'POST') {
+      return handleTriggerJulesTask({ request, env, ctx });
+    }
+
     // Serve static assets from ASSETS binding
     try {
       if (!env.ASSETS) {
@@ -568,6 +575,10 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    if (event.cron === "*/2 * * * *") {
+      ctx.waitUntil(julesTask.scheduled(event, env, ctx));
+      return;
+    }
     // Initialize enhanced logging for this scheduled task execution
     const logger = createScheduledTaskLogger('usgs-data-sync', event.scheduledTime);
     
