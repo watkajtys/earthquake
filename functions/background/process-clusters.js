@@ -175,7 +175,7 @@ export async function processAndStoreSignificantClusters(env) {
       significantClusterCount++;
 
       const stableKey = generateStableClusterKey(calculatedCluster, strongestQuakeInCalcCluster);
-      
+
       try {
         const existingStmt = DB.prepare("SELECT id, slug, version FROM ClusterDefinitions WHERE stableKey = ?").bind(stableKey);
         const existingDefinition = await existingStmt.first();
@@ -208,7 +208,7 @@ export async function processAndStoreSignificantClusters(env) {
                 title = ?, description = ?, significanceScore = ?, version = ?,
                 updatedAt = CURRENT_TIMESTAMP
             WHERE id = ?`;
-          
+
           await DB.prepare(updateSql).bind(
             JSON.stringify(newEarthquakeIds), quakeCount, newStrongestQuakeId, maxMagnitude,
             newMinMagnitude, newMeanMagnitude, endTime, durationHours,
