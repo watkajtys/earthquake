@@ -26,6 +26,7 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * Educational Snippets: Provides brief explanations on earthquake concepts like magnitude, depth, and intensity.
 * Dedicated 'Learn' Page: Provides educational content and detailed explanations about earthquake science and terminology.
 * **Regional Faulting Display**: Incorporates and displays data on regional fault lines, enhancing geological context and understanding. This feature was added as part of the vibe process using the Claude code CLI.
+* **Jules Task Node**: A monitoring component that displays the status of AI-driven tasks.
 * Responsive Sidebar: Dynamically loads and displays detailed analysis panels.
 
 ## Data Source
