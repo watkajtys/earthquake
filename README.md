@@ -26,6 +26,7 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * Educational Snippets: Provides brief explanations on earthquake concepts like magnitude, depth, and intensity.
 * Dedicated 'Learn' Page: Provides educational content and detailed explanations about earthquake science and terminology.
 * **Regional Faulting Display**: Incorporates and displays data on regional fault lines, enhancing geological context and understanding. This feature was added as part of the vibe process using the Claude code CLI.
+* **JulesTask Node**: A special node implemented by Jules, an AI software engineer. This node is a simple card with a title and a button.
 * Responsive Sidebar: Dynamically loads and displays detailed analysis panels.
 
 ## Data Source
@@ -205,7 +206,6 @@ The `src/` directory contains the core source code for the application, organize
 -   **`contexts/`**: React Context providers and custom hooks for global state management (e.g., `EarthquakeDataContext.jsx`, `UIStateContext.jsx`).
 -   **`functions/`**: Houses serverless function logic, primarily API handlers and related tests, integral to the Cloudflare Worker's operation (e.g., `functions/api/calculate-clusters.js`). The main Worker entry point, `src/worker.js`, orchestrates routing to these functions and other frontend asset-serving logic.
     -   **`functions/api/`**: Contains API route handlers (e.g., for cluster calculations, D1 database interactions).
-    -   **`julesTask.js`**: A utility module for AI-driven development tasks, used by AI agents like Jules to perform and manage development and maintenance operations.
 -   **`features/`**: Intended for feature-specific modules in future development (currently contains a `.gitkeep` file).
 -   **`hooks/`**: Intended for custom React hooks (currently contains a `.gitkeep` file).
 -   **`pages/`**: Top-level React components representing different application pages/views (e.g., `HomePage.jsx`, which defines the main application structure and routes).
