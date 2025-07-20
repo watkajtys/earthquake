@@ -302,3 +302,4 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
     ```bash
     npm run docs
     ```
+apples
