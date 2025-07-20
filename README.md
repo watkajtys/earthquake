@@ -205,6 +205,7 @@ The `src/` directory contains the core source code for the application, organize
 -   **`contexts/`**: React Context providers and custom hooks for global state management (e.g., `EarthquakeDataContext.jsx`, `UIStateContext.jsx`).
 -   **`functions/`**: Houses serverless function logic, primarily API handlers and related tests, integral to the Cloudflare Worker's operation (e.g., `functions/api/calculate-clusters.js`). The main Worker entry point, `src/worker.js`, orchestrates routing to these functions and other frontend asset-serving logic.
     -   **`functions/api/`**: Contains API route handlers (e.g., for cluster calculations, D1 database interactions).
+    -   **`julesTask.js`**: A utility module for AI-driven development tasks, used by AI agents like Jules to perform and manage development and maintenance operations.
 -   **`features/`**: Intended for feature-specific modules in future development (currently contains a `.gitkeep` file).
 -   **`hooks/`**: Intended for custom React hooks (currently contains a `.gitkeep` file).
 -   **`pages/`**: Top-level React components representing different application pages/views (e.g., `HomePage.jsx`, which defines the main application structure and routes).
