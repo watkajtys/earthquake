@@ -25,8 +25,36 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * Featured Quakes: Highlights notable recent or historical earthquakes.
 * Educational Snippets: Provides brief explanations on earthquake concepts like magnitude, depth, and intensity.
 * Dedicated 'Learn' Page: Provides educational content and detailed explanations about earthquake science and terminology.
-* **Regional Faulting Display**: Incorporates and displays data on regional fault lines, enhancing geological context and understanding. This feature was added as part of the vibe process using the Claude code CLI.
+* **Regional Faulting Display**: Displays regional fault lines for enhanced geological context.
+* **Fault Correlation**: Provides the groundwork for correlating seismic events with known faults.
 * Responsive Sidebar: Dynamically loads and displays detailed analysis panels.
+
+## Performance and Data Strategy
+
+Key performance bottlenecks have been identified and a strategy is in place to address them.
+
+*   **Cluster Calculation Algorithm (`findActiveClusters`)**: The current O(N^2) algorithm will be replaced with a more efficient spatial indexing approach (e.g., DBSCAN, k-d trees) to handle large datasets.
+*   **Cluster Sitemap Generation (`handleClustersSitemapRequest`)**: The sitemap generation process will be optimized to remove external API calls and rely solely on pre-generated data in the D1 database.
+*   **Historical Data Ingestion**: A batch processing system will be implemented to load historical earthquake data from USGS archives into the D1 database.
+
+## Future Enhancements
+
+The following enhancements are planned to enrich the application's features and educational value:
+
+*   **Enhanced Regional Quake Processing & Display**: Develop dedicated pages for specific seismic regions, aggregating recent activity, historical data, and regional statistics.
+*   **Processing Local Seismicity for Educational Purposes**: Create interactive learning modules to visualize seismic scenarios, explain fault mechanics, and analyze earthquake sequences.
+*   **Incorporating Nearby Fault Data**: Store fault geometries in a dedicated D1 table and develop a server-side proximity analysis function to link earthquakes to known faults.
+*   **Advanced Cluster Analysis**: Incorporate time-based parameters and fault data into the clustering algorithm to better characterize seismic events.
+*   **User-Defined Regions & Alerts**: Allow users to define custom regions of interest and receive notifications for significant quakes.
+
+## Development Roadmap
+
+The development work is prioritized into the following phases:
+
+*   **Phase 1: Critical Performance (Weeks 1-2)**: Focus on optimizing the clustering algorithm, distance calculations, and sitemap generation.
+*   **Phase 2: Historical Data Foundation (Weeks 3-4)**: Implement batch processing for historical data and generate historical cluster definitions.
+*   **Phase 3: Advanced Features (Weeks 5-8)**: Develop regional analysis tools, interactive learning modules, and fault data integration.
+*   **Phase 4: Enhancement and Polish (Weeks 9-12)**: Implement advanced clustering features, client-side performance optimizations, and a public educational API.
 
 ## Data Source
 
@@ -302,4 +330,3 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
     ```bash
     npm run docs
     ```
-apples
