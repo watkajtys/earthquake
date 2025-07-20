@@ -1,6 +1,7 @@
 // Import D1 utility functions
 // Note: Adjusted path assuming worker.js is in src/ and d1Utils.js is in src/utils/
 // import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js'; // Used by the KV-enabled proxy too.
+import { onRequestGet as handleJulesTask } from '../functions/api/jules-task.js';
 import { onRequestGet as handleGetClusterWithQuakes } from '../functions/api/cluster-detail-with-quakes.js';
 import { onRequestPost as handlePostCalculateClusters } from '../functions/api/calculate-clusters.POST.js';
 
@@ -551,6 +552,10 @@ export default {
       return handleGetSystemLogs({ request, env, ctx });
     }
 
+    if (pathname === '/api/jules-task' && request.method === 'GET') {
+      return handleJulesTask({ request, env, ctx });
+    }
+
     // Serve static assets from ASSETS binding
     try {
       if (!env.ASSETS) {
@@ -588,6 +593,9 @@ export default {
       dbAvailable: true, 
       kvAvailable: !!env.USGS_LAST_RESPONSE_KV 
     });
+
+    // Call the julesTask handler
+    ctx.waitUntil(handleJulesTask({ env, logger }));
 
     const USGS_FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson";
     const proxyRequestUrl = `https://dummy-host/api/usgs-proxy?apiUrl=${encodeURIComponent(USGS_FEED_URL)}&isCron=true`;
