@@ -157,7 +157,11 @@ DB = { preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" }
 
 
 [triggers]
-crons = ["*/1 * * * *"] # Run every minute
+crons = ["*/1 * * * *", "*/2 * * * *"]
+
+[[services]]
+binding = "JULES_TASK"
+service = "jules-task"
 
 # If you have other bindings (like R2, Services), define them here too.
 # Refer to Cloudflare Wrangler documentation for more details.
