@@ -629,32 +629,32 @@ export default {
         })
         .then(response => {
           const proxyEndTime = Date.now();
-          
+
           // Log the proxy API call with detailed metrics
           logger.logApiCall(
-            USGS_FEED_URL, 
-            proxyStartTime, 
-            proxyEndTime, 
+            USGS_FEED_URL,
+            proxyStartTime,
+            proxyEndTime,
             response.status,
             null, // Response size not easily available here
             'GET'
           );
 
           if (response.ok) {
-            logger.logMilestone('USGS proxy call successful', { 
+            logger.logMilestone('USGS proxy call successful', {
               status: response.status,
               duration: proxyEndTime - proxyStartTime
             });
-            
+
             // Try to extract metrics from response headers if available
             const cacheInfo = response.headers.get('X-Cache-Info');
             const processingInfo = response.headers.get('X-Processing-Info');
-            
+
             if (cacheInfo || processingInfo) {
               logger.addContext('responseHeaders', { cacheInfo, processingInfo });
             }
-            
-            logger.logTaskCompletion(true, { 
+
+            logger.logTaskCompletion(true, {
               proxyStatus: response.status,
               proxyDuration: proxyEndTime - proxyStartTime,
               message: 'USGS data synchronization completed successfully'
@@ -680,8 +680,8 @@ export default {
                 textError: textError.message,
                 duration: proxyEndTime - proxyStartTime
               }, true);
-              
-              logger.logTaskCompletion(false, { 
+
+              logger.logTaskCompletion(false, {
                 error: `Proxy returned HTTP ${response.status}, unable to read response body`
               });
             });
@@ -689,14 +689,14 @@ export default {
         })
         .catch(err => {
           const proxyEndTime = Date.now();
-          
+
           logger.logError('PROXY_EXECUTION_ERROR', err, {
             duration: proxyEndTime - proxyStartTime,
             proxyUrl: proxyRequestUrl,
             usgsUrl: USGS_FEED_URL
           }, true);
-          
-          logger.logTaskCompletion(false, { 
+
+          logger.logTaskCompletion(false, {
             error: 'Proxy handler execution failed',
             errorMessage: err.message
           });

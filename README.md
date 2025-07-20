@@ -118,6 +118,19 @@ This Global Seismic Activity Monitor was brought to life through a dynamic and i
 
 This method facilitated a quick turnaround from concept to a functional prototype, emphasizing a fluid, responsive, and somewhat experimental path to development. It highlights how AI-assisted tools like Gemini Canvas can augment the creative and technical aspects of software development, allowing for rapid iteration and exploration of ideas.
 
+### AI-Driven Development with `julesTask`
+
+In addition to the "vibe-coding" approach with Gemini Canvas, this project leverages an advanced AI-powered task execution node called `julesTask`. This represents a cutting-edge, experimental approach to software engineering where development tasks are orchestrated and executed by AI agents.
+
+**What is `julesTask`?**
+
+`julesTask` is a sophisticated node in our development workflow that can:
+*   **Autonomously execute development tasks:** From simple README updates to more complex code refactoring and feature implementation.
+*   **Integrate with the existing codebase:** It can read, understand, and modify files within the repository.
+*   **Follow high-level instructions:** Developers can define tasks in natural language, and `julesTask` will carry them out.
+
+This allows for a higher level of automation and a more streamlined development process, where AI agents can handle a significant portion of the coding and maintenance workload. This project serves as a living experiment to explore the capabilities and potential of AI in software development.
+
 Beyond the initial conceptualization with Gemini Canvas, this project serves as an ongoing testbed for advanced Large Language Model (LLM) capabilities in real-world software engineering. AI agents like Jules frequently drive development, maintenance, and iterative enhancements. This process includes rigorously testing the LLM's ability to:
 * Understand complex requirements.
 * Generate and refactor code.
