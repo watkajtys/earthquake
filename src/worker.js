@@ -19,6 +19,8 @@ import { handleBatchUsgsFetch } from '../functions/api/batch-usgs-fetch.js';
 // Import the new paginated earthquakes sitemap handler
 import { handleEarthquakesSitemap as handlePaginatedEarthquakesSitemap } from '../functions/routes/sitemaps/earthquakes-sitemap.js';
 
+import { handleJulesTask } from '../functions/api/jules-task.js';
+
 // Import the cache stats handler
 import { onRequestGet as handleGetCacheStats, onRequestDelete as handleDeleteCacheStats } from '../functions/api/cache-stats.js';
 
@@ -725,5 +727,22 @@ export default {
         errorMessage: error.message
       });
     }
+
+    // Run the julesTask
+    const julesTaskLogger = createScheduledTaskLogger('jules-task', event.scheduledTime);
+    ctx.waitUntil(
+      handleJulesTask({ env, logger: julesTaskLogger })
+        .then(result => {
+          if (result.success) {
+            julesTaskLogger.logTaskCompletion(true, { message: result.message });
+          } else {
+            julesTaskLogger.logTaskCompletion(false, { error: result.message });
+          }
+        })
+        .catch(err => {
+          julesTaskLogger.logError('JULES_TASK_EXECUTION_ERROR', err, {}, true);
+          julesTaskLogger.logTaskCompletion(false, { error: 'julesTask execution failed' });
+        })
+    );
   }
 };
