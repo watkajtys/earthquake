@@ -9,6 +9,7 @@ import SystemHealthOverview from '../components/monitoring/SystemHealthOverview.
 import TaskPerformanceChart from '../components/monitoring/TaskPerformanceChart.jsx';
 import MetricsGrid from '../components/monitoring/MetricsGrid.jsx';
 import LogViewer from '../components/monitoring/LogViewer.jsx';
+import JulesTaskNode from '../components/monitoring/JulesTaskNode.jsx';
 
 /**
  * MonitoringPage component providing comprehensive system monitoring
@@ -230,6 +231,7 @@ export default function MonitoringPage() {
             loading={loading}
           />
 
+          <JulesTaskNode />
           {/* Log Viewer */}
           <LogViewer 
             systemHealth={systemHealth}
