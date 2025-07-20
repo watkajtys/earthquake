@@ -302,3 +302,11 @@ You can generate HTML documentation from these JSDoc comments using the `jsdoc` 
     ```bash
     npm run docs
     ```
+
+## Background Tasks
+
+This project utilizes Cloudflare Workers to run background tasks on a schedule. These tasks are defined in the `wrangler.toml` file and implemented in the `src/worker.js` file.
+
+### julesTask
+
+The `julesTask` is a background task that runs every minute. It is responsible for performing various maintenance and data processing operations. This task is implemented in the `functions/api/jules-task.js` file.
