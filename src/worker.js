@@ -19,10 +19,6 @@ import { handleBatchUsgsFetch } from '../functions/api/batch-usgs-fetch.js';
 // Import the new paginated earthquakes sitemap handler
 import { handleEarthquakesSitemap as handlePaginatedEarthquakesSitemap } from '../functions/routes/sitemaps/earthquakes-sitemap.js';
 
-import { julesTask } from '../functions/background/jules-task.js';
-import { findActiveClustersOptimized } from '../functions/utils/spatialClusterUtils.js';
-import { CLUSTER_MIN_QUAKES } from './constants/appConstants.js';
-
 // Import the cache stats handler
 import { onRequestGet as handleGetCacheStats, onRequestDelete as handleDeleteCacheStats } from '../functions/api/cache-stats.js';
 
@@ -625,59 +621,47 @@ export default {
 
       // Call the KV-enabled proxy handler directly with enhanced error handling
       ctx.waitUntil(
-        (async () => {
-          try {
-            const response = await kvEnabledUsgsProxyHandler({
-              request: scheduledRequest,
-              env: env,
-              executionContext: ctx,
-              logger: logger // Pass logger to proxy handler for enhanced logging
+        kvEnabledUsgsProxyHandler({
+          request: scheduledRequest,
+          env: env,
+          executionContext: ctx,
+          logger: logger // Pass logger to proxy handler for enhanced logging
+        })
+        .then(response => {
+          const proxyEndTime = Date.now();
+
+          // Log the proxy API call with detailed metrics
+          logger.logApiCall(
+            USGS_FEED_URL,
+            proxyStartTime,
+            proxyEndTime,
+            response.status,
+            null, // Response size not easily available here
+            'GET'
+          );
+
+          if (response.ok) {
+            logger.logMilestone('USGS proxy call successful', {
+              status: response.status,
+              duration: proxyEndTime - proxyStartTime
             });
 
-            const proxyEndTime = Date.now();
+            // Try to extract metrics from response headers if available
+            const cacheInfo = response.headers.get('X-Cache-Info');
+            const processingInfo = response.headers.get('X-Processing-Info');
 
-            // Log the proxy API call with detailed metrics
-            logger.logApiCall(
-              USGS_FEED_URL,
-              proxyStartTime,
-              proxyEndTime,
-              response.status,
-              null, // Response size not easily available here
-              'GET'
-            );
+            if (cacheInfo || processingInfo) {
+              logger.addContext('responseHeaders', { cacheInfo, processingInfo });
+            }
 
-            if (response.ok) {
-              logger.logMilestone('USGS proxy call successful', {
-                status: response.status,
-                duration: proxyEndTime - proxyStartTime
-              });
-              
-              // Try to extract metrics from response headers if available
-              const cacheInfo = response.headers.get('X-Cache-Info');
-              const processingInfo = response.headers.get('X-Processing-Info');
-
-              if (cacheInfo || processingInfo) {
-                logger.addContext('responseHeaders', { cacheInfo, processingInfo });
-              }
-
-              logger.logTaskCompletion(true, {
-                proxyStatus: response.status,
-                proxyDuration: proxyEndTime - proxyStartTime,
-                message: 'USGS data synchronization completed successfully'
-              });
-
-              // New logic to call julesTask
-              const fetchResponse = await fetch("https://earthquakeslive.com/api/get-earthquakes?timeWindow=last_30_days&minMag=1");
-              if (fetchResponse.ok) {
-                const data = await fetchResponse.json();
-                const earthquakes = data.features;
-                const clusters = findActiveClustersOptimized(earthquakes, 100, CLUSTER_MIN_QUAKES);
-                await julesTask(env, clusters);
-              }
-
-            } else {
-              // Handle non-200 responses with detailed error logging
-              const text = await response.text();
+            logger.logTaskCompletion(true, {
+              proxyStatus: response.status,
+              proxyDuration: proxyEndTime - proxyStartTime,
+              message: 'USGS data synchronization completed successfully'
+            });
+          } else {
+            // Handle non-200 responses with detailed error logging
+            response.text().then(text => {
               logger.logError('PROXY_HTTP_ERROR', `HTTP ${response.status}`, {
                 status: response.status,
                 statusText: response.statusText,
@@ -689,22 +673,34 @@ export default {
                 error: `Proxy returned HTTP ${response.status}`,
                 responseBody: text
               });
-            }
-          } catch (err) {
-            const proxyEndTime = Date.now();
+            }).catch(textError => {
+              logger.logError('PROXY_HTTP_ERROR', `HTTP ${response.status} (unable to read response)`, {
+                status: response.status,
+                statusText: response.statusText,
+                textError: textError.message,
+                duration: proxyEndTime - proxyStartTime
+              }, true);
 
-            logger.logError('PROXY_EXECUTION_ERROR', err, {
-              duration: proxyEndTime - proxyStartTime,
-              proxyUrl: proxyRequestUrl,
-              usgsUrl: USGS_FEED_URL
-            }, true);
-
-            logger.logTaskCompletion(false, {
-              error: 'Proxy handler execution failed',
-              errorMessage: err.message
+              logger.logTaskCompletion(false, {
+                error: `Proxy returned HTTP ${response.status}, unable to read response body`
+              });
             });
           }
-        })()
+        })
+        .catch(err => {
+          const proxyEndTime = Date.now();
+
+          logger.logError('PROXY_EXECUTION_ERROR', err, {
+            duration: proxyEndTime - proxyStartTime,
+            proxyUrl: proxyRequestUrl,
+            usgsUrl: USGS_FEED_URL
+          }, true);
+
+          logger.logTaskCompletion(false, {
+            error: 'Proxy handler execution failed',
+            errorMessage: err.message
+          });
+        })
       );
 
     } catch (error) {
