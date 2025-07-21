@@ -1,35 +1,37 @@
 /**
- * @summary Cloudflare Pages Function for fetching earthquake data.
- * @description This function serves earthquake data directly from the `EarthquakeEvents` D1 table.
- * It supports filtering by a time window and returns an array of GeoJSON features.
- * All responses include an `X-Data-Source: D1` header.
+ * @file Cloudflare Pages Function for fetching earthquake data.
+ * @module get-earthquakes
+ */
+
+/**
+ * Handles GET requests to `/api/get-earthquakes` to fetch earthquake data from the D1 database.
+ * It supports filtering by a specified time window and returns data as an array of GeoJSON features.
  *
- * Query Parameters:
- *  - `timeWindow` (string): Specifies the time window for earthquake events.
- *    Expected values: "day" (last 24 hours), "week" (last 7 days), "month" (last 30 days).
- *    Defaults to "day" if not specified or if an invalid value is provided (though invalid values return a 400 error).
+ * @param {object} context - The Cloudflare Pages Function context.
+ * @param {Request} context.request - The incoming request object.
+ * @param {object} context.env - The environment object with bindings.
+ * @param {D1Database} context.env.DB - The D1 database binding.
+ * @returns {Promise<Response>} A `Response` object containing either the earthquake data or an error message.
  *
- * Successful Response (200 OK):
- *  - Body: A JSON array of GeoJSON feature objects, where each feature represents an earthquake.
- *          The `geojson_feature` column from the D1 table is parsed for each event.
- *  - Headers: `Content-Type: application/json`, `X-Data-Source: D1`.
- *
- * Error Responses:
- *  - 400 Bad Request: If the `timeWindow` parameter is invalid. Body includes an error message.
- *  - 500 Internal Server Error: If the database is unavailable, or if there's an error during query
- *    preparation, execution, or data processing. Body includes an error message.
- *
- * @summary Handles GET requests to /api/get-earthquakes.
- * @param {object} context - The Cloudflare Pages Function context object.
- * @param {Request} context.request - The incoming request object from the client.
- * @param {object} context.env - The environment object containing bindings.
- * @param {D1Database} context.env.DB - The D1 database binding for `EarthquakeEvents`.
- * @returns {Promise<Response>} A Response object containing the JSON data or an error message.
  * @example
- * // Example usage:
- * // fetch('/api/get-earthquakes?timeWindow=week')
- * // .then(response => response.json())
- * // .then(data => console.log(data));
+ * // Request earthquake data for the last week
+ * fetch('/api/get-earthquakes?timeWindow=week')
+ *   .then(response => response.json())
+ *   .then(data => console.log(data));
+ *
+ * @description
+ * This function retrieves earthquake event data from the `EarthquakeEvents` D1 table.
+ *
+ * **Query Parameters:**
+ * - `timeWindow` (string): Time frame for the data. Accepts "day", "week", "month". Defaults to "day".
+ *
+ * **Successful Response (200 OK):**
+ * - Returns a JSON array of GeoJSON feature objects.
+ * - Includes a `Cache-Control` header for caching at the edge.
+ *
+ * **Error Responses:**
+ * - **400 Bad Request:** Sent if the `timeWindow` parameter is invalid.
+ * - **500 Internal Server Error:** Sent for database connection issues, query failures, or other server-side errors.
  */
 export async function onRequestGet(context) {
   try {
