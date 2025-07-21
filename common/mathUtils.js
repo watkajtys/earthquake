@@ -1,11 +1,13 @@
 /**
  * @file mathUtils.js
+ * @summary A collection of mathematical utility functions.
  * @description Common math utility functions.
  */
 
 // Original source: src/utils/utils.js
 /**
- * Calculates the distance between two geographical coordinates using the Haversine formula.
+ * @summary Calculates the distance between two points on Earth.
+ * @description Calculates the distance between two geographical coordinates using the Haversine formula.
  * @param {number} lat1 Latitude of the first point.
  * @param {number} lon1 Longitude of the first point.
  * @param {number} lat2 Latitude of the second point.
