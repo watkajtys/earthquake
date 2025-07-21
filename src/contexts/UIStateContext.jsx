@@ -1,23 +1,20 @@
-import React, { useState, useContext, useCallback, useEffect } from 'react'; // Removed createContext
+import React, { useState, useContext, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UIStateContext } from './uiStateContextUtils.js'; // Import the context object
+import { UIStateContext } from './uiStateContextUtils.js';
 
 /**
- * Provides UI state to its children components via the UIStateContext.
- * It manages several pieces of UI state:
- * - `activeSidebarView`: The currently active view/panel in the sidebar. Synced with URL search parameter `sidebarActiveView`.
- * - `activeFeedPeriod`: The currently selected earthquake feed period (e.g., 'last_24_hours'). Synced with URL search parameter `activeFeedPeriod`.
- * - `globeFocusLng`: The target longitude for focusing the interactive globe. Not URL synced.
- * - `focusedNotableQuake`: Data object for a notable earthquake that should be highlighted or focused. Not URL synced.
+ * @file Manages the UI state of the application, including sidebar view, feed period, and globe focus.
+ * @module UIStateContext
+ */
+
+/**
+ * Provides UI state to its children components.
+ * This provider manages the active sidebar view, the selected feed period, and globe-focusing parameters,
+ * syncing relevant states with URL search parameters.
  *
- * The provider uses `useState` for managing these states and `useSearchParams` from `react-router-dom`
- * to read initial values from and sync changes back to the URL for relevant states.
- * Setter functions for these states are memoized using `useCallback`.
- *
- * @component
- * @param {Object} props - The component's props.
+ * @param {object} props - The component props.
  * @param {React.ReactNode} props.children - The child components that will have access to this context.
- * @returns {JSX.Element} The UIStateProvider component.
+ * @returns {JSX.Element} The `UIStateProvider` component.
  */
 export const UIStateProvider = ({ children }) => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -50,7 +47,8 @@ export const UIStateProvider = ({ children }) => {
     }, [searchParams]);
 
     /**
-     * Changes the active sidebar view and updates the URL search parameter.
+     * Updates the active sidebar view and syncs it with the URL search parameter.
+     *
      * @param {string} view - The identifier for the new sidebar view. Defaults to 'overview_panel'.
      */
     const changeSidebarView = useCallback((view) => {
@@ -82,7 +80,8 @@ export const UIStateProvider = ({ children }) => {
     }, [searchParams]);
 
     /**
-     * Changes the active earthquake feed period and updates the URL search parameter.
+     * Updates the active earthquake feed period and syncs it with the URL search parameter.
+     *
      * @param {string} period - The identifier for the new feed period. Defaults to 'last_24_hours'.
      */
     const changeActiveFeedPeriod = useCallback((period) => {
@@ -98,16 +97,20 @@ export const UIStateProvider = ({ children }) => {
     }, [setSearchParams, searchParams]);
 
     /**
-     * Sets the target longitude for focusing the interactive globe. This state is not synced with URL.
-     * @param {number} lng - The longitude value.
+     * Sets the target longitude for focusing the interactive globe.
+     * This state is not synced with the URL.
+     *
+     * @param {number} lng - The longitude value for the globe to focus on.
      */
     const setGlobeFocusLng = useCallback((lng) => {
         setGlobeFocusLng_internal(lng);
     }, []);
 
     /**
-     * Sets the data for a notable earthquake to be focused/highlighted. This state is not synced with URL.
-     * @param {Object|null} quake - The earthquake data object, or null to clear focus.
+     * Sets the data for a notable earthquake to be highlighted in the UI.
+     * This state is not synced with the URL.
+     *
+     * @param {object|null} quake - The earthquake data object, or `null` to clear the focus.
      */
     const setFocusedNotableQuake = useCallback((quake) => {
         setFocusedNotableQuake_internal(quake);
@@ -133,20 +136,12 @@ export const UIStateProvider = ({ children }) => {
 };
 
 /**
- * Custom hook to consume the UIStateContext.
- * Provides easy access to UI states (like active sidebar view, feed period) and their setters.
- * Throws an error if used outside of a `UIStateProvider`.
+ * Custom hook for consuming the `UIStateContext`.
+ * This hook provides access to the UI states and their setter functions.
+ * It will throw an error if used outside of a `UIStateProvider` to ensure state consistency.
  *
- * @returns {Object} The context value, containing UI states and setter functions.
- * @property {string} activeSidebarView - Current active view in the sidebar.
- * @property {function(string): void} setActiveSidebarView - Function to change the active sidebar view.
- * @property {string} activeFeedPeriod - Current selected earthquake feed period.
- * @property {function(string): void} setActiveFeedPeriod - Function to change the active feed period.
- * @property {number} globeFocusLng - Current target longitude for globe focus.
- * @property {function(number): void} setGlobeFocusLng - Function to set the globe focus longitude.
- * @property {Object|null} focusedNotableQuake - Data of the currently focused notable earthquake.
- * @property {function((Object|null)): void} setFocusedNotableQuake - Function to set or clear the focused notable quake.
- * @throws {Error} If the hook is used outside a UIStateProvider.
+ * @returns {object} The context value, including UI states and their corresponding setters.
+ * @throws {Error} If the hook is not used within a `UIStateProvider`.
  */
 export const useUIState = () => {
     const context = useContext(UIStateContext);
