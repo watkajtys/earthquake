@@ -66,6 +66,11 @@ const LearnPage = () => {
                                 Plate Tectonics and Earthquakes
                             </Link>
                         </li>
+                        <li>
+                            <Link to="/learn/safety-preparedness" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                Earthquake Safety and Preparedness
+                            </Link>
+                        </li>
                     </ul>
                 </div>
                  {/* ... other content from /learn route ... */}
