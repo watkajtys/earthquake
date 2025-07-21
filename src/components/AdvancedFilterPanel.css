@@ -1,0 +1,18 @@
+.advanced-filter-panel {
+  background-color: #f0f0f0;
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.advanced-filter-panel h3 {
+  margin-top: 0;
+}
+
+.advanced-filter-panel div {
+  margin-bottom: 10px;
+}
+
+.advanced-filter-panel label {
+  margin-right: 5px;
+}
