@@ -267,7 +267,8 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
             <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(4.5) }}></span> 4.0-4.9</span>
             <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(5.5) }}></span> 5.0-5.9</span>
             <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(6.5) }}></span> 6.0-6.9</span>
-            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(7.5) }}></span> 7.0+</span>
+            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(7.5) }}></span> 7.0-7.9</span>
+            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(8.5) }}></span> 8.0+</span>
             <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: getMagnitudeColor(null) }}></span> N/A</span>
         </div>
     </div>
