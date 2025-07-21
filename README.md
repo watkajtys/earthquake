@@ -9,9 +9,11 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 This project is under active development to enhance performance, data richness, and analytical capabilities. Key areas of focus include:
 
 *   **Performance Optimization:** Critical bottlenecks in the earthquake clustering algorithm (O(N²) complexity) and sitemap generation are being addressed. The plan includes implementing spatial indexing and optimizing database queries to significantly improve performance.
+*   **Frontend Refactoring:** The frontend is being refactored to improve maintainability and performance. This includes breaking down large components into smaller, more manageable ones, and optimizing data fetching and state management.
 *   **Historical Data Integration:** A robust batch processing system is being developed to ingest and analyze historical earthquake data from USGS archives. This will enable richer historical analysis and a more comprehensive dataset.
 *   **Enhanced Regional Analysis:** New features are being built to provide more detailed regional seismic analysis, including the integration of regional fault data and dedicated regional views.
 *   **Educational Enhancements:** The project is expanding its educational content with interactive learning modules and better correlation between seismic events and known faults.
+*   **CI/CD Pipeline:** A continuous integration and deployment (CI/CD) pipeline has been set up to automate testing and deployment, ensuring that new changes are automatically tested and deployed to the staging environment.
 
 The development roadmap is managed through a detailed task list, prioritizing critical performance fixes, followed by historical data integration and advanced feature enhancements.
 
@@ -45,9 +47,9 @@ The development of the Global Seismic Activity Monitor is prioritized to deliver
 * Featured Quakes: Highlights notable recent or historical earthquakes.
 * Educational Snippets: Provides brief explanations on earthquake concepts like magnitude, depth, and intensity.
 * Dedicated 'Learn' Page: Provides educational content and detailed explanations about earthquake science and terminology.
-* **Regional Faulting Display**: Incorporates and displays data on regional fault lines, enhancing geological context and understanding. This feature was added as part of the vibe process using the Claude code CLI.
-* **Enhanced Regional Quake Processing:** Under development to provide detailed analysis of specific seismic regions, including region-specific statistics and historical data.
-* **Nearby Fault Data Integration:** Under development to correlate earthquakes with known fault lines, providing deeper geological context.
+* Regional Faulting Display: Incorporates and displays data on regional fault lines, enhancing geological context and understanding. This feature was added as part of the vibe process using the Claude code CLI.
+* Enhanced Regional Quake Processing: Under development to provide detailed analysis of specific seismic regions, including region-specific statistics and historical data.
+* Nearby Fault Data Integration: Under development to correlate earthquakes with known fault lines, providing deeper geological context.
 * Responsive Sidebar: Dynamically loads and displays detailed analysis panels.
 
 ## Data Source
@@ -121,85 +123,70 @@ Manual deployments to specific environments can be performed using npm or yarn s
 **Note on Automated Deployments:**
 Typically, the `production` environment is connected to the main branch of the Git repository, and deployments to production occur automatically when changes are merged into that branch. The `staging` environment might also be configured for automatic deployments from a specific branch (e.g., `develop` or `staging`), or manual deployments using the commands above can be used as part of the release process. Preview deployments (as **Cloudflare Workers**) are typically automated, potentially using **Cloudflare Pages'** CI/CD capabilities for the build and deployment pipeline.
 
-## Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
-
-This Global Seismic Activity Monitor was brought to life through a dynamic and iterative development process, affectionately termed "vibe-coding." The project was conceptualized and significantly shaped within Gemini Canvas, leveraging a conversational AI-assisted development workflow.
-
-**How it worked:**
-
-* **Conversational Prototyping**: Initial ideas and feature requirements were discussed with Gemini. Based on these conversations, Gemini generated foundational React components and logic.
-* **Iterative Refinement**: Each feature, from basic globe setup to complex interactions like the ring highlights or data-driven UI updates, was built incrementally. The process involved:
-    * Describing the desired functionality or behavior.
-    * Reviewing and testing the code suggestions provided by Gemini.
-    * Identifying issues, bugs, or areas for improvement (like the ring animation or hover states).
-    * Providing feedback, error messages, and updated code snippets back to Gemini.
-    * Receiving revised code and explanations, and integrating them into the application.
-* **Agile & Exploratory**: This "vibe-coding" approach allowed for rapid exploration of different UI/UX ideas and quick pivots when a particular implementation wasn't ideal. For example, the globe hover-to-pause feature went through several iterations to achieve the desired precision.
-* **Focus on "Feel"**: Beyond just functional code, there was an emphasis on the "vibe" – ensuring the application felt responsive, informative, and visually engaging. This involved tweaking animations, color schemes, and data presentation based on iterative feedback.
-* **Collaborative Problem-Solving**: When bugs or unexpected behaviors arose (like the initial ring animation issues), the debugging process was also collaborative, with Gemini helping to diagnose problems based on error messages and observed behavior.
-
-This method facilitated a quick turnaround from concept to a functional prototype, emphasizing a fluid, responsive, and somewhat experimental path to development. It highlights how AI-assisted tools like Gemini Canvas can augment the creative and technical aspects of software development, allowing for rapid iteration and exploration of ideas.
-
-Beyond the initial conceptualization with Gemini Canvas, this project serves as an ongoing testbed for advanced Large Language Model (LLM) capabilities in real-world software engineering. AI agents like Jules frequently drive development, maintenance, and iterative enhancements. This process includes rigorously testing the LLM's ability to:
-* Understand complex requirements.
-* Generate and refactor code.
-* Debug issues.
-* Contribute to documentation (as demonstrated by this very README update).
-
-When working with AI agents like Jules, effective collaboration is key. Here are some tips and insights:
-
-*   **How to Interact Effectively:**
-    *   **Be specific:** Instead of vague requests like "improve the UI," provide detailed instructions, e.g., "change the color of the primary button to blue (hex code #007bff) and increase its padding to 12px."
-    *   **Provide context:** If reporting a bug, describe the steps to reproduce it, the expected behavior, and the actual outcome. Include error messages if any.
-    *   **Reference specifics:** Mention relevant files (e.g., `src/components/Globe.jsx`), functions (e.g., `handleMarkerClick`), or even line numbers if you have them.
-
-*   **Understanding Strengths:** AI agents like Jules excel at:
-    *   **Code Generation:** Creating boilerplate code, implementing well-defined functions, or building components based on clear specifications.
-    *   **Refactoring:** Assisting in improving code structure, enhancing readability, or optimizing performance when given specific guidelines or patterns to follow.
-    *   **Debugging Support:** Helping to identify potential causes of issues by analyzing code snippets and error messages. (Note: Jules cannot directly run code or use a debugger in this interactive context but can offer valuable suggestions based on the information provided).
-    *   **Documentation:** Generating or updating documentation, such as README files, code comments, or explanatory text.
-    *   **Answering Questions:** Providing information about the codebase, libraries used, or architectural decisions, based on its training data and the currently available code.
-
-*   **Embrace the Iterative Process:**
-    *   Working with AI is often a process of refinement. The initial output may not be perfect.
-    *   Be prepared to provide clear, constructive feedback and ask for revisions. Explain what was missed or how the output can be improved.
-
-*   **Experimental and Innovative Approach:**
-    *   Using AI agents for ongoing development is part of an innovative and experimental approach to software engineering.
-    *   Patience, clear communication, and a collaborative mindset are crucial for achieving the best results.
-
-This ongoing collaboration aims to push the boundaries of what LLMs can achieve in practical, non-trivial application development, providing valuable insights into their strengths and areas for continued improvement. Tools like the Claude code CLI are actively used in this "vibe process" for implementing new features and enhancements. The Global Seismic Activity Monitor is therefore not just a tool for visualizing earthquakes, but also a living experiment in the evolving landscape of AI-assisted software creation.
-
 The project reflects the spirit of innovation and agile creation championed by **Built By Vibes**.
 
 * **Twitter**: [@builtbyvibes](https://twitter.com/builtbyvibes)
 * **Website**: [www.builtbyvibes.com](https://www.builtbyvibes.com)
 
-## Setup and Installation
+## Getting Started
 
-To set up and run this project locally, follow these steps:
+This guide will walk you through setting up the project on your local machine for development and testing purposes.
 
-1.  **Clone the repository**:
+### Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+*   **Node.js**: This project requires a recent version of Node.js. You can download it from [nodejs.org](https://nodejs.org/).
+*   **npm** or **Yarn**: A package manager for JavaScript. npm is included with Node.js. If you prefer Yarn, you can install it from [yarnpkg.com](https://yarnpkg.com/).
+
+### Installation
+
+1.  **Clone the repository** to your local machine:
     ```bash
     git clone https://github.com/builtbyvibes/global-seismic-activity-monitor.git
     ```
+
 2.  **Navigate to the project directory**:
     ```bash
     cd global-seismic-activity-monitor
     ```
-3.  **Install dependencies**:
+
+3.  **Install the dependencies**:
     ```bash
+    # Using npm
     npm install
-    ```
-    (or `yarn install` if you use Yarn)
 
-4.  **Run the development server**:
-    ```bash
-    npm run dev
+    # Or using Yarn
+    yarn install
     ```
-    (or `yarn dev`)
 
-5.  **Open your browser and navigate to the local URL provided by Vite (usually `http://localhost:5173` or similar).**
+### Running the Development Server
+
+To start the development server, which includes hot-reloading for a better development experience, run the following command:
+
+```bash
+# Using npm
+npm run dev
+
+# Or using Yarn
+yarn dev
+```
+
+This will start the Vite development server, and you can view the application by navigating to the URL provided in your terminal (usually `http://localhost:5173`).
+
+### Running Tests
+
+The project uses Vitest for running unit and integration tests. To run the tests, use the following command:
+
+```bash
+# Using npm
+npm test
+
+# Or using Yarn
+yarn test
+```
+
+This will execute the test suite and provide a report of the test results in your terminal.
 
 **Developing Cloudflare Workers:**
 
