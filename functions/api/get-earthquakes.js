@@ -45,6 +45,13 @@ export async function onRequestGet(context) {
 
     const url = new URL(request.url);
     const timeWindowParam = url.searchParams.get("timeWindow") || "day";
+    const minMag = url.searchParams.get("minMag");
+    const maxMag = url.searchParams.get("maxMag");
+    const minDepth = url.searchParams.get("minDepth");
+    const maxDepth = url.searchParams.get("maxDepth");
+    const lat = url.searchParams.get("lat");
+    const lon = url.searchParams.get("lon");
+    const radius = url.searchParams.get("radius");
 
     let startTime;
     const now = new Date();
@@ -62,19 +69,51 @@ export async function onRequestGet(context) {
       );
     }
 
-    // event_time is stored in milliseconds since epoch
     const startTimeMilliseconds = startTime.getTime();
 
-    const query = `
+    let query = `
       SELECT geojson_feature
       FROM EarthquakeEvents
       WHERE event_time >= ?
-      ORDER BY event_time DESC;
     `;
+    const params = [startTimeMilliseconds];
+
+    if (minMag) {
+      query += " AND magnitude >= ?";
+      params.push(parseFloat(minMag));
+    }
+    if (maxMag) {
+      query += " AND magnitude <= ?";
+      params.push(parseFloat(maxMag));
+    }
+    if (minDepth) {
+      query += " AND depth >= ?";
+      params.push(parseFloat(minDepth));
+    }
+    if (maxDepth) {
+      query += " AND depth <= ?";
+      params.push(parseFloat(maxDepth));
+    }
+    if (lat && lon && radius) {
+      const latFloat = parseFloat(lat);
+      const lonFloat = parseFloat(lon);
+      const radiusFloat = parseFloat(radius);
+      const R = 6371; // Earth's radius in km
+      const maxLat = latFloat + (radiusFloat / R) * (180 / Math.PI);
+      const minLat = latFloat - (radiusFloat / R) * (180 / Math.PI);
+      const maxLon = lonFloat + (radiusFloat / R) * (180 / Math.PI) / Math.cos(latFloat * Math.PI / 180);
+      const minLon = lonFloat - (radiusFloat / R) * (180 / Math.PI) / Math.cos(latFloat * Math.PI / 180);
+
+      query += " AND latitude >= ? AND latitude <= ? AND longitude >= ? AND longitude <= ?";
+      params.push(minLat, maxLat, minLon, maxLon);
+    }
+
+
+    query += " ORDER BY event_time DESC;";
 
     let stmt;
     try {
-      stmt = db.prepare(query).bind(startTimeMilliseconds);
+      stmt = db.prepare(query).bind(...params);
     } catch (e) {
       console.error("Error preparing statement:", e);
       return new Response(`Failed to prepare database statement: ${e.message}`, {
@@ -104,22 +143,19 @@ export async function onRequestGet(context) {
 
     const features = queryResult.results.map(row => {
       try {
-        // Assuming geojson_feature is a string that needs to be parsed
         return JSON.parse(row.geojson_feature);
       } catch (parseError) {
         console.error("Failed to parse geojson_feature:", parseError, "Row:", row.geojson_feature);
-        // Return null or a placeholder for features that can't be parsed
-        // Or filter them out: return null; and then filter(f => f !== null)
         return { error: "Failed to parse feature data" };
       }
-    }).filter(feature => feature && !feature.error); // Filter out any parsing errors if chosen
+    }).filter(feature => feature && !feature.error);
 
     return new Response(JSON.stringify(features), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
         "X-Data-Source": "D1",
-        "Cache-Control": "public, s-maxage=60", // Added Cache-Control header
+        "Cache-Control": "public, s-maxage=60",
       },
     });
 
@@ -129,7 +165,6 @@ export async function onRequestGet(context) {
       status: 500,
       headers: {
         "X-Data-Source": "D1",
-        // No Cache-Control for error responses, or a short one like "public, s-maxage=5" if preferred
       },
     });
   }

@@ -18,6 +18,9 @@ import ClusterDetailModal from '../components/ClusterDetailModal'; // This is fo
 import { getMagnitudeColor, getMagnitudeColorStyle } from '../utils/utils.js';
 // import { findActiveClusters } from '../utils/clusterUtils.js'; // Import findActiveClusters - REMOVED
 
+import AdvancedFilterPanel from '../components/AdvancedFilterPanel';
+import '../components/AdvancedFilterPanel.css';
+
 // Import newly created components
 import SkeletonText from '../components/skeletons/SkeletonText';
 import SkeletonBlock from '../components/skeletons/SkeletonBlock';
@@ -1095,6 +1098,7 @@ function App() {
                 {/* The desktop sidebar's visibility is controlled by CSS (hidden lg:flex) */}
                 <aside className="hidden lg:flex w-[480px] bg-slate-800 p-0 flex-col border-l border-slate-700 shadow-2xl z-20">
                     <div className="p-3 border-b border-slate-700"> <h2 className="text-md font-semibold text-indigo-400">Detailed Earthquake Analysis</h2> </div>
+                    <AdvancedFilterPanel />
                     <div className="flex-shrink-0 p-2 space-x-1 border-b border-slate-700 whitespace-nowrap overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
                         <button onClick={handleSetSidebarOverview} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
                         <button onClick={handleSetSidebarDetails1hr} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>

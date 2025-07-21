@@ -63,23 +63,29 @@ export const EarthquakeDataProvider = ({ children }) => {
      * @returns {Promise<{data: Array<object>|null, source: ('D1'|'D1_failed'), error: string|null}>}
      *          An object containing the fetched data (array of GeoJSON features), the source, and any error message.
      */
-    const fetchFromD1 = async (timeWindow) => {
+    const fetchFromD1 = async (timeWindow, filters) => {
         try {
-            const response = await fetch(`/api/get-earthquakes?timeWindow=${timeWindow}`);
+            const params = new URLSearchParams({ timeWindow });
+            if (filters) {
+                Object.entries(filters).forEach(([key, value]) => {
+                    if (value !== null && value !== '') {
+                        params.append(key, value);
+                    }
+                });
+            }
+
+            const response = await fetch(`/api/get-earthquakes?${params.toString()}`);
             if (response.ok && response.headers.get('X-Data-Source') === 'D1') {
-                const data = await response.json(); // Expecting an array of features
+                const data = await response.json();
                 if (isValidFeatureArray(data)) {
                     return { data, source: 'D1', error: null };
                 } else {
-                    // console.warn(`D1 returned invalid feature array for ${timeWindow}:`, data);
                     return { data: null, source: 'D1_failed', error: 'D1 returned invalid feature array.' };
                 }
             }
             const errorText = await response.text();
-            // console.warn(`Failed to fetch from D1 for ${timeWindow} or invalid response: ${response.status} ${errorText}`);
             return { data: null, source: 'D1_failed', error: `Failed to fetch from D1: ${response.status} ${errorText}` };
         } catch (error) {
-            // console.error(`Error fetching from D1 for ${timeWindow}:`, error);
             return { data: null, source: 'D1_failed', error: error.message };
         }
     };
@@ -103,8 +109,9 @@ export const EarthquakeDataProvider = ({ children }) => {
             dispatch({ type: actionTypes.SET_ERROR, payload: { error: null } });
         }
 
-        const nowForFiltering = Date.now(); // Timestamp for data processing logic (e.g. filtering by time)
-        const currentTimestamp = Date.now(); // Timestamp for cache entry validity
+        const nowForFiltering = Date.now();
+        const currentTimestamp = Date.now();
+        const { filters } = state; // Get filters from state
 
         let dailyErrorMsg = null, weeklyErrorMsg = null;
         let dailyDataSource = null, weeklyDataSource = null;
@@ -116,7 +123,6 @@ export const EarthquakeDataProvider = ({ children }) => {
 
         // --- Daily Data Fetching ---
         if (dataCacheRef.current[CACHE_KEY_DAILY] && (currentTimestamp - dataCacheRef.current[CACHE_KEY_DAILY].timestamp < REFRESH_INTERVAL_MS)) {
-            // console.log("Serving daily data from cache");
             const cachedEntry = dataCacheRef.current[CACHE_KEY_DAILY];
             dispatch({
                 type: actionTypes.DAILY_DATA_PROCESSED,
@@ -125,9 +131,8 @@ export const EarthquakeDataProvider = ({ children }) => {
             dailyDataSource = cachedEntry.data.dataSource;
             dailyDataSkippedDueToCache = true;
         } else {
-            const d1DailyResponse = await fetchFromD1('day');
+            const d1DailyResponse = await fetchFromD1('day', filters); // Pass filters
             if (d1DailyResponse.source === 'D1') {
-                // console.log("Successfully fetched daily data from D1");
                 const processedData = { features: d1DailyResponse.data, metadata: null, fetchTime: nowForFiltering, dataSource: 'D1' };
                 dispatch({ type: actionTypes.DAILY_DATA_PROCESSED, payload: processedData });
                 dataCacheRef.current[CACHE_KEY_DAILY] = { data: processedData, timestamp: currentTimestamp };
@@ -155,7 +160,6 @@ export const EarthquakeDataProvider = ({ children }) => {
 
         // --- Weekly Data Fetching ---
         if (dataCacheRef.current[CACHE_KEY_WEEKLY] && (currentTimestamp - dataCacheRef.current[CACHE_KEY_WEEKLY].timestamp < REFRESH_INTERVAL_MS)) {
-            // console.log("Serving weekly data from cache");
             const cachedEntry = dataCacheRef.current[CACHE_KEY_WEEKLY];
             dispatch({
                 type: actionTypes.WEEKLY_DATA_PROCESSED,
@@ -164,9 +168,8 @@ export const EarthquakeDataProvider = ({ children }) => {
             weeklyDataSource = cachedEntry.data.dataSource;
             weeklyDataSkippedDueToCache = true;
         } else {
-            const d1WeeklyResponse = await fetchFromD1('week');
+            const d1WeeklyResponse = await fetchFromD1('week', filters); // Pass filters
             if (d1WeeklyResponse.source === 'D1') {
-                // console.log("Successfully fetched weekly data from D1");
                 const processedData = { features: d1WeeklyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' };
                 dispatch({ type: actionTypes.WEEKLY_DATA_PROCESSED, payload: processedData });
                 dataCacheRef.current[CACHE_KEY_WEEKLY] = { data: processedData, timestamp: currentTimestamp };
@@ -219,7 +222,7 @@ export const EarthquakeDataProvider = ({ children }) => {
         }
 
 
-    }, [dispatch]); // dispatch is stable
+    }, [dispatch, state.filters]); // Add state.filters dependency
 
     // --- Monthly Data Fetching Logic ---
     // Renamed from loadMonthlyData to fetchMonthlyDataInternal - MOVED EARLIER
@@ -389,11 +392,12 @@ export const EarthquakeDataProvider = ({ children }) => {
         dailyDataSource: state.dailyDataSource,
         weeklyDataSource: state.weeklyDataSource,
         monthlyDataSource: state.monthlyDataSource,
+        filters: state.filters,
+        setFilters: (filters) => dispatch({ type: actionTypes.SET_FILTERS, payload: filters }),
     }), [
         state, isLoadingInitialData, currentLoadingMessage, loadMonthlyData,
         feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
         feelableQuakes30Days_ctx, significantQuakes30Days_ctx,
-        // state.dailyDataSource, state.weeklyDataSource, state.monthlyDataSource // These are part of 'state'
     ]);
 
     return (
