@@ -6,6 +6,7 @@ import SeoMetadata from './SeoMetadata';
 import SummaryStatisticsCard from './SummaryStatisticsCard';
 import PaginatedEarthquakeTable from './PaginatedEarthquakeTable';
 import FeedSelector from './FeedSelector';
+import RangeFilter from './RangeFilter';
 import LoadMoreDataButton from './LoadMoreDataButton'; // Import the new component
 import { FEELABLE_QUAKE_THRESHOLD, MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 
@@ -53,23 +54,58 @@ const FeedsPageLayout = ({
         loadMonthlyData // This is the actual function from context
     } = useEarthquakeDataState();
 
-    const { activeFeedPeriod, setActiveFeedPeriod } = useUIState();
+    const {
+        activeFeedPeriod, setActiveFeedPeriod,
+        magnitudeRange, setMagnitudeRange,
+        depthRange, setDepthRange,
+    } = useUIState();
 
     // Re-derive currentFeedData
     const currentFeedData = useMemo(() => {
+        let filteredData;
         const baseDataForFilters = (contextHasAttemptedMonthlyLoad && contextAllEarthquakes.length > 0) ? contextAllEarthquakes : earthquakesLast7Days;
+
         switch (activeFeedPeriod) {
-            case 'last_hour': return earthquakesLastHour;
-            case 'last_24_hours': return earthquakesLast24Hours;
-            case 'last_7_days': return earthquakesLast7Days;
-            case 'last_14_days': return (contextHasAttemptedMonthlyLoad && contextAllEarthquakes.length > 0) ? earthquakesLast14Days : null;
-            case 'last_30_days': return (contextHasAttemptedMonthlyLoad && contextAllEarthquakes.length > 0) ? earthquakesLast30Days : null;
-            case 'feelable_quakes': return baseDataForFilters ? baseDataForFilters.filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD) : [];
-            case 'significant_quakes': return baseDataForFilters ? baseDataForFilters.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD) : [];
-            default: return earthquakesLast24Hours;
+            case 'last_hour':
+                filteredData = earthquakesLastHour;
+                break;
+            case 'last_24_hours':
+                filteredData = earthquakesLast24Hours;
+                break;
+            case 'last_7_days':
+                filteredData = earthquakesLast7Days;
+                break;
+            case 'last_14_days':
+                filteredData = (contextHasAttemptedMonthlyLoad && contextAllEarthquakes.length > 0) ? earthquakesLast14Days : null;
+                break;
+            case 'last_30_days':
+                filteredData = (contextHasAttemptedMonthlyLoad && contextAllEarthquakes.length > 0) ? earthquakesLast30Days : null;
+                break;
+            case 'feelable_quakes':
+                filteredData = baseDataForFilters ? baseDataForFilters.filter(q => q.properties.mag !== null && q.properties.mag >= FEELABLE_QUAKE_THRESHOLD) : [];
+                break;
+            case 'significant_quakes':
+                filteredData = baseDataForFilters ? baseDataForFilters.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD) : [];
+                break;
+            default:
+                filteredData = earthquakesLast24Hours;
         }
-    }, [activeFeedPeriod, earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
-        earthquakesLast14Days, earthquakesLast30Days, contextAllEarthquakes, contextHasAttemptedMonthlyLoad]);
+
+        if (filteredData) {
+            return filteredData.filter(quake => {
+                const mag = quake.properties.mag;
+                const depth = quake.geometry.coordinates[2];
+                return mag >= magnitudeRange[0] && mag <= magnitudeRange[1] &&
+                       depth >= depthRange[0] && depth <= depthRange[1];
+            });
+        }
+
+        return filteredData;
+    }, [
+        activeFeedPeriod, earthquakesLastHour, earthquakesLast24Hours, earthquakesLast7Days,
+        earthquakesLast14Days, earthquakesLast30Days, contextAllEarthquakes,
+        contextHasAttemptedMonthlyLoad, magnitudeRange, depthRange
+    ]);
 
     // Re-derive currentFeedTitle
     const currentFeedTitle = useMemo(() => {
@@ -136,6 +172,20 @@ const FeedsPageLayout = ({
                     allEarthquakes={contextAllEarthquakes}
                     FEELABLE_QUAKE_THRESHOLD={FEELABLE_QUAKE_THRESHOLD}
                     MAJOR_QUAKE_THRESHOLD={MAJOR_QUAKE_THRESHOLD}
+                />
+                <RangeFilter
+                    title="Magnitude"
+                    min={0}
+                    max={10}
+                    value={magnitudeRange}
+                    onChange={setMagnitudeRange}
+                />
+                <RangeFilter
+                    title="Depth (km)"
+                    min={0}
+                    max={1000}
+                    value={depthRange}
+                    onChange={setDepthRange}
                 />
                 <SummaryStatisticsCard
                     title={`Statistics for ${currentFeedTitle.replace("Earthquakes ", "").replace("Quakes ", "")}`}

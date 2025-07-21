@@ -31,6 +31,8 @@ export const UIStateProvider = ({ children }) => {
     );
     const [globeFocusLng, setGlobeFocusLng_internal] = useState(0);
     const [focusedNotableQuake, setFocusedNotableQuake_internal] = useState(null);
+    const [magnitudeRange, setMagnitudeRange] = useState([0, 10]);
+    const [depthRange, setDepthRange] = useState([0, 1000]);
 
     // PERFORMANCE & SYNC NOTE:
     // This effect synchronizes the 'activeSidebarView' state FROM the URL search parameters.
@@ -123,6 +125,10 @@ export const UIStateProvider = ({ children }) => {
         setGlobeFocusLng,
         focusedNotableQuake,
         setFocusedNotableQuake,
+        magnitudeRange,
+        setMagnitudeRange,
+        depthRange,
+        setDepthRange,
     };
 
     return (
