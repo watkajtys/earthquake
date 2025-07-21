@@ -26,6 +26,7 @@ import SkeletonTableRow from '../components/skeletons/SkeletonTableRow';
 import AlertDisplay from '../components/AlertDisplay';
 import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuakeBanner';
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
+import TimeMachine from '../components/TimeMachine';
 // RegionalDistributionList will be lazy loaded
 // MagnitudeDistributionSVGChart will be lazy loaded
 // EarthquakeTimelineSVGChart will be lazy loaded
@@ -361,7 +362,8 @@ function App() {
         earthquakesLast30Days,
         prev7DayData,
         prev14DayData,
-        loadMonthlyData
+        loadMonthlyData,
+        loadHistoricalData,
         // New pre-filtered lists (removed as they became unused)
         // feelableQuakes7Days_ctx,
         // significantQuakes7Days_ctx,
@@ -985,6 +987,7 @@ function App() {
             <header className="bg-slate-800 text-white pt-2 sm:pt-4 pb-1 sm:pb-2 px-2 shadow-lg z-40 border-b border-slate-700 flex-shrink-0">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-base sm:text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
+                    <TimeMachine onDateChange={loadHistoricalData} />
                     <p className="text-[0.7rem] sm:text-xs sm:text-sm text-slate-400 mt-0.5 sm:mt-0">{headerTimeDisplay}</p>
                 </div>
             </header>
