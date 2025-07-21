@@ -1,6 +1,5 @@
 /**
- * Cloudflare Pages Function handler for GET requests to /api/get-earthquakes.
- *
+ * @summary Cloudflare Pages Function for fetching earthquake data.
  * @description This function serves earthquake data directly from the `EarthquakeEvents` D1 table.
  * It supports filtering by a time window and returns an array of GeoJSON features.
  * All responses include an `X-Data-Source: D1` header.
@@ -20,11 +19,17 @@
  *  - 500 Internal Server Error: If the database is unavailable, or if there's an error during query
  *    preparation, execution, or data processing. Body includes an error message.
  *
+ * @summary Handles GET requests to /api/get-earthquakes.
  * @param {object} context - The Cloudflare Pages Function context object.
  * @param {Request} context.request - The incoming request object from the client.
  * @param {object} context.env - The environment object containing bindings.
  * @param {D1Database} context.env.DB - The D1 database binding for `EarthquakeEvents`.
  * @returns {Promise<Response>} A Response object containing the JSON data or an error message.
+ * @example
+ * // Example usage:
+ * // fetch('/api/get-earthquakes?timeWindow=week')
+ * // .then(response => response.json())
+ * // .then(data => console.log(data));
  */
 export async function onRequestGet(context) {
   try {

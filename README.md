@@ -4,6 +4,26 @@
 
 The Global Seismic Activity Monitor is a React-based web application that visualizes real-time and historical global earthquake data on an interactive 3D globe. It provides detailed statistics, insights into seismic events, and educational information about earthquake science. Users can explore recent and significant earthquakes, view their details, and understand their distribution and magnitude in a geographical context.
 
+## Project Status
+
+This project is under active development to enhance performance, data richness, and analytical capabilities. Key areas of focus include:
+
+*   **Performance Optimization:** Critical bottlenecks in the earthquake clustering algorithm (O(N²) complexity) and sitemap generation are being addressed. The plan includes implementing spatial indexing and optimizing database queries to significantly improve performance.
+*   **Historical Data Integration:** A robust batch processing system is being developed to ingest and analyze historical earthquake data from USGS archives. This will enable richer historical analysis and a more comprehensive dataset.
+*   **Enhanced Regional Analysis:** New features are being built to provide more detailed regional seismic analysis, including the integration of regional fault data and dedicated regional views.
+*   **Educational Enhancements:** The project is expanding its educational content with interactive learning modules and better correlation between seismic events and known faults.
+
+The development roadmap is managed through a detailed task list, prioritizing critical performance fixes, followed by historical data integration and advanced feature enhancements.
+
+## Development Roadmap
+
+The development of the Global Seismic Activity Monitor is prioritized to deliver the most critical improvements first. The roadmap is divided into the following phases:
+
+1.  **Critical Performance Fixes:** The immediate focus is on optimizing the core algorithms for clustering and data processing to ensure the application is fast and responsive, even with large datasets.
+2.  **Historical Data Foundation:** Once performance is optimized, the next priority is to build the infrastructure for ingesting and processing historical earthquake data, which will form the foundation for richer analysis.
+3.  **Advanced Features:** With a performant and data-rich platform, the focus will shift to developing advanced features for regional analysis, educational content, and fault integration.
+4.  **Enhancement and Polish:** The final phase will involve refining the user experience, improving the API, and adding other advanced features.
+
 ## Features
 
 * Interactive 3D Globe: Visualizes earthquake epicenters on a zoomable, rotatable globe.
@@ -26,75 +46,9 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * Educational Snippets: Provides brief explanations on earthquake concepts like magnitude, depth, and intensity.
 * Dedicated 'Learn' Page: Provides educational content and detailed explanations about earthquake science and terminology.
 * **Regional Faulting Display**: Incorporates and displays data on regional fault lines, enhancing geological context and understanding. This feature was added as part of the vibe process using the Claude code CLI.
+* **Enhanced Regional Quake Processing:** Under development to provide detailed analysis of specific seismic regions, including region-specific statistics and historical data.
+* **Nearby Fault Data Integration:** Under development to correlate earthquakes with known fault lines, providing deeper geological context.
 * Responsive Sidebar: Dynamically loads and displays detailed analysis panels.
-
-### Server-Side Processing Strategy
--   **Confirmation:** The application's architecture correctly centralizes data-intensive and backend operations on server-side Cloudflare Workers. This is a robust approach.
--   **Key Server-Side Functions & Responsibilities:**
-    *   **USGS Data Proxy & Initial Processing:** `functions/routes/api/usgs-proxy.js` (Handles fetching from USGS, caching, diffing against KV, and initiating D1 writes for new/updated events).
-    *   **Earthquake Data Storage & Retrieval:** Interactions with the `EarthquakeEvents` D1 table are managed by various API handlers (e.g., `functions/api/get-earthquakes.js`) and utility functions (`src/utils/d1Utils.js`).
-    *   **Real-time Cluster Calculation:** `functions/api/calculate-clusters.POST.js` (Performs on-demand cluster analysis).
-    *   **Persistent Cluster Definition Storage:** `functions/utils/d1ClusterUtils.js` and `storeClusterDefinitionsInBackground` (Manages storing significant cluster details in the `ClusterDefinitions` D1 table).
-    *   **Sitemap Generation:** Handlers within `src/worker.js` (Dynamically create sitemaps).
-    *   **Prerendering for SEO:** Handlers within `src/worker.js` (Serve static HTML for crawlers).
--   **Benefits:** This server-centric model ensures scalability, performance (by processing data close to users via Cloudflare's network), and better data management.
-
-## Performance and Optimizations
-
-This section summarizes critical performance bottlenecks and outlines recommended optimizations.
-
-### Cluster Calculation Algorithm (`findActiveClusters`)
--   **Issue:** The current earthquake clustering algorithm has a time complexity of approximately O(N^2), making it inefficient for large datasets.
--   **Impact:** Slow API responses, high server load, and potential timeouts, especially during periods of high seismic activity.
--   **Recommendation:**
-    -   **Algorithmic Enhancement:** Implement a more efficient clustering algorithm like **DBSCAN** or use **spatial indexing** (e.g., k-d trees, quadtrees) to accelerate the search for neighboring earthquakes.
-    -   **Caching:** Verify that the D1-based caching for cluster results is effectively minimizing redundant calculations.
-
-### Cluster Sitemap Generation (`handleClustersSitemapRequest`)
--   **Issue:** The sitemap generation process makes an individual API call to USGS for each cluster to get the strongest quake's details, which is highly inefficient.
--   **Impact:** Extremely slow sitemap generation, potential rate limiting from USGS, and possible Worker timeouts.
--   **Recommendation:**
-    -   **Store Canonical Slugs in D1:** Pre-calculate and store the final URL slug for each cluster in the `ClusterDefinitions` D1 table at the time of its creation.
-    -   **Sitemap from D1 Only:** Modify the sitemap generation logic to build the sitemap exclusively from the data stored in the `ClusterDefinitions` table, eliminating all external API calls during the process.
-
-### Scheduled Data Fetching & Processing (`usgs-proxy.js`)
--   **Issue:** The scheduled cron job for fetching hourly data from USGS is critical for data freshness. Any failure in this pipeline could lead to outdated information.
--   **Impact:** Users might see stale earthquake data if the cron job fails repeatedly.
--   **Recommendation:**
-    -   **Monitoring and Logging:** Implement comprehensive logging for each step of the scheduled task (fetch, KV read/write, D1 upsert).
-    -   **Alerting:** Set up alerts to be notified of persistent failures in the data pipeline.
-    -   **KV Diffing Logic:** Regularly verify that the logic for comparing new data with the cached version in the KV store correctly identifies new and updated events.
-
-## Future Enhancements
-
-This section outlines planned future enhancements to enrich the application's data, provide deeper regional analysis, and expand its educational content.
-
-### Strategy for Loading Historical Earthquake Data
--   **Objective:** To populate the application's D1 database with historical earthquake data from previous years and months.
--   **Process:**
-    -   **Data Acquisition:** Identify and use historical earthquake data archives from USGS.
-    -   **Batch Ingestion:** Develop a new, secure Cloudflare Worker HTTP function for batch ingestion. This function will fetch historical data, parse it, and load it into the `EarthquakeEvents` D1 table in manageable chunks.
-    -   **Historical Cluster Generation:** After data ingestion, a similar batch process will be used to analyze the historical data and generate corresponding cluster definitions, which will be stored in the `ClusterDefinitions` D1 table.
-
-### Enhanced Regional Quake Processing & Display
--   **Goal:** To provide more detailed and dedicated analysis for specific seismic regions.
--   **Initiatives:**
-    -   **Dedicated Regional Pages:** Create dynamic pages for specific regions (e.g., California, Japan) that aggregate region-specific seismicity, historical data, and statistics.
-    -   **Server-Side Regional Aggregation:** Implement server-side processes to pre-calculate and store regional summaries to support these pages efficiently.
-    -   **Enhanced Fault Data Integration:** Load detailed fault data into a dedicated D1 table. Develop server-side functions to analyze the proximity of earthquakes to known faults and display this information to the user.
-
-### Educational Content and Features
--   **Objective:** To expand the application's role as an educational tool.
--   **Initiatives:**
-    -   **Interactive Learning Modules:** Develop new interactive modules in the "Learn" section, covering topics like fault mechanics and seismic sequence analysis, using visualizations and real-world examples.
-    -   **Contextualized Explanations:** Provide explanations of seismic events that are tailored to the specific locality, discussing local geology and preparedness.
-    -   **Correlating Quakes with Known Faults:** Enhance the system to prominently link earthquakes to known faults, providing users with more context about the seismic events they are viewing.
-
-### Other Potential Features
--   **Advanced Cluster Analysis:** Explore time-based parameters in clustering to better identify and characterize earthquake sequences.
--   **Client-Side Rendering Performance:** Continuously optimize client-side rendering of large datasets and complex geometries using techniques like virtualization and Level of Detail (LOD).
--   **User-Defined Regions & Alerts:** Consider adding functionality for users to define custom regions of interest and receive notifications for significant quakes in those areas.
--   **Educational API Endpoint:** Develop a public API to provide access to processed data for educational or third-party use.
 
 ## Data Source
 
@@ -142,88 +96,43 @@ Manual deployments to specific environments can be performed using npm or yarn s
     *   **Purpose**: Deploys the current state of your project to the `staging` environment on Cloudflare.
     *   **npm Command**: `npm run deploy:staging`
     *   **Yarn Command**: `yarn deploy:staging`
-    *   **Usage**: Run the appropriate command from your terminal to push changes to staging. This is useful for final testing before a production release.
-    ```bash
-    # Using npm
-    npm run deploy:staging
-
-    # Or using Yarn
-    yarn deploy:staging
-    ```
 
 *   **Deploying to Production**:
     *   **Purpose**: Deploys the current state of your project to the `production` (live) environment on Cloudflare.
     *   **npm Command**: `npm run deploy:production`
     *   **Yarn Command**: `yarn deploy:production`
-    *   **Usage**: Run the appropriate command from your terminal to push changes to production. This should only be done after changes have been thoroughly tested (e.g., in `staging` or preview deployments).
-    ```bash
-    # Using npm
-    npm run deploy:production
-
-    # Or using Yarn
-    yarn deploy:production
-    ```
 
 **Note on Automated Deployments:**
 Typically, the `production` environment is connected to the main branch of the Git repository, and deployments to production occur automatically when changes are merged into that branch. The `staging` environment might also be configured for automatic deployments from a specific branch (e.g., `develop` or `staging`), or manual deployments using the commands above can be used as part of the release process. Preview deployments (as **Cloudflare Workers**) are typically automated, potentially using **Cloudflare Pages'** CI/CD capabilities for the build and deployment pipeline.
 
-## Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
+## Development Journey & Concept: "Vibe-Coding"
 
-This Global Seismic Activity Monitor was brought to life through a dynamic and iterative development process, affectionately termed "vibe-coding." The project was conceptualized and significantly shaped within Gemini Canvas, leveraging a conversational AI-assisted development workflow.
+This project was developed using a "vibe-coding" approach, a dynamic and iterative process centered on rapid prototyping and conversational development with AI assistants.
 
-**How it worked:**
+The workflow involved:
+*   **Conversational Prototyping**: Using AI to generate foundational code and components based on high-level feature descriptions.
+*   **Iterative Refinement**: Incrementally building and refining features through a cycle of describing desired changes, testing the generated code, and providing feedback.
+*   **Agile & Exploratory**: Quickly exploring different UI/UX ideas and pivoting when necessary.
 
-* **Conversational Prototyping**: Initial ideas and feature requirements were discussed with Gemini. Based on these conversations, Gemini generated foundational React components and logic.
-* **Iterative Refinement**: Each feature, from basic globe setup to complex interactions like the ring highlights or data-driven UI updates, was built incrementally. The process involved:
-    * Describing the desired functionality or behavior.
-    * Reviewing and testing the code suggestions provided by Gemini.
-    * Identifying issues, bugs, or areas for improvement (like the ring animation or hover states).
-    * Providing feedback, error messages, and updated code snippets back to Gemini.
-    * Receiving revised code and explanations, and integrating them into the application.
-* **Agile & Exploratory**: This "vibe-coding" approach allowed for rapid exploration of different UI/UX ideas and quick pivots when a particular implementation wasn't ideal. For example, the globe hover-to-pause feature went through several iterations to achieve the desired precision.
-* **Focus on "Feel"**: Beyond just functional code, there was an emphasis on the "vibe" – ensuring the application felt responsive, informative, and visually engaging. This involved tweaking animations, color schemes, and data presentation based on iterative feedback.
-* **Collaborative Problem-Solving**: When bugs or unexpected behaviors arose (like the initial ring animation issues), the debugging process was also collaborative, with Gemini helping to diagnose problems based on error messages and observed behavior.
+This method, facilitated by tools like Gemini Canvas and Claude, allows for a fluid and responsive development process, turning concepts into functional prototypes quickly.
 
-This method facilitated a quick turnaround from concept to a functional prototype, emphasizing a fluid, responsive, and somewhat experimental path to development. It highlights how AI-assisted tools like Gemini Canvas can augment the creative and technical aspects of software development, allowing for rapid iteration and exploration of ideas.
-
-Beyond the initial conceptualization with Gemini Canvas, this project serves as an ongoing testbed for advanced Large Language Model (LLM) capabilities in real-world software engineering. AI agents like Jules frequently drive development, maintenance, and iterative enhancements. This process includes rigorously testing the LLM's ability to:
-* Understand complex requirements.
-* Generate and refactor code.
-* Debug issues.
-* Contribute to documentation (as demonstrated by this very README update).
-
-When working with AI agents like Jules, effective collaboration is key. Here are some tips and insights:
-
-*   **How to Interact Effectively:**
-    *   **Be specific:** Instead of vague requests like "improve the UI," provide detailed instructions, e.g., "change the color of the primary button to blue (hex code #007bff) and increase its padding to 12px."
-    *   **Provide context:** If reporting a bug, describe the steps to reproduce it, the expected behavior, and the actual outcome. Include error messages if any.
-    *   **Reference specifics:** Mention relevant files (e.g., `src/components/Globe.jsx`), functions (e.g., `handleMarkerClick`), or even line numbers if you have them.
-
-*   **Understanding Strengths:** AI agents like Jules excel at:
-    *   **Code Generation:** Creating boilerplate code, implementing well-defined functions, or building components based on clear specifications.
-    *   **Refactoring:** Assisting in improving code structure, enhancing readability, or optimizing performance when given specific guidelines or patterns to follow.
-    *   **Debugging Support:** Helping to identify potential causes of issues by analyzing code snippets and error messages. (Note: Jules cannot directly run code or use a debugger in this interactive context but can offer valuable suggestions based on the information provided).
-    *   **Documentation:** Generating or updating documentation, such as README files, code comments, or explanatory text.
-    *   **Answering Questions:** Providing information about the codebase, libraries used, or architectural decisions, based on its training data and the currently available code.
-
-*   **Embrace the Iterative Process:**
-    *   Working with AI is often a process of refinement. The initial output may not be perfect.
-    *   Be prepared to provide clear, constructive feedback and ask for revisions. Explain what was missed or how the output can be improved.
-
-*   **Experimental and Innovative Approach:**
-    *   Using AI agents for ongoing development is part of an innovative and experimental approach to software engineering.
-    *   Patience, clear communication, and a collaborative mindset are crucial for achieving the best results.
-
-This ongoing collaboration aims to push the boundaries of what LLMs can achieve in practical, non-trivial application development, providing valuable insights into their strengths and areas for continued improvement. Tools like the Claude code CLI are actively used in this "vibe process" for implementing new features and enhancements. The Global Seismic Activity Monitor is therefore not just a tool for visualizing earthquakes, but also a living experiment in the evolving landscape of AI-assisted software creation.
+Beyond the initial build, this project serves as a testbed for advanced Large Language Model (LLM) capabilities in software engineering. AI agents are used for ongoing development, maintenance, and enhancements. This includes testing their ability to understand complex requirements, generate and refactor code, debug issues, and contribute to documentation.
 
 The project reflects the spirit of innovation and agile creation championed by **Built By Vibes**.
 
 * **Twitter**: [@builtbyvibes](https://twitter.com/builtbyvibes)
 * **Website**: [www.builtbyvibes.com](https://www.builtbyvibes.com)
 
-## Setup and Installation
+## Getting Started
 
-To set up and run this project locally, follow these steps:
+This section provides a step-by-step guide for new developers to set up and run the project locally.
+
+### Prerequisites
+
+*   Node.js (v16 or higher)
+*   npm or Yarn
+
+### Setup and Installation
 
 1.  **Clone the repository**:
     ```bash
@@ -249,11 +158,11 @@ To set up and run this project locally, follow these steps:
 
 **Developing Cloudflare Workers:**
 
-The serverless functions within the Cloudflare Worker (e.g., for the USGS proxy or API endpoints) can be developed and tested locally using the **Wrangler** CLI. While primary frontend development uses `npm run dev` (**Vite**), you can run a local development server for Worker functions to test them in isolation or develop new Worker-specific features.
+The serverless functions within the Cloudflare Worker can be developed and tested locally using the **Wrangler** CLI. While primary frontend development uses `npm run dev` (**Vite**), you can run a local development server for Worker functions.
 
 *   Navigate to the project root (where `wrangler.toml` is located).
 *   Use the command `npx wrangler dev` to start the local server for the Worker.
-*   Refer to the [Cloudflare Wrangler documentation](https://developers.cloudflare.com/workers/wrangler/commands/#dev) for more details on local development and testing of **Workers**.
+*   Refer to the [Cloudflare Wrangler documentation](https://developers.cloudflare.com/workers/wrangler/commands/#dev) for more details.
 
 **Note on Local Development Approach:**
 For most frontend development and testing, the **Vite** development server (`npm run dev`) is sufficient. It effectively proxies API requests to the appropriate Worker (either a deployed one or a local one if you're running both). Direct Worker development using `npx wrangler dev` becomes necessary when:
@@ -271,8 +180,8 @@ The `src/` directory contains the core source code for the application, organize
     -   **`components/skeletons/`**: Skeleton loader components used for placeholder UI during data fetching.
 -   **`constants/`**: Application-wide constants, primarily in `appConstants.js` (e.g., API URLs, thresholds).
 -   **`contexts/`**: React Context providers and custom hooks for global state management (e.g., `EarthquakeDataContext.jsx`, `UIStateContext.jsx`).
--   **`functions/`**: Houses serverless function logic, primarily API handlers and related tests, integral to the Cloudflare Worker's operation (e.g., `functions/api/calculate-clusters.js`). The main Worker entry point, `src/worker.js`, orchestrates routing to these functions and other frontend asset-serving logic.
-    -   **`functions/api/`**: Contains API route handlers (e.g., for cluster calculations, D1 database interactions).
+-   **`functions/`**: Houses serverless function logic, primarily API handlers and related tests, integral to the Cloudflare Worker's operation. The main Worker entry point, `src/worker.js`, orchestrates routing to these functions and other frontend asset-serving logic.
+    -   **`functions/api/`**: Contains API route handlers.
 -   **`features/`**: Intended for feature-specific modules in future development (currently contains a `.gitkeep` file).
 -   **`hooks/`**: Intended for custom React hooks (currently contains a `.gitkeep` file).
 -   **`pages/`**: Top-level React components representing different application pages/views (e.g., `HomePage.jsx`, which defines the main application structure and routes).
@@ -294,79 +203,11 @@ The codebase includes comprehensive JSDoc comments within the `.jsx` files in th
 
 ### Generating HTML Documentation
 
-You can generate HTML documentation from these JSDoc comments using the `jsdoc` npm package.
+You can generate HTML documentation from the JSDoc comments in the source code.
 
-1.  **Install JSDoc and a template (e.g., Docdash)**:
-    You can install `jsdoc` globally or as a development dependency in your project. `docdash` is a popular clean template.
-    ```bash
-    # Global installation
-    npm install -g jsdoc docdash
-
-    # Or, as dev dependencies
-    npm install --save-dev jsdoc docdash
-    ```
-
-2.  **Create a JSDoc Configuration File (Optional but Recommended)**:
-    Create a `jsdoc.json` (or `conf.json`) file in your project root for better control over the documentation generation process.
-    Example `jsdoc.json`:
-    ```json
-    {
-      "source": {
-        "include": ["src"],
-        "includePattern": ".+\\.jsx?$",
-        "excludePattern": "(node_modules|docs)"
-      },
-      "opts": {
-        "destination": "./docs/jsdoc/",
-        "recurse": true,
-        "readme": "./README.md",
-        "template": "node_modules/docdash"
-      },
-      "plugins": ["plugins/markdown"],
-      "templates": {
-        "default": {
-          "outputSourceFiles": false
-        },
-        "docdash": {
-          "static": true,
-          "sort": true,
-          "search": true,
-          "collapse": true,
-          "typedefs": true,
-          "removeQuotes": "none",
-          "menu": {
-            "Github repo": {
-              "href": "https://github.com/builtbyvibes/global-seismic-activity-monitor",
-              "target": "_blank"
-            }
-          }
-        }
-      }
-    }
-    ```
-    *Note: The `template` path in `jsdoc.json` assumes `docdash` is installed locally (i.e., in `node_modules`). If you installed `docdash` globally, you may need to provide the absolute path to the global `docdash` template directory or configure JSDoc to find global templates.*
-
-3.  **Run JSDoc**:
-    Since `jsdoc` and `docdash` are listed as development dependencies in `package.json`, you can run JSDoc using `npx` after installing dependencies (`npm install`).
-
-    If you are using the `jsdoc.json` configuration file (recommended):
-    ```bash
-    npx jsdoc -c jsdoc.json
-    ```
-    Alternatively, you can specify options directly on the command line:
-    ```bash
-    npx jsdoc src -r -d docs/jsdoc --template node_modules/docdash --readme README.md
-    ```
-    This will generate the documentation in the `docs/jsdoc/` directory. Open the `index.html` file in that directory to view the documentation.
-
-    **Recommended:** For convenience, consider adding a script to your `package.json`:
-    ```json
-    "scripts": {
-      // ... other scripts
-      "docs": "jsdoc -c jsdoc.json"
-    }
-    ```
-    Then, you can simply run:
+1.  **Generate the documentation**:
     ```bash
     npm run docs
     ```
+2.  **Open the documentation**:
+    Open `docs/jsdoc/index.html` in your browser.
