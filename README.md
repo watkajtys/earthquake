@@ -4,6 +4,26 @@
 
 The Global Seismic Activity Monitor is a React-based web application that visualizes real-time and historical global earthquake data on an interactive 3D globe. It provides detailed statistics, insights into seismic events, and educational information about earthquake science. Users can explore recent and significant earthquakes, view their details, and understand their distribution and magnitude in a geographical context.
 
+## Project Status
+
+This project is under active development to enhance performance, data richness, and analytical capabilities. Key areas of focus include:
+
+*   **Performance Optimization:** Critical bottlenecks in the earthquake clustering algorithm (O(N²) complexity) and sitemap generation are being addressed. The plan includes implementing spatial indexing and optimizing database queries to significantly improve performance.
+*   **Historical Data Integration:** A robust batch processing system is being developed to ingest and analyze historical earthquake data from USGS archives. This will enable richer historical analysis and a more comprehensive dataset.
+*   **Enhanced Regional Analysis:** New features are being built to provide more detailed regional seismic analysis, including the integration of regional fault data and dedicated regional views.
+*   **Educational Enhancements:** The project is expanding its educational content with interactive learning modules and better correlation between seismic events and known faults.
+
+The development roadmap is managed through a detailed task list, prioritizing critical performance fixes, followed by historical data integration and advanced feature enhancements.
+
+## Development Roadmap
+
+The development of the Global Seismic Activity Monitor is prioritized to deliver the most critical improvements first. The roadmap is divided into the following phases:
+
+1.  **Critical Performance Fixes:** The immediate focus is on optimizing the core algorithms for clustering and data processing to ensure the application is fast and responsive, even with large datasets.
+2.  **Historical Data Foundation:** Once performance is optimized, the next priority is to build the infrastructure for ingesting and processing historical earthquake data, which will form the foundation for richer analysis.
+3.  **Advanced Features:** With a performant and data-rich platform, the focus will shift to developing advanced features for regional analysis, educational content, and fault integration.
+4.  **Enhancement and Polish:** The final phase will involve refining the user experience, improving the API, and adding other advanced features.
+
 ## Features
 
 * Interactive 3D Globe: Visualizes earthquake epicenters on a zoomable, rotatable globe.
@@ -26,6 +46,8 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 * Educational Snippets: Provides brief explanations on earthquake concepts like magnitude, depth, and intensity.
 * Dedicated 'Learn' Page: Provides educational content and detailed explanations about earthquake science and terminology.
 * **Regional Faulting Display**: Incorporates and displays data on regional fault lines, enhancing geological context and understanding. This feature was added as part of the vibe process using the Claude code CLI.
+* **Enhanced Regional Quake Processing:** Under development to provide detailed analysis of specific seismic regions, including region-specific statistics and historical data.
+* **Nearby Fault Data Integration:** Under development to correlate earthquakes with known fault lines, providing deeper geological context.
 * Responsive Sidebar: Dynamically loads and displays detailed analysis panels.
 
 ## Data Source
