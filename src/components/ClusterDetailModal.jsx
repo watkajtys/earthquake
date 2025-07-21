@@ -1,8 +1,7 @@
 // src/ClusterDetailModal.jsx
-import React from 'react';
+import { useRef, useEffect } from 'react';
 import ClusterMiniMap from './ClusterMiniMap'; // Added import for the mini-map
 import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the new chart
-// import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor - Unused
 
 /**
  * A modal component to display detailed information about an earthquake cluster.
@@ -26,11 +25,11 @@ import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the n
  * @returns {JSX.Element | null} The rendered ClusterDetailModal component or null if no `cluster` data is provided.
  */
 function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
-    const modalContentRef = React.useRef(null);
-    const closeButtonRef = React.useRef(null);
+    const modalContentRef = useRef(null);
+    const closeButtonRef = useRef(null);
 
     // Effect for handling Escape key press for closing the modal and implementing focus trapping.
-    React.useEffect(() => {
+    useEffect(() => {
         const modalElement = modalContentRef.current;
         if (!modalElement) return;
 
