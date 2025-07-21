@@ -1,5 +1,4 @@
-import React, { useRef, useEffect, memo, useState, useMemo } from 'react'; // Added useState and useMemo
-// PropTypes import removed
+import { useRef, useEffect, memo, useState, useMemo } from 'react'; // Added useState and useMemo
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
@@ -8,9 +7,7 @@ import L from 'leaflet';
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
 import { 
   calculateBoundingBoxFromPoints, 
-  filterGeoJSONByBoundingBox,
-  initializeSpatialIndex,
-  clearSpatialIndex
+  filterGeoJSONByBoundingBox
 } from '../utils/geoSpatialUtils.js';
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
@@ -239,7 +236,7 @@ const EarthquakeMap = ({
           setTectonicPlatesDataJson(platesData.default);
         }
       } catch (error) {
-        console.error("Error loading tectonic plates data:", error);
+        // console.error("Error loading tectonic plates data:", error);
       } finally {
         if (isMounted) {
           setIsTectonicPlatesLoading(false);
@@ -262,7 +259,7 @@ const EarthquakeMap = ({
           setFullActiveFaultsData(faultsData.default);
         }
       } catch (error) {
-        console.error("Error loading active faults data:", error);
+        // console.error("Error loading active faults data:", error);
       } finally {
         if (isMounted) {
           setIsActiveFaultsLoading(false);
@@ -317,7 +314,7 @@ const EarthquakeMap = ({
       // Log filtering results for debugging
       const originalCount = fullActiveFaultsData.features.length;
       const filteredCount = filteredFaults.features.length;
-      console.log(`Active faults filtered: ${originalCount} → ${filteredCount} (${Math.round(filteredCount/originalCount*100)}%)`);
+      // console.log(`Active faults filtered: ${originalCount} → ${filteredCount} (${Math.round(filteredCount/originalCount*100)}%)`);
     } else {
       // Fallback: no filtering
       setActiveFaultsDataJson(fullActiveFaultsData);
@@ -377,7 +374,7 @@ const EarthquakeMap = ({
           typeof quake.properties?.mag !== 'number' ||
           typeof quake.properties?.time !== 'number'
         ) {
-          console.warn("Skipping rendering of nearby quake due to missing data:", quake);
+          // console.warn("Skipping rendering of nearby quake due to missing data:", quake);
           return null;
         }
         return (
@@ -444,7 +441,5 @@ const EarthquakeMap = ({
     </MapContainer>
   );
 };
-
-// PropTypes and defaultProps blocks removed.
 
 export default memo(EarthquakeMap);
