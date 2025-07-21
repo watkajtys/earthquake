@@ -1,6 +1,6 @@
 // src/contexts/EarthquakeDataContext.jsx
 import React, { useContext, useEffect, useCallback, useMemo, useReducer, useRef } from 'react'; // Removed createContext, Added useRef
-import { fetchUsgsData } from '../services/usgsApiService';
+import { fetchUsgsData, fetchUsgsDataByDate } from '../services/usgsApiService';
 import {
     USGS_API_URL_DAY,
     USGS_API_URL_WEEK,
@@ -292,6 +292,31 @@ export const EarthquakeDataProvider = ({ children }) => {
         dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingMonthly: false } });
     }, [dispatch]); // Added dispatch
 
+    const loadHistoricalData = useCallback(async (date) => {
+        dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingHistorical: true } });
+        dispatch({ type: actionTypes.SET_ERROR, payload: { historicalError: null } });
+
+        const startDate = new Date(date);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(date);
+        endDate.setHours(23, 59, 59, 999);
+
+        try {
+            const historicalRes = await fetchUsgsDataByDate(startDate, endDate);
+            if (historicalRes.error || !isValidGeoJson(historicalRes)) {
+                throw new Error(historicalRes?.error?.message || 'Historical data is missing or invalid.');
+            }
+            dispatch({
+                type: actionTypes.HISTORICAL_DATA_PROCESSED,
+                payload: { features: historicalRes.features, fetchTime: Date.now() }
+            });
+        } catch (error) {
+            dispatch({ type: actionTypes.SET_ERROR, payload: { historicalError: error.message } });
+        } finally {
+            dispatch({ type: actionTypes.SET_LOADING_FLAGS, payload: { isLoadingHistorical: false } });
+        }
+    }, [dispatch]);
+
     // This is the function that will be exposed to context consumers - MOVED EARLIER
     const loadMonthlyData = useCallback(() => {
         dispatch({ type: actionTypes.REQUEST_MONTHLY_DATA_LOAD });
@@ -382,6 +407,7 @@ export const EarthquakeDataProvider = ({ children }) => {
         isLoadingInitialData,
         currentLoadingMessage,
         loadMonthlyData,
+        loadHistoricalData,
         feelableQuakes7Days_ctx,
         significantQuakes7Days_ctx,
         feelableQuakes30Days_ctx,
@@ -390,7 +416,7 @@ export const EarthquakeDataProvider = ({ children }) => {
         weeklyDataSource: state.weeklyDataSource,
         monthlyDataSource: state.monthlyDataSource,
     }), [
-        state, isLoadingInitialData, currentLoadingMessage, loadMonthlyData,
+        state, isLoadingInitialData, currentLoadingMessage, loadMonthlyData, loadHistoricalData,
         feelableQuakes7Days_ctx, significantQuakes7Days_ctx,
         feelableQuakes30Days_ctx, significantQuakes30Days_ctx,
         // state.dailyDataSource, state.weeklyDataSource, state.monthlyDataSource // These are part of 'state'
