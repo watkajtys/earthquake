@@ -115,7 +115,8 @@ const getActiveFaultStyle = (feature) => {
 };
 
 /**
- * Renders an interactive Leaflet map to display earthquake information.
+ * @summary A React component that displays an interactive map of earthquake data.
+ * @description Renders an interactive Leaflet map to display earthquake information.
  * Key features include:
  * - Displaying a main highlighted earthquake with a pulsing icon.
  * - Showing nearby earthquakes with icons whose opacity varies by age.
@@ -126,6 +127,7 @@ const getActiveFaultStyle = (feature) => {
  * The component is memoized for performance optimization.
  *
  * @component
+ * @summary Renders an interactive Leaflet map to display earthquake information.
  * @param {Object} props - The component's props.
  * @param {number} props.mapCenterLatitude - Initial latitude for the map center.
  * @param {number} props.mapCenterLongitude - Initial longitude for the map center.
@@ -140,6 +142,16 @@ const getActiveFaultStyle = (feature) => {
  * @param {boolean} [props.fitMapToBounds=false] - If true, the map will adjust its bounds to show all plotted quakes. If false, it uses `defaultZoom`.
  * @param {number} [props.defaultZoom=8] - Default zoom level for the map if not fitting to bounds or if only one point is shown.
  * @returns {JSX.Element} The EarthquakeMap component.
+ * @example
+ * <EarthquakeMap
+ *  mapCenterLatitude={34.0522}
+ *  mapCenterLongitude={-118.2437}
+ *  highlightQuakeLatitude={34.0522}
+ *  highlightQuakeLongitude={-118.2437}
+ *  highlightQuakeMagnitude={5.5}
+ *  highlightQuakeTitle="Los Angeles"
+ *  nearbyQuakes={[]}
+ * />
  */
 const EarthquakeMap = ({
   mapCenterLatitude,
