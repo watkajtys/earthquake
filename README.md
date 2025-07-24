@@ -6,23 +6,62 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 
 ## Project Status
 
-This project is under active development to enhance performance, data richness, and analytical capabilities. Key areas of focus include:
+Addressing the following bottlenecks is crucial for improving user experience and system efficiency.
 
-*   **Performance Optimization:** Critical bottlenecks in the earthquake clustering algorithm (O(N²) complexity) and sitemap generation are being addressed. The plan includes implementing spatial indexing and optimizing database queries to significantly improve performance.
-*   **Historical Data Integration:** A robust batch processing system is being developed to ingest and analyze historical earthquake data from USGS archives. This will enable richer historical analysis and a more comprehensive dataset.
-*   **Enhanced Regional Analysis:** New features are being built to provide more detailed regional seismic analysis, including the integration of regional fault data and dedicated regional views.
-*   **Educational Enhancements:** The project is expanding its educational content with interactive learning modules and better correlation between seismic events and known faults.
+### Cluster Calculation Algorithm (`findActiveClusters`)
+-   **Issue:** The current earthquake clustering algorithm, located in `functions/api/calculate-clusters.POST.js` (specifically the `findActiveClusters` function), appears to use a method that compares every earthquake with every other earthquake to find neighbors. This approach has a time complexity of roughly O(N^2), where N is the number of earthquakes.
+-   **Impact:** As the number of earthquakes in a given dataset increases (e.g., for wider time windows or seismically active periods), the calculation time for clusters will grow quadratically. This can lead to slow API responses, increased server load on Cloudflare Workers, and potentially timeouts.
+-   **Recommendation:**
+    1.  **Algorithmic Enhancement:** Investigate and implement a more efficient clustering algorithm. Options include:
+        *   **DBSCAN:** A density-based clustering algorithm that can be more efficient if spatial indexing is used.
+        *   **Spatial Indexing:** Implement structures like k-d trees or quadtrees to rapidly find earthquakes within a certain distance of each other, which would optimize the neighbor search phase of the current or a new algorithm.
+    2.  **Caching Verification:** Ensure the existing D1-based caching for cluster results (`ClusterCache` table) is effectively minimizing recalculations for identical input parameters (earthquake list, distance, min quakes).
 
-The development roadmap is managed through a detailed task list, prioritizing critical performance fixes, followed by historical data integration and advanced feature enhancements.
+### Cluster Sitemap Generation (`handleClustersSitemapRequest`)
+-   **Issue:** The `handleClustersSitemapRequest` function within the main worker script (`src/worker.js`) currently fetches all cluster slugs from the `ClusterDefinitions` D1 table. Then, for *each individual cluster*, it makes an external API call to the USGS to retrieve details of the strongest quake. This information is used to construct the URL for the sitemap entry.
+-   **Impact:**
+    *   **Extreme Slowness:** Sitemap generation becomes very slow, especially with a large number of defined clusters.
+    *   **USGS Rate Limiting/Blocking:** Making numerous sequential API calls to USGS can lead to rate limiting or temporary blocking.
+    *   **Worker Timeouts:** The prolonged execution time can exceed Cloudflare Worker limits.
+    *   **Stale Sitemap:** If the process fails or times out, the sitemap may not be updated correctly.
+-   **Recommendation:**
+    1.  **Store Canonical Slugs in D1:** Modify the `ClusterDefinitions` table and the cluster creation logic (`storeClusterDefinition` in `functions/utils/d1ClusterUtils.js` and its callers) to generate and store the final, canonical URL slug for each cluster at the time of its definition. This slug should be directly usable in the sitemap.
+    2.  **Sitemap from D1 Only:** Update `handleClustersSitemapRequest` to build the cluster sitemap *exclusively* using data available within the `ClusterDefinitions` D1 table (i.e., the pre-generated canonical slugs and `updatedAt` timestamps). This will eliminate all external API calls during sitemap generation.
+
+### Scheduled Data Fetching & Processing (`usgs-proxy.js`)
+-   **Issue:** The scheduled cron job (`*/1 * * * *` in `wrangler.toml`), executed by `src/worker.js` which calls `kvEnabledUsgsProxyHandler` (defined in `functions/routes/api/usgs-proxy.js`), is vital for data freshness. It fetches `all_hour.geojson` from USGS. While the proxy includes logic for KV store comparison to minimize redundant D1 writes, any sustained failure in this pipeline (USGS fetch, KV operations, D1 upsert) could impact data currency.
+-   **Impact:** Users could be viewing outdated earthquake information if the cron job fails repeatedly or processes data incorrectly.
+-   **Recommendation:**
+    1.  **Comprehensive Monitoring & Logging:** Implement detailed logging for each step of the scheduled task (fetching, KV read/write, D1 upsert). Monitor these logs for errors.
+    2.  **Alerting:** Set up alerts for persistent failures in the scheduled task.
+    3.  **KV Diffing Logic Verification:** Regularly ensure the logic that compares new data with data from `USGS_LAST_RESPONSE_KV` correctly identifies new and updated events, preventing both missed updates and unnecessary processing.
 
 ## Development Roadmap
 
-The development of the Global Seismic Activity Monitor is prioritized to deliver the most critical improvements first. The roadmap is divided into the following phases:
+### Phase 1: Critical Performance (Weeks 1-2)
+- Task 1.1: Spatial Indexing Implementation ⭐ **HIGHEST PRIORITY**
+- Task 1.4: Distance Calculation Optimization 🆕 **NEW**
+- Task 1.3: Cluster Caching Enhancement
+- Task 3.1: Enhanced Logging
+- Task 2.2: Sitemap Optimization
 
-1.  **Critical Performance Fixes:** The immediate focus is on optimizing the core algorithms for clustering and data processing to ensure the application is fast and responsive, even with large datasets.
-2.  **Historical Data Foundation:** Once performance is optimized, the next priority is to build the infrastructure for ingesting and processing historical earthquake data, which will form the foundation for richer analysis.
-3.  **Advanced Features:** With a performant and data-rich platform, the focus will shift to developing advanced features for regional analysis, educational content, and fault integration.
-4.  **Enhancement and Polish:** The final phase will involve refining the user experience, improving the API, and adding other advanced features.
+### Phase 2: Historical Data Foundation (Weeks 3-4)
+- Task 4.1: Enhanced Batch Processing
+- Task 4.2: Historical Data Sources
+- Task 5.1: Batch Cluster Generation
+- Task 9.1: Database Index Optimization
+
+### Phase 3: Advanced Features (Weeks 5-8)
+- Task 6.1: Regional Analysis Foundation
+- Task 7.1: Interactive Learning Modules
+- Task 8.1: Fault Data Storage
+- Task 10.1: Structured Logging
+
+### Phase 4: Enhancement and Polish (Weeks 9-12)
+- Task 1.2: DBSCAN Implementation ⚠️ **LOWER PRIORITY**
+- Task 6.2: Regional Statistics
+- Task 8.2: Fault Proximity Analysis
+- Task 11.1: Advanced Cluster Features
 
 ## Features
 
@@ -54,74 +93,9 @@ The development of the Global Seismic Activity Monitor is prioritized to deliver
 
 * Earthquake data is sourced from the **U.S. Geological Survey (USGS) Earthquake Hazards Program** via their GeoJSON feeds.
 
-## Technologies Used
+## Technical Details
 
-* **React**: JavaScript library for building user interfaces.
-* **React Globe GL**: For 3D globe visualization using ThreeJS/WebGL.
-* **Tailwind CSS**: Utility-first CSS framework for styling.
-* **Vite**: Frontend build tool.
-* **JavaScript (ES6+)**
-* **Cloudflare Workers**: For hosting, deployment, and serverless backend functions.
-
-## Deployment / Infrastructure
-
-The application is deployed as a **Cloudflare Worker**, which handles both the serving of the static frontend assets (built with **Vite**) and the backend serverless functions.
-
-*   **Unified Deployment**: The React-based user interface and the serverless backend logic (e.g., USGS proxy, API endpoints) are managed and deployed as a single Cloudflare Worker.
-*   **Static Asset Serving**: The Worker script is configured to serve the static files (HTML, CSS, JavaScript, images) generated by the Vite build process. This is typically managed via an `ASSETS` binding in the `wrangler.toml` configuration.
-*   **Serverless Functions**: API endpoints, data proxying, and other backend tasks are handled by the same Worker script.
-*   **Configuration**: Worker configuration, including routes, environment variables, KV/D1 bindings, and build steps for the worker itself, is managed through the `wrangler.toml` file.
-*   **Benefits**: This setup offers significant advantages, including:
-    *   **Scalability**: **Cloudflare Workers** scale automatically to handle traffic load.
-    *   **Performance**: Cloudflare's extensive Content Delivery Network (CDN) ensures that the application and its data are delivered quickly to users worldwide.
-    *   **Cost-Effectiveness**: A unified **Worker-based** architecture can be highly cost-effective.
-    *   **Simplified DevOps**: CI/CD for the entire application (frontend and backend) is streamlined by deploying to **Cloudflare Workers**.
-
-## Environments and Deployment
-
-This project utilizes distinct environments for development, staging, and production, managed through **Cloudflare Workers** and **Wrangler**.
-
-### Environments
-
-*   **`production`**: This is the live environment that serves the application to end-users. It uses production-ready configurations, including the main D1 database and KV namespaces.
-*   **`staging`**: This environment is intended for pre-production testing. It mirrors the production setup and, importantly, **uses the same production D1 database and KV namespace bindings**. This allows for testing with live data to ensure changes are safe and performant before they are deployed to the live `production` environment. Use this environment with caution due to its use of live data.
-*   **`preview`**: Preview deployments are automatically generated for each commit pushed to a branch (other than the production branch). These are deployed as **Cloudflare Workers**, often orchestrated via a CI/CD pipeline (which might be integrated with **Cloudflare Pages** for build and preview URL generation, e.g., `*.pages.dev`). These environments use preview-specific D1 and KV namespaces, suitable for testing new features in isolation without affecting production or staging data.
-*   **`dev`**: This refers to the local development environment. For the frontend, **Vite** (usually via `npm run dev`) is used. For testing the Worker functions locally, `wrangler dev` is the command. This setup typically uses preview or development-specific bindings defined in `wrangler.toml` to avoid impacting live data.
-
-### Manual Deployment Commands
-
-Manual deployments to specific environments can be performed using npm or yarn scripts defined in `package.json`.
-
-*   **Deploying to Staging**:
-    *   **Purpose**: Deploys the current state of your project to the `staging` environment on Cloudflare.
-    *   **npm Command**: `npm run deploy:staging`
-    *   **Yarn Command**: `yarn deploy:staging`
-    *   **Usage**: Run the appropriate command from your terminal to push changes to staging. This is useful for final testing before a production release.
-    ```bash
-    # Using npm
-    npm run deploy:staging
-
-    # Or using Yarn
-    yarn deploy:staging
-    ```
-
-*   **Deploying to Production**:
-    *   **Purpose**: Deploys the current state of your project to the `production` (live) environment on Cloudflare.
-    *   **npm Command**: `npm run deploy:production`
-    *   **Yarn Command**: `yarn deploy:production`
-    *   **Usage**: Run the appropriate command from your terminal to push changes to production. This should only be done after changes have been thoroughly tested (e.g., in `staging` or preview deployments).
-    ```bash
-    # Using npm
-    npm run deploy:production
-
-    # Or using Yarn
-    yarn deploy:production
-    ```
-
-**Note on Automated Deployments:**
-Typically, the `production` environment is connected to the main branch of the Git repository, and deployments to production occur automatically when changes are merged into that branch. The `staging` environment might also be configured for automatic deployments from a specific branch (e.g., `develop` or `staging`), or manual deployments using the commands above can be used as part of the release process. Preview deployments (as **Cloudflare Workers**) are typically automated, potentially using **Cloudflare Pages'** CI/CD capabilities for the build and deployment pipeline.
-
-## Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
+### Development Journey & Concept: "Vibe-Coding" with Gemini Canvas
 
 This Global Seismic Activity Monitor was brought to life through a dynamic and iterative development process, affectionately termed "vibe-coding." The project was conceptualized and significantly shaped within Gemini Canvas, leveraging a conversational AI-assisted development workflow.
 
@@ -175,7 +149,74 @@ The project reflects the spirit of innovation and agile creation championed by *
 * **Twitter**: [@builtbyvibes](https://twitter.com/builtbyvibes)
 * **Website**: [www.builtbyvibes.com](https://www.builtbyvibes.com)
 
-## Setup and Installation
+### Technologies Used
+
+* **React**: JavaScript library for building user interfaces.
+* **React Globe GL**: For 3D globe visualization using ThreeJS/WebGL.
+* **Tailwind CSS**: Utility-first CSS framework for styling.
+* **Vite**: Frontend build tool.
+* **JavaScript (ES6+)**
+* **Cloudflare Workers**: For hosting, deployment, and serverless backend functions.
+
+### Deployment / Infrastructure
+
+The application is deployed as a **Cloudflare Worker**, which handles both the serving of the static frontend assets (built with **Vite**) and the backend serverless functions.
+
+*   **Unified Deployment**: The React-based user interface and the serverless backend logic (e.g., USGS proxy, API endpoints) are managed and deployed as a single Cloudflare Worker.
+*   **Static Asset Serving**: The Worker script is configured to serve the static files (HTML, CSS, JavaScript, images) generated by the Vite build process. This is typically managed via an `ASSETS` binding in the `wrangler.toml` configuration.
+*   **Serverless Functions**: API endpoints, data proxying, and other backend tasks are handled by the same Worker script.
+*   **Configuration**: Worker configuration, including routes, environment variables, KV/D1 bindings, and build steps for the worker itself, is managed through the `wrangler.toml` file.
+*   **Benefits**: This setup offers significant advantages, including:
+    *   **Scalability**: **Cloudflare Workers** scale automatically to handle traffic load.
+    *   **Performance**: Cloudflare's extensive Content Delivery Network (CDN) ensures that the application and its data are delivered quickly to users worldwide.
+    *   **Cost-Effectiveness**: A unified **Worker-based** architecture can be highly cost-effective.
+    *   **Simplified DevOps**: CI/CD for the entire application (frontend and backend) is streamlined by deploying to **Cloudflare Workers**.
+
+### Environments and Deployment
+
+This project utilizes distinct environments for development, staging, and production, managed through **Cloudflare Workers** and **Wrangler**.
+
+#### Environments
+
+*   **`production`**: This is the live environment that serves the application to end-users. It uses production-ready configurations, including the main D1 database and KV namespaces.
+*   **`staging`**: This environment is intended for pre-production testing. It mirrors the production setup and, importantly, **uses the same production D1 database and KV namespace bindings**. This allows for testing with live data to ensure changes are safe and performant before they are deployed to the live `production` environment. Use this environment with caution due to its use of live data.
+*   **`preview`**: Preview deployments are automatically generated for each commit pushed to a branch (other than the production branch). These are deployed as **Cloudflare Workers**, often orchestrated via a CI/CD pipeline (which might be integrated with **Cloudflare Pages** for build and preview URL generation, e.g., `*.pages.dev`). These environments use preview-specific D1 and KV namespaces, suitable for testing new features in isolation without affecting production or staging data.
+*   **`dev`**: This refers to the local development environment. For the frontend, **Vite** (usually via `npm run dev`) is used. For testing the Worker functions locally, `wrangler dev` is the command. This setup typically uses preview or development-specific bindings defined in `wrangler.toml` to avoid impacting live data.
+
+#### Manual Deployment Commands
+
+Manual deployments to specific environments can be performed using npm or yarn scripts defined in `package.json`.
+
+*   **Deploying to Staging**:
+    *   **Purpose**: Deploys the current state of your project to the `staging` environment on Cloudflare.
+    *   **npm Command**: `npm run deploy:staging`
+    *   **Yyarn Command**: `yarn deploy:staging`
+    *   **Usage**: Run the appropriate command from your terminal to push changes to staging. This is useful for final testing before a production release.
+    ```bash
+    # Using npm
+    npm run deploy:staging
+
+    # Or using Yarn
+    yarn deploy:staging
+    ```
+
+*   **Deploying to Production**:
+    *   **Purpose**: Deploys the current state of your project to the `production` (live) environment on Cloudflare.
+    *   **npm Command**: `npm run deploy:production`
+    *   **Yarn Command**: `yarn deploy:production`
+    *   **Usage**: Run the appropriate command from your terminal to push changes to production. This should only be done after changes have been thoroughly tested (e.g., in `staging` or preview deployments).
+    ```bash
+    # Using npm
+    npm run deploy:production
+
+    # Or using Yarn
+    yarn deploy:production
+    ```
+
+**Note on Automated Deployments:**
+Typically, the `production` environment is connected to the main branch of the Git repository, and deployments to production occur automatically when changes are merged into that branch. The `staging` environment might also be configured for automatic deployments from a specific branch (e.g., `develop` or `staging`), or manual deployments using the commands above can be used as part of the release process. Preview deployments (as **Cloudflare Workers**) are typically automated, potentially using **Cloudflare Pages'** CI/CD capabilities for the build and deployment pipeline.
+
+### Setup and Installation
 
 To set up and run this project locally, follow these steps:
 
@@ -215,7 +256,7 @@ For most frontend development and testing, the **Vite** development server (`npm
 *   Initially setting up new Worker routes or functionalities.
 *   Testing Worker behavior in complete isolation from the frontend.
 
-## Project Structure
+### Project Structure
 
 The `src/` directory contains the core source code for the application, organized as follows:
 
@@ -242,11 +283,11 @@ Additionally, at the project root:
 
 This structure promotes a logical organization of the codebase, simplifying navigation and maintenance. JSDoc comments are used extensively throughout `.jsx` files to document components, functions, props, and data structures, further aiding in code comprehension.
 
-## Technical Documentation
+### Technical Documentation
 
 The codebase includes comprehensive JSDoc comments within the `.jsx` files in the `src` directory. These comments explain components, functions, props, and data structures to facilitate easier understanding and maintenance.
 
-### Generating HTML Documentation
+#### Generating HTML Documentation
 
 You can generate HTML documentation from these JSDoc comments using the `jsdoc` npm package.
 
