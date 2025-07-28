@@ -170,6 +170,8 @@ When working with AI agents like Jules, effective collaboration is key. Here are
 
 This ongoing collaboration aims to push the boundaries of what LLMs can achieve in practical, non-trivial application development, providing valuable insights into their strengths and areas for continued improvement. Tools like the Claude code CLI are actively used in this "vibe process" for implementing new features and enhancements. The Global Seismic Activity Monitor is therefore not just a tool for visualizing earthquakes, but also a living experiment in the evolving landscape of AI-assisted software creation.
 
+This is an update for julesTask 2.
+
 The project reflects the spirit of innovation and agile creation championed by **Built By Vibes**.
 
 * **Twitter**: [@builtbyvibes](https://twitter.com/builtbyvibes)
