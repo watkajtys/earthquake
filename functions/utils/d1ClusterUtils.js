@@ -62,9 +62,6 @@ export async function storeClusterDefinition(db, clusterData) {
   if (typeof clusterData.endTime !== 'number') return { success: false, error: 'Invalid type for endTime: must be a number.' };
   if (typeof clusterData.quakeCount !== 'number') return { success: false, error: 'Invalid type for quakeCount: must be a number.' };
 
-  // Set updatedAt timestamp at the application layer
-  clusterData.updatedAt = Date.now(); // Milliseconds Unix epoch
-
   // Log received clusterData (after validation and before try...catch)
   console.log('[storeClusterDefinition] Received clusterData:', JSON.stringify(clusterData, null, 2)); // Added null, 2 for pretty print
 
