@@ -67,7 +67,16 @@ describe('EarthquakeDetailModalComponent Navigation', () => {
   };
 
   test('calls navigate(-1) when onClose is triggered from EarthquakeDetailView', () => {
-    renderComponent();
+    const history = { length: 3 };
+    render(
+      <MemoryRouter initialEntries={['/some-previous-page', '/quake/test-detail-url']}>
+        <Routes>
+          <Route path="/quake/*" element={<EarthquakeDetailModalComponent history={history} />} />
+          <Route path="/some-previous-page" element={<div>Previous Page</div>} />
+          <Route path="/" element={<div>Home Page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
 
     act(() => {
       if (mockOnCloseCallback) {
