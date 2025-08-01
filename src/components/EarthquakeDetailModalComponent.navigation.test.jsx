@@ -78,6 +78,6 @@ describe('EarthquakeDetailModalComponent Navigation', () => {
       }
     });
 
-    expect(mockNavigateGlobal).toHaveBeenCalledWith(-1);
+    expect(mockNavigateGlobal).toHaveBeenCalledWith('/');
   });
 });
