@@ -80,11 +80,7 @@ const EarthquakeDetailModalComponent = () => {
     const handleClose = () => {
         // Check if there's a history to go back to. If not, navigate to the homepage.
         // This handles the case where the user lands directly on a quake detail page.
-        if (window.history.length > 2) { // Changed from 1 to 2 to account for the current page
-            navigate(-1); // Go back to the previous page
-        } else {
-            navigate('/'); // Navigate to homepage
-        }
+        navigate(-1); // Go back to the previous page
     };
 
     /**
