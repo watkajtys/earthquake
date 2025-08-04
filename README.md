@@ -170,6 +170,8 @@ When working with AI agents like Jules, effective collaboration is key. Here are
 
 This ongoing collaboration aims to push the boundaries of what LLMs can achieve in practical, non-trivial application development, providing valuable insights into their strengths and areas for continued improvement. Tools like the Claude code CLI are actively used in this "vibe process" for implementing new features and enhancements. The Global Seismic Activity Monitor is therefore not just a tool for visualizing earthquakes, but also a living experiment in the evolving landscape of AI-assisted software creation.
 
+This project is also a testbed for our AI agents.
+
 The project reflects the spirit of innovation and agile creation championed by **Built By Vibes**.
 
 * **Twitter**: [@builtbyvibes](https://twitter.com/builtbyvibes)
@@ -241,6 +243,10 @@ Additionally, at the project root:
 -   **`wrangler.toml`**: The configuration file for Cloudflare Workers projects. It defines build settings, environments, routes, service bindings (like KV, D1, and static assets), cron triggers, and compatibility settings for the Worker.
 
 This structure promotes a logical organization of the codebase, simplifying navigation and maintenance. JSDoc comments are used extensively throughout `.jsx` files to document components, functions, props, and data structures, further aiding in code comprehension.
+
+## Other Documentation
+
+You may also find other documentation files in the root of this repository, such as `apple.md` and `update.md`.
 
 ## Technical Documentation
 
