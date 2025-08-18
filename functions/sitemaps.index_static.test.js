@@ -47,71 +47,55 @@ const createMockContext = (request, env = {}, cf = {}) => {
 };
 
 // Constants needed for mocking DB responses for index-sitemap
-const MIN_FEELABLE_MAGNITUDE_SITEMAP_TEST = 2.5;
 const SITEMAP_PAGE_SIZE_SITEMAP_TEST = 40000;
 
 
 describe('Sitemap Index and Static Pages Handlers', () => {
     beforeEach(() => {
         vi.resetAllMocks();
-        // fetch.mockReset(); // MSW will handle fetch lifecycle
         mockCache.match.mockReset();
         mockCache.put.mockReset();
     });
 
-    it('/sitemap-index.xml should return XML sitemap index including dynamic earthquake sitemaps', async () => {
+    it('/sitemap-index.xml should return XML sitemap index including correctly paginated earthquake sitemaps', async () => {
       const request = new Request('http://localhost/sitemap-index.xml');
       const context = createMockContext(request);
 
-      // Mock D1 responses for earthquake sitemap generation
-      const mockCountResult = { total: 85000 }; // Should result in 3 pages (85000 / 40000)
-      const mockLatestModResult = { latest_mod_ts: new Date('2024-01-15T10:00:00.000Z').getTime() };
+      // Create a mock list of events. 85000 are significant, 5000 are not.
+      const significantEvents = Array.from({ length: 85000 }, (_, i) => ({
+          magnitude: 5.0,
+          geojson_feature: '{}'
+      }));
+      const nonSignificantEvents = Array.from({ length: 5000 }, (_, i) => ({
+          magnitude: 3.0,
+          geojson_feature: '{}'
+      }));
+      const allEvents = [...significantEvents, ...nonSignificantEvents];
 
-      context.env.DB.prepare = vi.fn().mockImplementation((query) => {
-        const upperQuery = query.toUpperCase();
-        if (upperQuery.startsWith("SELECT COUNT(*)")) {
-          return {
-            bind: vi.fn().mockImplementation((mag) => {
-              expect(mag).toBe(MIN_FEELABLE_MAGNITUDE_SITEMAP_TEST);
-              return { first: vi.fn().mockResolvedValue(mockCountResult) };
-            })
-          };
-        }
-        if (upperQuery.startsWith("SELECT MAX(CASE")) {
-          return {
-            bind: vi.fn().mockImplementation((mag) => {
-              expect(mag).toBe(MIN_FEELABLE_MAGNITUDE_SITEMAP_TEST);
-              return { first: vi.fn().mockResolvedValue(mockLatestModResult) };
-            })
-          };
-        }
-        // Fallback for any other prepare calls if necessary
-        return { bind: vi.fn().mockReturnThis(), first: vi.fn(), all: vi.fn() };
-      });
+      const mockDbResponse = { results: allEvents };
+      context.env.DB.all.mockResolvedValue(mockDbResponse);
 
       const response = await onRequest(context);
-      expect(response.status).toBe(200);
-      expect(response.headers.get('Content-Type')).toContain('application/xml');
       const text = await response.text();
 
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toContain('application/xml');
       expect(text).toContain('<sitemapindex');
+
+      // Check that the DB was queried correctly
+      expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/SELECT magnitude, geojson_feature FROM EarthquakeEvents/i));
+      expect(context.env.DB.bind).toHaveBeenCalledWith(2.5);
+
+      // Check for static sitemaps
       expect(text).toContain('<loc>https://earthquakeslive.com/sitemap-static-pages.xml</loc>');
       expect(text).toContain('<loc>https://earthquakeslive.com/sitemap-clusters.xml</loc>');
 
       // Check for dynamic earthquake sitemaps
+      // 85000 significant events / 40000 per page = 3 pages
       expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-1.xml</loc>');
       expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-2.xml</loc>');
       expect(text).toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-3.xml</loc>');
       expect(text).not.toContain('<loc>https://earthquakeslive.com/sitemaps/earthquakes-4.xml</loc>');
-
-      // Check lastmod for dynamic sitemaps
-      const expectedLastMod = new Date(mockLatestModResult.latest_mod_ts).toISOString();
-      // Ensure this lastmod is present for the dynamic entries (might be multiple times)
-      expect(text.split(`<lastmod>${expectedLastMod}</lastmod>`).length - 1).toBeGreaterThanOrEqual(3);
-
-      // Check that DB prepare was called for count and lastmod
-      expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/SELECT COUNT\(\*\) as total FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= \?/i));
-      expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/SELECT MAX\(CASE WHEN geojson_feature IS NOT NULL THEN JSON_EXTRACT\(geojson_feature, '\$\.properties\.updated'\) ELSE event_time \* 1000 END\) as latest_mod_ts FROM EarthquakeEvents WHERE magnitude >= \?/i));
     });
 
     it('/sitemap-index.xml should handle DB error gracefully for earthquake sitemaps', async () => {

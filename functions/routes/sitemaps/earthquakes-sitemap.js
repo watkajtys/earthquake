@@ -2,10 +2,10 @@
  * @file Generates sitemaps for earthquake events, including a sitemap index and paginated sitemap files.
  */
 import { escapeXml } from '../../utils/xml-utils.js';
+import { isEventSignificant } from '../../../src/utils/significanceUtils.js';
 
 const SITEMAP_PAGE_SIZE = 40000; // Number of URLs per paginated sitemap file
 const BASE_URL = "https://earthquakeslive.com";
-export const MIN_FEELABLE_MAGNITUDE = 2.5; // Minimum magnitude for an earthquake to be considered "feelable"
 
 const slugify = (text) => {
   if (!text) return 'unknown-location';
@@ -25,19 +25,28 @@ const slugify = (text) => {
 async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
   const offset = (pageNumber - 1) * SITEMAP_PAGE_SIZE;
   try {
+    // Fetch a broader set of events and filter in code.
+    // We fetch everything above a lower magnitude to catch events that might have faulting data but are < 4.5
     const d1Results = await db.prepare(
       "SELECT id, magnitude, place, event_time, geojson_feature FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= ? ORDER BY event_time DESC LIMIT ? OFFSET ?"
-    ).bind(MIN_FEELABLE_MAGNITUDE, SITEMAP_PAGE_SIZE, offset).all();
+    ).bind(2.5, SITEMAP_PAGE_SIZE, offset).all(); // Fetch M2.5+ to filter in code
 
     const earthquakeEvents = d1Results.results;
 
     if (!earthquakeEvents || earthquakeEvents.length === 0) {
-      console.log(`No valid feelable earthquake events found for page ${pageNumber}.`);
-      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No feelable events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
+      console.log(`No valid earthquake events found for page ${pageNumber}.`);
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
+    }
+
+    const significantEvents = earthquakeEvents.filter(isEventSignificant);
+
+    if (significantEvents.length === 0) {
+      console.log(`No significant earthquake events found for sitemap on page ${pageNumber}.`);
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No significant events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-    for (const event of earthquakeEvents) {
+    for (const event of significantEvents) {
       const eventId = event.id;
       const originalPlace = event.place;
       if (!eventId || !originalPlace) {
