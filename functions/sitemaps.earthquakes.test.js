@@ -2,6 +2,7 @@ import { onRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 import { MIN_SIGNIFICANT_MAGNITUDE, isEventSignificant } from '../src/utils/significanceUtils.js';
+
 // --- Mocks for Cloudflare Environment ---
 const mockCache = {
   match: vi.fn(),
