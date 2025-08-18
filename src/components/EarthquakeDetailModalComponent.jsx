@@ -5,6 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import EarthquakeDetailView from './EarthquakeDetailView'; // Path relative to src/components/
 import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
 import defaultEarthquakeLogo from '../assets/default-earthquake-logo.svg'; // Import the new SVG
+import { isEventSignificant } from '../utils/significanceUtils.js';
 
 /**
  * A wrapper component that displays detailed information about a specific earthquake in a modal-like view.
@@ -104,6 +105,11 @@ const EarthquakeDetailModalComponent = () => {
         // It should contain loadedData.id (USGS event ID) and loadedData.properties.detail (USGS event page URL)
         // and loadedData.geometry.coordinates for lat, lon, depth.
 
+        const isSignificant = isEventSignificant({
+            magnitude: loadedData.properties?.mag,
+            geojson_feature: loadedData,
+        });
+
         const props = loadedData.properties;
         const geom = loadedData.geometry;
         const mag = props?.mag;
@@ -176,6 +182,7 @@ const EarthquakeDetailModalComponent = () => {
             publishedTime: time ? new Date(time).toISOString() : undefined,
             modifiedTime: updated ? new Date(updated).toISOString() : (time ? new Date(time).toISOString() : undefined),
             imageUrl: shakemapIntensityImageUrl || null,
+            noIndex: !isSignificant,
         });
     }, [detailUrlParam]); // detailUrlParam (params['*']) is a dependency for canonicalPageUrl
 
@@ -201,6 +208,7 @@ const EarthquakeDetailModalComponent = () => {
                 modifiedTime={seoProps?.modifiedTime}
                 imageUrl={seoProps?.imageUrl}
                 eventJsonLd={seoProps?.eventJsonLd}
+                noIndex={seoProps?.noIndex}
             />
             {detailUrl && ( // Only render EarthquakeDetailView if detailUrl is available
                 <EarthquakeDetailView

@@ -18,9 +18,10 @@ import PropTypes from 'prop-types'; // Optional: for prop type validation
  * @param {string} [props.modifiedTime] - Modification time for articles (ISO 8601 format), used for `article:modified_time`.
  * @param {string} [props.keywords] - Comma-separated keywords for the `keywords` meta tag.
  * @param {object} [props.eventJsonLd] - Optional JSON-LD object for event structured data.
+ * @param {boolean} [props.noIndex=false] - If true, adds a "noindex" meta tag for robots.
  * @returns {null} This component does not render any DOM elements.
  */
-const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', locale = 'en_US', canonicalUrl, publishedTime, modifiedTime, keywords, eventJsonLd }) => {
+const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', locale = 'en_US', canonicalUrl, publishedTime, modifiedTime, keywords, eventJsonLd, noIndex = false }) => {
   useEffect(() => {
     document.title = title;
 
@@ -40,6 +41,13 @@ const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', 
             document.head.removeChild(element);
         }
     };
+
+    // Manage robots meta tag for noindexing
+    if (noIndex) {
+        setMetaTag('name', 'robots', 'noindex');
+    } else {
+        removeMetaTag('name', 'robots');
+    }
 
     // Set description
     setMetaTag('name', 'description', description);
@@ -183,6 +191,7 @@ SeoMetadata.propTypes = {
   modifiedTime: PropTypes.string,
   keywords: PropTypes.string,
   eventJsonLd: PropTypes.object,
+  noIndex: PropTypes.bool,
 };
 
 export default SeoMetadata;
