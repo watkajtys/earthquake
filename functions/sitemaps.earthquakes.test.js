@@ -1,7 +1,7 @@
 import { onRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-import { MIN_FEELABLE_MAGNITUDE } from './routes/sitemaps/earthquakes-sitemap.js'; // Reverted to standard relative path
+import { MIN_SIGNIFICANT_MAGNITUDE, isEventSignificant } from '../src/utils/significanceUtils.js';
 
 // --- Mocks for Cloudflare Environment ---
 const mockCache = {
@@ -58,122 +58,87 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         mockCache.put.mockReset();
     });
 
-    // --- Tests for Paginated Sitemap Content ---
-    // Note: Tests for '/sitemaps/earthquakes-index.xml' were removed as this functionality
-    // is now part of the main index-sitemap.js and tested in index_static.test.js.
-
-    it('/sitemaps/earthquakes-1.xml should query D1 and return XML with only feelable earthquakes', async () => {
+    it('/sitemaps/earthquakes-1.xml should return XML with only significant earthquakes', async () => {
         const now = Date.now();
         const nowInSeconds = Math.floor(now / 1000);
-        const mockDbResults = { // This object simulates the raw data *before* it would be filtered by the SQL query in the actual code.
+
+        const mockDbResults = {
             results: [
+                // 1. Significant by magnitude
                 {
-                    id: "ev_feelable_1", magnitude: 5.5, place: "10km N of Testville",
+                    id: "ev_sig_mag", magnitude: MIN_SIGNIFICANT_MAGNITUDE, place: "Big Quake City",
                     event_time: nowInSeconds - 3600, geojson_feature: JSON.stringify({ properties: { updated: now } })
                 },
+                // 2. Significant by product (moment-tensor)
                 {
-                    id: "ev_too_small", magnitude: 1.2, place: "Tiny Town", // Below threshold
+                    id: "ev_sig_product", magnitude: 4.4, place: "Faulty Towers",
+                    event_time: nowInSeconds - 7200, geojson_feature: JSON.stringify({
+                        properties: { updated: now - 10000, products: { "moment-tensor": [{}] } }
+                    })
+                },
+                // 3. Not significant
+                {
+                    id: "ev_not_significant", magnitude: 4.4, place: "Quiet Corner",
                     event_time: nowInSeconds - 5000, geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } })
                 },
+                // 4. Also not significant (below 2.5)
                 {
-                    id: "ev_feelable_2", magnitude: 4.2, place: "Somewhere Else",
-                    event_time: nowInSeconds - 7200, geojson_feature: JSON.stringify({ properties: { updated: now - 10000 } })
-                },
-                 {
-                    id: "ev_on_threshold", magnitude: MIN_FEELABLE_MAGNITUDE, place: "Borderline Heights",
+                    id: "ev_too_small", magnitude: 1.2, place: "Tiny Town",
                     event_time: nowInSeconds - 8000, geojson_feature: JSON.stringify({ properties: { updated: now - 15000 } })
                 }
             ]
         };
-        // For the mock `all()` function, we provide data as if the SQL query has already done its job.
-        // So, we filter `mockDbResults` here to simulate what the DB would return after the `WHERE magnitude >= ?` clause.
-        const filteredMockResultsForDB = {
-            results: mockDbResults.results.filter(e => e.magnitude >= MIN_FEELABLE_MAGNITUDE)
-        };
 
         const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
-        const context = createMockContext(request, {}, {}, filteredMockResultsForDB); // Use the pre-filtered data for the mock
+        // The mock now returns ALL results >= 2.5, as the code will filter them.
+        const context = createMockContext(request, {}, {}, mockDbResults);
 
         const response = await onRequest(context);
-        expect(response.status).toBe(200);
-        expect(response.headers.get('Content-Type')).toContain('application/xml');
         const text = await response.text();
 
-        expect(context.env.DB.prepare).toHaveBeenCalledWith(
-             expect.stringMatching(/SELECT id, magnitude, place, event_time, geojson_feature FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= \? ORDER BY event_time DESC LIMIT \? OFFSET \?/i)
-        );
-        // Check bind parameters: magnitude threshold, limit, offset
-        expect(context.env.DB.bind).toHaveBeenCalledWith(MIN_FEELABLE_MAGNITUDE, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('Content-Type')).toContain('application/xml');
+
+        // The DB query should now fetch all quakes >= 2.5 for in-code filtering
+        expect(context.env.DB.bind).toHaveBeenCalledWith(2.5, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
+
         expect(text).toContain('<urlset');
 
-        const expectedUrl1 = `https://earthquakeslive.com/quake/m5.5-10km-n-of-testville-ev_feelable_1`;
+        const expectedUrl1 = `https://earthquakeslive.com/quake/m${MIN_SIGNIFICANT_MAGNITUDE.toFixed(1)}-big-quake-city-ev_sig_mag`;
         expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
-        expect(text).toContain(`<lastmod>${new Date(now).toISOString()}</lastmod>`);
 
-        const expectedUrl2 = `https://earthquakeslive.com/quake/m4.2-somewhere-else-ev_feelable_2`;
+        const expectedUrl2 = `https://earthquakeslive.com/quake/m4.4-faulty-towers-ev_sig_product`;
         expect(text).toContain(`<loc>${expectedUrl2}</loc>`);
-        expect(text).toContain(`<lastmod>${new Date(now - 10000).toISOString()}</lastmod>`);
 
-        const expectedUrl3 = `https://earthquakeslive.com/quake/m${MIN_FEELABLE_MAGNITUDE.toFixed(1)}-borderline-heights-ev_on_threshold`;
-        expect(text).toContain(`<loc>${expectedUrl3}</loc>`);
-        expect(text).toContain(`<lastmod>${new Date(now - 15000).toISOString()}</lastmod>`);
+        expect(text).not.toContain("ev_not_significant");
+        expect(text).not.toContain("ev_too_small");
 
-        expect(text).not.toContain("ev_too_small"); // Ensure the non-feelable one is not present
         const urlCount = (text.match(/<url>/g) || []).length;
-        expect(urlCount).toBe(3); // Only the 3 feelable events
+        expect(urlCount).toBe(2); // Only the 2 significant events
     });
 
-    it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid for feelable quakes', async () => {
-        const eventTime1 = Math.floor(Date.now() / 1000) - 86400; // 1 day ago in seconds
-        const eventTime2 = Math.floor(Date.now() / 1000) - 172800; // 2 days ago in seconds
+    it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid', async () => {
+        const eventTime1 = Math.floor(Date.now() / 1000) - 86400;
 
-        const rawMockEvents = { // Raw data before SQL filtering
+        const mockDbResults = {
             results: [
                 {
-                    id: "ev_no_geojson", magnitude: 3.0, place: "No GeoJSON Here", event_time: eventTime1
-                },
-                {
-                    id: "ev_invalid_updated", magnitude: 3.1, place: "Invalid Updated", event_time: eventTime2,
-                    geojson_feature: JSON.stringify({ properties: { updated: "not-a-timestamp" } })
-                },
-                 {
-                    id: "ev_no_properties", magnitude: 3.2, place: "No Properties", event_time: eventTime2 + 3600,
-                    geojson_feature: JSON.stringify({})
-                },
-                {
-                    id: "ev_too_small_for_lastmod_test", magnitude: 1.0, place: "Tiny Place", event_time: eventTime2 + 7200,
+                    id: "ev_no_geojson", magnitude: 5.0, place: "No GeoJSON Here", event_time: eventTime1
                 }
             ]
         };
-        // Simulate DB filtering for the mock
-        const filteredMockEventsForDB = {
-            results: rawMockEvents.results.filter(e => e.magnitude >= MIN_FEELABLE_MAGNITUDE)
-        };
 
         const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
-        const context = createMockContext(request, {}, {}, filteredMockEventsForDB); // Use pre-filtered data
+        const context = createMockContext(request, {}, {}, mockDbResults);
         const response = await onRequest(context);
         const text = await response.text();
 
         expect(response.status).toBe(200);
-        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= \? ORDER BY event_time DESC LIMIT \? OFFSET \?/i));
-        expect(context.env.DB.bind).toHaveBeenCalledWith(MIN_FEELABLE_MAGNITUDE, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
-
-        const expectedUrl1 = `https://earthquakeslive.com/quake/m3.0-no-geojson-here-ev_no_geojson`;
+        const expectedUrl1 = `https://earthquakeslive.com/quake/m5.0-no-geojson-here-ev_no_geojson`;
         expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
         expect(text).toContain(`<lastmod>${new Date(eventTime1 * 1000).toISOString()}</lastmod>`);
-
-        const expectedUrl2 = `https://earthquakeslive.com/quake/m3.1-invalid-updated-ev_invalid_updated`;
-        expect(text).toContain(`<loc>${expectedUrl2}</loc>`);
-        expect(text).toContain(`<lastmod>${new Date(eventTime2 * 1000).toISOString()}</lastmod>`);
-
-        const expectedUrl3 = `https://earthquakeslive.com/quake/m3.2-no-properties-ev_no_properties`;
-        expect(text).toContain(`<loc>${expectedUrl3}</loc>`);
-        expect(text).toContain(`<lastmod>${new Date((eventTime2 + 3600) * 1000).toISOString()}</lastmod>`);
-
-        expect(text).not.toContain("ev_too_small_for_lastmod_test"); // Ensure non-feelable is not present
         const urlCount = (text.match(/<url>/g) || []).length;
-        expect(urlCount).toBe(3); // Only the 3 feelable events that also meet other criteria
+        expect(urlCount).toBe(1);
     });
 
     it('/sitemaps/earthquakes-1.xml should handle D1 query error for a page', async () => {
@@ -206,40 +171,40 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const response = await onRequest(context);
         expect(response.status).toBe(200);
         const text = await response.text();
-        expect(text).toContain("<!-- No feelable events for page 1 -->"); // Message changed in source
+        expect(text).toContain("<!-- No events for page 1 -->");
         expect(text).not.toContain("<loc>");
+    });
+
+    it('/sitemaps/earthquakes-1.xml should return an empty set if no events are significant', async () => {
+        const now = Date.now();
+        const mockDbResults = {
+            results: [
+                 {
+                    id: "ev_not_significant_1", magnitude: 4.4, place: "Almost Significant",
+                    event_time: Math.floor(now / 1000),
+                    geojson_feature: JSON.stringify({ properties: { updated: now } })
+                },
+                {
+                    id: "ev_not_significant_2", magnitude: 3.0, place: "Not even close",
+                    event_time: Math.floor(now / 1000),
+                    geojson_feature: JSON.stringify({ properties: { updated: now } })
+                },
+            ]
+        };
+
+        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
+        const context = createMockContext(request, {}, {}, mockDbResults);
+        const response = await onRequest(context);
+        const text = await response.text();
+
+        expect(response.status).toBe(200);
+        expect(text).toContain("<!-- No significant events for page 1 -->");
+        const urlCount = (text.match(/<url>/g) || []).length;
+        expect(urlCount).toBe(0);
     });
 
     it('/sitemaps/earthquakes-1.xml should skip events with missing id or place from D1', async () => {
         const now = Date.now();
-        const _mockEvents = {
-            results: [
-                {
-                    /* id missing */ magnitude: 5.5, place: "Valid Place",
-                    event_time: Math.floor(now / 1000),
-                    geojson_feature: JSON.stringify({ properties: { updated: now } })
-                },
-                {
-                    id: "ev_no_place", magnitude: 4.2, /* place missing */
-                    event_time: Math.floor(now / 1000),
-                    geojson_feature: JSON.stringify({ properties: { updated: now } })
-                },
-                 {
-                    id: "ev_valid", magnitude: 6.0, place: "Proper Event",
-                    event_time: Math.floor(now / 1000) - 3600,
-                    geojson_feature: JSON.stringify({ properties: { updated: now - 10000 } })
-                },
-            ]
-        };
-        // The SQL query "WHERE id IS NOT NULL AND place IS NOT NULL" should prevent these,
-        // but this test ensures the JS code would also handle it if somehow they got through.
-        // However, the current DB query will filter these out. If we want to test JS robustness
-        // for this, the mock for `all()` would need to return these despite the query.
-        // For now, let's assume the DB query is effective.
-        // To properly test this specific JS handling, we'd need to adjust the mock `all`
-        // to return such data, bypassing the SQL filter logic for the test.
-
-        // Adjusted mock to test JS resilience if DB somehow returned non-compliant rows
         const adjustedMockEvents = {
             results: [
                  {
@@ -267,11 +232,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const text = await response.text();
 
         expect(response.status).toBe(200);
-        // The prepare mock in createMockContext doesn't check the SQL string itself, just that prepare is called.
-        // We rely on the bind call to check parameters.
-        expect(context.env.DB.prepare).toHaveBeenCalled(); // Simplified check
-        expect(context.env.DB.bind).toHaveBeenCalledWith(MIN_FEELABLE_MAGNITUDE, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
-
+        expect(context.env.DB.bind).toHaveBeenCalledWith(2.5, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
 
         const expectedUrl = `https://earthquakeslive.com/quake/m6.0-proper-event-ev_valid`;
         expect(text).toContain(`<loc>${expectedUrl}</loc>`);
@@ -283,12 +244,12 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const mockEvents = {
             results: [
                 {
-                    id: "ev_invalid_time", magnitude: 3.0, place: "Invalid Time",
+                    id: "ev_invalid_time", magnitude: 5.0, place: "Invalid Time",
                     event_time: null,
                     geojson_feature: JSON.stringify({ properties: { updated: "bad-date-string" }})
                 },
                 {
-                    id: "ev_valid_time", magnitude: 3.1, place: "Valid Time",
+                    id: "ev_valid_time", magnitude: 5.1, place: "Valid Time",
                     event_time: Math.floor(Date.now() / 1000) - 7200, // valid
                     geojson_feature: JSON.stringify({ properties: { updated: "another-bad-string" }})
                 }
@@ -300,11 +261,9 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const text = await response.text();
 
         expect(response.status).toBe(200);
-        expect(context.env.DB.prepare).toHaveBeenCalled(); // Simplified check
-        expect(context.env.DB.bind).toHaveBeenCalledWith(MIN_FEELABLE_MAGNITUDE, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
+        expect(context.env.DB.bind).toHaveBeenCalledWith(2.5, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
 
-
-        const expectedUrl = `https://earthquakeslive.com/quake/m3.1-valid-time-ev_valid_time`;
+        const expectedUrl = `https://earthquakeslive.com/quake/m5.1-valid-time-ev_valid_time`;
         expect(text).toContain(`<loc>${expectedUrl}</loc>`); // Only the one with valid event_time
         const urlCount = (text.match(/<url>/g) || []).length;
         expect(urlCount).toBe(1);
@@ -317,7 +276,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         await onRequest(contextPage2);
         expect(contextPage2.env.DB.prepare).toHaveBeenCalled(); // Simplified check
         // Offset for page 2 = (2 - 1) * SITEMAP_PAGE_SIZE_FOR_TEST
-        expect(contextPage2.env.DB.bind).toHaveBeenCalledWith(MIN_FEELABLE_MAGNITUDE, SITEMAP_PAGE_SIZE_FOR_TEST, SITEMAP_PAGE_SIZE_FOR_TEST);
+        expect(contextPage2.env.DB.bind).toHaveBeenCalledWith(2.5, SITEMAP_PAGE_SIZE_FOR_TEST, SITEMAP_PAGE_SIZE_FOR_TEST);
 
 
         const requestInvalidPage = new Request('http://localhost/sitemaps/earthquakes-abc.xml'); // Corrected path

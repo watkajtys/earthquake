@@ -45,7 +45,7 @@ export async function onRequest(context) {
   }
 
   // Updated routing for paginated earthquake sitemaps (reverted to /sitemaps/ prefix)
-  if (pathname === "/sitemaps/earthquakes-index.xml" || pathname.startsWith("/sitemaps/earthquakes-")) {
+  if (pathname.startsWith("/sitemaps/earthquakes-")) {
 
     return handleEarthquakesSitemap(context); // This correctly points to the refactored handler
   }

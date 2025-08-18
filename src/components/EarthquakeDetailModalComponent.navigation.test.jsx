@@ -56,9 +56,9 @@ describe('EarthquakeDetailModalComponent Navigation', () => {
     useEarthquakeDataState.mockReturnValue(defaultEarthquakeContextValue);
   });
 
-  const renderComponent = (props = {}) => {
+  const renderComponent = (props = {}, initialEntries = ['/quake/test-detail-url']) => {
     return render(
-      <MemoryRouter initialEntries={['/quake/test-detail-url']}>
+      <MemoryRouter initialEntries={initialEntries}>
         <Routes>
           <Route path="/quake/*" element={<EarthquakeDetailModalComponent {...props} />} />
         </Routes>
@@ -67,6 +67,9 @@ describe('EarthquakeDetailModalComponent Navigation', () => {
   };
 
   test('calls navigate(-1) when onClose is triggered from EarthquakeDetailView', () => {
+    // Spy on and mock window.history.length to simulate a history stack
+    vi.spyOn(window.history, 'length', 'get').mockReturnValue(3);
+
     renderComponent();
 
     act(() => {

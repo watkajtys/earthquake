@@ -17,6 +17,7 @@ import { onRequestGet as handleGetEarthquakes } from '../functions/api/get-earth
 import { handleBatchUsgsFetch } from '../functions/api/batch-usgs-fetch.js';
 
 // Import the new paginated earthquakes sitemap handler
+import { handleIndexSitemap as handleRealIndexSitemap } from '../functions/routes/sitemaps/index-sitemap.js';
 import { handleEarthquakesSitemap as handlePaginatedEarthquakesSitemap } from '../functions/routes/sitemaps/earthquakes-sitemap.js';
 
 // Import the cache stats handler
@@ -90,22 +91,8 @@ async function handleUsgsProxyRequest(request, env, ctx, apiUrl) {
 }
 */
 
-// eslint-disable-next-line no-unused-vars
-async function handleSitemapIndexRequest(request, env, ctx) { // This is the main sitemap index /sitemap-index.xml
-  const sitemapIndexXML = `<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>https://earthquakeslive.com/sitemap-static-pages.xml</loc>
-  </sitemap>
-  <sitemap>
-    <loc>https://earthquakeslive.com/sitemaps/earthquakes-index.xml</loc> {/* Path to the new earthquake sitemap index */}
-  </sitemap>
-  <sitemap>
-    <loc>https://earthquakeslive.com/sitemap-clusters.xml</loc>
-  </sitemap>
-</sitemapindex>`;
-  return new Response(sitemapIndexXML, { headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=21600" }});
-}
+// The old, hardcoded handleSitemapIndexRequest has been removed.
+// We now import the real, dynamic one as handleRealIndexSitemap.
 
 // eslint-disable-next-line no-unused-vars
 async function handleStaticPagesSitemapRequest(request, env, ctx) {
@@ -474,10 +461,10 @@ export default {
     }
 
     // Sitemap routes
-    if (pathname === "/sitemap-index.xml") return handleSitemapIndexRequest(request, env, ctx);
+    if (pathname === "/sitemap-index.xml") return handleRealIndexSitemap({ request, env, ctx });
     if (pathname === "/sitemap-static-pages.xml") return handleStaticPagesSitemapRequest(request, env, ctx);
-    // Route for the new earthquake sitemap index and paginated sitemaps (reverted to /sitemaps/ prefix)
-    if (pathname === "/sitemaps/earthquakes-index.xml" || pathname.startsWith("/sitemaps/earthquakes-")) {
+    // Route for the new paginated sitemaps. The defunct earthquakes-index.xml route is removed.
+    if (pathname.startsWith("/sitemaps/earthquakes-")) {
 
       return handlePaginatedEarthquakesSitemap({ request, env, ctx });
     }
