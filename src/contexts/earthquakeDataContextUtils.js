@@ -180,6 +180,15 @@ export const calculateMagnitudeDistribution = (earthquakes) => {
 
 /** @type {EarthquakeDataState} */
 export const initialState = {
+    filters: {
+        minMag: null,
+        maxMag: null,
+        minDepth: null,
+        maxDepth: null,
+        lat: null,
+        lon: null,
+        radius: null,
+    },
     isLoadingDaily: true,
     isLoadingWeekly: true,
     isLoadingMonthly: false,
@@ -237,6 +246,7 @@ export const EarthquakeDataContext = createContext(null);
  * @enum {string}
  */
 export const actionTypes = {
+    SET_FILTERS: 'SET_FILTERS',
     SET_LOADING_FLAGS: 'SET_LOADING_FLAGS',
     SET_ERROR: 'SET_ERROR',
     /** Action type for when daily data has been fetched and processed.
@@ -288,6 +298,12 @@ export const actionTypes = {
 export function earthquakeReducer(state = initialState, action) {
     let newState;
     switch (action.type) {
+        case actionTypes.SET_FILTERS:
+            newState = {
+                ...state,
+                filters: { ...state.filters, ...action.payload },
+            };
+            break;
         case actionTypes.SET_LOADING_FLAGS:
             newState = { ...state, ...action.payload };
             break;

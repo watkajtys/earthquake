@@ -66,6 +66,11 @@ const LearnPage = () => {
                                 Plate Tectonics and Earthquakes
                             </Link>
                         </li>
+                        <li>
+                            <Link to="/learn/what-to-do-in-an-earthquake" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                What to Do Before, During, and After an Earthquake
+                            </Link>
+                        </li>
                     </ul>
                 </div>
                  {/* ... other content from /learn route ... */}
