@@ -42,6 +42,7 @@ const PaginatedEarthquakeTable = memo(({
     const sortableFields = [
         { value: 'time', label: 'Time' },
         { value: 'mag', label: 'Magnitude' },
+        { value: 'depth', label: 'Depth' },
         { value: 'place', label: 'Location' },
     ];
 
@@ -51,11 +52,17 @@ const PaginatedEarthquakeTable = memo(({
         if (sortConfig.key !== null) {
             items = [...items].sort((a, b) => {
                 let valA, valB;
-                // Removed depth specific logic as the column is being removed
-                valA = a.properties?.[sortConfig.key];
-                valB = b.properties?.[sortConfig.key];
+                if (sortConfig.key === 'depth') {
+                    valA = a.geometry.coordinates[2];
+                    valB = b.geometry.coordinates[2];
+                } else {
+                    valA = a.properties?.[sortConfig.key];
+                    valB = b.properties?.[sortConfig.key];
+                }
+
                 if (valA === null || valA === undefined) return 1;
                 if (valB === null || valB === undefined) return -1;
+
                 if (typeof valA === 'string' && typeof valB === 'string') {
                     const comparison = valA.toLowerCase().localeCompare(valB.toLowerCase());
                     return sortConfig.direction === 'ascending' ? comparison : -comparison;
@@ -140,6 +147,7 @@ const PaginatedEarthquakeTable = memo(({
                             >
                                 <div className="flex justify-between items-center text-xs sm:text-sm">
                                     <span className="font-bold">M {quake.properties.mag?.toFixed(1) || "N/A"}</span>
+                                    <span className="font-medium">{quake.geometry.coordinates[2].toFixed(1)} km</span>
                                     <span>
                                         {Date.now() - quake.properties.time < 2 * 24 * 60 * 60 * 1000 ? formatTimeAgo(Date.now() - quake.properties.time) : formatDate(quake.properties.time)}
                                     </span>
