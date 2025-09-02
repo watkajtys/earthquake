@@ -23,26 +23,53 @@ export async function handleClustersSitemapRequest(context) {
   }
 
   try {
-    // Fetch the canonical slug and updatedAt timestamp for each cluster definition.
-    // The slug is the part of the URL path after '/cluster/'.
-    // Ensures that only entries with valid slugs are included.
     const d1Results = await env.DB.prepare(
-      "SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> ''"
+      "SELECT slug, updatedAt, strongestQuakeId FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> ''"
     ).all();
 
-    const clusterDefinitions = d1Results.results;
+    const allClusterDefinitions = d1Results.results;
 
-    if (!clusterDefinitions || clusterDefinitions.length === 0) {
-      console.log("No valid cluster definitions with slugs found in D1 table ClusterDefinitions.");
+    if (!allClusterDefinitions || allClusterDefinitions.length === 0) {
+      console.log("No valid cluster definitions found.");
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`, { headers: { "Content-Type": "application/xml" } });
+    }
+
+    const strongestQuakeIds = allClusterDefinitions.map(def => def.strongestQuakeId).filter(id => id);
+    if (strongestQuakeIds.length === 0) {
+      console.log("No clusters with a strongest quake found.");
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`, { headers: { "Content-Type": "application/xml" } });
+    }
+
+    const placeholders = strongestQuakeIds.map(() => '?').join(',');
+    const enhancedQuakesStmt = await env.DB.prepare(
+      `SELECT id, geojson_feature FROM EarthquakeEvents WHERE id IN (${placeholders})`
+    ).bind(...strongestQuakeIds);
+    const enhancedQuakesResults = await enhancedQuakesStmt.all();
+    const enhancedQuakes = enhancedQuakesResults.results;
+
+    const enhancedQuakeIds = new Set();
+    for (const quake of enhancedQuakes) {
+      try {
+        const feature = JSON.parse(quake.geojson_feature);
+        const products = feature.properties?.products;
+        if (products && products.shakemap && products.shakemap.length > 0) {
+          enhancedQuakeIds.add(quake.id);
+        }
+      } catch (e) {
+        console.warn(`Failed to parse geojson_feature for quake ${quake.id}: ${e.message}`);
+      }
+    }
+
+    const filteredDefinitions = allClusterDefinitions.filter(def => enhancedQuakeIds.has(def.strongestQuakeId));
+
+    if (filteredDefinitions.length === 0) {
+      console.log("No clusters with a data-enhanced strongest quake found.");
       return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-
-    for (const definition of clusterDefinitions) {
-      // Prioritize definition.updatedAt as it's directly selected. Fallback for 'updated' can be removed if 'updatedAt' is standard.
-      const updatedTimestamp = definition.updatedAt || definition.updated;
-
+    for (const definition of filteredDefinitions) {
+      const updatedTimestamp = definition.updatedAt;
       if (!definition.slug || typeof updatedTimestamp === 'undefined') {
         // This check might be redundant due to the SQL WHERE clause, but kept as a safeguard.
         console.warn(`Invalid definition from D1 (missing slug or updatedAt):`, definition);

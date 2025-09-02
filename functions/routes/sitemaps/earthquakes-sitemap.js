@@ -7,6 +7,29 @@ import { isEventSignificant } from '../../../src/utils/significanceUtils.js';
 const SITEMAP_PAGE_SIZE = 40000; // Number of URLs per paginated sitemap file
 const BASE_URL = "https://earthquakeslive.com";
 
+/**
+ * Checks if an earthquake event has a shakemap, indicating it is "data enhanced".
+ * @param {object} event - The earthquake event object.
+ * @returns {boolean} - True if the event has a shakemap, false otherwise.
+ */
+const isDataEnhanced = (event) => {
+  if (!event?.geojson_feature) {
+    return false;
+  }
+  try {
+    const feature = typeof event.geojson_feature === 'string'
+      ? JSON.parse(event.geojson_feature)
+      : event.geojson_feature;
+    const products = feature.properties?.products;
+    // An event is enhanced if it has a shakemap product.
+    return products && products.shakemap && products.shakemap.length > 0;
+  } catch (e) {
+    console.warn(`[isDataEnhanced] Failed to parse geojson_feature for event ${event.id}: ${e.message}`);
+    return false;
+  }
+};
+
+
 const slugify = (text) => {
   if (!text) return 'unknown-location';
   return text
@@ -45,8 +68,16 @@ async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
       return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No significant events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
 
+    const enhancedEvents = significantEvents.filter(isDataEnhanced);
+
+    if (enhancedEvents.length === 0) {
+      console.log(`No data-enhanced earthquake events found for sitemap on page ${pageNumber}.`);
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No data-enhanced events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
+    }
+
+
     let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-    for (const event of significantEvents) {
+    for (const event of enhancedEvents) {
       const eventId = event.id;
       const originalPlace = event.place;
       if (!eventId || !originalPlace) {

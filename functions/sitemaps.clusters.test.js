@@ -54,22 +54,33 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
     });
 
     it('/sitemap-clusters.xml should list clusters from D1 and return XML', async () => {
-        const mockD1Results = [
-            // This slug should be a complete, final URL path segment
-            { slug: "10-quakes-near-test-place-up-to-m5.0-cluster1", updatedAt: new Date().toISOString() },
+        const mockD1ClusterResults = [
+            { slug: "10-quakes-near-test-place-up-to-m5.0-cluster1", updatedAt: new Date().toISOString(), strongestQuakeId: "quake1" },
         ];
+        const mockD1QuakeResults = {
+            results: [{
+                id: "quake1",
+                geojson_feature: JSON.stringify({ properties: { products: { shakemap: [{}] } } })
+            }]
+        };
+
         const request = new Request('http://localhost/sitemap-clusters.xml');
         const context = createMockContext(request);
-        context.env.DB.all.mockResolvedValueOnce({ results: mockD1Results, success: true });
+        context.env.DB.prepare.mockReturnThis();
+        context.env.DB.bind.mockReturnThis();
+        // Mock chain for D1 calls
+        context.env.DB.all
+            .mockResolvedValueOnce({ results: mockD1ClusterResults, success: true }) // First call for clusters
+            .mockResolvedValueOnce(mockD1QuakeResults); // Second call for quakes
 
-        const response = await onRequest(context); // Uses handleClustersSitemapRequest internally
+        const response = await onRequest(context);
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('application/xml');
         const text = await response.text();
         expect(text).toContain('<urlset');
         expect(text).toContain('https://earthquakeslive.com/cluster/10-quakes-near-test-place-up-to-m5.0-cluster1');
-        // Check the new SQL query structure
-        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> ''"));
+        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT slug, updatedAt, strongestQuakeId FROM ClusterDefinitions"));
+        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT id, geojson_feature FROM EarthquakeEvents"));
     });
 
     it('/sitemap-clusters.xml should handle DB not configured', async () => {
@@ -100,7 +111,7 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
       expect(response.status).toBe(200);
       const text = await response.text();
       expect(text).not.toContain("<loc>");
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("No valid cluster definitions with slugs found in D1 table ClusterDefinitions."));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("No valid cluster definitions found."));
       consoleLogSpy.mockRestore();
     });
 
@@ -108,11 +119,19 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
 
         it('should generate correct URLs for valid D1 entries (slug and updatedAt)', async () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
-            const d1Results = [
-                { slug: "15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9", updatedAt: "2023-01-01T00:00:00Z" },
-                { slug: "5-quakes-near-california-up-to-m4.2-ci12345", updatedAt: "2023-01-02T00:00:00Z" },
+            const d1ClusterResults = [
+                { slug: "15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9", updatedAt: "2023-01-01T00:00:00Z", strongestQuakeId: "us7000mfp9" },
+                { slug: "5-quakes-near-california-up-to-m4.2-ci12345", updatedAt: "2023-01-02T00:00:00Z", strongestQuakeId: "ci12345" },
             ];
-            mockContext.env.DB.all.mockResolvedValueOnce({ results: d1Results, success: true });
+            const d1QuakeResults = {
+                results: [
+                    { id: "us7000mfp9", geojson_feature: JSON.stringify({ properties: { products: { shakemap: [{}] } } }) },
+                    { id: "ci12345", geojson_feature: JSON.stringify({ properties: { products: { shakemap: [{}] } } }) }
+                ]
+            };
+            mockContext.env.DB.all
+                .mockResolvedValueOnce({ results: d1ClusterResults, success: true })
+                .mockResolvedValueOnce(d1QuakeResults);
 
             const response = await handleClustersSitemapRequest(mockContext);
             const xml = await response.text();
@@ -128,22 +147,23 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
         // The SQL query `WHERE slug IS NOT NULL AND slug <> ''` handles invalid/missing slugs at DB level.
         it('should skip entries if D1 slug is missing or empty (handled by SQL, but defensive check in code)', async () => { // Unskipping this test
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
-            const _d1Results = [
-                { slug: null, updatedAt: "2023-01-01T00:00:00Z" }, // Will be filtered by SQL
-                { slug: "", updatedAt: "2023-01-01T00:00:00Z" },   // Will be filtered by SQL
-                { slug: "valid-slug-example", updatedAt: "2023-01-02T00:00:00Z" },
+            const d1ClusterResults = [
+                { slug: "valid-slug-example", updatedAt: "2023-01-02T00:00:00Z", strongestQuakeId: "quake-valid" },
             ];
-            mockContext.env.DB.all.mockResolvedValueOnce({ results: [{ slug: "valid-slug-example", updatedAt: "2023-01-02T00:00:00Z" }], success: true }); // Simulate only valid one returned
+             const d1QuakeResults = {
+                results: [ { id: "quake-valid", geojson_feature: JSON.stringify({ properties: { products: { shakemap: [{}] } } }) } ]
+            };
+
+            mockContext.env.DB.all
+                .mockResolvedValueOnce({ results: d1ClusterResults, success: true })
+                .mockResolvedValueOnce(d1QuakeResults);
+
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
             const response = await handleClustersSitemapRequest(mockContext);
             const xml = await response.text();
 
             expect(xml).toContain('https://earthquakeslive.com/cluster/valid-slug-example');
-            // The code's internal `!definition.slug` check might still trigger if somehow a null/empty slug passes SQL
-            // For this test, we assume SQL filters them, so the internal check might not be hit if d1Results is already filtered.
-            // If it were to be hit:
-            // expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid definition from D1 (missing slug or updatedAt)"));
             consoleWarnSpy.mockRestore();
         });
 
