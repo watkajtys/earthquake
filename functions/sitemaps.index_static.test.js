@@ -61,14 +61,14 @@ describe('Sitemap Index and Static Pages Handlers', () => {
       const request = new Request('http://localhost/sitemap-index.xml');
       const context = createMockContext(request);
 
-      // Create a mock list of events. 85000 are significant, 5000 are not.
+      // Create a mock list of events. 85000 are significant (have shakemap), 5000 are not.
       const significantEvents = Array.from({ length: 85000 }, (_, i) => ({
           magnitude: 5.0,
-          geojson_feature: '{}'
+          geojson_feature: JSON.stringify({ properties: { products: { shakemap: [{}] } } })
       }));
       const nonSignificantEvents = Array.from({ length: 5000 }, (_, i) => ({
           magnitude: 3.0,
-          geojson_feature: '{}'
+          geojson_feature: JSON.stringify({ properties: { products: { "moment-tensor": [{}] } } }) // No shakemap
       }));
       const allEvents = [...significantEvents, ...nonSignificantEvents];
 
