@@ -2,6 +2,7 @@
  * @file Generates the sitemap for earthquake cluster pages (sitemap-clusters.xml).
  */
 import { escapeXml } from '../../utils/xml-utils.js';
+import { isEventDataEnhanced } from '../../../src/utils/dataEnhancementUtils.js';
 
 /**
  * Handles requests for the earthquake cluster sitemap.
@@ -23,50 +24,56 @@ export async function handleClustersSitemapRequest(context) {
   }
 
   try {
-    // Fetch the canonical slug and updatedAt timestamp for each cluster definition.
-    // The slug is the part of the URL path after '/cluster/'.
-    // Ensures that only entries with valid slugs are included.
+    // Fetch cluster definitions with slugs and strongest quake IDs.
     const d1Results = await env.DB.prepare(
-      "SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> ''"
+      "SELECT slug, updatedAt, strongestQuakeId FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> '' AND strongestQuakeId IS NOT NULL"
     ).all();
 
     const clusterDefinitions = d1Results.results;
 
     if (!clusterDefinitions || clusterDefinitions.length === 0) {
-      console.log("No valid cluster definitions with slugs found in D1 table ClusterDefinitions.");
+      console.log("No valid cluster definitions found.");
       return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
+
+    // Extract strongest quake IDs to fetch their data in a single batch.
+    const strongestQuakeIds = [...new Set(clusterDefinitions.map(def => def.strongestQuakeId))];
+
+    // Fetch the geojson_feature for all strongest quakes.
+    const placeholders = strongestQuakeIds.map(() => '?').join(',');
+    const quakesQuery = `SELECT id, geojson_feature FROM EarthquakeEvents WHERE id IN (${placeholders})`;
+    const quakesStmt = env.DB.prepare(quakesQuery).bind(...strongestQuakeIds);
+    const { results: strongestQuakes } = await quakesStmt.all();
+
+    // Create a map for quick lookup of quake data.
+    const quakeDataMap = new Map(strongestQuakes.map(q => [q.id, q]));
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
 
     for (const definition of clusterDefinitions) {
-      // Prioritize definition.updatedAt as it's directly selected. Fallback for 'updated' can be removed if 'updatedAt' is standard.
-      const updatedTimestamp = definition.updatedAt || definition.updated;
+      const strongestQuake = quakeDataMap.get(definition.strongestQuakeId);
 
-      if (!definition.slug || typeof updatedTimestamp === 'undefined') {
-        // This check might be redundant due to the SQL WHERE clause, but kept as a safeguard.
-        console.warn(`Invalid definition from D1 (missing slug or updatedAt):`, definition);
-        continue;
-      }
-
-      try {
-        const lastmodDate = new Date(updatedTimestamp);
-        if (isNaN(lastmodDate.getTime())) {
-            console.warn(`Invalid 'updatedAt' date format for slug ${definition.slug}: ${updatedTimestamp}`);
-            continue;
+      // Only include clusters where the largest quake has a shakemap (is data-enhanced).
+      if (strongestQuake && isEventDataEnhanced(strongestQuake)) {
+        const updatedTimestamp = definition.updatedAt;
+        if (!definition.slug || typeof updatedTimestamp === 'undefined') {
+          console.warn(`Skipping cluster due to missing slug or updatedAt:`, definition);
+          continue;
         }
-        const lastmod = lastmodDate.toISOString();
 
-        // Construct the full sitemap URL using the canonical slug.
-        // Ensure no double slashes if slug might start with one (though typically it shouldn't).
-        const sitemapUrlPath = definition.slug.startsWith('/') ? definition.slug.substring(1) : definition.slug;
-        const sitemapUrl = `https://earthquakeslive.com/cluster/${sitemapUrlPath}`;
-
-        xml += `<url><loc>${escapeXml(sitemapUrl)}</loc><lastmod>${lastmod}</lastmod></url>`;
-
-      } catch (processError) {
-        console.error(`Error processing definition for slug ${definition.slug} in cluster sitemap: ${processError.message}`);
-        continue;
+        try {
+          const lastmodDate = new Date(updatedTimestamp);
+          if (isNaN(lastmodDate.getTime())) {
+              console.warn(`Invalid 'updatedAt' for slug ${definition.slug}: ${updatedTimestamp}`);
+              continue;
+          }
+          const lastmod = lastmodDate.toISOString();
+          const sitemapUrl = `https://earthquakeslive.com/cluster/${definition.slug}`;
+          xml += `<url><loc>${escapeXml(sitemapUrl)}</loc><lastmod>${lastmod}</lastmod></url>`;
+        } catch (processError) {
+          console.error(`Error processing cluster slug ${definition.slug}: ${processError.message}`);
+          continue;
+        }
       }
     }
 
