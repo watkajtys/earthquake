@@ -1,7 +1,8 @@
 import { onRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-import { MIN_SIGNIFICANT_MAGNITUDE, isEventSignificant } from '../src/utils/significanceUtils.js';
+import { isEventWithAdvancedData } from './utils/sitemapUtils.js';
+import { MIN_SIGNIFICANT_MAGNITUDE } from '../src/utils/significanceUtils.js';
 
 // --- Mocks for Cloudflare Environment ---
 const mockCache = {
@@ -58,22 +59,22 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         mockCache.put.mockReset();
     });
 
-    it('/sitemaps/earthquakes-1.xml should return XML with only significant earthquakes', async () => {
+    it('/sitemaps/earthquakes-1.xml should return XML with only events having advanced data', async () => {
         const now = Date.now();
         const nowInSeconds = Math.floor(now / 1000);
 
         const mockDbResults = {
             results: [
-                // 1. Significant by magnitude
+                // 1. Significant by magnitude, but no shakemap
                 {
                     id: "ev_sig_mag", magnitude: MIN_SIGNIFICANT_MAGNITUDE, place: "Big Quake City",
                     event_time: nowInSeconds - 3600, geojson_feature: JSON.stringify({ properties: { updated: now } })
                 },
-                // 2. Significant by product (moment-tensor)
+                // 2. Has shakemap
                 {
-                    id: "ev_sig_product", magnitude: 4.4, place: "Faulty Towers",
+                    id: "ev_with_shakemap", magnitude: 4.4, place: "Shakey Town",
                     event_time: nowInSeconds - 7200, geojson_feature: JSON.stringify({
-                        properties: { updated: now - 10000, products: { "moment-tensor": [{}] } }
+                        properties: { updated: now - 10000, products: { "shakemap": [{}] } }
                     })
                 },
                 // 3. Not significant
@@ -81,16 +82,10 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     id: "ev_not_significant", magnitude: 4.4, place: "Quiet Corner",
                     event_time: nowInSeconds - 5000, geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } })
                 },
-                // 4. Also not significant (below 2.5)
-                {
-                    id: "ev_too_small", magnitude: 1.2, place: "Tiny Town",
-                    event_time: nowInSeconds - 8000, geojson_feature: JSON.stringify({ properties: { updated: now - 15000 } })
-                }
             ]
         };
 
         const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
-        // The mock now returns ALL results >= 2.5, as the code will filter them.
         const context = createMockContext(request, {}, {}, mockDbResults);
 
         const response = await onRequest(context);
@@ -98,23 +93,65 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('application/xml');
-
-        // The DB query should now fetch all quakes >= 2.5 for in-code filtering
         expect(context.env.DB.bind).toHaveBeenCalledWith(2.5, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
 
         expect(text).toContain('<urlset');
 
-        const expectedUrl1 = `https://earthquakeslive.com/quake/m${MIN_SIGNIFICANT_MAGNITUDE.toFixed(1)}-big-quake-city-ev_sig_mag`;
-        expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
+        const expectedUrl = `https://earthquakeslive.com/quake/m4.4-shakey-town-ev_with_shakemap`;
+        expect(text).toContain(`<loc>${expectedUrl}</loc>`);
 
-        const expectedUrl2 = `https://earthquakeslive.com/quake/m4.4-faulty-towers-ev_sig_product`;
-        expect(text).toContain(`<loc>${expectedUrl2}</loc>`);
-
+        expect(text).not.toContain("ev_sig_mag");
         expect(text).not.toContain("ev_not_significant");
-        expect(text).not.toContain("ev_too_small");
 
         const urlCount = (text.match(/<url>/g) || []).length;
-        expect(urlCount).toBe(2); // Only the 2 significant events
+        expect(urlCount).toBe(1); // Only the event with shakemap
+    });
+
+    it('/sitemaps/earthquakes-1.xml should only include events with advanced data (shakemap)', async () => {
+        const now = Date.now();
+        const nowInSeconds = Math.floor(now / 1000);
+
+        const mockDbResults = {
+            results: [
+                // 1. Event with shakemap
+                {
+                    id: "ev_with_shakemap", magnitude: 4.8, place: "Shakey Town",
+                    event_time: nowInSeconds - 3600, geojson_feature: JSON.stringify({
+                        properties: { updated: now, products: { "shakemap": [{}] } }
+                    })
+                },
+                // 2. Significant magnitude but NO shakemap
+                {
+                    id: "ev_sig_mag_no_shakemap", magnitude: 5.2, place: "Big Quake City",
+                    event_time: nowInSeconds - 7200, geojson_feature: JSON.stringify({
+                        properties: { updated: now - 10000, products: { "moment-tensor": [{}] } }
+                    })
+                },
+                // 3. Not significant and no shakemap
+                {
+                    id: "ev_not_significant", magnitude: 4.4, place: "Quiet Corner",
+                    event_time: nowInSeconds - 5000, geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } })
+                },
+            ]
+        };
+
+        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
+        const context = createMockContext(request, {}, {}, mockDbResults);
+
+        const response = await onRequest(context);
+        const text = await response.text();
+
+        expect(response.status).toBe(200);
+        expect(text).toContain('<urlset');
+
+        const expectedUrl = `https://earthquakeslive.com/quake/m4.8-shakey-town-ev_with_shakemap`;
+        expect(text).toContain(`<loc>${expectedUrl}</loc>`);
+
+        expect(text).not.toContain("ev_sig_mag_no_shakemap");
+        expect(text).not.toContain("ev_not_significant");
+
+        const urlCount = (text.match(/<url>/g) || []).length;
+        expect(urlCount).toBe(1); // Only the event with a shakemap
     });
 
     it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid', async () => {
@@ -123,7 +160,8 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const mockDbResults = {
             results: [
                 {
-                    id: "ev_no_geojson", magnitude: 5.0, place: "No GeoJSON Here", event_time: eventTime1
+                    id: "ev_no_geojson", magnitude: 5.0, place: "No GeoJSON Here", event_time: eventTime1,
+                    geojson_feature: JSON.stringify({ properties: { products: { "shakemap": [{}] } } })
                 }
             ]
         };
@@ -175,7 +213,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(text).not.toContain("<loc>");
     });
 
-    it('/sitemaps/earthquakes-1.xml should return an empty set if no events are significant', async () => {
+    it('/sitemaps/earthquakes-1.xml should return an empty set if no events have advanced data', async () => {
         const now = Date.now();
         const mockDbResults = {
             results: [
@@ -198,7 +236,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const text = await response.text();
 
         expect(response.status).toBe(200);
-        expect(text).toContain("<!-- No significant events for page 1 -->");
+        expect(text).toContain("<!-- No events with advanced data for page 1 -->");
         const urlCount = (text.match(/<url>/g) || []).length;
         expect(urlCount).toBe(0);
     });
@@ -220,7 +258,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                  {
                     id: "ev_valid", magnitude: 6.0, place: "Proper Event",
                     event_time: Math.floor(now / 1000) - 3600,
-                    geojson_feature: JSON.stringify({ properties: { updated: now - 10000 } })
+                    geojson_feature: JSON.stringify({ properties: { updated: now - 10000, products: { "shakemap": [{}] } } })
                 },
             ]
         };
@@ -251,7 +289,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                 {
                     id: "ev_valid_time", magnitude: 5.1, place: "Valid Time",
                     event_time: Math.floor(Date.now() / 1000) - 7200, // valid
-                    geojson_feature: JSON.stringify({ properties: { updated: "another-bad-string" }})
+                    geojson_feature: JSON.stringify({ properties: { updated: "another-bad-string", products: { "shakemap": [{}] } }})
                 }
             ]
         };
