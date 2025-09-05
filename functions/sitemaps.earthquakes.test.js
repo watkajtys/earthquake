@@ -65,7 +65,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
         const mockDbResults = {
             results: [
-                // 1. Significant by magnitude, but no shakemap
+                // 1. Significant by magnitude, but no advanced data
                 {
                     id: "ev_sig_mag", magnitude: MIN_SIGNIFICANT_MAGNITUDE, place: "Big Quake City",
                     event_time: nowInSeconds - 3600, geojson_feature: JSON.stringify({ properties: { updated: now } })
@@ -77,7 +77,14 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                         properties: { updated: now - 10000, products: { "shakemap": [{}] } }
                     })
                 },
-                // 3. Not significant
+                // 3. Has moment-tensor
+                {
+                    id: "ev_with_moment_tensor", magnitude: 4.5, place: "Tensorville",
+                    event_time: nowInSeconds - 8200, geojson_feature: JSON.stringify({
+                        properties: { updated: now - 20000, products: { "moment-tensor": [{}] } }
+                    })
+                },
+                // 4. Not significant
                 {
                     id: "ev_not_significant", magnitude: 4.4, place: "Quiet Corner",
                     event_time: nowInSeconds - 5000, geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } })
@@ -97,17 +104,19 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
         expect(text).toContain('<urlset');
 
-        const expectedUrl = `https://earthquakeslive.com/quake/m4.4-shakey-town-ev_with_shakemap`;
-        expect(text).toContain(`<loc>${expectedUrl}</loc>`);
+        const expectedUrl1 = `https://earthquakeslive.com/quake/m4.4-shakey-town-ev_with_shakemap`;
+        expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
+        const expectedUrl2 = `https://earthquakeslive.com/quake/m4.5-tensorville-ev_with_moment_tensor`;
+        expect(text).toContain(`<loc>${expectedUrl2}</loc>`);
 
         expect(text).not.toContain("ev_sig_mag");
         expect(text).not.toContain("ev_not_significant");
 
         const urlCount = (text.match(/<url>/g) || []).length;
-        expect(urlCount).toBe(1); // Only the event with shakemap
+        expect(urlCount).toBe(2); // Only the events with advanced data
     });
 
-    it('/sitemaps/earthquakes-1.xml should only include events with advanced data (shakemap)', async () => {
+    it('/sitemaps/earthquakes-1.xml should only include events with advanced data (shakemap, moment-tensor, focal-mechanism)', async () => {
         const now = Date.now();
         const nowInSeconds = Math.floor(now / 1000);
 
@@ -120,14 +129,21 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                         properties: { updated: now, products: { "shakemap": [{}] } }
                     })
                 },
-                // 2. Significant magnitude but NO shakemap
+                // 2. Event with moment-tensor
                 {
-                    id: "ev_sig_mag_no_shakemap", magnitude: 5.2, place: "Big Quake City",
+                    id: "ev_with_moment_tensor", magnitude: 5.2, place: "Tensorville",
                     event_time: nowInSeconds - 7200, geojson_feature: JSON.stringify({
                         properties: { updated: now - 10000, products: { "moment-tensor": [{}] } }
                     })
                 },
-                // 3. Not significant and no shakemap
+                // 3. Event with focal-mechanism
+                {
+                    id: "ev_with_focal_mechanism", magnitude: 4.5, place: "Focal Point",
+                    event_time: nowInSeconds - 8200, geojson_feature: JSON.stringify({
+                        properties: { updated: now - 20000, products: { "focal-mechanism": [{}] } }
+                    })
+                },
+                // 4. Not significant and no advanced data
                 {
                     id: "ev_not_significant", magnitude: 4.4, place: "Quiet Corner",
                     event_time: nowInSeconds - 5000, geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } })
@@ -144,14 +160,17 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(response.status).toBe(200);
         expect(text).toContain('<urlset');
 
-        const expectedUrl = `https://earthquakeslive.com/quake/m4.8-shakey-town-ev_with_shakemap`;
-        expect(text).toContain(`<loc>${expectedUrl}</loc>`);
+        const expectedUrl1 = `https://earthquakeslive.com/quake/m4.8-shakey-town-ev_with_shakemap`;
+        expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
+        const expectedUrl2 = `https://earthquakeslive.com/quake/m5.2-tensorville-ev_with_moment_tensor`;
+        expect(text).toContain(`<loc>${expectedUrl2}</loc>`);
+        const expectedUrl3 = `https://earthquakeslive.com/quake/m4.5-focal-point-ev_with_focal_mechanism`;
+        expect(text).toContain(`<loc>${expectedUrl3}</loc>`);
 
-        expect(text).not.toContain("ev_sig_mag_no_shakemap");
         expect(text).not.toContain("ev_not_significant");
 
         const urlCount = (text.match(/<url>/g) || []).length;
-        expect(urlCount).toBe(1); // Only the event with a shakemap
+        expect(urlCount).toBe(3); // All three events with advanced data
     });
 
     it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid', async () => {
