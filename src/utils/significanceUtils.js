@@ -55,6 +55,8 @@ export const isEventSignificant = (event) => {
  * - shakemap (instrumental intensity map)
  * - moment-tensor (fault plane solution)
  * - focal-mechanism (older fault plane solution)
+ * - losspager (PAGER alert and loss estimation)
+ * - phase-data (detailed seismic wave data)
  *
  * @param {object} event - The earthquake event object from the D1 database.
  * @returns {boolean} - True if the event has at least one advanced data product.
@@ -71,7 +73,7 @@ export const hasAdvancedScientificData = (event) => {
 
     const products = feature.properties?.products;
 
-    if (products && (products['shakemap'] || products['moment-tensor'] || products['focal-mechanism'])) {
+    if (products && (products['shakemap'] || products['moment-tensor'] || products['focal-mechanism'] || products['losspager'] || products['phase-data'])) {
       return true;
     }
   } catch (e) {

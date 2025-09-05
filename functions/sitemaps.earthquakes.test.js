@@ -83,7 +83,21 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                         properties: { updated: now - 11000, products: { "shakemap": [{}] } }
                     })
                 },
-                // 4. Not significant and no advanced data. Should NOT be in sitemap.
+                // 4. Has losspager data. Should BE in sitemap.
+                {
+                    id: "ev_with_losspager", magnitude: 3.9, place: "Lossy Lane",
+                    event_time: nowInSeconds - 4500, geojson_feature: JSON.stringify({
+                        properties: { updated: now - 12000, products: { "losspager": [{}] } }
+                    })
+                },
+                // 5. Has phase-data. Should BE in sitemap.
+                {
+                    id: "ev_with_phasedata", magnitude: 3.8, place: "Phased Out",
+                    event_time: nowInSeconds - 4800, geojson_feature: JSON.stringify({
+                        properties: { updated: now - 13000, products: { "phase-data": [{}] } }
+                    })
+                },
+                // 6. Not significant and no advanced data. Should NOT be in sitemap.
                 {
                     id: "ev_not_significant", magnitude: 4.4, place: "Quiet Corner",
                     event_time: nowInSeconds - 5000, geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } })
@@ -107,6 +121,10 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
         const expectedUrl2 = `https://earthquakeslive.com/quake/m4.2-shakey-town-ev_with_shakemap`;
         expect(text).toContain(`<loc>${expectedUrl2}</loc>`);
+        const expectedUrl3 = `https://earthquakeslive.com/quake/m3.9-lossy-lane-ev_with_losspager`;
+        expect(text).toContain(`<loc>${expectedUrl3}</loc>`);
+        const expectedUrl4 = `https://earthquakeslive.com/quake/m3.8-phased-out-ev_with_phasedata`;
+        expect(text).toContain(`<loc>${expectedUrl4}</loc>`);
 
 
         // URLs that SHOULD NOT be present
@@ -115,7 +133,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
 
         const urlCount = (text.match(/<url>/g) || []).length;
-        expect(urlCount).toBe(2); // Only the 2 events with advanced data
+        expect(urlCount).toBe(4); // Now expecting 4 events with advanced data
     });
 
     it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid', async () => {
