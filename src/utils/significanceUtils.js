@@ -45,3 +45,39 @@ export const isEventSignificant = (event) => {
 
   return false;
 };
+
+/**
+ * Checks if an earthquake has advanced scientific data products.
+ * This is a stricter check than isEventSignificant, intended for filtering sitemaps
+ * to only include the most high-value seismic events.
+ *
+ * An event has advanced data if it has ANY of the following products:
+ * - shakemap (instrumental intensity map)
+ * - moment-tensor (fault plane solution)
+ * - focal-mechanism (older fault plane solution)
+ *
+ * @param {object} event - The earthquake event object from the D1 database.
+ * @returns {boolean} - True if the event has at least one advanced data product.
+ */
+export const hasAdvancedScientificData = (event) => {
+  if (!event || !event.geojson_feature) {
+    return false;
+  }
+
+  try {
+    const feature = typeof event.geojson_feature === 'string'
+      ? JSON.parse(event.geojson_feature)
+      : event.geojson_feature;
+
+    const products = feature.properties?.products;
+
+    if (products && (products['shakemap'] || products['moment-tensor'] || products['focal-mechanism'])) {
+      return true;
+    }
+  } catch (e) {
+    console.warn(`[hasAdvancedScientificData] Failed to parse geojson_feature for event ${event.id}: ${e.message}`);
+    // If parsing fails, it doesn't have the data.
+  }
+
+  return false;
+};
