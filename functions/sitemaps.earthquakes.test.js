@@ -64,14 +64,16 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
         const mockDbResults = {
             results: [
-                // 1. Significant by magnitude
+                // 1. Significant by magnitude (and now has enhanced data to pass new filter)
                 {
                     id: "ev_sig_mag", magnitude: MIN_SIGNIFICANT_MAGNITUDE, place: "Big Quake City",
-                    event_time: nowInSeconds - 3600, geojson_feature: JSON.stringify({ properties: { updated: now } })
+                    event_time: nowInSeconds - 3600, geojson_feature: JSON.stringify({
+                        properties: { updated: now, products: { "losspager": [{}] } }
+                    })
                 },
-                // 2. Significant by product (moment-tensor)
+                // 2. Significant by product (moment-tensor) and now has sufficient magnitude
                 {
-                    id: "ev_sig_product", magnitude: 4.4, place: "Faulty Towers",
+                    id: "ev_sig_product", magnitude: 4.5, place: "Faulty Towers",
                     event_time: nowInSeconds - 7200, geojson_feature: JSON.stringify({
                         properties: { updated: now - 10000, products: { "moment-tensor": [{}] } }
                     })
@@ -90,7 +92,6 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         };
 
         const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
-        // The mock now returns ALL results >= 2.5, as the code will filter them.
         const context = createMockContext(request, {}, {}, mockDbResults);
 
         const response = await onRequest(context);
@@ -98,32 +99,84 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('application/xml');
-
-        // The DB query should now fetch all quakes >= 2.5 for in-code filtering
         expect(context.env.DB.bind).toHaveBeenCalledWith(2.5, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
 
         expect(text).toContain('<urlset');
-
         const expectedUrl1 = `https://earthquakeslive.com/quake/m${MIN_SIGNIFICANT_MAGNITUDE.toFixed(1)}-big-quake-city-ev_sig_mag`;
         expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
 
-        const expectedUrl2 = `https://earthquakeslive.com/quake/m4.4-faulty-towers-ev_sig_product`;
+        const expectedUrl2 = `https://earthquakeslive.com/quake/m4.5-faulty-towers-ev_sig_product`;
         expect(text).toContain(`<loc>${expectedUrl2}</loc>`);
 
         expect(text).not.toContain("ev_not_significant");
         expect(text).not.toContain("ev_too_small");
 
         const urlCount = (text.match(/<url>/g) || []).length;
-        expect(urlCount).toBe(2); // Only the 2 significant events
+        expect(urlCount).toBe(2);
+    });
+
+    it('/sitemaps/earthquakes-1.xml should only include events with enhanced data for SEO', async () => {
+        const now = Date.now();
+        const nowInSeconds = Math.floor(now / 1000);
+
+        const mockDbResults = {
+            results: [
+                // 1. SEO-worthy: Mag >= 4.5 AND has enhanced data (moment-tensor)
+                {
+                    id: "seo_worthy_1", magnitude: 4.5, place: "Enhanced City", event_time: nowInSeconds,
+                    geojson_feature: JSON.stringify({ properties: { updated: now, products: { "moment-tensor": [{}] } } })
+                },
+                // 2. NOT SEO-worthy: Mag >= 4.5 but NO enhanced data
+                {
+                    id: "not_seo_worthy_1", magnitude: 4.6, place: "Plain City", event_time: nowInSeconds,
+                    geojson_feature: JSON.stringify({ properties: { updated: now, products: {} } })
+                },
+                // 3. NOT SEO-worthy: Has enhanced data but Mag < 4.5
+                {
+                    id: "not_seo_worthy_2", magnitude: 4.4, place: "Enhanced but Small Town", event_time: nowInSeconds,
+                    geojson_feature: JSON.stringify({ properties: { updated: now, products: { "losspager": [{}] } } })
+                },
+                // 4. SEO-worthy: Mag >= 4.5 AND has shakemap with maxmmi-grid
+                {
+                    id: "seo_worthy_shakemap", magnitude: 5.0, place: "Shaky Isles", event_time: nowInSeconds,
+                    geojson_feature: JSON.stringify({
+                        properties: { updated: now, products: { shakemap: [{ properties: { "maxmmi-grid": "some_grid" } }] } }
+                    })
+                },
+                // 5. NOT SEO-worthy: Mag >= 4.5 but shakemap is missing maxmmi-grid
+                {
+                    id: "not_seo_worthy_shakemap", magnitude: 5.1, place: "Mildly Shaky Isles", event_time: nowInSeconds,
+                    geojson_feature: JSON.stringify({
+                        properties: { updated: now, products: { shakemap: [{ properties: {} }] } }
+                    })
+                }
+            ]
+        };
+
+        const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
+        const context = createMockContext(request, {}, {}, mockDbResults);
+        const response = await onRequest(context);
+        const text = await response.text();
+
+        expect(response.status).toBe(200);
+        expect(text).toContain("seo_worthy_1");
+        expect(text).toContain("seo_worthy_shakemap");
+        expect(text).not.toContain("not_seo_worthy_1");
+        expect(text).not.toContain("not_seo_worthy_2");
+        expect(text).not.toContain("not_seo_worthy_shakemap");
+
+        const urlCount = (text.match(/<url>/g) || []).length;
+        expect(urlCount).toBe(2);
     });
 
     it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid', async () => {
         const eventTime1 = Math.floor(Date.now() / 1000) - 86400;
-
         const mockDbResults = {
             results: [
                 {
-                    id: "ev_no_geojson", magnitude: 5.0, place: "No GeoJSON Here", event_time: eventTime1
+                    id: "ev_no_geojson", magnitude: 5.0, place: "No GeoJSON Here", event_time: eventTime1,
+                    // Add enhanced data so it passes the new filter, but keep updated property missing to test fallback
+                    geojson_feature: JSON.stringify({ properties: { products: { "dyfi": [{}] } } })
                 }
             ]
         };
@@ -210,7 +263,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                  {
                     /* id missing */ magnitude: 5.5, place: "Valid Place",
                     event_time: Math.floor(now / 1000),
-                    geojson_feature: JSON.stringify({ properties: { updated: now } })
+                    geojson_feature: JSON.stringify({ properties: { updated: now, products: { "finite-fault": [{}] } } })
                 },
                 {
                     id: "ev_no_place", magnitude: 4.2, /* place missing */
@@ -220,7 +273,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                  {
                     id: "ev_valid", magnitude: 6.0, place: "Proper Event",
                     event_time: Math.floor(now / 1000) - 3600,
-                    geojson_feature: JSON.stringify({ properties: { updated: now - 10000 } })
+                    geojson_feature: JSON.stringify({ properties: { updated: now - 10000, products: { "finite-fault": [{}] } } })
                 },
             ]
         };
@@ -246,12 +299,12 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                 {
                     id: "ev_invalid_time", magnitude: 5.0, place: "Invalid Time",
                     event_time: null,
-                    geojson_feature: JSON.stringify({ properties: { updated: "bad-date-string" }})
+                    geojson_feature: JSON.stringify({ properties: { updated: "bad-date-string", products: { "losspager": [{}] } }})
                 },
                 {
                     id: "ev_valid_time", magnitude: 5.1, place: "Valid Time",
                     event_time: Math.floor(Date.now() / 1000) - 7200, // valid
-                    geojson_feature: JSON.stringify({ properties: { updated: "another-bad-string" }})
+                    geojson_feature: JSON.stringify({ properties: { updated: "another-bad-string", products: { "phase-data": [{}] } }})
                 }
             ]
         };

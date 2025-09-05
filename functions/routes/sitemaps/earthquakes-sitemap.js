@@ -21,7 +21,40 @@ const slugify = (text) => {
 
 // Removed generateEarthquakeSitemapIndex function as it's no longer used.
 // The main sitemap index now directly lists paginated earthquake sitemaps.
+const hasEnhancedData = (event) => {
+  if (!event.geojson_feature) return false;
 
+  try {
+    const feature = typeof event.geojson_feature === 'string'
+      ? JSON.parse(event.geojson_feature)
+      : event.geojson_feature;
+
+    const products = feature.properties?.products;
+    if (!products) return false;
+
+    // Check for faulting data
+    if (products['moment-tensor'] || products['focal-mechanism'] || products['finite-fault']) {
+      return true;
+    }
+
+    // Check for shakemap with intensity data
+    if (products.shakemap) {
+      const shakemap = Array.isArray(products.shakemap) ? products.shakemap[0] : products.shakemap;
+      if (shakemap.properties && shakemap.properties['maxmmi-grid']) {
+        return true;
+      }
+    }
+
+    // Check for other scientific products
+    if (products.losspager || products.dyfi || products['phase-data']) {
+      return true;
+    }
+  } catch (e) {
+    console.warn(`[hasEnhancedData] Failed to parse geojson_feature for event ${event.id}: ${e.message}`);
+  }
+
+  return false;
+};
 async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
   const offset = (pageNumber - 1) * SITEMAP_PAGE_SIZE;
   try {
@@ -38,15 +71,17 @@ async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
       return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
 
-    const significantEvents = earthquakeEvents.filter(isEventSignificant);
+    const sitemapEvents = earthquakeEvents.filter(event => {
+      return event.magnitude >= 4.5 && hasEnhancedData(event);
+    });
 
-    if (significantEvents.length === 0) {
+    if (sitemapEvents.length === 0) {
       console.log(`No significant earthquake events found for sitemap on page ${pageNumber}.`);
       return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No significant events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-    for (const event of significantEvents) {
+    for (const event of sitemapEvents) {
       const eventId = event.id;
       const originalPlace = event.place;
       if (!eventId || !originalPlace) {
