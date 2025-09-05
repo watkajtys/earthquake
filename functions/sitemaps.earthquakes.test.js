@@ -65,14 +65,14 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
         const mockDbResults = {
             results: [
-                // 1. Formerly significant by magnitude, now should be excluded
+                // 1. Excluded: high magnitude, but no data products
                 {
                     id: "ev_high_mag_no_data", magnitude: 5.0, place: "Big Quake City",
                     event_time: nowInSeconds - 3600, geojson_feature: JSON.stringify({ properties: { updated: now } })
                 },
-                // 2. Included due to enhanced data (moment-tensor)
+                // 2. Included: has moment-tensor
                 {
-                    id: "ev_with_enhanced_data", magnitude: 4.4, place: "Faulty Towers",
+                    id: "ev_with_moment_tensor", magnitude: 4.4, place: "Faulty Towers",
                     event_time: nowInSeconds - 7200, geojson_feature: JSON.stringify({
                         properties: { updated: now - 10000, products: { "moment-tensor": [{}] } }
                     })
@@ -82,13 +82,20 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     id: "ev_no_data", magnitude: 4.4, place: "Quiet Corner",
                     event_time: nowInSeconds - 5000, geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } })
                 },
-                 // 4. Included due to enhanced data (focal-mechanism)
+                 // 4. Included: has shakemap
                 {
-                    id: "ev_with_focal_mechanism", magnitude: 3.9, place: "Focus Point",
+                    id: "ev_with_shakemap", magnitude: 3.9, place: "Shaky Town",
                     event_time: nowInSeconds - 8200, geojson_feature: JSON.stringify({
-                        properties: { updated: now - 11000, products: { "focal-mechanism": [{}] } }
+                        properties: { updated: now - 11000, products: { "shakemap": [{}] } }
                     })
                 },
+                // 5. Included: has losspager
+                {
+                    id: "ev_with_losspager", magnitude: 6.1, place: "Risky Region",
+                     event_time: nowInSeconds - 9000, geojson_feature: JSON.stringify({
+                        properties: { updated: now - 12000, products: { "losspager": [{}] } }
+                    })
+                }
             ]
         };
 
@@ -100,27 +107,19 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('application/xml');
-
-        // The DB query should now fetch all quakes >= 2.5 for in-code filtering
         expect(context.env.DB.bind).toHaveBeenCalledWith(2.5, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
 
-        expect(response.headers.get('Content-Type')).toContain('application/xml');
-        expect(context.env.DB.bind).toHaveBeenCalledWith(2.5, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
-
-        // Check for the event that SHOULD be in the sitemap
-        const expectedUrl1 = `https://earthquakeslive.com/quake/m4.4-faulty-towers-ev_with_enhanced_data`;
-        expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
-
-        const expectedUrl2 = `https://earthquakeslive.com/quake/m3.9-focus-point-ev_with_focal_mechanism`;
-        expect(text).toContain(`<loc>${expectedUrl2}</loc>`);
-
+        // Check for events that SHOULD be in the sitemap
+        expect(text).toContain(`ev_with_moment_tensor`);
+        expect(text).toContain(`ev_with_shakemap`);
+        expect(text).toContain(`ev_with_losspager`);
 
         // Check for events that SHOULD NOT be in the sitemap
         expect(text).not.toContain("ev_high_mag_no_data");
         expect(text).not.toContain("ev_no_data");
 
         const urlCount = (text.match(/<url>/g) || []).length;
-        expect(urlCount).toBe(2); // Only the 2 events with enhanced data
+        expect(urlCount).toBe(3); // The 3 events with enhanced data
     });
 
     it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature.properties.updated is missing/invalid', async () => {

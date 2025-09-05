@@ -23,11 +23,12 @@ const slugify = (text) => {
 // The main sitemap index now directly lists paginated earthquake sitemaps.
 
 /**
- * Checks if an earthquake event has enhanced scientific data (nodal plane/moment tensor).
- * This is the sole criterion for including an earthquake in the sitemap.
+ * Checks if an earthquake event has any kind of enhanced scientific data product.
+ * This is the criterion for including an earthquake in the sitemap to ensure only
+ * data-rich pages are indexed.
  *
  * @param {object} event - The earthquake event from the database.
- * @returns {boolean} - True if the event has the required scientific data.
+ * @returns {boolean} - True if the event has at least one enhanced data product.
  */
 const hasEnhancedScientificData = (event) => {
   if (!event || !event.geojson_feature) {
@@ -40,8 +41,19 @@ const hasEnhancedScientificData = (event) => {
       : event.geojson_feature;
 
     const products = feature.properties?.products;
-    // The presence of 'moment-tensor' or 'focal-mechanism' indicates enhanced data.
-    return !!(products && (products['moment-tensor'] || products['focal-mechanism']));
+
+    if (!products) {
+      return false;
+    }
+
+    // Check for the presence of any key data product that indicates a richer detail page.
+    return !!(
+      products['moment-tensor'] ||
+      products['focal-mechanism'] ||
+      products['shakemap'] ||
+      products['losspager'] ||
+      products['phase-data']
+    );
   } catch (e) {
     console.warn(`[hasEnhancedScientificData] Failed to parse geojson_feature for event ${event.id}: ${e.message}`);
     return false;
