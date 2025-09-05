@@ -2,7 +2,7 @@
  * @file Generates sitemaps for earthquake events, including a sitemap index and paginated sitemap files.
  */
 import { escapeXml } from '../../utils/xml-utils.js';
-import { isEventSignificant } from '../../../src/utils/significanceUtils.js';
+
 
 const SITEMAP_PAGE_SIZE = 40000; // Number of URLs per paginated sitemap file
 const BASE_URL = "https://earthquakeslive.com";
@@ -22,6 +22,32 @@ const slugify = (text) => {
 // Removed generateEarthquakeSitemapIndex function as it's no longer used.
 // The main sitemap index now directly lists paginated earthquake sitemaps.
 
+/**
+ * Checks if an earthquake event has enhanced scientific data (nodal plane/moment tensor).
+ * This is the sole criterion for including an earthquake in the sitemap.
+ *
+ * @param {object} event - The earthquake event from the database.
+ * @returns {boolean} - True if the event has the required scientific data.
+ */
+const hasEnhancedScientificData = (event) => {
+  if (!event || !event.geojson_feature) {
+    return false;
+  }
+
+  try {
+    const feature = typeof event.geojson_feature === 'string'
+      ? JSON.parse(event.geojson_feature)
+      : event.geojson_feature;
+
+    const products = feature.properties?.products;
+    // The presence of 'moment-tensor' or 'focal-mechanism' indicates enhanced data.
+    return !!(products && (products['moment-tensor'] || products['focal-mechanism']));
+  } catch (e) {
+    console.warn(`[hasEnhancedScientificData] Failed to parse geojson_feature for event ${event.id}: ${e.message}`);
+    return false;
+  }
+};
+
 async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
   const offset = (pageNumber - 1) * SITEMAP_PAGE_SIZE;
   try {
@@ -38,15 +64,15 @@ async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
       return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
 
-    const significantEvents = earthquakeEvents.filter(isEventSignificant);
+    const eventsWithEnhancedData = earthquakeEvents.filter(hasEnhancedScientificData);
 
-    if (significantEvents.length === 0) {
-      console.log(`No significant earthquake events found for sitemap on page ${pageNumber}.`);
-      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No significant events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
+    if (eventsWithEnhancedData.length === 0) {
+      console.log(`No earthquake events with enhanced data found for sitemap on page ${pageNumber}.`);
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No events with enhanced data for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
-    for (const event of significantEvents) {
+    for (const event of eventsWithEnhancedData) {
       const eventId = event.id;
       const originalPlace = event.place;
       if (!eventId || !originalPlace) {

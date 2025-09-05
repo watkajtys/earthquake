@@ -1,7 +1,8 @@
 import { onRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-import { MIN_SIGNIFICANT_MAGNITUDE, isEventSignificant } from '../src/utils/significanceUtils.js';
+// The significance logic is now self-contained within the sitemap generator,
+// so we no longer need to import it here for testing.
 
 // --- Mocks for Cloudflare Environment ---
 const mockCache = {
@@ -58,39 +59,40 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         mockCache.put.mockReset();
     });
 
-    it('/sitemaps/earthquakes-1.xml should return XML with only significant earthquakes', async () => {
+    it('/sitemaps/earthquakes-1.xml should return XML with only earthquakes having enhanced data', async () => {
         const now = Date.now();
         const nowInSeconds = Math.floor(now / 1000);
 
         const mockDbResults = {
             results: [
-                // 1. Significant by magnitude
+                // 1. Formerly significant by magnitude, now should be excluded
                 {
-                    id: "ev_sig_mag", magnitude: MIN_SIGNIFICANT_MAGNITUDE, place: "Big Quake City",
+                    id: "ev_high_mag_no_data", magnitude: 5.0, place: "Big Quake City",
                     event_time: nowInSeconds - 3600, geojson_feature: JSON.stringify({ properties: { updated: now } })
                 },
-                // 2. Significant by product (moment-tensor)
+                // 2. Included due to enhanced data (moment-tensor)
                 {
-                    id: "ev_sig_product", magnitude: 4.4, place: "Faulty Towers",
+                    id: "ev_with_enhanced_data", magnitude: 4.4, place: "Faulty Towers",
                     event_time: nowInSeconds - 7200, geojson_feature: JSON.stringify({
                         properties: { updated: now - 10000, products: { "moment-tensor": [{}] } }
                     })
                 },
-                // 3. Not significant
+                // 3. Excluded, no enhanced data
                 {
-                    id: "ev_not_significant", magnitude: 4.4, place: "Quiet Corner",
+                    id: "ev_no_data", magnitude: 4.4, place: "Quiet Corner",
                     event_time: nowInSeconds - 5000, geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } })
                 },
-                // 4. Also not significant (below 2.5)
+                 // 4. Included due to enhanced data (focal-mechanism)
                 {
-                    id: "ev_too_small", magnitude: 1.2, place: "Tiny Town",
-                    event_time: nowInSeconds - 8000, geojson_feature: JSON.stringify({ properties: { updated: now - 15000 } })
-                }
+                    id: "ev_with_focal_mechanism", magnitude: 3.9, place: "Focus Point",
+                    event_time: nowInSeconds - 8200, geojson_feature: JSON.stringify({
+                        properties: { updated: now - 11000, products: { "focal-mechanism": [{}] } }
+                    })
+                },
             ]
         };
 
         const request = new Request('http://localhost/sitemaps/earthquakes-1.xml');
-        // The mock now returns ALL results >= 2.5, as the code will filter them.
         const context = createMockContext(request, {}, {}, mockDbResults);
 
         const response = await onRequest(context);
@@ -102,28 +104,44 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         // The DB query should now fetch all quakes >= 2.5 for in-code filtering
         expect(context.env.DB.bind).toHaveBeenCalledWith(2.5, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
 
-        expect(text).toContain('<urlset');
+        expect(response.headers.get('Content-Type')).toContain('application/xml');
+        expect(context.env.DB.bind).toHaveBeenCalledWith(2.5, SITEMAP_PAGE_SIZE_FOR_TEST, 0);
 
-        const expectedUrl1 = `https://earthquakeslive.com/quake/m${MIN_SIGNIFICANT_MAGNITUDE.toFixed(1)}-big-quake-city-ev_sig_mag`;
+        // Check for the event that SHOULD be in the sitemap
+        const expectedUrl1 = `https://earthquakeslive.com/quake/m4.4-faulty-towers-ev_with_enhanced_data`;
         expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
 
-        const expectedUrl2 = `https://earthquakeslive.com/quake/m4.4-faulty-towers-ev_sig_product`;
+        const expectedUrl2 = `https://earthquakeslive.com/quake/m3.9-focus-point-ev_with_focal_mechanism`;
         expect(text).toContain(`<loc>${expectedUrl2}</loc>`);
 
-        expect(text).not.toContain("ev_not_significant");
-        expect(text).not.toContain("ev_too_small");
+
+        // Check for events that SHOULD NOT be in the sitemap
+        expect(text).not.toContain("ev_high_mag_no_data");
+        expect(text).not.toContain("ev_no_data");
 
         const urlCount = (text.match(/<url>/g) || []).length;
-        expect(urlCount).toBe(2); // Only the 2 significant events
+        expect(urlCount).toBe(2); // Only the 2 events with enhanced data
     });
 
-    it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid', async () => {
+    it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature.properties.updated is missing/invalid', async () => {
         const eventTime1 = Math.floor(Date.now() / 1000) - 86400;
+        const now = Date.now();
 
         const mockDbResults = {
             results: [
+                // This event has enhanced data, making it sitemap-worthy, but is missing the 'updated' property
+                // to test the event_time fallback.
                 {
-                    id: "ev_no_geojson", magnitude: 5.0, place: "No GeoJSON Here", event_time: eventTime1
+                    id: "ev_fallback_to_event_time",
+                    magnitude: 5.0,
+                    place: "Fallback Test",
+                    event_time: eventTime1,
+                    geojson_feature: JSON.stringify({
+                        properties: {
+                            products: { "moment-tensor": [{}] }
+                            // 'updated' property is deliberately missing
+                        }
+                    })
                 }
             ]
         };
@@ -134,7 +152,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const text = await response.text();
 
         expect(response.status).toBe(200);
-        const expectedUrl1 = `https://earthquakeslive.com/quake/m5.0-no-geojson-here-ev_no_geojson`;
+        const expectedUrl1 = `https://earthquakeslive.com/quake/m5.0-fallback-test-ev_fallback_to_event_time`;
         expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
         expect(text).toContain(`<lastmod>${new Date(eventTime1 * 1000).toISOString()}</lastmod>`);
         const urlCount = (text.match(/<url>/g) || []).length;
@@ -175,17 +193,17 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(text).not.toContain("<loc>");
     });
 
-    it('/sitemaps/earthquakes-1.xml should return an empty set if no events are significant', async () => {
+    it('/sitemaps/earthquakes-1.xml should return an empty set if no events have enhanced data', async () => {
         const now = Date.now();
         const mockDbResults = {
             results: [
                  {
-                    id: "ev_not_significant_1", magnitude: 4.4, place: "Almost Significant",
+                    id: "ev_no_data_1", magnitude: 4.4, place: "Almost Significant",
                     event_time: Math.floor(now / 1000),
                     geojson_feature: JSON.stringify({ properties: { updated: now } })
                 },
                 {
-                    id: "ev_not_significant_2", magnitude: 3.0, place: "Not even close",
+                    id: "ev_no_data_2", magnitude: 3.0, place: "Not even close",
                     event_time: Math.floor(now / 1000),
                     geojson_feature: JSON.stringify({ properties: { updated: now } })
                 },
@@ -198,7 +216,8 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const text = await response.text();
 
         expect(response.status).toBe(200);
-        expect(text).toContain("<!-- No significant events for page 1 -->");
+        // The comment should now reflect the new filtering criteria
+        expect(text).toContain("<!-- No events with enhanced data for page 1 -->");
         const urlCount = (text.match(/<url>/g) || []).length;
         expect(urlCount).toBe(0);
     });
@@ -207,20 +226,23 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         const now = Date.now();
         const adjustedMockEvents = {
             results: [
+                 // Excluded: missing id
                  {
                     /* id missing */ magnitude: 5.5, place: "Valid Place",
                     event_time: Math.floor(now / 1000),
-                    geojson_feature: JSON.stringify({ properties: { updated: now } })
+                    geojson_feature: JSON.stringify({ properties: { updated: now, products: { "moment-tensor": [{}] } } })
                 },
+                // Excluded: missing place
                 {
                     id: "ev_no_place", magnitude: 4.2, /* place missing */
                     event_time: Math.floor(now / 1000),
-                    geojson_feature: JSON.stringify({ properties: { updated: now } })
+                    geojson_feature: JSON.stringify({ properties: { updated: now, products: { "moment-tensor": [{}] } } })
                 },
+                 // Included: has all required fields and enhanced data
                  {
                     id: "ev_valid", magnitude: 6.0, place: "Proper Event",
                     event_time: Math.floor(now / 1000) - 3600,
-                    geojson_feature: JSON.stringify({ properties: { updated: now - 10000 } })
+                    geojson_feature: JSON.stringify({ properties: { updated: now - 10000, products: { "moment-tensor": [{}] } } })
                 },
             ]
         };
@@ -243,15 +265,17 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
     it('/sitemaps/earthquakes-1.xml should skip events with invalid lastmodTimestamp after fallbacks', async () => {
         const mockEvents = {
             results: [
+                // Excluded: No valid timestamp (event_time is null, updated is bad), even though it has enhanced data.
                 {
                     id: "ev_invalid_time", magnitude: 5.0, place: "Invalid Time",
                     event_time: null,
-                    geojson_feature: JSON.stringify({ properties: { updated: "bad-date-string" }})
+                    geojson_feature: JSON.stringify({ properties: { updated: "bad-date-string", products: { "moment-tensor": [{}] } }})
                 },
+                // Included: Has enhanced data and a valid event_time to fall back to.
                 {
                     id: "ev_valid_time", magnitude: 5.1, place: "Valid Time",
                     event_time: Math.floor(Date.now() / 1000) - 7200, // valid
-                    geojson_feature: JSON.stringify({ properties: { updated: "another-bad-string" }})
+                    geojson_feature: JSON.stringify({ properties: { updated: "another-bad-string", products: { "moment-tensor": [{}] } }})
                 }
             ]
         };
