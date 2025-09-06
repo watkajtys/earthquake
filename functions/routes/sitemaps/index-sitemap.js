@@ -3,7 +3,6 @@
  * This sitemap lists all individual sitemap files, including paginated earthquake sitemaps.
  */
 import { escapeXml } from '../../utils/xml-utils.js'; // For error messages
-import { isEventSignificant } from '../../../src/utils/significanceUtils.js';
 
 const SITEMAP_PAGE_SIZE = 40000;
 const BASE_URL = "https://earthquakeslive.com";
@@ -23,14 +22,12 @@ export async function handleIndexSitemap(context) {
 
   if (env.DB) {
     try {
-      // Fetch all potentially significant events to get an accurate count.
-      // This is less efficient than a COUNT query but necessary for our complex logic.
-      const allPotentiallySignificantEvents = await env.DB.prepare(
-        "SELECT magnitude, geojson_feature FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= ?"
-      ).bind(2.5).all();
+      // Fetch the count of events with enhanced data directly from the database.
+      const d1Result = await env.DB.prepare(
+        "SELECT COUNT(*) as count FROM EarthquakeEvents WHERE has_enhanced_data = TRUE"
+      ).first();
+      const totalSignificantEvents = d1Result ? d1Result.count : 0;
 
-      const significantEvents = allPotentiallySignificantEvents.results.filter(isEventSignificant);
-      const totalSignificantEvents = significantEvents.length;
 
       if (totalSignificantEvents > 0) {
         const totalPages = Math.ceil(totalSignificantEvents / SITEMAP_PAGE_SIZE);

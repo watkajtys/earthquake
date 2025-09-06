@@ -61,19 +61,8 @@ describe('Sitemap Index and Static Pages Handlers', () => {
       const request = new Request('http://localhost/sitemap-index.xml');
       const context = createMockContext(request);
 
-      // Create a mock list of events. 85000 are significant, 5000 are not.
-      const significantEvents = Array.from({ length: 85000 }, (_, i) => ({
-          magnitude: 5.0,
-          geojson_feature: '{}'
-      }));
-      const nonSignificantEvents = Array.from({ length: 5000 }, (_, i) => ({
-          magnitude: 3.0,
-          geojson_feature: '{}'
-      }));
-      const allEvents = [...significantEvents, ...nonSignificantEvents];
-
-      const mockDbResponse = { results: allEvents };
-      context.env.DB.all.mockResolvedValue(mockDbResponse);
+      // Mock the DB to return a count of significant events.
+      context.env.DB.first.mockResolvedValue({ count: 85000 });
 
       const response = await onRequest(context);
       const text = await response.text();
@@ -83,8 +72,8 @@ describe('Sitemap Index and Static Pages Handlers', () => {
       expect(text).toContain('<sitemapindex');
 
       // Check that the DB was queried correctly
-      expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/SELECT magnitude, geojson_feature FROM EarthquakeEvents/i));
-      expect(context.env.DB.bind).toHaveBeenCalledWith(2.5);
+      expect(context.env.DB.prepare).toHaveBeenCalledWith("SELECT COUNT(*) as count FROM EarthquakeEvents WHERE has_enhanced_data = TRUE");
+      expect(context.env.DB.bind).not.toHaveBeenCalled();
 
       // Check for static sitemaps
       expect(text).toContain('<loc>https://earthquakeslive.com/sitemap-static-pages.xml</loc>');
