@@ -328,15 +328,35 @@ describe('findActiveClustersOptimized', () => {
   });
 
   it('should handle different clustering parameters', () => {
-    const earthquakes = createClusteredEarthquakes(34.0, -118.0, 10);
+    // Using a static, deterministic dataset to avoid flaky tests from random data
+    const earthquakes = [
+      // Cluster A (dense)
+      createMockEarthquake('a1', 34.00, -118.00, 5.0),
+      createMockEarthquake('a2', 34.01, -118.01, 5.1),
+      createMockEarthquake('a3', 34.02, -118.02, 5.2),
+      createMockEarthquake('a4', 33.99, -117.99, 5.3),
+      createMockEarthquake('a5', 34.00, -118.01, 5.4),
+      // Cluster B (less dense, further away)
+      createMockEarthquake('b1', 34.10, -118.10, 4.0),
+      createMockEarthquake('b2', 34.11, -118.11, 4.1),
+      createMockEarthquake('b3', 34.12, -118.12, 4.2),
+    ];
     
-    // Tight clustering
+    // Tight clustering (5km radius, 5 quakes min) - should only find Cluster A
     const tightClusters = findActiveClustersOptimized(earthquakes, 5, 5);
     
-    // Loose clustering  
+    // Loose clustering (50km radius, 2 quakes min) - should find both A and B as one large cluster
     const looseClusters = findActiveClustersOptimized(earthquakes, 50, 2);
     
-    // Loose clustering should find more/larger clusters
+    expect(tightClusters.length).toBe(1);
+    expect(tightClusters[0].length).toBe(5);
+
+    expect(looseClusters.length).toBe(1);
+    expect(looseClusters[0].length).toBe(8);
+
+    // The assertion remains valid: loose clustering can merge smaller clusters,
+    // resulting in an equal or smaller number of clusters, but covering more ground.
+    // In this deterministic case, they both find 1 cluster.
     expect(looseClusters.length).toBeGreaterThanOrEqual(tightClusters.length);
   });
 });

@@ -17,7 +17,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 /**
  * Extracts product flags from USGS detail response
  */
-function extractProductFlags(detailData) {
+export function extractProductFlags(detailData) {
   const flags = {
     has_shakemap: false,
     has_moment_tensor: false,
