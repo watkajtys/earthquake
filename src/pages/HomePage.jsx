@@ -61,6 +61,7 @@ const LearnPage = lazy(() => import('./LearnPage'));
 const MagnitudeVsIntensityPage = lazy(() => import('./learn/MagnitudeVsIntensityPage'));
 const MeasuringEarthquakesPage = lazy(() => import('./learn/MeasuringEarthquakesPage'));
 const PlateTectonicsPage = lazy(() => import('./learn/PlateTectonicsPage'));
+const EarthquakeSafetyPage = lazy(() => import('./learn/EarthquakeSafetyPage'));
 const MonitoringPage = lazy(() => import('./MonitoringPage'));
 
 // Lazy load other heavy/conditional components for the sidebar
@@ -1084,6 +1085,7 @@ function App() {
                               <Route path="/learn/magnitude-vs-intensity" element={<MagnitudeVsIntensityPage />} />
                               <Route path="/learn/measuring-earthquakes" element={<MeasuringEarthquakesPage />} />
                               <Route path="/learn/plate-tectonics" element={<PlateTectonicsPage />} />
+                              <Route path="/learn/earthquake-safety" element={<EarthquakeSafetyPage />} />
                               <Route path="/monitoring" element={<MonitoringPage />} />
 
                             </Routes>

@@ -47,23 +47,28 @@ const LearnPage = () => {
 
                 {/* New section for further reading */}
                 <div className="mt-6 pt-4 border-t border-slate-700">
-                    <h3 className="text-md font-semibold text-indigo-300 mb-3">
-                        Further Reading & In-depth Topics
-                    </h3>
+                    <h2 className="text-md font-semibold text-indigo-300 mb-3">
+                        Further Reading: In-depth Topics and Safety Guides
+                    </h2>
                     <ul className="space-y-2 list-disc list-inside pl-1">
                         <li>
-                            <Link to="/learn/magnitude-vs-intensity" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
-                                Understanding Earthquake Magnitude vs. Intensity
-                            </Link>
-                        </li>
-                        <li>
-                            <Link to="/learn/measuring-earthquakes" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
-                                How Earthquakes Are Measured (Seismographs & Scales)
+                            <Link to="/learn/earthquake-safety" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                Earthquake Safety: How to Prepare and Respond
                             </Link>
                         </li>
                         <li>
                             <Link to="/learn/plate-tectonics" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
                                 Plate Tectonics and Earthquakes
+                            </Link>
+                        </li>
+                        <li>
+                            <Link to="/learn/measuring-earthquakes" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                How Earthquakes Are Measured
+                            </Link>
+                        </li>
+                        <li>
+                            <Link to="/learn/magnitude-vs-intensity" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                                Understanding Magnitude vs. Intensity
                             </Link>
                         </li>
                     </ul>
