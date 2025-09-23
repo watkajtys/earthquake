@@ -58,15 +58,15 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         mockCache.put.mockReset();
     });
 
-    it('/sitemaps/earthquakes-1.xml should return XML with only significant earthquakes that have 2+ data products', async () => {
+    it('/sitemaps/earthquakes-1.xml should return XML with only significant earthquakes that have 3+ data products', async () => {
         const now = Date.now();
         const nowInSeconds = Math.floor(now / 1000);
 
-        // NOTE: The logic has changed. The DB query itself now filters for events with 2+ data products.
+        // NOTE: The logic has changed. The DB query itself now filters for events with 3+ data products.
         // The in-code filter `isEventSignificant` then further refines this.
         const mockDbResults = {
             results: [
-                // 1. Significant by magnitude AND has 2+ products. SHOULD BE IN SITEMAP.
+                // 1. Significant by magnitude AND has 3+ products. SHOULD BE IN SITEMAP.
                 {
                     id: "ev_sig_mag_and_products",
                     magnitude: MIN_SIGNIFICANT_MAGNITUDE, // is significant
@@ -75,8 +75,9 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     geojson_feature: JSON.stringify({ properties: { updated: now } }),
                     has_shakemap: 1,
                     has_moment_tensor: 1,
+                    has_dyfi: 1, // Added to meet 3+
                 },
-                // 2. Significant by product in geojson, and has 2+ products. SHOULD BE IN SITEMAP.
+                // 2. Significant by product in geojson, and has 3+ products. SHOULD BE IN SITEMAP.
                 {
                     id: "ev_sig_product_and_products",
                     magnitude: 4.4, // not significant by mag
@@ -87,8 +88,9 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     }),
                     has_dyfi: 1,
                     has_losspager: 1,
+                    has_shakemap: 1, // Added to meet 3+
                 },
-                // 3. Not significant, but has 2+ products. SHOULD BE FILTERED by isEventSignificant.
+                // 3. Not significant, but has 2 products. SHOULD BE FILTERED by DB query.
                 {
                     id: "ev_not_significant_but_products",
                     magnitude: 4.4, // not significant
@@ -96,9 +98,9 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     event_time: nowInSeconds - 5000,
                     geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } }),
                     has_shakemap: 1,
-                    has_focal_mechanism: 1,
+                    has_focal_mechanism: 1, // Only 2 products
                 },
-                 // 4. Significant by magnitude, but <2 products. SHOULD BE FILTERED by the DB query.
+                 // 4. Significant by magnitude, but <3 products. SHOULD BE FILTERED by the DB query.
                  {
                     id: "ev_sig_mag_no_products",
                     magnitude: MIN_SIGNIFICANT_MAGNITUDE,
@@ -106,7 +108,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     event_time: nowInSeconds - 8000,
                     geojson_feature: JSON.stringify({ properties: { updated: now - 15000 } }),
                     has_shakemap: 1,
-                    has_moment_tensor: 0,
+                    has_moment_tensor: 0, // Only 1 product
                 }
             ]
         };
@@ -124,7 +126,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     (event.has_dyfi || 0) +
                     (event.has_losspager || 0) +
                     (event.has_finite_fault || 0);
-                return productCount >= 2;
+                return productCount >= 3;
             })
         };
 
@@ -146,7 +148,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
          COALESCE(has_dyfi, 0) +
          COALESCE(has_losspager, 0) +
          COALESCE(has_finite_fault, 0)
-       ) >= 2
+       ) >= 3
        ORDER BY event_time DESC LIMIT ? OFFSET ?`;
 
         // Check if the prepare statement was called with something that matches the new query structure

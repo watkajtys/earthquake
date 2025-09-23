@@ -38,7 +38,7 @@ async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
          COALESCE(has_dyfi, 0) +
          COALESCE(has_losspager, 0) +
          COALESCE(has_finite_fault, 0)
-       ) >= 2
+       ) >= 3
        ORDER BY event_time DESC LIMIT ? OFFSET ?`
     ).bind(2.5, SITEMAP_PAGE_SIZE, offset).all(); // Fetch M2.5+ to filter in code
 
