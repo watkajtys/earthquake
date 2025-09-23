@@ -69,7 +69,7 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
         expect(text).toContain('<urlset');
         expect(text).toContain('https://earthquakeslive.com/cluster/10-quakes-near-test-place-up-to-m5.0-cluster1');
         // Check the new SQL query structure
-        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> ''"));
+        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("enhanced_quake_count >= 2"));
     });
 
     it('/sitemap-clusters.xml should handle DB not configured', async () => {

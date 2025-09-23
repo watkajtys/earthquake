@@ -23,12 +23,26 @@ export async function handleClustersSitemapRequest(context) {
   }
 
   try {
-    // Fetch the canonical slug and updatedAt timestamp for each cluster definition.
-    // The slug is the part of the URL path after '/cluster/'.
-    // Ensures that only entries with valid slugs are included.
-    const d1Results = await env.DB.prepare(
-      "SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> ''"
-    ).all();
+    // Fetch the canonical slug and updatedAt for cluster definitions that are "significant",
+    // meaning they are associated with at least two earthquakes having enhanced scientific data.
+    // This is determined by checking the `has_enhanced_data` flag on the `EarthquakeEvents` table.
+    const d1Results = await env.DB.prepare(`
+      SELECT T.slug, T.updatedAt
+      FROM (
+        SELECT
+          cd.slug,
+          cd.updatedAt,
+          (
+            SELECT count(*)
+            FROM json_each(cd.earthquakeIds) AS je
+            JOIN EarthquakeEvents AS ee ON ee.id = je.value
+            WHERE ee.has_enhanced_data = 1
+          ) AS enhanced_quake_count
+        FROM ClusterDefinitions AS cd
+        WHERE cd.slug IS NOT NULL AND cd.slug <> ''
+      ) AS T
+      WHERE T.enhanced_quake_count >= 2
+    `).all();
 
     const clusterDefinitions = d1Results.results;
 
