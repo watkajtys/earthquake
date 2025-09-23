@@ -23,32 +23,80 @@ export async function handleClustersSitemapRequest(context) {
   }
 
   try {
-    // Fetch the canonical slug and updatedAt timestamp for each cluster definition.
-    // The slug is the part of the URL path after '/cluster/'.
-    // Ensures that only entries with valid slugs are included.
-    const d1Results = await env.DB.prepare(
-      "SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> ''"
+    // Fetch all cluster definitions with a slug.
+    const clusterDefinitionsResults = await env.DB.prepare(
+      "SELECT id, slug, updatedAt, earthquakeIds FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> ''"
     ).all();
 
-    const clusterDefinitions = d1Results.results;
+    const clusterDefinitions = clusterDefinitionsResults.results;
 
     if (!clusterDefinitions || clusterDefinitions.length === 0) {
-      console.log("No valid cluster definitions with slugs found in D1 table ClusterDefinitions.");
+      console.log("No valid cluster definitions with slugs found.");
       return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`, { headers: { "Content-Type": "application/xml" } });
     }
 
-    let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+    // Get all earthquake IDs from the clusters.
+    const allEarthquakeIds = new Set();
+    const clusterIdToQuakeIds = new Map();
 
     for (const definition of clusterDefinitions) {
-      // Prioritize definition.updatedAt as it's directly selected. Fallback for 'updated' can be removed if 'updatedAt' is standard.
-      const updatedTimestamp = definition.updatedAt || definition.updated;
+      try {
+        const quakeIds = JSON.parse(definition.earthquakeIds || '[]');
+        if (Array.isArray(quakeIds) && quakeIds.length > 0) {
+          clusterIdToQuakeIds.set(definition.id, new Set(quakeIds));
+          quakeIds.forEach(id => allEarthquakeIds.add(id));
+        }
+      } catch (e) {
+        console.warn(`Failed to parse earthquakeIds for cluster ${definition.id}: ${e.message}`);
+      }
+    }
 
+    if (allEarthquakeIds.size === 0) {
+        console.log("No earthquake IDs found in any clusters.");
+        return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`, { headers: { "Content-Type": "application/xml" } });
+    }
+
+    // Find all significant earthquakes from the list of IDs.
+    const significantQuakeIds = new Set();
+    const queryPlaceholders = Array.from(allEarthquakeIds).map(() => '?').join(',');
+    const significantQuakesResults = await env.DB.prepare(
+        `SELECT id FROM EarthquakeEvents WHERE id IN (${queryPlaceholders}) AND (
+            COALESCE(has_shakemap, 0) +
+            COALESCE(has_moment_tensor, 0) +
+            COALESCE(has_focal_mechanism, 0) +
+            COALESCE(has_dyfi, 0) +
+            COALESCE(has_losspager, 0) +
+            COALESCE(has_finite_fault, 0)
+        ) >= 3`
+    ).bind(...allEarthquakeIds).all();
+
+    if (significantQuakesResults.results) {
+        significantQuakesResults.results.forEach(row => significantQuakeIds.add(row.id));
+    }
+
+    // Filter clusters to only those containing at least one significant quake.
+    const significantClusterDefs = clusterDefinitions.filter(def => {
+        const quakeIdsForCluster = clusterIdToQuakeIds.get(def.id);
+        if (!quakeIdsForCluster) return false;
+        for (const quakeId of quakeIdsForCluster) {
+            if (significantQuakeIds.has(quakeId)) {
+                return true; // Found a significant quake in this cluster
+            }
+        }
+        return false;
+    });
+
+    if (significantClusterDefs.length === 0) {
+        console.log("No clusters with significant earthquakes found.");
+        return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`, { headers: { "Content-Type": "application/xml" } });
+    }
+
+    let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+    for (const definition of significantClusterDefs) {
+      const updatedTimestamp = definition.updatedAt || definition.updated;
       if (!definition.slug || typeof updatedTimestamp === 'undefined') {
-        // This check might be redundant due to the SQL WHERE clause, but kept as a safeguard.
-        console.warn(`Invalid definition from D1 (missing slug or updatedAt):`, definition);
         continue;
       }
-
       try {
         const lastmodDate = new Date(updatedTimestamp);
         if (isNaN(lastmodDate.getTime())) {
@@ -56,21 +104,16 @@ export async function handleClustersSitemapRequest(context) {
             continue;
         }
         const lastmod = lastmodDate.toISOString();
-
-        // Construct the full sitemap URL using the canonical slug.
-        // Ensure no double slashes if slug might start with one (though typically it shouldn't).
         const sitemapUrlPath = definition.slug.startsWith('/') ? definition.slug.substring(1) : definition.slug;
         const sitemapUrl = `https://earthquakeslive.com/cluster/${sitemapUrlPath}`;
-
         xml += `<url><loc>${escapeXml(sitemapUrl)}</loc><lastmod>${lastmod}</lastmod></url>`;
-
       } catch (processError) {
-        console.error(`Error processing definition for slug ${definition.slug} in cluster sitemap: ${processError.message}`);
+        console.error(`Error processing definition for slug ${definition.slug}: ${processError.message}`);
         continue;
       }
     }
-
     xml += `</urlset>`;
+
     return new Response(xml, { headers: { "Content-Type": "application/xml" } });
 
   } catch (error) {
