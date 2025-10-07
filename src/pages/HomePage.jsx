@@ -1483,7 +1483,7 @@ function App() {
                         {!initialDataLoaded && !isLoadingDaily && !isLoadingWeekly && (activeSidebarView === 'details_1hr' || activeSidebarView === 'details_24hr' || activeSidebarView === 'details_7day' ) && ( <div className="text-center py-10"><p className="text-sm text-slate-500">No data available for this period.</p></div> )}
                     </div> {/* End of desktop sidebar scrollable content */}
                     <footer className="p-1.5 text-center border-t border-slate-700 mt-auto">
-                        <p className="text-[10px] text-slate-500">&copy; {new Date().getFullYear()} Built By Vibes | Data: USGS</p>
+                        <p className="text-[10px] text-slate-500">&copy; {new Date().getFullYear()} <a href="https://builtbyvibes.com" target="_blank" rel="noopener noreferrer" className="hover:text-slate-400">Built By Vibes</a> | Data: USGS</p>
                     </footer>
                 </aside>
             </div> {/* End of main flex container (main + aside) */}
