@@ -95,10 +95,24 @@
   }
 }
 
-/* Apply animation to the SVG within the custom icon if not directly styled on SVG element */
-/* .custom-pulsing-icon svg { */
-  /* The animation is already applied inline in the SVG HTML for simplicity, */
-  /* but could be applied here if preferred: */
-  /* animation: pulse 1.5s infinite; */
-  /* transform-origin: center; */
-/* } */
+.pulsing-icon {
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(255, 255, 255, 1);
+  transform: scale(1);
+  animation: pulse-effect 2.2s infinite;
+  border: 2px solid white;
+}
+
+@keyframes pulse-effect {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+  }
+  70% {
+    transform: scale(1.8);
+    box-shadow: 0 0 0 10px rgba(255, 255, 255, 0);
+  }
+  100% {
+    transform: scale(0.9);
+  }
+}

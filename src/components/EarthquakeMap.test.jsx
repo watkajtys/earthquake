@@ -91,22 +91,18 @@ describe('EarthquakeMap Component - Core Rendering', () => {
 
   it('renders a marker with custom pulsing icon for the highlightQuake', async () => {
     render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
-    // Wait for the marker to appear, as it might be tied to effects
     const markers = await screen.findAllByTestId('marker');
-    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
+    // Find the main marker; it should be the one that is NOT a "nearby" quake
+    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') !== 'custom-nearby-quake-icon');
     expect(mainMarker).toBeInTheDocument();
     expect(mainMarker).toHaveAttribute('data-position', JSON.stringify([baseProps.highlightQuakeLatitude, baseProps.highlightQuakeLongitude]));
   });
 
   it('does not render highlightQuake marker if coordinates are undefined', async () => {
     render(<MemoryRouter><EarthquakeMap {...baseProps} nearbyQuakes={[]} highlightQuakeLatitude={undefined} highlightQuakeLongitude={undefined} /></MemoryRouter>);
-    // When no highlight quake and no nearby quakes, no markers should be rendered.
-    // queryAllByTestId is suitable for asserting absence without throwing.
     await waitFor(() => {
       const markers = screen.queryAllByTestId('marker');
-      const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
-      expect(mainMarker).toBeUndefined();
-      // Also, ensure no markers are present at all for this specific case
+      // In this specific test, no markers should be rendered at all.
       expect(markers.length).toBe(0);
     });
   });
@@ -114,8 +110,8 @@ describe('EarthquakeMap Component - Core Rendering', () => {
   it('displays highlight quake title, magnitude, and detail link in popup', async () => {
     render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
     const markers = await screen.findAllByTestId('marker');
-    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
-    expect(mainMarker).toBeInTheDocument(); // Ensure the marker is found before trying to get popup
+    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') !== 'custom-nearby-quake-icon');
+    expect(mainMarker).toBeInTheDocument();
     const popup = within(mainMarker).getByTestId('popup');
     expect(popup).toHaveTextContent(baseProps.highlightQuakeTitle);
     expect(popup).toHaveTextContent(`Magnitude: ${baseProps.highlightQuakeMagnitude}`);
@@ -126,7 +122,7 @@ describe('EarthquakeMap Component - Core Rendering', () => {
   it('displays ShakeMap link if mainQuakeDetailUrl is not provided but shakeMapUrl is', async () => {
     render(<MemoryRouter><EarthquakeMap {...baseProps} mainQuakeDetailUrl={null} shakeMapUrl="https://shakemap.example.com" /></MemoryRouter>);
     const markers = await screen.findAllByTestId('marker');
-    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
+    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') !== 'custom-nearby-quake-icon');
     expect(mainMarker).toBeInTheDocument();
     const popup = within(mainMarker).getByTestId('popup');
     const shakeMapLink = within(popup).getByRole('link', { name: /ShakeMap Details/i });
@@ -167,7 +163,7 @@ describe('EarthquakeMap Component - Core Rendering', () => {
 
       // Check markers: 1 main highlight marker + 1 valid nearby marker
       const markers = screen.getAllByTestId('marker');
-      const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
+      const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') !== 'custom-nearby-quake-icon');
       const nearbyMarkers = markers.filter(m => m.getAttribute('data-icon-classname') === 'custom-nearby-quake-icon');
 
       expect(mainMarker).toBeInTheDocument();
@@ -316,7 +312,7 @@ describe('EarthquakeMap Component - Bounds Fitting', () => {
     expect(mapContainer).toHaveAttribute('data-center', JSON.stringify([differentCenterProps.mapCenterLatitude, differentCenterProps.mapCenterLongitude]));
 
     const markers = await screen.findAllByTestId('marker');
-    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') === 'custom-pulsing-icon');
+    const mainMarker = markers.find(m => m.getAttribute('data-icon-classname') !== 'custom-nearby-quake-icon');
     expect(mainMarker).toBeInTheDocument();
     expect(mainMarker).toHaveAttribute('data-position', JSON.stringify([differentCenterProps.highlightQuakeLatitude, differentCenterProps.highlightQuakeLongitude]));
 

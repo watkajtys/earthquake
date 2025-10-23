@@ -31,22 +31,13 @@ L.Icon.Default.mergeOptions({
  */
 const createEpicenterIcon = (magnitude) => {
   const fillColor = getMagnitudeColor(magnitude);
-  // SVG for pulsing rings animation.
-  const rings = Array(3).fill(0).map((_, i) => `
-    <circle cx="0" cy="0" r="5" stroke="${fillColor}" stroke-width="4" fill="none" stroke-opacity="0.6">
-      <animate attributeName="r" from="5" to="30" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
-      <animate attributeName="stroke-opacity" from="0.6" to="0" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
-    </circle>
-    <circle cx="0" cy="0" r="5" stroke="${fillColor}" stroke-width="2" fill="none" stroke-opacity="1">
-      <animate attributeName="r" from="5" to="25" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
-      <animate attributeName="stroke-opacity" from="1" to="0" dur="2.5s" begin="${i * 0.8}s" repeatCount="indefinite"/>
-    </circle>
-  `).join('');
+  const iconHtml = `<div style="background-color: ${fillColor}; width: 18px; height: 18px;" class="pulsing-icon"></div>`;
+
   return new L.DivIcon({
-    html: `<svg width="60" height="60" viewBox="0 0 72 72"><g transform="translate(36,36)">${rings}<circle cx="0" cy="0" r="6" fill="${fillColor}" stroke="#FFFFFF" stroke-width="1.5"/></g></svg>`,
-    className: 'custom-pulsing-icon',
-    iconSize: [60, 60],
-    iconAnchor: [30, 30],
+    html: iconHtml,
+    className: '', // className is not needed as styles are inline or in App.css
+    iconSize: [18, 18],
+    iconAnchor: [9, 9], // Centered anchor
   });
 };
 
@@ -63,16 +54,19 @@ const createNearbyQuakeIcon = (magnitude, time) => {
   const fillColor = getMagnitudeColor(magnitude);
   const currentTime = Date.now();
   const ageInDays = (currentTime - time) / (1000 * 60 * 60 * 24);
+
   let opacity;
   if (ageInDays < 1) opacity = 1.0;
   else if (ageInDays < 7) opacity = 0.8;
   else if (ageInDays < 14) opacity = 0.6;
   else opacity = 0.4;
-  const alphaHex = Math.round(opacity * 255).toString(16).padStart(2, '0');
-  const finalColor = fillColor + alphaHex;
+
+  // Optimized SVG string with opacity directly applied
+  const iconHtml = `<svg width="18" height="18" viewBox="0 0 18 18" style="opacity: ${opacity};"><circle cx="9" cy="9" r="5" fill="${fillColor}" /></svg>`;
+
   return new L.DivIcon({
-    html: `<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="5" fill="${finalColor}" /></svg>`,
-    className: 'custom-nearby-quake-icon',
+    html: iconHtml,
+    className: 'custom-nearby-quake-icon', // This class can be used for global styling if needed
     iconSize: [18, 18],
     iconAnchor: [9, 9],
   });
