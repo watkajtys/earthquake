@@ -4,8 +4,20 @@
  * Extends the existing SpatialGrid to support Point geometries for clustering
  */
 
-import { calculateBoundingBox, isPointInBoundingBox } from '../../src/utils/geoSpatialUtils.js';
+import { calculateBoundingBox } from '../../src/utils/geoSpatialUtils.js';
 import { calculateDistance } from './mathUtils.js';
+
+/**
+ * Checks if a coordinate pair is within a bounding box.
+ *
+ * @param {number} lat - Latitude to check
+ * @param {number} lng - Longitude to check
+ * @param {Object} bbox - Bounding box with north, south, east, west properties
+ * @returns {boolean} True if point is within bounding box
+ */
+export function isPointInBoundingBox(lat, lng, bbox) {
+  return lat >= bbox.south && lat <= bbox.north && lng >= bbox.west && lng <= bbox.east;
+}
 
 /**
  * Enhanced spatial grid specifically for earthquake Point geometries
