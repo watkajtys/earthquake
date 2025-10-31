@@ -17,8 +17,7 @@ import {
 //   fetchUsgsData: vi.fn(),
 // }));
 vi.mock('../../utils/geoJsonUtils', () => ({
-  isValidFeatureArray: vi.fn(() => true), // Default to true for valid mock data
-  isValidGeoJson: vi.fn(() => true),     // Default to true for valid mock data
+  isValidGeoJson: vi.fn(() => true),
 }));
 
 // Mock earthquakeDataContextUtils to override initialState for this test suite
@@ -38,8 +37,8 @@ vi.mock('../../contexts/earthquakeDataContextUtils.js', async (importOriginal) =
 
 const AllTheProviders = ({ children }) => (<EarthquakeDataProvider>{children}</EarthquakeDataProvider>);
 
-// Mock features
-const mockD1FeatureMonth = { type: "Feature", id: "d1_month", properties: { time: Date.now() - 15 * 24 * 3600 * 1000, mag: 3.3, place: "D1 Month Place" }, geometry: {} };
+// Mock events (flat structure)
+const mockD1EventMonth = { id: "d1_month", event_time: Date.now() - 15 * 24 * 3600 * 1000, magnitude: 3.3, place: "D1 Month Place", latitude: 12, longitude: 22, depth: 32 };
 const mockUsgsFeatureMonth = { type: "Feature", id: "usgs_month", properties: { time: Date.now() - 15 * 24 * 3600 * 1000, mag: 3.5, place: "USGS Month Place" }, geometry: {} };
 
 
@@ -57,7 +56,6 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
   // Using real timers for this suite to avoid potential issues with fake timers and waitFor/async operations.
   beforeEach(() => {
     setIntervalSpy = vi.spyOn(global, 'setInterval').mockImplementation(() => 12345);
-    isValidFeatureArray.mockClear().mockReturnValue(true);
     isValidGeoJson.mockClear().mockReturnValue(true);
   });
 
@@ -129,16 +127,12 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
 
   describe('D1 Fallback Logic for loadMonthlyData', () => {
     it('D1 Success Path: should fetch monthly data from D1', async () => {
-      const d1MonthlyDataFeatures = [mockD1FeatureMonth]; // fetchFromD1 expects an array of features
-
       server.use(
         http.get('/api/get-earthquakes', ({ request }) => {
           const url = new URL(request.url);
           const timeWindow = url.searchParams.get('timeWindow');
           if (timeWindow === 'month') {
-            // console.log('[MSW Monthly D1 Success Override] Intercepted D1 API call for month');
-            // fetchFromD1 in context expects the direct array of features from response.json()
-            return HttpResponse.json(d1MonthlyDataFeatures, { status: 200, headers: { 'X-Data-Source': 'D1' } });
+            return HttpResponse.json([mockD1EventMonth], { status: 200, headers: { 'X-Data-Source': 'D1' } });
           }
           return HttpResponse.json({ error: 'Test D1 Monthly Success override: Unexpected timeWindow ' + timeWindow }, { status: 400 });
         })
@@ -151,13 +145,13 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
       await vi.waitUntil(() => (
           !result.current.isLoadingMonthly &&
           result.current.monthlyDataSource === 'D1' &&
-          result.current.allEarthquakes.some(q => q.id === mockD1FeatureMonth.id)
+          result.current.allEarthquakes.some(q => q.id === mockD1EventMonth.id)
         ), { timeout: 7000, interval: 50 }
       );
 
-      // expect(fetchUsgsData).not.toHaveBeenCalled(); // fetchUsgsData is no longer a spy
       expect(result.current.monthlyDataSource).toBe('D1');
-      expect(result.current.allEarthquakes).toEqual(expect.arrayContaining(d1MonthlyDataFeatures));
+      expect(result.current.allEarthquakes[0].properties.mag).toBe(mockD1EventMonth.magnitude);
+      expect(result.current.allEarthquakes[0].geometry.coordinates[0]).toBe(mockD1EventMonth.longitude);
       expect(result.current.monthlyError).toBeNull();
     }, 10000);
 
@@ -256,44 +250,6 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
       expect(result.current.monthlyError).toBeNull();
     }, 10000);
 
-    it('D1 Returns Invalid Feature Array, USGS Success: should fall back to USGS', async () => {
-      isValidFeatureArray.mockReturnValueOnce(false); // Ensure this is cleared by clearAllMocks in afterEach
-
-      server.use(
-        http.get('/api/get-earthquakes', ({ request }) => {
-          const url = new URL(request.url);
-          const timeWindow = url.searchParams.get('timeWindow');
-          if (timeWindow === 'day') {
-            return HttpResponse.json([{ id: 'test-d1-day', properties: { place: 'Test D1 Day', mag: 0.1, time: Date.now() } }], { status: 200, headers: { 'X-Data-Source': 'D1' } });
-          }
-          if (timeWindow === 'week') {
-            return HttpResponse.json([{ id: 'test-d1-week', properties: { place: 'Test D1 Week', mag: 0.2, time: Date.now() } }], { status: 200, headers: { 'X-Data-Source': 'D1' } });
-          }
-          if (timeWindow === 'month') {
-            return HttpResponse.json(["invalid data"], { status: 200, headers: { 'X-Data-Source': 'D1' } });
-          }
-          return HttpResponse.json({error: `Unhandled timeWindow: ${timeWindow}`}, {status: 400});
-        }),
-        http.get('/api/usgs-proxy', ({ request }) => {
-          const url = new URL(request.url);
-          if (url.searchParams.get('apiUrl') === USGS_API_URL_MONTH) {
-            return HttpResponse.json({ type: 'FeatureCollection', features: [mockUsgsFeatureMonth], metadata: { generated: Date.now(), count: 1 } });
-          }
-        })
-      );
-
-      const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
-      await act(async () => { result.current.loadMonthlyData(); });
-
-      await waitFor(() => {
-        expect(result.current.isLoadingMonthly).toBe(false);
-        expect(result.current.monthlyDataSource).toBe('USGS');
-      });
-
-      expect(isValidFeatureArray).toHaveBeenCalledTimes(1); // Service calls it once for D1
-      expect(result.current.allEarthquakes).toEqual(expect.arrayContaining([mockUsgsFeatureMonth]));
-      expect(result.current.monthlyError).toBeNull();
-    }, 10000);
 
     it('Both D1 and USGS Fail: should set monthlyError', async () => {
       server.use(

@@ -21,15 +21,14 @@ vi.mock('../../services/usgsApiService', () => ({
   fetchUsgsData: vi.fn(),
 }));
 vi.mock('../../utils/geoJsonUtils', () => ({
-  isValidFeatureArray: vi.fn(() => true), // Default to true for valid mock data
-  isValidGeoJson: vi.fn(() => true),     // Default to true for valid mock data
+  isValidGeoJson: vi.fn(() => true),
 }));
 
 const AllTheProviders = ({ children }) => (<EarthquakeDataProvider>{children}</EarthquakeDataProvider>);
 
-// Mock features
-const mockD1FeatureDay = { type: "Feature", id: "d1_day", properties: { time: Date.now(), mag: 1.1, place: "D1 Day Place" }, geometry: {} };
-const mockD1FeatureWeek = { type: "Feature", id: "d1_week", properties: { time: Date.now() - 2 * 24 * 3600 * 1000, mag: 2.2, place: "D1 Week Place" }, geometry: {} };
+// Mock events (flat structure)
+const mockD1EventDay = { id: "d1_day", event_time: Date.now(), magnitude: 1.1, place: "D1 Day Place", latitude: 10, longitude: 20, depth: 30 };
+const mockD1EventWeek = { id: "d1_week", event_time: Date.now() - 2 * 24 * 3600 * 1000, magnitude: 2.2, place: "D1 Week Place", latitude: 11, longitude: 21, depth: 31 };
 const mockUsgsFeatureDay = { type: "Feature", id: "usgs_day", properties: { time: Date.now(), mag: 1.5, place: "USGS Day Place" }, geometry: {} };
 const mockUsgsFeatureWeek = { type: "Feature", id: "usgs_week", properties: { time: Date.now() - 2 * 24 * 3600 * 1000, mag: 2.5, place: "USGS Week Place" }, geometry: {} };
 
@@ -46,7 +45,6 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     fetchUsgsData.mockReset();
-    isValidFeatureArray.mockClear().mockReturnValue(true);
     isValidGeoJson.mockClear().mockReturnValue(true);
 
     // Spy on setInterval to suppress the refresh interval
@@ -149,48 +147,38 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
         http.get('/api/get-earthquakes', ({ request }) => {
           const url = new URL(request.url);
           const timeWindow = url.searchParams.get('timeWindow');
-          // console.log(`[MSW D1 Success Path Override] Intercepted D1 API call for timeWindow: ${timeWindow}`);
           if (timeWindow === 'day') {
-            // Return features array directly as expected by fetchFromD1's response.json() consumer
-            return HttpResponse.json([mockD1FeatureDay], { status: 200, headers: { 'X-Data-Source': 'D1' } });
+            return HttpResponse.json([mockD1EventDay], { status: 200, headers: { 'X-Data-Source': 'D1' } });
           }
           if (timeWindow === 'week') {
-            // Return features array directly
-            return HttpResponse.json([mockD1FeatureWeek], { status: 200, headers: { 'X-Data-Source': 'D1' } });
+            return HttpResponse.json([mockD1EventWeek], { status: 200, headers: { 'X-Data-Source': 'D1' } });
           }
-          // Fallback for this specific override if an unexpected timeWindow is called
           return HttpResponse.json({ error: 'Test D1 Success override: Unhandled timeWindow' }, { status: 400 });
         })
       );
 
       const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
 
-      // Advance timers to help flush effects and state updates after initial render and fetch
       await act(async () => {
-        vi.advanceTimersByTime(LOADING_MESSAGE_INTERVAL_MS * 3); // Advance by a few loading message cycles
-        await Promise.resolve(); // Flush any microtasks
+        vi.advanceTimersByTime(LOADING_MESSAGE_INTERVAL_MS * 3);
+        await Promise.resolve();
       });
 
-      // Wait for the data sources and a key piece of data to be set,
-      // implying loading is complete and data is processed, using vi.waitUntil
       await vi.waitUntil(() => {
         return (
-          result.current.isLoadingDaily === false &&
-          result.current.isLoadingWeekly === false &&
+          !result.current.isLoadingDaily &&
+          !result.current.isLoadingWeekly &&
           result.current.dailyDataSource === 'D1' &&
           result.current.weeklyDataSource === 'D1' &&
-          result.current.earthquakesLast24Hours.some(eq => eq.id === mockD1FeatureDay.id)
+          result.current.earthquakesLast24Hours.some(eq => eq.id === mockD1EventDay.id)
         );
       }, { timeout: 9000, interval: 50 });
 
-      // Assertions (some might be redundant)
-      // expect(fetchSpy).toHaveBeenCalledWith('/api/get-earthquakes?timeWindow=day'); // Temporarily commented out
-      // expect(fetchSpy).toHaveBeenCalledWith('/api/get-earthquakes?timeWindow=week'); // Temporarily commented out
       expect(fetchUsgsData).not.toHaveBeenCalled();
       expect(result.current.dailyDataSource).toBe('D1');
       expect(result.current.weeklyDataSource).toBe('D1');
-      expect(result.current.earthquakesLast24Hours).toEqual(expect.arrayContaining([mockD1FeatureDay]));
-      expect(result.current.earthquakesLast7Days).toEqual(expect.arrayContaining([mockD1FeatureWeek]));
+      expect(result.current.earthquakesLast24Hours[0].properties.mag).toBe(mockD1EventDay.magnitude);
+      expect(result.current.earthquakesLast7Days[0].geometry.coordinates[0]).toBe(mockD1EventWeek.longitude);
       expect(result.current.error).toBeNull();
     }, 10000);
 
@@ -261,8 +249,8 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
         // Define mock data consistent with what the context expects for D1 processing initially
         // fetchFromD1 expects a FeatureCollection to be returned by the API, even if the header is wrong,
         // as it tries to parse before checking the header.
-        const d1DayDataWithInvalidHeader = { type: "FeatureCollection", features: [mockD1FeatureDay] };
-        const d1WeekDataWithInvalidHeader = { type: "FeatureCollection", features: [mockD1FeatureWeek] };
+        const d1DayDataWithInvalidHeader = [{ id: "d1_invalid_day" }];
+        const d1WeekDataWithInvalidHeader = [{ id: "d1_invalid_week" }];
 
         server.use(
           http.get('/api/get-earthquakes', ({ request }) => {
@@ -333,65 +321,6 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
         expect(result.current.error).toBeNull(); // Should be no error if USGS fallback is successful
     }, 10000);
 
-    it('D1 Returns Invalid Feature Array (isValidFeatureArray=false), USGS Success: should fall back to USGS', async () => {
-        isValidFeatureArray.mockReturnValueOnce(false).mockReturnValueOnce(false); // D1 daily then D1 weekly responses will be marked as invalid
-
-        const dummyD1DataDay = { type: "FeatureCollection", features: [{ id: "d1_invalid_day_feature" }] }; // Content doesn't strictly matter
-        const dummyD1DataWeek = { type: "FeatureCollection", features: [{ id: "d1_invalid_week_feature" }] };
-
-        server.use(
-          http.get('/api/get-earthquakes', ({ request }) => {
-            const url = new URL(request.url);
-            const timeWindow = url.searchParams.get('timeWindow');
-            // console.log(`[MSW Invalid Feature Array Override] D1 API call for timeWindow: ${timeWindow}`);
-            if (timeWindow === 'day') {
-              return HttpResponse.json(dummyD1DataDay, { status: 200, headers: { 'X-Data-Source': 'D1' } });
-            }
-            if (timeWindow === 'week') {
-              return HttpResponse.json(dummyD1DataWeek, { status: 200, headers: { 'X-Data-Source': 'D1' } });
-            }
-            return HttpResponse.json({ error: 'Test D1 Invalid Feature Array override: Unhandled timeWindow' }, { status: 400 });
-          })
-        );
-
-        const testStartTime = Date.now();
-        const mUsgsFeatureDay = { ...mockUsgsFeatureDay, id: "usgs_day_for_invalid_d1_array", properties: { ...mockUsgsFeatureDay.properties, time: testStartTime - 1000 } };
-        const mUsgsFeatureWeek = { ...mockUsgsFeatureWeek, id: "usgs_week_for_invalid_d1_array", properties: { ...mockUsgsFeatureWeek.properties, time: testStartTime - (2 * 24 * 3600 * 1000) } };
-
-        const usgsDayData = { type: "FeatureCollection", features: [mUsgsFeatureDay], metadata: { generated: testStartTime } };
-        const usgsWeekData = { type: "FeatureCollection", features: [mUsgsFeatureWeek], metadata: { generated: testStartTime } };
-
-        fetchUsgsData.mockImplementation(async (url) => {
-          if (url.toString().includes(USGS_API_URL_DAY)) return Promise.resolve(usgsDayData);
-          if (url.toString().includes(USGS_API_URL_WEEK)) return Promise.resolve(usgsWeekData);
-          return Promise.reject(new Error(`Unexpected USGS API call to ${url} in invalid feature array test`));
-        });
-
-        const { result } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
-
-        await act(async () => {
-          vi.advanceTimersByTime(LOADING_MESSAGE_INTERVAL_MS * 3);
-          await Promise.resolve();
-        });
-
-        await vi.waitUntil(() => (
-            !result.current.isLoadingDaily &&
-            !result.current.isLoadingWeekly &&
-            result.current.dailyDataSource === 'USGS' &&
-            result.current.weeklyDataSource === 'USGS' &&
-            result.current.earthquakesLast24Hours.some(q => q.id === mUsgsFeatureDay.id) &&
-            result.current.earthquakesLast7Days.some(q => q.id === mUsgsFeatureWeek.id)
-          ), { timeout: 7000, interval: 50 }
-        );
-
-        expect(isValidFeatureArray).toHaveBeenCalledTimes(2); // For D1 daily and D1 weekly
-        expect(fetchUsgsData).toHaveBeenCalledTimes(2); // For USGS daily and USGS weekly fallbacks
-        expect(result.current.dailyDataSource).toBe('USGS');
-        expect(result.current.weeklyDataSource).toBe('USGS');
-        expect(result.current.earthquakesLast24Hours.some(q => q.id === mUsgsFeatureDay.id)).toBe(true);
-        expect(result.current.earthquakesLast7Days.some(q => q.id === mUsgsFeatureWeek.id)).toBe(true);
-        expect(result.current.error).toBeNull();
-    }, 10000);
 
     it('Both D1 and USGS Fail: should set error state', async () => {
       server.use(
