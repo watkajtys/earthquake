@@ -6,21 +6,14 @@ const mockEventTime2DaysAgo = Date.now() - 2 * 24 * 60 * 60 * 1000;
 const mockEventTime8DaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000;
 const mockEventTime35DaysAgo = Date.now() - 35 * 24 * 60 * 60 * 1000;
 
-const mockFeature1 = { type: "Feature", id: "evt1", properties: { time: mockEventTimeRecent, mag: 5.0 }, geometry: { type: "Point", coordinates: [1, 1] } };
-const mockFeature2 = { type: "Feature", id: "evt2", properties: { time: mockEventTime2DaysAgo, mag: 4.5 }, geometry: { type: "Point", coordinates: [2, 2] } };
-const mockFeature3 = { type: "Feature", id: "evt3", properties: { time: mockEventTime8DaysAgo, mag: 6.0 }, geometry: { type: "Point", coordinates: [3, 3] } };
-const _mockFeature4 = { type: "Feature", id: "evt4", properties: { time: mockEventTime35DaysAgo, mag: 3.0 }, geometry: { type: "Point", coordinates: [4, 4] } };
+const mockEvent1 = { id: "evt1", event_time: mockEventTimeRecent, latitude: 1, longitude: 1, depth: 10, magnitude: 5.0, place: "Test Place 1" };
+const mockEvent2 = { id: "evt2", event_time: mockEventTime2DaysAgo, latitude: 2, longitude: 2, depth: 20, magnitude: 4.5, place: "Test Place 2" };
+const mockEvent3 = { id: "evt3", event_time: mockEventTime8DaysAgo, latitude: 3, longitude: 3, depth: 30, magnitude: 6.0, place: "Test Place 3" };
+const _mockEvent4 = { id: "evt4", event_time: mockEventTime35DaysAgo, latitude: 4, longitude: 4, depth: 40, magnitude: 3.0, place: "Test Place 4" };
 
-const mockDbResultsDay = [{ geojson_feature: JSON.stringify(mockFeature1) }];
-const mockDbResultsWeek = [
-    { geojson_feature: JSON.stringify(mockFeature1) },
-    { geojson_feature: JSON.stringify(mockFeature2) }
-];
-const mockDbResultsMonth = [
-    { geojson_feature: JSON.stringify(mockFeature1) },
-    { geojson_feature: JSON.stringify(mockFeature2) },
-    { geojson_feature: JSON.stringify(mockFeature3) }
-];
+const mockDbResultsDay = [mockEvent1];
+const mockDbResultsWeek = [mockEvent1, mockEvent2];
+const mockDbResultsMonth = [mockEvent1, mockEvent2, mockEvent3];
 // mockFeature4 is older than 30 days
 
 // Mock console
@@ -68,7 +61,7 @@ describe('API Endpoint: /api/get-earthquakes', () => {
             expect(response.headers.get('Content-Type')).toBe('application/json');
             expect(response.headers.get('X-Data-Source')).toBe('D1');
             const body = await response.json();
-            expect(body).toEqual([mockFeature1]);
+            expect(body).toEqual(mockDbResultsDay);
             expect(mockStmt.bind).toHaveBeenCalledWith(expect.any(Number));
             // Check if the bound timestamp is roughly 24 hours ago
             const expectedStartTimeDay = new Date(mockEventTimeRecent);
@@ -85,7 +78,7 @@ describe('API Endpoint: /api/get-earthquakes', () => {
             expect(response.status).toBe(200);
             expect(response.headers.get('X-Data-Source')).toBe('D1');
             const body = await response.json();
-            expect(body).toEqual([mockFeature1, mockFeature2]);
+            expect(body).toEqual(mockDbResultsWeek);
             // Check if the bound timestamp is roughly 7 days ago
             const expectedStartTimeWeek = new Date(mockEventTimeRecent);
             expectedStartTimeWeek.setDate(expectedStartTimeWeek.getDate() - 7);
@@ -101,7 +94,7 @@ describe('API Endpoint: /api/get-earthquakes', () => {
             expect(response.status).toBe(200);
             expect(response.headers.get('X-Data-Source')).toBe('D1');
             const body = await response.json();
-            expect(body).toEqual([mockFeature1, mockFeature2, mockFeature3]);
+            expect(body).toEqual(mockDbResultsMonth);
             const expectedStartTimeMonth = new Date(mockEventTimeRecent);
             expectedStartTimeMonth.setMonth(expectedStartTimeMonth.getMonth() - 1);
             expect(mockStmt.bind.mock.calls[0][0]).toBeCloseTo(expectedStartTimeMonth.getTime(), -3);
@@ -192,28 +185,4 @@ describe('API Endpoint: /api/get-earthquakes', () => {
         });
     });
 
-    describe('Malformed geojson_feature in D1', () => {
-        it('should return 200 and filter out malformed features, logging an error', async () => {
-            const malformedFeatureString = "this is not json";
-            const mixedResults = [
-                { geojson_feature: JSON.stringify(mockFeature1) },
-                { geojson_feature: malformedFeatureString }
-            ];
-            mockStmt.all.mockResolvedValue({ results: mixedResults, success: true });
-            const request = new Request(`http://localhost/api/get-earthquakes?timeWindow=day`);
-            const context = { request, env: mockEnv, functionPath: '/api/get-earthquakes' };
-
-            const response = await onRequestGet(context);
-            expect(response.status).toBe(200);
-            expect(response.headers.get('X-Data-Source')).toBe('D1');
-            const body = await response.json();
-            expect(body).toEqual([mockFeature1]); // Only the valid feature
-            expect(console.error).toHaveBeenCalledWith(
-                "Failed to parse geojson_feature:",
-                expect.any(SyntaxError), // Error object
-                "Row:",
-                malformedFeatureString
-            );
-        });
-    });
 });

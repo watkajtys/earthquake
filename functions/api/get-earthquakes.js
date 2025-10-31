@@ -66,7 +66,14 @@ export async function onRequestGet(context) {
     const startTimeMilliseconds = startTime.getTime();
 
     const query = `
-      SELECT geojson_feature
+      SELECT
+        id,
+        magnitude,
+        place,
+        event_time,
+        latitude,
+        longitude,
+        depth
       FROM EarthquakeEvents
       WHERE event_time >= ?
       ORDER BY event_time DESC;
@@ -102,17 +109,9 @@ export async function onRequestGet(context) {
         });
     }
 
-    const features = queryResult.results.map(row => {
-      try {
-        // Assuming geojson_feature is a string that needs to be parsed
-        return JSON.parse(row.geojson_feature);
-      } catch (parseError) {
-        console.error("Failed to parse geojson_feature:", parseError, "Row:", row.geojson_feature);
-        // Return null or a placeholder for features that can't be parsed
-        // Or filter them out: return null; and then filter(f => f !== null)
-        return { error: "Failed to parse feature data" };
-      }
-    }).filter(feature => feature && !feature.error); // Filter out any parsing errors if chosen
+    // With the optimized query, the results are already in the desired format.
+    // No need to parse geojson_feature anymore.
+    const features = queryResult.results;
 
     return new Response(JSON.stringify(features), {
       status: 200,

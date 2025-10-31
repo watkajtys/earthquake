@@ -67,13 +67,23 @@ export const EarthquakeDataProvider = ({ children }) => {
         try {
             const response = await fetch(`/api/get-earthquakes?timeWindow=${timeWindow}`);
             if (response.ok && response.headers.get('X-Data-Source') === 'D1') {
-                const data = await response.json(); // Expecting an array of features
-                if (isValidFeatureArray(data)) {
-                    return { data, source: 'D1', error: null };
-                } else {
-                    // console.warn(`D1 returned invalid feature array for ${timeWindow}:`, data);
-                    return { data: null, source: 'D1_failed', error: 'D1 returned invalid feature array.' };
-                }
+                const flatData = await response.json(); // Expecting an array of flat earthquake objects
+                // Reconstruct the GeoJSON structure
+                const reconstructedData = flatData.map(eq => ({
+                    type: 'Feature',
+                    properties: {
+                        mag: eq.magnitude,
+                        place: eq.place,
+                        time: eq.event_time,
+                        // Add other properties that might be expected by the UI
+                    },
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [eq.longitude, eq.latitude, eq.depth]
+                    },
+                    id: eq.id
+                }));
+                return { data: reconstructedData, source: 'D1', error: null };
             }
             const errorText = await response.text();
             // console.warn(`Failed to fetch from D1 for ${timeWindow} or invalid response: ${response.status} ${errorText}`);
@@ -126,7 +136,7 @@ export const EarthquakeDataProvider = ({ children }) => {
             dailyDataSkippedDueToCache = true;
         } else {
             const d1DailyResponse = await fetchFromD1('day');
-            if (d1DailyResponse.source === 'D1') {
+            if (d1DailyResponse.source === 'D1' && d1DailyResponse.data) {
                 // console.log("Successfully fetched daily data from D1");
                 const processedData = { features: d1DailyResponse.data, metadata: null, fetchTime: nowForFiltering, dataSource: 'D1' };
                 dispatch({ type: actionTypes.DAILY_DATA_PROCESSED, payload: processedData });
@@ -165,7 +175,7 @@ export const EarthquakeDataProvider = ({ children }) => {
             weeklyDataSkippedDueToCache = true;
         } else {
             const d1WeeklyResponse = await fetchFromD1('week');
-            if (d1WeeklyResponse.source === 'D1') {
+            if (d1WeeklyResponse.source === 'D1' && d1WeeklyResponse.data) {
                 // console.log("Successfully fetched weekly data from D1");
                 const processedData = { features: d1WeeklyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' };
                 dispatch({ type: actionTypes.WEEKLY_DATA_PROCESSED, payload: processedData });
@@ -251,7 +261,7 @@ export const EarthquakeDataProvider = ({ children }) => {
         let monthlyDataSource = null;
 
         const d1MonthlyResponse = await fetchFromD1('month');
-        if (d1MonthlyResponse.source === 'D1') {
+        if (d1MonthlyResponse.source === 'D1' && d1MonthlyResponse.data) {
             // console.log("Successfully fetched monthly data from D1");
             const processedData = { features: d1MonthlyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' };
             dispatch({
