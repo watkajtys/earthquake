@@ -54,10 +54,10 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
     // The fact that bind was called correctly N times and batch was called with N operations is a good indicator.
     // We can still check the arguments of the bind calls on the mockStmt directly as before.
     expect(mockStmt.bind).toHaveBeenNthCalledWith(1,
-      'quake1', 1678886400000, 20, 10, 5, 5.5, 'Location A', 'url_a', JSON.stringify(mockFeatures[0]), expect.any(Number)
+      'quake1', 1678886400000, 20, 10, 5, 5.5, 'Location A', 'url_a', expect.any(Number)
     );
     expect(mockStmt.bind).toHaveBeenNthCalledWith(2,
-      'quake2', 1678887400000, 22, 12, 8, 4.3, 'Location B', 'url_b', JSON.stringify(mockFeatures[1]), expect.any(Number)
+      'quake2', 1678887400000, 22, 12, 8, 4.3, 'Location B', 'url_b', expect.any(Number)
     );
 
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] Starting D1 upsert for ${mockFeatures.length} features.`));
@@ -101,7 +101,7 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
     expect(mockDb.prepare).toHaveBeenCalledTimes(1); // Called once for the batch
     expect(mockStmt.bind).toHaveBeenCalledTimes(1); // Only called for the valid feature
     expect(mockStmt.bind).toHaveBeenCalledWith(
-      'valid1', 1678886400000, 20, 10, 5, 5.5, 'Valid Place', 'valid_url', JSON.stringify(validFeature), expect.any(Number)
+      'valid1', 1678886400000, 20, 10, 5, 5.5, 'Valid Place', 'valid_url', expect.any(Number)
     );
     // expect(mockStmt.run).toHaveBeenCalledTimes(1); // run is no longer called per feature
     expect(mockDb.batch).toHaveBeenCalledTimes(1); // batch is called once with the valid operations

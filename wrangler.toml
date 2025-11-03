@@ -17,6 +17,23 @@ kv_namespaces = [
   { binding = "USGS_LAST_RESPONSE_KV", id = "8bebf55e19a14299b35d1d4f6a53d2b5", preview_id = "21d89ac9c07c4845b08dd6d0e0a2b5eb" }
 ]
 
+[[r2_buckets]]
+bucket_name = "geojson-bucket"
+binding = "GEOJSON_BUCKET"
+
+[[queues.producers]]
+queue = "geojson-queue"
+binding = "GEOJSON_QUEUE"
+
+[[queues.consumers]]
+queue = "geojson-queue"
+max_batch_size = 10
+max_wait_ms = 1000
+consumer = {
+  script = "functions/consumers/geojson-archive",
+  environment = "production"
+}
+
 [[d1_databases]]
 binding = "DB" # Binding name used in your Worker code
 database_name = "PrimaryDB" # Name of the D1 database (used in wrangler d1 commands)
