@@ -3,12 +3,6 @@ import { registerClusterDefinition, fetchClusterDefinition, fetchActiveClusters 
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server'; // Corrected path
 
-// Mock the local cluster calculation utility
-vi.mock('../utils/clusterUtils.js', () => ({
-  findActiveClusters: vi.fn(),
-}));
-// After mocking, we can import the aliased function to access the mock
-import { findActiveClusters as localFindActiveClusters } from '../utils/clusterUtils.js';
 
 
 describe('clusterApiService', () => {
@@ -22,7 +16,6 @@ describe('clusterApiService', () => {
 
   beforeEach(() => {
     // vi.resetAllMocks(); // Not needed as much with MSW, specific mocks can be cleared if necessary
-    localFindActiveClusters.mockClear(); // Clear this specific mock
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -148,122 +141,45 @@ describe('clusterApiService', () => {
   });
 
   describe('fetchActiveClusters', () => {
-    const mockEarthquakes = [{ id: 'eq1', geometry: { coordinates: [1,2] }, properties: { time: 123, mag: 5 } }];
-    const mockMaxDistanceKm = 100;
-    const mockMinQuakes = 2;
     const mockServerCalculatedData = [{ clusterId: 'serverCluster', quakes: ['eq1', 'eq2'] }];
-    const mockLocalCalculatedData = [{ clusterId: 'localCluster', quakes: ['eq1', 'eq3'] }];
 
-    it('should return server data and not call local fallback if server responds OK', async () => {
+    it('should return data from the /api/get-clusters endpoint', async () => {
       server.use(
-        http.post('/api/calculate-clusters', async () => {
-          return HttpResponse.json(mockServerCalculatedData, { // Body is the array of clusters
-            status: 200
-            // No cache headers since caching is removed
+        http.get('/api/get-clusters', () => {
+          return HttpResponse.json(mockServerCalculatedData, {
+            status: 200,
+            headers: { 'X-Cache-Status': 'Hit' }
           });
         })
       );
-      const result = await fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
+
+      const result = await fetchActiveClusters();
       expect(result).toEqual(mockServerCalculatedData);
-      expect(localFindActiveClusters).not.toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith('Active clusters fetched from server (parsed as direct array). Cache-Hit: null'); // Cache header will be null
+      expect(consoleLogSpy).toHaveBeenCalledWith('Active clusters fetched from server. Cache-Status: Hit');
     });
 
-    it('should use server data if server responds OK (no cache headers)', async () => {
+    it('should return an empty array if the server responds with an error', async () => {
       server.use(
-        http.post('/api/calculate-clusters', () => {
-          return HttpResponse.json(mockServerCalculatedData, { // Body is the array of clusters
-            status: 200
-            // No cache headers since caching is removed
-          });
-        })
-      );
-      const result = await fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(result).toEqual(mockServerCalculatedData);
-      expect(localFindActiveClusters).not.toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith('Active clusters fetched from server (parsed as direct array). Cache-Hit: null');
-      expect(consoleLogSpy).toHaveBeenCalledWith('Using server data. Cache-Hit: false or not present.');
-    });
-
-
-    it('should call local fallback if server responds OK but with unexpected data structure', async () => {
-      server.use(
-        http.post('/api/calculate-clusters', () => {
-          return HttpResponse.json(
-            { notes: 'Payload does not match expected cluster structure' },
-            { status: 200 }
-          );
-        })
-      );
-      localFindActiveClusters.mockReturnValueOnce(mockLocalCalculatedData);
-      const result = await fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(result).toEqual(mockLocalCalculatedData);
-      expect(localFindActiveClusters).toHaveBeenCalledWith(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(consoleWarnSpy).toHaveBeenCalledWith('Unexpected data structure from server. Cache-Hit: null. Falling back to local calculation.');
-      expect(consoleLogSpy).toHaveBeenCalledWith('Initiating client-side cluster calculation using localFindActiveClusters.');
-      expect(consoleLogSpy).toHaveBeenCalledWith('Client-side cluster calculation successful.');
-    });
-
-    it('should call local fallback if server responds with an error (e.g., 500)', async () => {
-      server.use(
-        http.post('/api/calculate-clusters', () => {
+        http.get('/api/get-clusters', () => {
           return new HttpResponse('Internal Server Error', { status: 500 });
         })
       );
-      localFindActiveClusters.mockReturnValueOnce(mockLocalCalculatedData);
-      const result = await fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(result).toEqual(mockLocalCalculatedData);
-      expect(localFindActiveClusters).toHaveBeenCalledWith(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch active clusters from server. Status: 500. Body: Internal Server Error. Falling back to local calculation.');
+
+      const result = await fetchActiveClusters();
+      expect(result).toEqual([]);
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch active clusters from server. Status: 500. Body: Internal Server Error.');
     });
 
-    it('should call local fallback if fetch throws a network error', async () => {
+    it('should return an empty array on network error', async () => {
       server.use(
-        http.post('/api/calculate-clusters', () => {
-          return new HttpResponse(null, { status: 503, statusText: 'Service Down' });
+        http.get('/api/get-clusters', () => {
+          return HttpResponse.error();
         })
       );
-      localFindActiveClusters.mockReturnValueOnce(mockLocalCalculatedData);
-      const result = await fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(result).toEqual(mockLocalCalculatedData);
-      expect(localFindActiveClusters).toHaveBeenCalledWith(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch active clusters from server. Status: 503. Body: . Falling back to local calculation.');
-    });
 
-    it('should re-throw error if local fallback also fails', async () => {
-      const localError = new Error("Local calculation failed");
-      server.use(
-        http.post('/api/calculate-clusters', () => {
-          return new HttpResponse(null, { status: 503, statusText: 'Service Down' });
-        })
-      );
-      localFindActiveClusters.mockImplementationOnce(() => {
-        throw localError;
-      });
-      await expect(fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes))
-        .rejects.toThrow(localError);
-      expect(localFindActiveClusters).toHaveBeenCalledWith(mockEarthquakes, mockMaxDistanceKm, mockMinQuakes);
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch active clusters from server. Status: 503. Body: . Falling back to local calculation.');
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Client-side cluster calculation also failed:', localError);
+      const result = await fetchActiveClusters();
+      expect(result).toEqual([]);
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Network error while fetching active clusters:', expect.any(Error));
     });
-
-    it('should throw error for invalid earthquakes array', async () => {
-        await expect(fetchActiveClusters("not-an-array", mockMaxDistanceKm, mockMinQuakes))
-            .rejects.toThrow("Invalid earthquakes array");
-        expect(consoleErrorSpy).toHaveBeenCalledWith("fetchActiveClusters: Invalid earthquakes array provided.");
-    });
-
-    it('should throw error for invalid maxDistanceKm', async () => {
-        await expect(fetchActiveClusters(mockEarthquakes, "invalid", mockMinQuakes))
-            .rejects.toThrow("Invalid maxDistanceKm");
-        expect(consoleErrorSpy).toHaveBeenCalledWith("fetchActiveClusters: Invalid maxDistanceKm provided.");
-    });
-
-    it('should throw error for invalid minQuakes', async () => {
-        await expect(fetchActiveClusters(mockEarthquakes, mockMaxDistanceKm, "invalid"))
-            .rejects.toThrow("Invalid minQuakes");
-        expect(consoleErrorSpy).toHaveBeenCalledWith("fetchActiveClusters: Invalid minQuakes provided.");
-    });
-
   });
 });

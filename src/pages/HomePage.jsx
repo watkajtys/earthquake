@@ -450,19 +450,15 @@ function App() {
 
     // Effect to fetch active clusters from the API
     useEffect(() => {
-        if (earthquakesLast7Days && earthquakesLast7Days.length > 0) {
-            fetchActiveClusters(earthquakesLast7Days, CLUSTER_MAX_DISTANCE_KM, CLUSTER_MIN_QUAKES)
-                .then(clusters => {
-                    setCalculatedClusters(clusters);
-                })
-                .catch(error => {
-                    console.error("Error fetching active clusters:", error);
-                    setCalculatedClusters([]);
-                });
-        } else {
-            setCalculatedClusters([]);
-        }
-    }, [earthquakesLast7Days]); // Dependency: earthquakesLast7Days
+        fetchActiveClusters()
+            .then(clusters => {
+                setCalculatedClusters(clusters);
+            })
+            .catch(error => {
+                console.error("Error fetching active clusters:", error);
+                setCalculatedClusters([]);
+            });
+    }, []); // Empty dependency array to run once on mount
 
     // Use calculatedClusters for the activeClusters memo
     const activeClusters = useMemo(() => {
