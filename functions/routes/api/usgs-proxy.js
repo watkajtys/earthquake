@@ -119,6 +119,9 @@ export async function handleUsgsProxy(context) { // context contains { request, 
       }
 
       const responseDataForLogic = await upstreamResponse.clone().json(); // Get data for logic
+      let featuresToUpsert = responseDataForLogic.features || [];
+      const totalNewFeaturesFetched = featuresToUpsert.length;
+      console.log(`[usgs-proxy-kv] Total features fetched from USGS API: ${totalNewFeaturesFetched}`);
 
       // Create the response to be returned to the client AND to be cached (if not cron).
       // Start with the original response's body and status.
@@ -232,10 +235,6 @@ export async function handleUsgsProxy(context) { // context contains { request, 
           logger.logError('KV_NOT_CONFIGURED', 'USGS_LAST_RESPONSE_KV namespace not configured', {}, false);
         }
       }
-
-      let featuresToUpsert = responseDataForLogic.features || [];
-      const totalNewFeaturesFetched = featuresToUpsert.length;
-      console.log(`[usgs-proxy-kv] Total features fetched from USGS API: ${totalNewFeaturesFetched}`);
 
       if (oldFeaturesFromKV && Array.isArray(oldFeaturesFromKV)) {
         const comparisonStartTime = Date.now();

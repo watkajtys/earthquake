@@ -42,6 +42,10 @@ const createMockContext = (request, env = {}, cf = {}) => {
         put: vi.fn(),
         list: vi.fn().mockResolvedValue({ keys: [], list_complete: true, cursor: undefined }),
       },
+      USGS_LAST_RESPONSE_KV: {
+        get: vi.fn(),
+        put: vi.fn(),
+      },
       ASSETS: {
           fetch: vi.fn().mockResolvedValue(new Response("SPA fallback", { headers: { 'Content-Type': 'text/html'}}))
       },
@@ -287,5 +291,35 @@ describe('/api/usgs-proxy', () => {
       expect(selectCalls[2][0].split('?').length - 1).toBe(20);
 
       expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalled();
+    });
+
+    it('should return a custom payload for cron requests', async () => {
+      const targetApiUrl = 'http://example.com/earthquakes_cron_feed';
+      const mockFeatures = [
+        { id: 'cron_quake1', properties: { updated: 1000 }, geometry: { coordinates: [1,1,1] }},
+        { id: 'cron_quake2', properties: { updated: 2000 }, geometry: { coordinates: [2,2,2] }}
+      ];
+      const mockApiResponseData = { features: mockFeatures };
+
+      mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
+      upsertEarthquakeFeaturesToD1.mockResolvedValue({ successCount: 2, errorCount: 0 });
+
+      const request = new Request(`http://localhost${proxyPath}?apiUrl=${encodeURIComponent(targetApiUrl)}&isCron=true`);
+      const context = createMockContext(request);
+
+      // Mock the KV store to return an empty set of old features, so all new features are considered "new"
+      vi.spyOn(context.env.USGS_LAST_RESPONSE_KV, 'get').mockResolvedValue(null);
+
+      const response = await onRequest(context);
+      await context._awaitWaitUntilPromises();
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+
+      // For cron requests, the response should have a specific structure
+      expect(json).toHaveProperty('newOrUpdatedFeatures');
+      expect(json).toHaveProperty('fullGeoJson');
+      expect(json.newOrUpdatedFeatures).toEqual(mockFeatures);
+      expect(json.fullGeoJson).toEqual(mockApiResponseData);
     });
   });

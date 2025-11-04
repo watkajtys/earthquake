@@ -253,6 +253,14 @@ export const handlers = [
     return HttpResponse.json({ features: mockFeatures }, { status: 200 });
   }),
 
+  http.get('http://example.com/earthquakes_cron_feed', () => {
+    const mockFeatures = [
+      { id: 'cron_quake1', properties: { updated: 1000 }, geometry: { coordinates: [1,1,1] }},
+      { id: 'cron_quake2', properties: { updated: 2000 }, geometry: { coordinates: [2,2,2] }}
+    ];
+    return HttpResponse.json({ features: mockFeatures }, { status: 200 });
+  }),
+
   // Handlers for prerender-cluster.integration.test.js (USGS GeoJSON detail feeds)
   http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us7000mfp9.geojson', () => {
     return HttpResponse.json(
