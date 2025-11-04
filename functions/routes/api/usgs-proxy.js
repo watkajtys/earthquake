@@ -292,9 +292,20 @@ export async function handleUsgsProxy(context) { // context contains { request, 
       if (env.DB && featuresToUpsert && featuresToUpsert.length > 0) {
         // ==> New logic to count new earthquakes and update stats
         const featureIds = featuresToUpsert.map(f => f.id);
-        const existingIdsStmt = await env.DB.prepare(`SELECT id FROM EarthquakeEvents WHERE id IN (${featureIds.map(() => '?').join(',')})`).bind(...featureIds);
-        const existingIdsResult = await existingIdsStmt.all();
-        const existingIds = new Set(existingIdsResult.results.map(row => row.id));
+
+        // Batch the SELECT query to avoid "too many SQL variables" error
+        const batchSize = 90;
+        let existingIds = new Set();
+        for (let i = 0; i < featureIds.length; i += batchSize) {
+          const batchIds = featureIds.slice(i, i + batchSize);
+          if (batchIds.length > 0) {
+            const existingIdsStmt = await env.DB.prepare(`SELECT id FROM EarthquakeEvents WHERE id IN (${batchIds.map(() => '?').join(',')})`).bind(...batchIds);
+            const existingIdsResult = await existingIdsStmt.all();
+            for (const row of existingIdsResult.results) {
+              existingIds.add(row.id);
+            }
+          }
+        }
 
         const newEarthquakeCount = featuresToUpsert.filter(f => !existingIds.has(f.id)).length;
 
