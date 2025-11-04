@@ -730,7 +730,7 @@ export default {
       
       // Create a request for backfill with appropriate parameters
       // Process 10 earthquakes per minute to avoid overwhelming the API
-      const backfillUrl = `https://dummy-host/api/backfill-earthquake-details?batch_size=10&min_magnitude=3.5&max_age_days=365`;
+      const backfillUrl = `https://dummy-host/api/backfill-earthquake-details?batch_size=10&min_magnitude=0&max_age_days=365`;
       const backfillRequest = new Request(backfillUrl, {
         method: "GET",
         headers: {
