@@ -273,13 +273,44 @@ export default {
       if (clusters.length > 0) {
         await storeClusterDefinitions(env.DB, clusters);
 
+        // After storing, fetch the active definitions to cache them.
+        const stmt = env.DB.prepare(`
+          SELECT
+            id,
+            slug,
+            title,
+            description,
+            locationName,
+            centroidLat,
+            centroidLon,
+            radiusKm,
+            depthRange,
+            startTime,
+            endTime,
+            durationHours,
+            quakeCount,
+            strongestQuakeId,
+            earthquakeIds,
+            maxMagnitude,
+            meanMagnitude,
+            minMagnitude,
+            significanceScore,
+            version,
+            updatedAt
+          FROM ClusterDefinitions
+          WHERE endTime >= ?
+          ORDER BY significanceScore DESC
+        `).bind(thirtyDaysAgoTimestamp);
+
+        const { results: activeClusters } = await stmt.all();
+
+
         try {
-          // Store the calculated clusters in KV
           const cacheKey = "active_clusters";
-          await env.CLUSTER_KV.put(cacheKey, JSON.stringify(clusters), {
+          await env.CLUSTER_KV.put(cacheKey, JSON.stringify(activeClusters), {
             expirationTtl: 3600 // Cache for 1 hour
           });
-          console.log(`process-cluster-definitions: Successfully cached ${clusters.length} clusters in KV.`);
+          console.log(`process-cluster-definitions: Successfully cached ${activeClusters.length} clusters in KV.`);
         } catch (kvError) {
           console.error("process-cluster-definitions: Failed to cache clusters in KV:", kvError.message, kvError.stack);
         }
