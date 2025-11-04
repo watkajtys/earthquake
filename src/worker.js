@@ -770,7 +770,7 @@ export default {
     console.log('[scheduled-backfill] Starting automated backfill process');
     try {
       const { onRequestGet: backfillHandler } = await import('../functions/api/backfill-earthquake-details.js');
-      const backfillUrl = `https://dummy-host/api/backfill-earthquake-details?batch_size=10&min_magnitude=0&max_age_days=365`;
+      const backfillUrl = `https://dummy-host/api/backfill-earthquake-details?batch_size=10&min_magnitude=0&max_age_days=1`;
       const backfillRequest = new Request(backfillUrl, {
         method: "GET",
         headers: {

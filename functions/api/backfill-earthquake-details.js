@@ -271,6 +271,28 @@ export async function onRequestGet(context) {
         
       } catch (error) {
         console.error(`[backfill] Error processing ${earthquake.id}: ${error.message}`);
+
+        // Increment attempt counter on any failure to prevent infinite loops
+        const attempts = earthquake.detail_fetch_attempts || 0;
+        const nextAttempt = scheduleRetry(attempts);
+
+        const retryStmt = env.DB.prepare(`
+          UPDATE EarthquakeEvents
+          SET detail_fetch_attempts = ?,
+              last_detail_fetch_attempt = ?,
+              next_detail_fetch_attempt = ?
+          WHERE id = ?
+        `).bind(
+          attempts + 1,
+          Date.now(),
+          nextAttempt,
+          earthquake.id
+        );
+
+        // Use context.ctx.waitUntil to allow the update to run in the background
+        // This ensures the main loop can continue without waiting for this to complete
+        context.ctx.waitUntil(retryStmt.run());
+
         errors.push({
           id: earthquake.id,
           error: error.message
