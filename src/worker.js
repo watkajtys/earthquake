@@ -2,7 +2,6 @@
 // Note: Adjusted path assuming worker.js is in src/ and d1Utils.js is in src/utils/
 // import { upsertEarthquakeFeaturesToD1 } from './utils/d1Utils.js'; // Used by the KV-enabled proxy too.
 import { onRequestGet as handleGetClusterWithQuakes } from '../functions/api/cluster-detail-with-quakes.js';
-import { onRequestPost as handlePostCalculateClusters } from '../functions/api/calculate-clusters.POST.js';
 
 // Import the KV-enabled proxy handler
 import { handleUsgsProxy as kvEnabledUsgsProxyHandler } from '../functions/routes/api/usgs-proxy.js';
@@ -12,6 +11,7 @@ import { createScheduledTaskLogger } from './utils/scheduledTaskLogger.js';
 
 // Import the get-earthquakes handler
 import { onRequestGet as handleGetEarthquakes } from '../functions/api/get-earthquakes.js';
+import { onRequestGet as handleGetClusters } from '../functions/api/get-clusters.js';
 
 // Import the batch USGS fetch handler
 import { handleBatchUsgsFetch } from '../functions/api/batch-usgs-fetch.js';
@@ -507,8 +507,8 @@ export default {
       return handleGetClusterWithQuakes({ request, env, ctx });
     }
 
-    if (pathname === '/api/calculate-clusters' && request.method === 'POST') {
-      return handlePostCalculateClusters({ request, env, ctx });
+    if (pathname === '/api/get-clusters' && request.method === 'GET') {
+      return handleGetClusters({ request, env, ctx });
     }
 
     if (pathname === '/api/get-earthquakes' && request.method === 'GET') {
