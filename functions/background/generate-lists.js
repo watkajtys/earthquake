@@ -52,7 +52,7 @@ async function fetchEarthquakeData(db, timeWindow) {
  * @param {D1Database} env.DB - The D1 database binding.
  * @param {R2Bucket} env.GEOJSON_BUCKET - The R2 bucket for storing lists.
  */
-async function handleGenerateLists({ env }) {
+export async function handleGenerateLists({ env }) {
   const { DB, GEOJSON_BUCKET } = env;
 
   if (!DB || !GEOJSON_BUCKET) {
