@@ -31,6 +31,9 @@ import { onRequestGet as handleGetSystemLogs } from '../functions/api/system-log
 // Import the queue consumer
 import geojsonArchiveConsumer from '../functions/consumers/geojson-archive.js';
 
+// Import the new list generator
+import { handleGenerateLists } from '../functions/background/generate-lists.js';
+
 // === Cache Management Functions ===
 // Cache management functions removed - cluster cache has been eliminated
 
@@ -583,6 +586,18 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    // Route scheduled events based on their cron trigger
+    if (event.cron === "*/5 * * * *") {
+      console.log("[worker-scheduled] Cron matched '*/5 * * * *'. Generating lists.");
+      ctx.waitUntil(handleGenerateLists({ env }));
+      return; // End execution for this task
+    }
+
+    // Default to the 1-minute cron task (USGS data sync and backfill)
+    if (event.cron === "*/1 * * * *") {
+      console.log("[worker-scheduled] Cron matched '*/1 * * * *'. Running data sync and backfill.");
+    }
+
     // Initialize enhanced logging for this scheduled task execution
     const logger = createScheduledTaskLogger('usgs-data-sync', event.scheduledTime);
     
