@@ -141,8 +141,23 @@ export async function handleUsgsProxy(context) { // context contains { request, 
         console.log("[usgs-proxy] Cron request: Setting Cache-Control to no-store for the response.");
       }
 
-      // Use the already read responseDataForLogic to avoid re-parsing
-      response = new Response(JSON.stringify(responseDataForLogic), {
+      // If it is a cron request, return a custom payload with new/updated features.
+      // Otherwise, return the standard GeoJSON.
+      let responseBody;
+      if (isCronRequest) {
+        console.log(`[usgs-proxy] Cron request: Creating custom response payload with ${featuresToUpsert.length} new/updated features.`);
+        const responsePayload = {
+          newOrUpdatedFeatures: featuresToUpsert,
+          // We include the full geojson as well, in case other processes need it.
+          // The primary consumer (generate-lists) will use newOrUpdatedFeatures.
+          fullGeoJson: responseDataForLogic
+        };
+        responseBody = JSON.stringify(responsePayload);
+      } else {
+        responseBody = JSON.stringify(responseDataForLogic);
+      }
+
+      response = new Response(responseBody, {
         status: upstreamResponse.status,
         statusText: upstreamResponse.statusText,
         headers: finalResponseHeaders

@@ -601,9 +601,24 @@ export default {
         // from terminating the worker if a task fails.
         ctx.waitUntil(
           this.fetchLatestUsgsData(event, env, ctx, logger)
-            .then(() => {
-              // Now that fetching is done, generate the lists.
-              return this.generateFrontendLists(event, env, ctx, logger);
+            .then(proxyResponse => {
+              // If the proxy call was successful, proxyResponse should be a Response object.
+              if (proxyResponse && proxyResponse.ok) {
+                return proxyResponse.json();
+              }
+              // If the response is not OK, or if fetchLatestUsgsData threw an error,
+              // we will not proceed to list generation. The error is already logged in fetchLatestUsgsData.
+              return null;
+            })
+            .then(proxyData => {
+              // Now that fetching is done and we have the data, generate the lists.
+              if (proxyData && proxyData.newOrUpdatedFeatures) {
+                // Pass the new features to the list generation function.
+                return this.generateFrontendLists(event, env, ctx, logger, proxyData.newOrUpdatedFeatures);
+              } else {
+                logger.logMilestone('Skipping list generation due to no new data or upstream error.');
+                console.log('[worker-scheduled] Skipping list generation: no new data or upstream error.');
+              }
             })
             .catch((err) => {
               // It's important to log the error within the waitUntil chain.
@@ -698,6 +713,8 @@ export default {
             const processingInfo = response.headers.get('X-Processing-Info');
             if (cacheInfo || processingInfo) logger.addContext('responseHeaders', { cacheInfo, processingInfo });
             logger.logTaskCompletion(true, { proxyStatus: response.status, proxyDuration: proxyEndTime - proxyStartTime, message: 'USGS data synchronization completed successfully' });
+            // Return the successful response to the caller
+            return response;
           } else {
             // Ensure we handle non-OK responses correctly by returning a Promise that rejects
             return response.text().then(text => {
@@ -732,11 +749,12 @@ export default {
    * Generates the frontend earthquake lists and stores them in R2.
    * This is part of the high-frequency tasks.
    */
-  async generateFrontendLists(event, env, ctx, parentLogger) {
+  async generateFrontendLists(event, env, ctx, parentLogger, newFeatures) {
     const logger = parentLogger || createScheduledTaskLogger('generate-lists', event.scheduledTime);
-    console.log('[worker-scheduled] Generating lists.');
+    console.log(`[worker-scheduled] Generating lists with ${newFeatures.length} new/updated features.`);
     try {
-      await handleGenerateLists({ env });
+      // Pass the new features to the handler.
+      await handleGenerateLists({ env, newFeatures });
       logger.logMilestone('List generation complete');
     } catch (error) {
       logger.logError('LIST_GENERATION_ERROR', error.message, { stack: error.stack }, true);
