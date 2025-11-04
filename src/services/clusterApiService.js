@@ -153,76 +153,30 @@ export async function fetchClusterWithQuakes(clusterId) {
  * @returns {Promise<Array<Array<Object>>>} A promise that resolves to an array of clusters. Each cluster is an array of earthquake objects.
  * @throws {Error} If the backend request fails and the client-side fallback calculation also fails, or if input parameters are invalid.
  */
-export async function fetchActiveClusters(earthquakes, maxDistanceKm, minQuakes) {
-  if (!Array.isArray(earthquakes)) {
-    console.error("fetchActiveClusters: Invalid earthquakes array provided.");
-    throw new Error("Invalid earthquakes array");
-  }
-  if (typeof maxDistanceKm !== 'number' || maxDistanceKm <= 0) {
-    console.error("fetchActiveClusters: Invalid maxDistanceKm provided.");
-    throw new Error("Invalid maxDistanceKm");
-  }
-  if (typeof minQuakes !== 'number' || minQuakes <= 0) {
-    console.error("fetchActiveClusters: Invalid minQuakes provided.");
-    throw new Error("Invalid minQuakes");
-  }
-
+export async function fetchActiveClusters() {
   try {
-    const response = await fetch('/api/calculate-clusters', {
-      method: 'POST',
+    const response = await fetch('/api/get-clusters', {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify({ earthquakes, maxDistanceKm, minQuakes }),
     });
-
-    const cacheHit = response.headers.get('X-Cache-Hit');
 
     if (response.ok) {
       const data = await response.json();
-      let parsedClusters = null;
-
-      if (data && data.clusters && Array.isArray(data.clusters)) {
-        console.log(`Active clusters fetched from server (parsed as object with .clusters property). Cache-Hit: ${cacheHit}`);
-        parsedClusters = data.clusters;
-      } else if (data && Array.isArray(data)) {
-        // This path handles cases where the server might directly return an array of clusters,
-        // which was an older expectation for cacheHit === 'true' path.
-        console.log(`Active clusters fetched from server (parsed as direct array). Cache-Hit: ${cacheHit}`);
-        parsedClusters = data;
-      }
-
-      // If clusters were successfully parsed from server response, return them.
-      // Log whether it was a cache hit or not, but use the data regardless.
-      if (parsedClusters !== null) {
-        console.log(`Using server data. Cache-Hit: ${cacheHit === 'true' ? 'true' : 'false or not present'}.`);
-        return parsedClusters;
-      } else {
-        // Server response was OK, but data structure was not as expected.
-        console.warn(`Unexpected data structure from server. Cache-Hit: ${cacheHit}. Falling back to local calculation.`);
-        // Fall through to local calculation by not returning here.
-      }
-    } else { // !response.ok
+      console.log(`Active clusters fetched from server. Cache-Status: ${response.headers.get('X-Cache-Status')}`);
+      return data;
+    } else {
       const errorBody = await response.text();
       console.error(
-        `Failed to fetch active clusters from server. Status: ${response.status}. Body: ${errorBody}. Falling back to local calculation.`
+        `Failed to fetch active clusters from server. Status: ${response.status}. Body: ${errorBody}.`
       );
-      // Fall through to local calculation.
+      // Depending on requirements, you might want to return an empty array or throw an error.
+      // For a non-critical feature, returning an empty array might be preferable.
+      return [];
     }
   } catch (error) {
-    console.error('Network error or JSON parsing error while fetching/processing active clusters. Falling back to local calculation:', error);
-    // Fall through to local calculation.
-  }
-
-  // Fallback to local calculation
-  try {
-    console.log('Initiating client-side cluster calculation using localFindActiveClusters.');
-    const localClusters = localFindActiveClusters(earthquakes, maxDistanceKm, minQuakes);
-    console.log('Client-side cluster calculation successful.');
-    return localClusters;
-  } catch (localError) {
-    console.error('Client-side cluster calculation also failed:', localError);
-    throw localError; // Re-throw if local calculation also fails
+    console.error('Network error while fetching active clusters:', error);
+    return []; // Return an empty array on network error to prevent UI crashes.
   }
 }
