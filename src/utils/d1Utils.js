@@ -42,60 +42,65 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
   // If this code were to run outside a CF Worker (e.g. Node.js with a D1 client), it might be async.
   // For now, assuming CF Worker environment.
   const stmt = db.prepare(upsertStmtText);
-  let successCount = 0;
-  let errorCount = 0;
-  const operations = [];
+  let totalSuccessCount = 0;
+  let totalErrorCount = 0;
+  const batchSize = 90; // D1 has a limit on the number of statements in a batch, and params per statement.
+  let totalOperationsAttempted = 0;
 
-  for (const feature of features) {
-    // Basic validation to ensure feature and its critical properties exist
-    if (!feature || !feature.id || !feature.properties || !feature.geometry || !feature.geometry.coordinates || feature.geometry.coordinates.length < 3) {
-      console.warn("[d1Utils-upsert] Skipping feature due to missing critical data:", feature?.id || "ID missing");
-      errorCount++;
-      continue;
-    }
 
-    const id = feature.id;
-    const event_time = feature.properties.time;
-    const latitude = feature.geometry.coordinates[1];
-    const longitude = feature.geometry.coordinates[0];
-    const depth = feature.geometry.coordinates[2];
-    const magnitude = feature.properties.mag;
-    const place = feature.properties.place;
-    const usgs_detail_url = feature.properties.detail || `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${feature.id}.geojson`;
-    const geojson_feature_string = ""; // Phase 2: Stop writing GeoJSON to D1
-    const retrieved_at = Date.now();
-    const next_detail_fetch_attempt = retrieved_at + 45 * 60 * 1000; // Proactively schedule first fetch for 45 mins from now
+  for (let i = 0; i < features.length; i += batchSize) {
+    const batchFeatures = features.slice(i, i + batchSize);
+    const operations = [];
 
-    // Ensure no null values for required fields before adding to batch
-    if (id == null || event_time == null || latitude == null || longitude == null || depth == null || magnitude == null || place == null) {
-        console.warn(`[d1Utils-upsert] Skipping feature ${id} due to null value in one of the required fields.`);
-        errorCount++; // Count as an error if critical data is missing for a feature
+    for (const feature of batchFeatures) {
+      // Basic validation to ensure feature and its critical properties exist
+      if (!feature || !feature.id || !feature.properties || !feature.geometry || !feature.geometry.coordinates || feature.geometry.coordinates.length < 3) {
+        console.warn("[d1Utils-upsert] Skipping feature due to missing critical data:", feature?.id || "ID missing");
+        totalErrorCount++;
         continue;
+      }
+
+      const id = feature.id;
+      const event_time = feature.properties.time;
+      const latitude = feature.geometry.coordinates[1];
+      const longitude = feature.geometry.coordinates[0];
+      const depth = feature.geometry.coordinates[2];
+      const magnitude = feature.properties.mag;
+      const place = feature.properties.place;
+      const usgs_detail_url = feature.properties.detail || `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${feature.id}.geojson`;
+      const geojson_feature_string = ""; // Phase 2: Stop writing GeoJSON to D1
+      const retrieved_at = Date.now();
+      const next_detail_fetch_attempt = retrieved_at + 45 * 60 * 1000; // Proactively schedule first fetch for 45 mins from now
+
+      // Ensure no null values for required fields before adding to batch
+      if (id == null || event_time == null || latitude == null || longitude == null || depth == null || magnitude == null || place == null) {
+          console.warn(`[d1Utils-upsert] Skipping feature ${id} due to null value in one of the required fields.`);
+          totalErrorCount++; // Count as an error if critical data is missing for a feature
+          continue;
+      }
+
+      operations.push(stmt.bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at, next_detail_fetch_attempt));
     }
 
-    operations.push(stmt.bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at, next_detail_fetch_attempt));
-  }
-
-  if (operations.length > 0) {
-    try {
-      // Execute all operations in a single batch
-      await db.batch(operations);
-      // If db.batch does not throw, assume all operations in the batch were successful.
-      // This is a simplification; D1's batch might have more nuanced results,
-      // but for ON CONFLICT DO UPDATE, it often doesn't return individual outcomes.
-      successCount = operations.length;
-      console.log(`[d1Utils-upsert] Batch upsert successful for ${operations.length} operations.`);
-    } catch (batchError) {
-      console.error(`[d1Utils-upsert] Error during batch D1 upsert: ${batchError.message}`, batchError);
-      // If the batch fails, assume all operations in it failed.
-      errorCount += operations.length; // Add to existing errors from validation phase
-      // successCount remains 0 or its value from prior successful batches if implemented (not in this version).
-      // For this implementation, if a batch fails, all its operations are counted as errors.
+    if (operations.length > 0) {
+      totalOperationsAttempted += operations.length;
+      try {
+        console.log(`[d1Utils-upsert] Executing batch starting at index ${i} with ${operations.length} operations.`);
+        // Execute the batch of operations
+        await db.batch(operations);
+        // If db.batch does not throw, assume all operations in the batch were successful.
+        totalSuccessCount += operations.length;
+        console.log(`[d1Utils-upsert] Batch upsert successful for ${operations.length} operations.`);
+      } catch (batchError) {
+        console.error(`[d1Utils-upsert] Error during batch D1 upsert for slice starting at index ${i}: ${batchError.message}`, batchError);
+        // If the batch fails, assume all operations in it failed.
+        totalErrorCount += operations.length; // Add to existing errors from validation phase
+      }
     }
   }
 
-  console.log(`[d1Utils-upsert] D1 upsert processing complete. Attempted: ${operations.length}, Success: ${successCount}, Errors: ${errorCount}`);
-  return { successCount, errorCount };
+  console.log(`[d1Utils-upsert] D1 upsert processing complete. Total features: ${features.length}, Attempted: ${totalOperationsAttempted}, Success: ${totalSuccessCount}, Errors: ${totalErrorCount}`);
+  return { successCount: totalSuccessCount, errorCount: totalErrorCount };
 }
 
 /**

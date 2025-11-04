@@ -63,7 +63,7 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] Starting D1 upsert for ${mockFeatures.length} features.`));
     // The success log message changed slightly with batching
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] Batch upsert successful for ${mockFeatures.length} operations.`));
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] D1 upsert processing complete. Attempted: ${mockFeatures.length}, Success: ${mockFeatures.length}, Errors: 0`));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] D1 upsert processing complete. Total features: ${mockFeatures.length}, Attempted: ${mockFeatures.length}, Success: ${mockFeatures.length}, Errors: 0`));
     expect(result).toEqual({ successCount: mockFeatures.length, errorCount: 0 });
   });
 
@@ -131,7 +131,7 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
     const batchOperations = mockDb.batch.mock.calls[0][0];
     expect(batchOperations.length).toBe(features.length); // All features were prepared for batching
 
-    expect(console.error).toHaveBeenCalledWith(`[d1Utils-upsert] Error during batch D1 upsert: ${batchError.message}`, batchError);
+    expect(console.error).toHaveBeenCalledWith(`[d1Utils-upsert] Error during batch D1 upsert for slice starting at index 0: ${batchError.message}`, batchError);
     // If batch fails, all operations in it are counted as errors.
     // successCount remains 0 (or its initial value if there were prior successful batches, not applicable here).
     // errorCount becomes the number of operations attempted in the failed batch.
@@ -140,4 +140,29 @@ describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
 
   // More tests:
   // - Defaulting usgs_detail_url if feature.properties.detail is missing
+
+  it('should process features in batches', async () => {
+    // Create a large number of features to trigger batching
+    const mockFeatures = Array.from({ length: 200 }, (_, i) => ({
+      id: `quake${i}`,
+      properties: { time: 1678886400000 + i, mag: 3.0 + i / 100, place: `Location ${i}`, detail: `url_${i}` },
+      geometry: { coordinates: [10 + i / 10, 20 + i / 10, 5 + i / 10] }
+    }));
+
+    const result = await upsertEarthquakeFeaturesToD1(mockDb, mockFeatures);
+
+    // Batch size is 90, so 200 features should result in 3 batches (90, 90, 20)
+    expect(mockDb.batch).toHaveBeenCalledTimes(3);
+
+    // Check the size of each batch
+    expect(mockDb.batch.mock.calls[0][0].length).toBe(90);
+    expect(mockDb.batch.mock.calls[1][0].length).toBe(90);
+    expect(mockDb.batch.mock.calls[2][0].length).toBe(20);
+
+    // Verify the total counts
+    expect(result).toEqual({ successCount: 200, errorCount: 0 });
+
+    // Verify bind was called for every feature
+    expect(mockStmt.bind).toHaveBeenCalledTimes(200);
+  });
 });
