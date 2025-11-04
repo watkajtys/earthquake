@@ -250,7 +250,7 @@ export default {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const thirtyDaysAgoTimestamp = thirtyDaysAgo.getTime();
 
-      const stmt = env.DB.prepare("SELECT geojson_feature FROM EarthquakeEvents WHERE time > ?").bind(thirtyDaysAgoTimestamp);
+      const stmt = env.DB.prepare("SELECT geojson_feature FROM EarthquakeEvents WHERE event_time > ?").bind(thirtyDaysAgoTimestamp);
       const {
         results
       } = await stmt.all();
