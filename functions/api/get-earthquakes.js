@@ -1,50 +1,55 @@
 /**
  * @summary Cloudflare Pages Function for fetching earthquake data.
- * @description This function serves earthquake data directly from the `EarthquakeEvents` D1 table.
- * It supports filtering by a time window and returns an array of GeoJSON features.
- * All responses include an `X-Data-Source: D1` header.
+ * @description This function serves earthquake data primarily from pre-generated lists in R2.
+ * It falls back to querying the D1 database if the R2 object is not found.
  *
  * Query Parameters:
- *  - `timeWindow` (string): Specifies the time window for earthquake events.
- *    Expected values: "day" (last 24 hours), "week" (last 7 days), "month" (last 30 days).
- *    Defaults to "day" if not specified or if an invalid value is provided (though invalid values return a 400 error).
+ *  - `timeWindow` (string): Specifies the time window. Valid values: "day", "week", "month".
+ *    Defaults to "day".
  *
  * Successful Response (200 OK):
- *  - Body: A JSON array of GeoJSON feature objects, where each feature represents an earthquake.
- *          The `geojson_feature` column from the D1 table is parsed for each event.
- *  - Headers: `Content-Type: application/json`, `X-Data-Source: D1`.
- *
- * Error Responses:
- *  - 400 Bad Request: If the `timeWindow` parameter is invalid. Body includes an error message.
- *  - 500 Internal Server Error: If the database is unavailable, or if there's an error during query
- *    preparation, execution, or data processing. Body includes an error message.
- *
- * @summary Handles GET requests to /api/get-earthquakes.
- * @param {object} context - The Cloudflare Pages Function context object.
- * @param {Request} context.request - The incoming request object from the client.
- * @param {object} context.env - The environment object containing bindings.
- * @param {D1Database} context.env.DB - The D1 database binding for `EarthquakeEvents`.
- * @returns {Promise<Response>} A Response object containing the JSON data or an error message.
- * @example
- * // Example usage:
- * // fetch('/api/get-earthquakes?timeWindow=week')
- * // .then(response => response.json())
- * // .then(data => console.log(data));
+ *  - Body: A JSON array of earthquake objects.
+ *  - Headers: `Content-Type: application/json`, `X-Data-Source: R2` or `X-Data-Source: D1`.
  */
 export async function onRequestGet(context) {
   try {
     const { env, request } = context;
-    const db = env.DB;
-
-    if (!db) {
-      return new Response("Database not available", {
-        status: 500,
-        headers: { "X-Data-Source": "D1" },
-      });
-    }
+    const { DB, GEOJSON_BUCKET } = env;
 
     const url = new URL(request.url);
     const timeWindowParam = url.searchParams.get("timeWindow") || "day";
+
+    const validTimeWindows = ["day", "week", "month"];
+    if (!validTimeWindows.includes(timeWindowParam)) {
+      return new Response(
+        "Invalid timeWindow parameter. Valid values are 'day', 'week', 'month'.",
+        { status: 400, headers: { "X-Data-Source": "None" } }
+      );
+    }
+
+    // First, try to fetch the pre-generated list from R2
+    if (GEOJSON_BUCKET) {
+      const fileName = `list-${timeWindowParam}.json`;
+      const r2Object = await GEOJSON_BUCKET.get(fileName);
+
+      if (r2Object !== null) {
+        console.log(`[get-earthquakes] Serving list from R2 for time window: ${timeWindowParam}`);
+        const headers = new Headers();
+        r2Object.writeHttpMetadata(headers);
+        headers.set('etag', r2Object.httpEtag);
+        headers.set('X-Data-Source', 'R2');
+        return new Response(r2Object.body, { headers });
+      }
+      console.log(`[get-earthquakes] R2 object not found for ${timeWindowParam}. Falling back to D1.`);
+    }
+
+    // If not found in R2 or R2 is unavailable, fall back to D1
+    if (!DB) {
+      return new Response("Database not available", {
+        status: 500,
+        headers: { "X-Data-Source": "None" },
+      });
+    }
 
     let startTime;
     const now = new Date();
@@ -53,72 +58,29 @@ export async function onRequestGet(context) {
       startTime = new Date(now.setDate(now.getDate() - 7));
     } else if (timeWindowParam === "month") {
       startTime = new Date(now.setMonth(now.getMonth() - 1));
-    } else if (timeWindowParam === "day") {
+    } else { // "day"
       startTime = new Date(now.setDate(now.getDate() - 1));
-    } else {
-      return new Response(
-        "Invalid timeWindow parameter. Valid values are 'day', 'week', 'month'.",
-        { status: 400, headers: { "X-Data-Source": "D1" } }
-      );
     }
 
-    // event_time is stored in milliseconds since epoch
     const startTimeMilliseconds = startTime.getTime();
 
     const query = `
-      SELECT
-        id,
-        magnitude,
-        place,
-        event_time,
-        latitude,
-        longitude,
-        depth
+      SELECT id, magnitude, place, event_time, latitude, longitude, depth
       FROM EarthquakeEvents
       WHERE event_time >= ?
       ORDER BY event_time DESC;
     `;
 
-    let stmt;
-    try {
-      stmt = db.prepare(query).bind(startTimeMilliseconds);
-    } catch (e) {
-      console.error("Error preparing statement:", e);
-      return new Response(`Failed to prepare database statement: ${e.message}`, {
-        status: 500,
-        headers: { "X-Data-Source": "D1" },
-      });
-    }
-
-    let queryResult;
-    try {
-      queryResult = await stmt.all();
-    } catch (e) {
-      console.error("Error executing query:", e);
-      return new Response(`Failed to execute database query: ${e.message}`, {
-        status: 500,
-        headers: { "X-Data-Source": "D1" },
-      });
-    }
-
-    if (!queryResult || !queryResult.results) {
-        console.error("Query returned no results or malformed result:", queryResult);
-        return new Response("Failed to retrieve data from database.", {
-          status: 500,
-          headers: { "X-Data-Source": "D1" },
-        });
-    }
-
-    // With the optimized query, the results are already in the desired format.
-    // No need to parse geojson_feature anymore.
-    const features = queryResult.results;
+    const stmt = DB.prepare(query).bind(startTimeMilliseconds);
+    const { results } = await stmt.all();
+    const features = results || [];
 
     return new Response(JSON.stringify(features), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
         "X-Data-Source": "D1",
-        "Cache-Control": "public, s-maxage=60", // Added Cache-Control header
+        "Cache-Control": "public, s-maxage=60",
       },
     });
 
@@ -126,10 +88,7 @@ export async function onRequestGet(context) {
     console.error("Unhandled error in onRequestGet:", e);
     return new Response(`Server error: ${e.message}`, {
       status: 500,
-      headers: {
-        "X-Data-Source": "D1",
-        // No Cache-Control for error responses, or a short one like "public, s-maxage=5" if preferred
-      },
+      headers: { "X-Data-Source": "None" },
     });
   }
 }
