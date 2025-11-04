@@ -43,45 +43,12 @@ export async function onRequestGet(context) {
       console.log(`[get-earthquakes] R2 object not found for ${timeWindowParam}. Falling back to D1.`);
     }
 
-    // If not found in R2 or R2 is unavailable, fall back to D1
-    if (!DB) {
-      return new Response("Database not available", {
-        status: 500,
-        headers: { "X-Data-Source": "None" },
-      });
-    }
-
-    let startTime;
-    const now = new Date();
-
-    if (timeWindowParam === "week") {
-      startTime = new Date(now.setDate(now.getDate() - 7));
-    } else if (timeWindowParam === "month") {
-      startTime = new Date(now.setMonth(now.getMonth() - 1));
-    } else { // "day"
-      startTime = new Date(now.setDate(now.getDate() - 1));
-    }
-
-    const startTimeMilliseconds = startTime.getTime();
-
-    const query = `
-      SELECT id, magnitude, place, event_time, latitude, longitude, depth
-      FROM EarthquakeEvents
-      WHERE event_time >= ?
-      ORDER BY event_time DESC;
-    `;
-
-    const stmt = DB.prepare(query).bind(startTimeMilliseconds);
-    const { results } = await stmt.all();
-    const features = results || [];
-
-    return new Response(JSON.stringify(features), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Data-Source": "D1",
-        "Cache-Control": "public, s-maxage=60",
-      },
+    // If the R2 object is not found, return a 404 response.
+    // The D1 fallback is removed to protect the database from high read operations.
+    // It is now the sole responsibility of the background worker to ensure the lists exist.
+    return new Response(`R2 object not found for time window: ${timeWindowParam}`, {
+      status: 404,
+      headers: { "X-Data-Source": "None" },
     });
 
   } catch (e) {

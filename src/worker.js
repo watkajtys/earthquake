@@ -596,12 +596,20 @@ export default {
         console.log(`[worker-scheduled] Cron matched '${event.cron}'. Running high-frequency tasks.`);
         logger.logMilestone('High-frequency tasks started');
 
-        // Task 1: Fetch latest USGS data
-        ctx.waitUntil(this.fetchLatestUsgsData(event, env, ctx, logger));
-
-        // Task 2: Generate lists for the frontend
-        ctx.waitUntil(this.generateFrontendLists(event, env, ctx, logger));
-
+        // Chain the tasks to ensure sequential execution.
+        // The '.catch()' is crucial to prevent unhandled promise rejections
+        // from terminating the worker if a task fails.
+        ctx.waitUntil(
+          this.fetchLatestUsgsData(event, env, ctx, logger)
+            .then(() => {
+              // Now that fetching is done, generate the lists.
+              return this.generateFrontendLists(event, env, ctx, logger);
+            })
+            .catch((err) => {
+              // It's important to log the error within the waitUntil chain.
+              logger.logError('HIGH_FREQ_TASK_CHAIN_ERROR', err, {}, true);
+            })
+        );
         break;
 
       case '*/30 * * * *':
@@ -674,89 +682,38 @@ export default {
       // Track proxy call timing
       const proxyStartTime = Date.now();
 
-      // Call the KV-enabled proxy handler directly with enhanced error handling
-      ctx.waitUntil(
-        kvEnabledUsgsProxyHandler({
+      // Call the KV-enabled proxy handler directly and return the promise
+      return kvEnabledUsgsProxyHandler({
           request: scheduledRequest,
           env: env,
           executionContext: ctx,
           logger: logger // Pass logger to proxy handler for enhanced logging
-        })
-        .then(response => {
+        }).then(response => {
           const proxyEndTime = Date.now();
-          
-          // Log the proxy API call with detailed metrics
-          logger.logApiCall(
-            USGS_FEED_URL, 
-            proxyStartTime, 
-            proxyEndTime, 
-            response.status,
-            null, // Response size not easily available here
-            'GET'
-          );
+          logger.logApiCall(USGS_FEED_URL, proxyStartTime, proxyEndTime, response.status, null, 'GET');
 
           if (response.ok) {
-            logger.logMilestone('USGS proxy call successful', { 
-              status: response.status,
-              duration: proxyEndTime - proxyStartTime
-            });
-            
-            // Try to extract metrics from response headers if available
+            logger.logMilestone('USGS proxy call successful', { status: response.status, duration: proxyEndTime - proxyStartTime });
             const cacheInfo = response.headers.get('X-Cache-Info');
             const processingInfo = response.headers.get('X-Processing-Info');
-            
-            if (cacheInfo || processingInfo) {
-              logger.addContext('responseHeaders', { cacheInfo, processingInfo });
-            }
-            
-            logger.logTaskCompletion(true, { 
-              proxyStatus: response.status,
-              proxyDuration: proxyEndTime - proxyStartTime,
-              message: 'USGS data synchronization completed successfully'
-            });
+            if (cacheInfo || processingInfo) logger.addContext('responseHeaders', { cacheInfo, processingInfo });
+            logger.logTaskCompletion(true, { proxyStatus: response.status, proxyDuration: proxyEndTime - proxyStartTime, message: 'USGS data synchronization completed successfully' });
           } else {
-            // Handle non-200 responses with detailed error logging
-            response.text().then(text => {
-              logger.logError('PROXY_HTTP_ERROR', `HTTP ${response.status}`, {
-                status: response.status,
-                statusText: response.statusText,
-                responseBody: text,
-                duration: proxyEndTime - proxyStartTime
-              }, true);
-              
-              logger.logTaskCompletion(false, { 
-                error: `Proxy returned HTTP ${response.status}`,
-                responseBody: text
-              });
-            }).catch(textError => {
-              logger.logError('PROXY_HTTP_ERROR', `HTTP ${response.status} (unable to read response)`, {
-                status: response.status,
-                statusText: response.statusText,
-                textError: textError.message,
-                duration: proxyEndTime - proxyStartTime
-              }, true);
-              
-              logger.logTaskCompletion(false, { 
-                error: `Proxy returned HTTP ${response.status}, unable to read response body`
-              });
+            // Ensure we handle non-OK responses correctly by returning a Promise that rejects
+            return response.text().then(text => {
+              logger.logError('PROXY_HTTP_ERROR', `HTTP ${response.status}`, { status: response.status, statusText: response.statusText, responseBody: text, duration: proxyEndTime - proxyStartTime }, true);
+              logger.logTaskCompletion(false, { error: `Proxy returned HTTP ${response.status}`, responseBody: text });
+              // Propagate the error to the calling chain
+              throw new Error(`Proxy returned HTTP ${response.status}`);
             });
           }
-        })
-        .catch(err => {
+        }).catch(err => {
           const proxyEndTime = Date.now();
-          
-          logger.logError('PROXY_EXECUTION_ERROR', err, {
-            duration: proxyEndTime - proxyStartTime,
-            proxyUrl: proxyRequestUrl,
-            usgsUrl: USGS_FEED_URL
-          }, true);
-          
-          logger.logTaskCompletion(false, { 
-            error: 'Proxy handler execution failed',
-            errorMessage: err.message
-          });
-        })
-      );
+          logger.logError('PROXY_EXECUTION_ERROR', err, { duration: proxyEndTime - proxyStartTime, proxyUrl: proxyRequestUrl, usgsUrl: USGS_FEED_URL }, true);
+          logger.logTaskCompletion(false, { error: 'Proxy handler execution failed', errorMessage: err.message });
+          // Re-throw the error to ensure the chain fails
+          throw err;
+        });
 
     } catch (error) {
       logger.logError('SETUP_ERROR', error, {
