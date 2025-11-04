@@ -29,10 +29,6 @@ binding = "GEOJSON_QUEUE"
 queue = "geojson-queue"
 max_batch_size = 10
 max_wait_ms = 1000
-consumer = {
-  script = "functions/consumers/geojson-archive",
-  environment = "production"
-}
 
 [[d1_databases]]
 binding = "DB" # Binding name used in your Worker code
