@@ -168,6 +168,10 @@ crons = ["*/5 * * * *", "*/30 * * * *"]
 cron = "0 0 * * *" # Daily reconciliation job
 module = "functions/background/reconcile-stats.js"
 
+[[crons]]
+cron = "*/10 * * * *" # Process cluster definitions every 10 minutes
+module = "functions/background/process-cluster-definitions.js"
+
 # If you have other bindings (like R2, Services), define them here too.
 # Refer to Cloudflare Wrangler documentation for more details.
 # wrangler.toml (wrangler v3.88.0^)
