@@ -106,22 +106,24 @@ export async function onRequestGet(context) {
 
   try {
     // Build query to get earthquakes without detail data or those due for a retry
+    const fortyFiveMinutesAgo = Date.now() - (45 * 60 * 1000);
     let query = `
       SELECT id, magnitude, place, event_time, usgs_detail_url, detail_fetch_attempts
       FROM EarthquakeEvents
       WHERE
-        (detail_fetched = FALSE)
+        detail_fetched = FALSE
+        AND detail_fetch_attempts < 3 -- Max 3 retries
         AND (
-          -- Never attempted or due for a retry
-          (detail_fetch_attempts = 0 OR detail_fetch_attempts IS NULL) OR
+          -- First attempt: event must be at least 45 minutes old to allow for data availability
+          ((detail_fetch_attempts = 0 OR detail_fetch_attempts IS NULL) AND event_time <= ?) OR
+          -- Retry attempt: scheduled retry time must be in the past
           (next_detail_fetch_attempt IS NOT NULL AND next_detail_fetch_attempt <= ?)
         )
-        AND detail_fetch_attempts < 3 -- Max 3 retries
         AND magnitude >= ?
         AND event_time >= ?
     `;
     
-    const params = [Date.now(), minMagnitude, minEventTime];
+    const params = [fortyFiveMinutesAgo, Date.now(), minMagnitude, minEventTime];
     
     if (continueFrom) {
       // This part might need adjustment if continueFrom logic is complex with retries
@@ -276,18 +278,53 @@ export async function onRequestGet(context) {
       }
     }
 
-    // Get statistics
-    const statsStmt = env.DB.prepare(`
-      SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN detail_fetched = TRUE THEN 1 ELSE 0 END) as fetched,
-        SUM(CASE WHEN has_shakemap = TRUE THEN 1 ELSE 0 END) as with_shakemap,
-        SUM(CASE WHEN has_moment_tensor = TRUE THEN 1 ELSE 0 END) as with_moment_tensor
-      FROM EarthquakeEvents
-      WHERE magnitude >= ?
-    `).bind(minMagnitude);
-    
-    const stats = await statsStmt.first();
+    // Get statistics, using a 5-minute cache to reduce D1 load
+    const cacheKey = `backfill_stats_v1_${minMagnitude}`;
+    let stats = null;
+    let cacheStatus = "MISS";
+
+    if (env.USGS_LAST_RESPONSE_KV) {
+      try {
+        const cachedStats = await env.USGS_LAST_RESPONSE_KV.get(cacheKey, 'json');
+        if (cachedStats) {
+          stats = cachedStats;
+          cacheStatus = "HIT";
+          console.log(`[backfill] Statistics cache HIT for key: ${cacheKey}`);
+        }
+      } catch (e) {
+        console.error(`[backfill] Error reading from KV for stats cache: ${e.message}`);
+        // Proceed to fetch from D1
+      }
+    }
+
+    if (!stats) {
+      cacheStatus = "MISS";
+      console.log(`[backfill] Statistics cache MISS for key: ${cacheKey}. Querying D1.`);
+      const statsStmt = env.DB.prepare(`
+        SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN detail_fetched = TRUE THEN 1 ELSE 0 END) as fetched,
+          SUM(CASE WHEN has_shakemap = TRUE THEN 1 ELSE 0 END) as with_shakemap,
+          SUM(CASE WHEN has_moment_tensor = TRUE THEN 1 ELSE 0 END) as with_moment_tensor
+        FROM EarthquakeEvents
+        WHERE magnitude >= ?
+      `).bind(minMagnitude);
+
+      stats = await statsStmt.first();
+
+      // Asynchronously write to cache
+      if (env.USGS_LAST_RESPONSE_KV && stats) {
+        context.ctx.waitUntil(
+          env.USGS_LAST_RESPONSE_KV.put(cacheKey, JSON.stringify(stats), {
+            expirationTtl: 300 // 5 minutes
+          }).then(() => {
+            console.log(`[backfill] Successfully cached statistics for key: ${cacheKey}`);
+          }).catch(e => {
+            console.error(`[backfill] Error writing to KV for stats cache: ${e.message}`);
+          })
+        );
+      }
+    }
     
     const elapsedSeconds = (Date.now() - startTime) / 1000;
     const lastProcessedId = processed.length > 0 ? processed[processed.length - 1].id : null;
@@ -334,16 +371,47 @@ export async function onRequestPost(context) {
   }
 
   try {
-    // Get count of earthquakes needing backfill
-    const countStmt = env.DB.prepare(`
-      SELECT COUNT(*) as total
-      FROM EarthquakeEvents
-      WHERE detail_fetched = FALSE
-        AND magnitude >= 3.0
-    `);
-    
-    const countResult = await countStmt.first();
-    const total = countResult.total;
+    // Get count of earthquakes needing backfill, using a 5-minute cache
+    const cacheKey = "backfill_post_count_v1";
+    let total = null;
+    let cacheStatus = "MISS";
+
+    if (env.USGS_LAST_RESPONSE_KV) {
+      try {
+        const cachedResult = await env.USGS_LAST_RESPONSE_KV.get(cacheKey, 'json');
+        if (cachedResult && typeof cachedResult.total === 'number') {
+          total = cachedResult.total;
+          cacheStatus = "HIT";
+          console.log(`[backfill-post] Count cache HIT. Total: ${total}`);
+        }
+      } catch (e) {
+        console.error(`[backfill-post] Error reading count from KV cache: ${e.message}`);
+      }
+    }
+
+    if (cacheStatus === "MISS") {
+      console.log(`[backfill-post] Count cache MISS. Querying D1 for count.`);
+      const countStmt = env.DB.prepare(`
+        SELECT COUNT(*) as total
+        FROM EarthquakeEvents
+        WHERE detail_fetched = FALSE
+          AND magnitude >= 3.0
+      `);
+
+      const countResult = await countStmt.first();
+      total = countResult.total;
+
+      // Asynchronously write to cache if the value is fresh from DB
+      if (env.USGS_LAST_RESPONSE_KV) {
+        context.ctx.waitUntil(
+          env.USGS_LAST_RESPONSE_KV.put(cacheKey, JSON.stringify({ total }), {
+            expirationTtl: 300 // 5 minutes
+          }).catch(e => {
+            console.error(`[backfill-post] Error writing count to KV cache: ${e.message}`);
+          })
+        );
+      }
+    }
     
     if (total === 0) {
       return jsonResponse({

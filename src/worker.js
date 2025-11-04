@@ -586,20 +586,45 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // Route scheduled events based on their cron trigger
-    if (event.cron === "*/5 * * * *") {
-      console.log("[worker-scheduled] Cron matched '*/5 * * * *'. Generating lists.");
-      ctx.waitUntil(handleGenerateLists({ env }));
-      return; // End execution for this task
-    }
+    // Initialize logger for all scheduled tasks
+    const logger = createScheduledTaskLogger('scheduled-worker', event.scheduledTime);
+    logger.addContext('cronTrigger', { cron: event.cron });
 
-    // Default to the 1-minute cron task (USGS data sync and backfill)
-    if (event.cron === "*/1 * * * *") {
-      console.log("[worker-scheduled] Cron matched '*/1 * * * *'. Running data sync and backfill.");
-    }
+    // Router for different cron schedules
+    switch (event.cron) {
+      case '*/5 * * * *':
+        console.log(`[worker-scheduled] Cron matched '${event.cron}'. Running high-frequency tasks.`);
+        logger.logMilestone('High-frequency tasks started');
 
-    // Initialize enhanced logging for this scheduled task execution
-    const logger = createScheduledTaskLogger('usgs-data-sync', event.scheduledTime);
+        // Task 1: Fetch latest USGS data
+        ctx.waitUntil(this.fetchLatestUsgsData(event, env, ctx, logger));
+
+        // Task 2: Generate lists for the frontend
+        ctx.waitUntil(this.generateFrontendLists(event, env, ctx, logger));
+
+        break;
+
+      case '*/30 * * * *':
+        console.log(`[worker-scheduled] Cron matched '${event.cron}'. Running backfill task.`);
+        logger.logMilestone('Backfill task started');
+
+        // Task: Run the automated backfill process
+        ctx.waitUntil(this.runAutomatedBackfill(event, env, ctx, logger));
+
+        break;
+
+      default:
+        console.warn(`[worker-scheduled] Cron matched '${event.cron}' has no defined task.`);
+        logger.logError('UNKNOWN_CRON', `No task defined for cron: ${event.cron}`, {}, false);
+    }
+  },
+
+  /**
+   * Fetches the latest earthquake data from the USGS feed.
+   * This is part of the high-frequency tasks.
+   */
+  async fetchLatestUsgsData(event, env, ctx, parentLogger) {
+    const logger = parentLogger || createScheduledTaskLogger('usgs-data-sync', event.scheduledTime);
     
     logger.addContext('environment', {
       hasDB: !!env.DB,
@@ -739,22 +764,37 @@ export default {
         usgsUrl: USGS_FEED_URL
       }, true);
       
-      logger.logTaskCompletion(false, { 
+      logger.logTaskCompletion(false, {
         error: 'Failed to setup scheduled proxy call',
         errorMessage: error.message
       });
     }
+  },
 
-    // After processing new earthquakes, run automated backfill
-    // This will process historical earthquakes that haven't been enriched yet
+  /**
+   * Generates the frontend earthquake lists and stores them in R2.
+   * This is part of the high-frequency tasks.
+   */
+  async generateFrontendLists(event, env, ctx, parentLogger) {
+    const logger = parentLogger || createScheduledTaskLogger('generate-lists', event.scheduledTime);
+    console.log('[worker-scheduled] Generating lists.');
     try {
-      console.log('[scheduled-backfill] Starting automated backfill process');
-      
-      // Import the backfill handler
+      await handleGenerateLists({ env });
+      logger.logMilestone('List generation complete');
+    } catch (error) {
+      logger.logError('LIST_GENERATION_ERROR', error.message, { stack: error.stack }, true);
+    }
+  },
+
+  /**
+   * Runs the automated backfill process for enriching historical earthquake data.
+   * This is a low-frequency task.
+   */
+  async runAutomatedBackfill(event, env, ctx, parentLogger) {
+    const logger = parentLogger || createScheduledTaskLogger('automated-backfill', event.scheduledTime);
+    console.log('[scheduled-backfill] Starting automated backfill process');
+    try {
       const { onRequestGet: backfillHandler } = await import('../functions/api/backfill-earthquake-details.js');
-      
-      // Create a request for backfill with appropriate parameters
-      // Process 10 earthquakes per minute to avoid overwhelming the API
       const backfillUrl = `https://dummy-host/api/backfill-earthquake-details?batch_size=10&min_magnitude=0&max_age_days=365`;
       const backfillRequest = new Request(backfillUrl, {
         method: "GET",
@@ -763,37 +803,26 @@ export default {
           "X-Execution-ID": logger.executionId,
         }
       });
-      
-      // Execute backfill in background
-      ctx.waitUntil(
-        backfillHandler({ request: backfillRequest, env, ctx })
-          .then(response => response.json())
-          .then(result => {
-            if (result.success) {
-              console.log(`[scheduled-backfill] Successfully processed ${result.processed} earthquakes. ${result.statistics?.remaining || 0} remaining.`);
-              logger.logMilestone('Automated backfill complete', {
-                processed: result.processed,
-                errors: result.errors,
-                remaining: result.statistics?.remaining,
-                completionPercentage: result.statistics?.completion_percentage
-              });
-            } else {
-              console.error('[scheduled-backfill] Backfill failed:', result.error);
-              logger.logError('BACKFILL_ERROR', result.error || 'Unknown error', { result }, false);
-            }
-          })
-          .catch(backfillError => {
-            console.error('[scheduled-backfill] Error during automated backfill:', backfillError.message);
-            logger.logError('BACKFILL_EXECUTION_ERROR', backfillError.message, { 
-              stack: backfillError.stack 
-            }, false);
-          })
-      );
-      
-    } catch (backfillSetupError) {
-      console.error('[scheduled-backfill] Failed to setup automated backfill:', backfillSetupError.message);
-      logger.logError('BACKFILL_SETUP_ERROR', backfillSetupError.message, {
-        stack: backfillSetupError.stack
+
+      const response = await backfillHandler({ request: backfillRequest, env, ctx });
+      const result = await response.json();
+
+      if (result.success) {
+        console.log(`[scheduled-backfill] Successfully processed ${result.processed} earthquakes. ${result.statistics?.remaining || 0} remaining.`);
+        logger.logMilestone('Automated backfill complete', {
+          processed: result.processed,
+          errors: result.errors,
+          remaining: result.statistics?.remaining,
+          completionPercentage: result.statistics?.completion_percentage
+        });
+      } else {
+        console.error('[scheduled-backfill] Backfill failed:', result.error);
+        logger.logError('BACKFILL_ERROR', result.error || 'Unknown error', { result }, false);
+      }
+    } catch (backfillError) {
+      console.error('[scheduled-backfill] Error during automated backfill:', backfillError.message);
+      logger.logError('BACKFILL_EXECUTION_ERROR', backfillError.message, {
+        stack: backfillError.stack
       }, false);
     }
   }
