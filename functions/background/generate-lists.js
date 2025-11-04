@@ -1,3 +1,5 @@
+import { createScheduledTaskLogger } from '../../src/utils/scheduledTaskLogger.js';
+
 /**
  * @summary Scheduled task to pre-generate earthquake lists and save them to R2.
  * @description This function is designed to be triggered by a cron schedule. It queries
@@ -46,40 +48,41 @@ async function fetchEarthquakeData(db, timeWindow) {
 
 /**
  * The main handler for the scheduled list generation task.
- * @param {object} context - The context object from the scheduled event.
- * @param {object} context.env - The environment object with bindings.
- * @param {D1Database} context.env.DB - The D1 database binding.
- * @param {R2Bucket} context.env.GEOJSON_BUCKET - The R2 bucket for storing lists.
+ * @param {object} env - The environment object with bindings.
+ * @param {D1Database} env.DB - The D1 database binding.
+ * @param {R2Bucket} env.GEOJSON_BUCKET - The R2 bucket for storing lists.
  */
-export async function handleGenerateLists({ env }) {
+async function handleGenerateLists({ env }) {
   const { DB, GEOJSON_BUCKET } = env;
 
   if (!DB || !GEOJSON_BUCKET) {
-    console.error("[generate-lists] Missing required DB or GEOJSON_BUCKET bindings.");
-    return;
+    throw new Error("[generate-lists] Missing required DB or GEOJSON_BUCKET bindings.");
   }
-
-  console.log("[generate-lists] Starting pre-generation of earthquake lists.");
 
   const timeWindows = ["day", "week", "month"];
   for (const timeWindow of timeWindows) {
-    try {
-      console.log(`[generate-lists] Generating list for time window: ${timeWindow}`);
-      const data = await fetchEarthquakeData(DB, timeWindow);
-      const fileName = `list-${timeWindow}.json`;
-      const jsonData = JSON.stringify(data);
+    const data = await fetchEarthquakeData(DB, timeWindow);
+    const fileName = `list-${timeWindow}.json`;
+    const jsonData = JSON.stringify(data);
 
-      await GEOJSON_BUCKET.put(fileName, jsonData, {
-        httpMetadata: {
-          contentType: 'application/json',
-          cacheControl: 'public, max-age=300', // 5-minute cache
-        },
-      });
-      console.log(`[generate-lists] Successfully uploaded ${fileName} to R2.`);
+    await GEOJSON_BUCKET.put(fileName, jsonData, {
+      httpMetadata: {
+        contentType: 'application/json',
+        cacheControl: 'public, max-age=300', // 5-minute cache
+      },
+    });
+  }
+}
+
+export default {
+  async scheduled(controller, env, ctx) {
+    const logger = createScheduledTaskLogger("generate-lists", controller.scheduledTime);
+    try {
+      await handleGenerateLists({ env });
+      logger.logTaskCompletion(true, { message: "Successfully generated all lists." });
     } catch (e) {
-      console.error(`[generate-lists] Failed to generate list for ${timeWindow}: ${e.message}`);
+      logger.logError("generate-lists-failed", e, {}, true);
+      logger.logTaskCompletion(false, { error: e.message });
     }
   }
-
-  console.log("[generate-lists] Finished pre-generation of earthquake lists.");
 }
