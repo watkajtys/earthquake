@@ -3,6 +3,8 @@
  * Fetches detail endpoints to populate product availability flags
  */
 
+import { updateStatsInKV } from '../utils/kv-stats-updater.js';
+
 // Helper to return JSON response
 const jsonResponse = (data, status = 200) => {
   return new Response(JSON.stringify(data), {
@@ -244,6 +246,16 @@ export async function onRequestGet(context) {
         
         await updateStmt.run();
 
+        // ==> New logic to update stats in KV
+        const statsToUpdate = {
+          fetched: 1,
+          with_shakemap: flags.has_shakemap ? 1 : 0,
+          with_moment_tensor: flags.has_moment_tensor ? 1 : 0,
+        };
+        const statsUpdatePromise = updateStatsInKV(context, 'USGS_LAST_RESPONSE_KV', 'earthquake_stats', statsToUpdate);
+        context.ctx.waitUntil(statsUpdatePromise);
+        // <== End of new logic
+
         // After successful update, push the full GeoJSON to the queue for archiving
         if (env.GEOJSON_QUEUE) {
           await env.GEOJSON_QUEUE.send({
@@ -300,51 +312,15 @@ export async function onRequestGet(context) {
       }
     }
 
-    // Get statistics, using a 5-minute cache to reduce D1 load
-    const cacheKey = `backfill_stats_v1_${minMagnitude}`;
-    let stats = null;
-    let cacheStatus = "MISS";
-
+    // Get statistics directly from KV
+    let stats = {};
     if (env.USGS_LAST_RESPONSE_KV) {
       try {
-        const cachedStats = await env.USGS_LAST_RESPONSE_KV.get(cacheKey, 'json');
-        if (cachedStats) {
-          stats = cachedStats;
-          cacheStatus = "HIT";
-          console.log(`[backfill] Statistics cache HIT for key: ${cacheKey}`);
-        }
+        stats = await env.USGS_LAST_RESPONSE_KV.get('earthquake_stats', 'json') || {};
+        console.log(`[backfill] Successfully read stats from KV.`);
       } catch (e) {
-        console.error(`[backfill] Error reading from KV for stats cache: ${e.message}`);
-        // Proceed to fetch from D1
-      }
-    }
-
-    if (!stats) {
-      cacheStatus = "MISS";
-      console.log(`[backfill] Statistics cache MISS for key: ${cacheKey}. Querying D1.`);
-      const statsStmt = env.DB.prepare(`
-        SELECT
-          COUNT(*) as total,
-          SUM(CASE WHEN detail_fetched = TRUE THEN 1 ELSE 0 END) as fetched,
-          SUM(CASE WHEN has_shakemap = TRUE THEN 1 ELSE 0 END) as with_shakemap,
-          SUM(CASE WHEN has_moment_tensor = TRUE THEN 1 ELSE 0 END) as with_moment_tensor
-        FROM EarthquakeEvents
-        WHERE magnitude >= ?
-      `).bind(minMagnitude);
-
-      stats = await statsStmt.first();
-
-      // Asynchronously write to cache
-      if (env.USGS_LAST_RESPONSE_KV && stats) {
-        context.ctx.waitUntil(
-          env.USGS_LAST_RESPONSE_KV.put(cacheKey, JSON.stringify(stats), {
-            expirationTtl: 300 // 5 minutes
-          }).then(() => {
-            console.log(`[backfill] Successfully cached statistics for key: ${cacheKey}`);
-          }).catch(e => {
-            console.error(`[backfill] Error writing to KV for stats cache: ${e.message}`);
-          })
-        );
+        console.error(`[backfill] Error reading stats from KV: ${e.message}`);
+        // Proceed with empty stats object
       }
     }
     
@@ -358,15 +334,15 @@ export async function onRequestGet(context) {
       elapsed_seconds: elapsedSeconds,
       last_processed_id: lastProcessedId,
       continue_url: lastProcessedId ? 
-        `${url.pathname}?batch_size=${batchSize}&min_magnitude=${minMagnitude}&max_age_days=${maxAgeDays}&continue_from=${lastProcessedId}` : 
+        `${url.pathname}?batch_size=${batchSize}&min_magnitude=${minMagnitude}&max_age_days=${maxAgeDays}&continue_from=${lastProcessedId}` :
         null,
       statistics: {
-        total_earthquakes: stats.total,
-        total_fetched: stats.fetched,
-        remaining: stats.total - stats.fetched,
-        with_shakemap: stats.with_shakemap,
-        with_moment_tensor: stats.with_moment_tensor,
-        completion_percentage: ((stats.fetched / stats.total) * 100).toFixed(2)
+        total_earthquakes: stats.total_earthquakes || 0,
+        total_fetched: stats.fetched || 0,
+        remaining: (stats.total_earthquakes || 0) - (stats.fetched || 0),
+        with_shakemap: stats.with_shakemap || 0,
+        with_moment_tensor: stats.with_moment_tensor || 0,
+        completion_percentage: (((stats.fetched || 0) / (stats.total_earthquakes || 1)) * 100).toFixed(2) // Avoid division by zero
       },
       processed_earthquakes: processed,
       error_earthquakes: errors

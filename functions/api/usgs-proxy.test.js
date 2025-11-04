@@ -18,6 +18,13 @@ vi.mock('../../src/utils/kvUtils.js', () => ({
 // Import the mocked functions for use in tests
 import { getFeaturesFromKV, setFeaturesToKV } from '../../src/utils/kvUtils.js';
 
+const createMockDbInstance = () => ({
+  prepare: vi.fn().mockReturnThis(),
+  bind: vi.fn().mockReturnThis(),
+  first: vi.fn().mockResolvedValue(null),
+  run: vi.fn().mockResolvedValue({ success: true }),
+  all: vi.fn().mockResolvedValue({ results: [] }),
+});
 
 // Mock Cloudflare Workers globals
 
@@ -59,7 +66,7 @@ describe('handleUsgsProxy', () => {
       request: new Request(`${PROXY_ENDPOINT_BASE}?apiUrl=${encodeURIComponent(currentTestApiUrl)}`), // URL will be specific to test
       env: {
         WORKER_CACHE_DURATION_SECONDS: String(DEFAULT_CACHE_DURATION_SECONDS), // Ensure it's a string like env vars
-        DB: undefined, // Default to no DB
+        DB: createMockDbInstance(), // Use the full mock by default
         USGS_LAST_RESPONSE_KV: { get: vi.fn(), put: vi.fn() }, // Mock KV namespace binding
       },
       executionContext: { // <<< Ensure executionContext and its waitUntil are provided
@@ -106,8 +113,6 @@ describe('handleUsgsProxy', () => {
   it('should proxy successfully with cache miss, cache the response, and call D1 if configured', async () => {
     setTestApiUrl('https://external.api/data_with_features');
     const mockApiResponseData = { features: [{id: 'feat1', properties: {}, geometry: {}}], message: 'Success!' };
-    const mockDbInstance = { prepare: vi.fn() }; // Mock D1
-    mockContext.env.DB = mockDbInstance;
 
     mockCache.match.mockResolvedValueOnce(undefined); // Cache miss
 
@@ -122,7 +127,7 @@ describe('handleUsgsProxy', () => {
     const cachedResponse = mockCache.put.mock.calls[0][1];
     expect(cachedResponse.headers.get('Content-Type')).toBe('application/json');
     expect(cachedResponse.headers.get('Cache-Control')).toBe(`s-maxage=${DEFAULT_CACHE_DURATION_SECONDS}`);
-    expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockDbInstance, mockApiResponseData.features);
+    expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, mockApiResponseData.features);
   });
 
   it('should return cached response on cache hit', async () => {
@@ -221,14 +226,11 @@ describe('handleUsgsProxy', () => {
 
     it('should call D1 upsert when DB is configured and features are present', async () => {
       const mockFeatures = [{ id: 'default_d1_feat', type: 'Feature' }]; // Matches default MSW handler
-      const mockDb = { prepare: vi.fn() };
-      mockContext.env.DB = mockDb;
-
       // MSW will use the default handler for 'https://external.api/d1_interaction'
       await handleUsgsProxy(mockContext);
       await mockContext.executionContext.waitUntil.mock.calls[0]?.value; // Wait for D1 upsert
 
-      expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockDb, mockFeatures);
+      expect(upsertEarthquakeFeaturesToD1).toHaveBeenCalledWith(mockContext.env.DB, mockFeatures);
     });
 
     it('should NOT call D1 upsert when DB is not configured', async () => {
@@ -275,8 +277,6 @@ describe('handleUsgsProxy', () => {
 
     it('should handle D1 error gracefully and log it', async () => {
       const mockFeatures = [{ id: 'default_d1_feat', type: 'Feature' }]; // Matches default MSW handler
-      const mockDb = { prepare: vi.fn() };
-      mockContext.env.DB = mockDb;
       const d1Error = new Error('D1 Fails');
       upsertEarthquakeFeaturesToD1.mockRejectedValueOnce(d1Error);
 
@@ -364,7 +364,7 @@ describe('handleUsgsProxy KV Logic', () => {
       request: new Request(`${PROXY_ENDPOINT_BASE}?apiUrl=${encodeURIComponent(currentTestApiUrl)}`),
       env: {
         WORKER_CACHE_DURATION_SECONDS: String(DEFAULT_CACHE_DURATION_SECONDS),
-        DB: { prepare: vi.fn() }, // Mock D1
+        DB: createMockDbInstance(), // Mock D1
         USGS_LAST_RESPONSE_KV: { get: vi.fn(), put: vi.fn() }, // Mock KV namespace
       },
       executionContext: { // <<< Ensure executionContext and its waitUntil are provided

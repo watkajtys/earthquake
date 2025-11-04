@@ -30,7 +30,7 @@ const createMockContext = (request, env = {}, cf = {}) => {
     bind: vi.fn().mockReturnThis(),
     first: vi.fn(),
     run: vi.fn(),
-    all: vi.fn(),
+    all: vi.fn().mockResolvedValue({ results: [] }),
   };
 
   return {

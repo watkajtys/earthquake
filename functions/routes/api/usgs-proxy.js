@@ -4,6 +4,7 @@
 
 import { upsertEarthquakeFeaturesToD1 } from '../../../src/utils/d1Utils.js';
 import { getFeaturesFromKV, setFeaturesToKV } from '../../../src/utils/kvUtils.js'; // Import KV utils
+import { updateStatsInKV } from '../../utils/kv-stats-updater.js';
 
 const USGS_LAST_RESPONSE_KEY = "usgs_last_response_features"; // Define a constant for the KV key
 
@@ -289,6 +290,23 @@ export async function handleUsgsProxy(context) { // context contains { request, 
       }
 
       if (env.DB && featuresToUpsert && featuresToUpsert.length > 0) {
+        // ==> New logic to count new earthquakes and update stats
+        const featureIds = featuresToUpsert.map(f => f.id);
+        const existingIdsStmt = await env.DB.prepare(`SELECT id FROM EarthquakeEvents WHERE id IN (${featureIds.map(() => '?').join(',')})`).bind(...featureIds);
+        const existingIdsResult = await existingIdsStmt.all();
+        const existingIds = new Set(existingIdsResult.results.map(row => row.id));
+
+        const newEarthquakeCount = featuresToUpsert.filter(f => !existingIds.has(f.id)).length;
+
+        if (newEarthquakeCount > 0) {
+          console.log(`[usgs-proxy-kv-stats] Incrementing total_earthquakes by ${newEarthquakeCount}.`);
+          const statsUpdatePromise = updateStatsInKV(context, 'USGS_LAST_RESPONSE_KV', 'earthquake_stats', {
+            total_earthquakes: newEarthquakeCount
+          });
+          executionContext.waitUntil(statsUpdatePromise);
+        }
+        // <== End of new logic
+
         console.log(`[usgs-proxy-d1] Attempting to upsert ${featuresToUpsert.length} features to D1.`);
         
         const d1StartTime = Date.now();
