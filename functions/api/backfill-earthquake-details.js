@@ -14,6 +14,26 @@ const jsonResponse = (data, status = 200) => {
 // Helper to add delay between requests (rate limiting)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Helper to calculate next retry time with exponential backoff
+const scheduleRetry = (attempts) => {
+  const now = Date.now();
+  let delay;
+  switch (attempts) {
+    case 0: // First retry
+      delay = 60 * 60 * 1000; // 1 hour
+      break;
+    case 1: // Second retry
+      delay = 4 * 60 * 60 * 1000; // 4 hours
+      break;
+    case 2: // Third retry
+      delay = 12 * 60 * 60 * 1000; // 12 hours
+      break;
+    default: // Max retries reached
+      return null;
+  }
+  return now + delay;
+};
+
 /**
  * Extracts product flags from USGS detail response
  */
@@ -85,18 +105,27 @@ export async function onRequestGet(context) {
   const minEventTime = Date.now() - maxAgeMs;
 
   try {
-    // Build query to get earthquakes without detail data
+    // Build query to get earthquakes without detail data or those due for a retry
     let query = `
-      SELECT id, magnitude, place, event_time, usgs_detail_url
+      SELECT id, magnitude, place, event_time, usgs_detail_url, detail_fetch_attempts
       FROM EarthquakeEvents
-      WHERE detail_fetched = FALSE
+      WHERE
+        (detail_fetched = FALSE)
+        AND (
+          -- Never attempted or due for a retry
+          (detail_fetch_attempts = 0 OR detail_fetch_attempts IS NULL) OR
+          (next_detail_fetch_attempt IS NOT NULL AND next_detail_fetch_attempt <= ?)
+        )
+        AND detail_fetch_attempts < 3 -- Max 3 retries
         AND magnitude >= ?
         AND event_time >= ?
     `;
     
-    const params = [minMagnitude, minEventTime];
+    const params = [Date.now(), minMagnitude, minEventTime];
     
     if (continueFrom) {
+      // This part might need adjustment if continueFrom logic is complex with retries
+      // For now, keeping it simple
       query += ` AND id > ?`;
       params.push(continueFrom);
     }
@@ -137,11 +166,47 @@ export async function onRequestGet(context) {
           }
         });
 
+        // CRITICAL: Always consume the response body to prevent stalled requests
+        const responseText = await response.text();
+
         if (!response.ok) {
-          throw new Error(`USGS API returned ${response.status}`);
+          // Handle 409 Conflict - likely data not ready for backfill
+          if (response.status === 409) {
+            const attempts = earthquake.detail_fetch_attempts || 0;
+            const nextAttempt = scheduleRetry(attempts);
+
+            console.log(`[backfill] Received 409 for ${earthquake.id}. Scheduling retry.`);
+
+            const retryStmt = env.DB.prepare(`
+              UPDATE EarthquakeEvents
+              SET detail_fetch_attempts = ?,
+                  last_detail_fetch_attempt = ?,
+                  next_detail_fetch_attempt = ?
+              WHERE id = ?
+            `).bind(
+              attempts + 1,
+              Date.now(),
+              nextAttempt,
+              earthquake.id
+            );
+            await retryStmt.run();
+
+            errors.push({
+              id: earthquake.id,
+              error: `USGS API returned 409. Scheduled retry.`,
+              status: 409
+            });
+
+          } else {
+            // Handle other errors
+            throw new Error(`USGS API returned ${response.status}: ${responseText}`);
+          }
+
+          // Skip to the next earthquake
+          continue;
         }
 
-        const detailData = await response.json();
+        const detailData = JSON.parse(responseText);
         
         // Extract product flags
         const flags = extractProductFlags(detailData);
@@ -158,7 +223,8 @@ export async function onRequestGet(context) {
               has_enhanced_data = ?,
               products_json = ?,
               detail_fetched = TRUE,
-              detail_fetch_time = ?
+              detail_fetch_time = ?,
+              detail_fetch_attempts = ? -- Record the successful attempt
           WHERE id = ?
         `).bind(
           flags.has_shakemap,
@@ -170,6 +236,7 @@ export async function onRequestGet(context) {
           flags.has_enhanced_data,
           flags.products_json,
           Date.now(),
+          (earthquake.detail_fetch_attempts || 0) + 1,
           earthquake.id
         );
         
