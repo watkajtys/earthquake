@@ -26,8 +26,8 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
 
   console.log(`[d1Utils-upsert] Starting D1 upsert for ${features.length} features.`);
   const upsertStmtText = `
-    INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at, next_detail_fetch_attempt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
         event_time = excluded.event_time,
         latitude = excluded.latitude,
@@ -64,6 +64,7 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
     const usgs_detail_url = feature.properties.detail || `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${feature.id}.geojson`;
     const geojson_feature_string = ""; // Phase 2: Stop writing GeoJSON to D1
     const retrieved_at = Date.now();
+    const next_detail_fetch_attempt = retrieved_at + 45 * 60 * 1000; // Proactively schedule first fetch for 45 mins from now
 
     // Ensure no null values for required fields before adding to batch
     if (id == null || event_time == null || latitude == null || longitude == null || depth == null || magnitude == null || place == null) {
@@ -72,7 +73,7 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
         continue;
     }
 
-    operations.push(stmt.bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at));
+    operations.push(stmt.bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at, next_detail_fetch_attempt));
   }
 
   if (operations.length > 0) {
