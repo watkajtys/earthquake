@@ -92,6 +92,15 @@ d1_databases = [
 name = "earthquake" # Explicitly set name for production environment
 main = "src/worker.js"
 workers_dev = true # Set to false if using custom domain for production and not workers.dev
+
+[[env.production.r2_buckets]]
+binding = "GEOJSON_BUCKET"
+bucket_name = "geojson-bucket"
+
+[[env.production.queues.producers]]
+queue = "geojson-queue"
+binding = "GEOJSON_QUEUE"
+
 kv_namespaces = [
   { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" }, # Production KV
   # For production, ensure you have a production version of USGS_LAST_RESPONSE_KV

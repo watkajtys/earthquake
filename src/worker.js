@@ -408,17 +408,26 @@ async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
     }
     const geojsonFeature = await usgsResponse.json();
 
-    if (DB) {
-      // The upsert logic will now write an empty string for geojson_feature, which is correct.
-      // The enhancement worker will handle getting the full GeoJSON and putting it in R2.
-      const id = geojsonFeature.id;
-      // ... (rest of the properties needed for the non-GeoJSON columns)
-      const upsertPromise = DB.prepare(
-        `INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature, retrieved_at, detail_fetched)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE)
-         ON CONFLICT(id) DO NOTHING`
+    // Asynchronously send to queue for R2 archiving and update D1
+    if (env.GEOJSON_QUEUE && env.DB) {
+      const queuePromise = env.GEOJSON_QUEUE.send({
+        id: geojsonFeature.id,
+        geojson: geojsonFeature,
+      }).then(() => {
+        console.log(`[${sourceName}] Successfully queued GeoJSON for ${geojsonFeature.id} for R2 archiving.`);
+      }).catch(err => {
+        console.error(`[${sourceName}] Failed to queue GeoJSON for ${geojsonFeature.id}: ${err.message}`, err);
+      });
+
+      // Also update D1, but don't wait for it to complete
+      const upsertPromise = env.DB.prepare(
+        `INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, detail_fetched, retrieved_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           detail_fetched = TRUE,
+           retrieved_at = excluded.retrieved_at`
       ).bind(
-        id,
+        geojsonFeature.id,
         geojsonFeature.properties?.time,
         geojsonFeature.geometry?.coordinates?.[1],
         geojsonFeature.geometry?.coordinates?.[0],
@@ -426,11 +435,12 @@ async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
         geojsonFeature.properties?.mag,
         geojsonFeature.properties?.place,
         usgsUrl,
-        "", // Write empty string for geojson_feature
         Date.now()
-      ).run().catch(err => console.error(`[${sourceName}] D1 upsert from USGS fallback failed for ${id}: ${err.message}`, err));
-      ctx.waitUntil(upsertPromise);
+      ).run().catch(err => console.error(`[${sourceName}] D1 upsert from USGS fallback failed for ${geojsonFeature.id}: ${err.message}`, err));
+
+      ctx.waitUntil(Promise.all([queuePromise, upsertPromise]));
     }
+
     return new Response(JSON.stringify(geojsonFeature), { headers: { 'Content-Type': 'application/json', 'X-Data-Source': 'USGS-API' }});
   } catch (usgsOrGeneralError) {
     console.error(`[${sourceName}] Error during USGS fetch/processing for event ${event_id}: ${usgsOrGeneralError.message}`, usgsOrGeneralError);
@@ -730,7 +740,7 @@ export default {
       
       // Create a request for backfill with appropriate parameters
       // Process 10 earthquakes per minute to avoid overwhelming the API
-      const backfillUrl = `https://dummy-host/api/backfill-earthquake-details?batch_size=10&min_magnitude=3.5&max_age_days=365`;
+      const backfillUrl = `https://dummy-host/api/backfill-earthquake-details?batch_size=10&min_magnitude=0&max_age_days=365`;
       const backfillRequest = new Request(backfillUrl, {
         method: "GET",
         headers: {
