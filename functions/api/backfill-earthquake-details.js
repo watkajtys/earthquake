@@ -174,6 +174,15 @@ export async function onRequestGet(context) {
         );
         
         await updateStmt.run();
+
+        // After successful update, push the full GeoJSON to the queue for archiving
+        if (env.GEOJSON_QUEUE) {
+          await env.GEOJSON_QUEUE.send({
+            id: earthquake.id,
+            geojson: detailData,
+          });
+          console.log(`[backfill] Queued GeoJSON for ${earthquake.id} for R2 archiving.`);
+        }
         
         processed.push({
           id: earthquake.id,
