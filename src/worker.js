@@ -376,33 +376,28 @@ async function handlePrerenderCluster(request, env, ctx, urlSlugParam) {
 
 async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
   const sourceName = "earthquake-detail-handler";
-  const DATA_FRESHNESS_THRESHOLD_MS = 60 * 60 * 1000;
-  const DB = env.DB;
 
-  if (!DB) {
-    console.error(`[${sourceName}] D1 Database (DB) not configured for event: ${event_id}. Proceeding to USGS fetch only.`);
-  } else {
-    try {
-      console.log(`[${sourceName}] Querying D1 for event: ${event_id}`);
-      const stmt = DB.prepare("SELECT geojson_feature, retrieved_at FROM EarthquakeEvents WHERE id = ?").bind(event_id);
-      const result = await stmt.first();
-      if (result && result.retrieved_at && (Date.now() - result.retrieved_at < DATA_FRESHNESS_THRESHOLD_MS)) {
-        console.log(`[${sourceName}] Fresh data found in D1 for event: ${event_id}. Freshness: ${Date.now() - result.retrieved_at}ms.`);
-        return new Response(result.geojson_feature, { headers: { 'Content-Type': 'application/json', 'X-Data-Source': 'D1-Cache' }});
-      }
-      if (result) console.log(`[${sourceName}] Data for event ${event_id} found in D1 but is stale (retrieved_at: ${result.retrieved_at}). Proceeding to USGS fetch.`);
-      else console.log(`[${sourceName}] Event ${event_id} not found in D1. Proceeding to USGS fetch.`);
-    } catch (d1Error) {
-      console.error(`[${sourceName}] D1 query error for event ${event_id}: ${d1Error.message}. Falling back to USGS.`, d1Error);
+  // R2 is the primary source of truth for GeoJSON
+  if (env.GEOJSON_BUCKET) {
+    const r2Object = await env.GEOJSON_BUCKET.get(`${event_id}.json`);
+    if (r2Object !== null) {
+      console.log(`[${sourceName}] Serving GeoJSON from R2 for event: ${event_id}.`);
+      const headers = new Headers();
+      r2Object.writeHttpMetadata(headers);
+      headers.set('etag', r2Object.httpEtag);
+      headers.set('Content-Type', 'application/json');
+      headers.set('X-Data-Source', 'R2-Storage');
+      return new Response(r2Object.body, { headers });
     }
+    console.log(`[${sourceName}] Event ${event_id} not found in R2. Proceeding to USGS fetch.`);
   }
 
+  // USGS API is the fallback for data not yet in our system.
+  const DB = env.DB;
   try {
     const usgsUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${event_id}.geojson`;
     console.log(`[${sourceName}] Fetching event ${event_id} from USGS: ${usgsUrl}`);
-    let usgsResponse;
-    try { usgsResponse = await fetch(usgsUrl); }
-    catch (fetchError) { console.error(`[${sourceName}] USGS API fetch failed for ${usgsUrl}: ${fetchError.message}`, fetchError); return jsonErrorResponse(`USGS API fetch failed: ${fetchError.message}`, 502, sourceName); }
+    const usgsResponse = await fetch(usgsUrl);
 
     if (!usgsResponse.ok) {
       console.error(`[${sourceName}] Error fetching data from USGS API (${usgsUrl}): ${usgsResponse.status} ${usgsResponse.statusText}`);
@@ -411,32 +406,31 @@ async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
     const geojsonFeature = await usgsResponse.json();
 
     if (DB) {
-      const retrieved_at = Date.now();
-      const geojson_feature_string = JSON.stringify(geojsonFeature);
+      // The upsert logic will now write an empty string for geojson_feature, which is correct.
+      // The enhancement worker will handle getting the full GeoJSON and putting it in R2.
       const id = geojsonFeature.id;
-      const event_time = geojsonFeature.properties?.time;
-      const latitude = geojsonFeature.geometry?.coordinates?.[1];
-      const longitude = geojsonFeature.geometry?.coordinates?.[0];
-      const depth = geojsonFeature.geometry?.coordinates?.[2];
-      const magnitude = geojsonFeature.properties?.mag;
-      const place = geojsonFeature.properties?.place;
-
-      if (id == null || event_time == null || latitude == null || longitude == null || depth == null || magnitude == null || place == null) {
-        console.warn(`[${sourceName}] Skipping D1 upsert for event ${id} due to missing critical GeoJSON properties.`);
-      } else {
-        const usgs_detail_json_url = usgsUrl;
-        const upsertStmt = `INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature, retrieved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET event_time=excluded.event_time, latitude=excluded.latitude, longitude=excluded.longitude, depth=excluded.depth, magnitude=excluded.magnitude, place=excluded.place, usgs_detail_url=excluded.usgs_detail_url, geojson_feature=excluded.geojson_feature, retrieved_at=excluded.retrieved_at;`;
-        const d1WritePromise = DB.prepare(upsertStmt).bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_json_url, geojson_feature_string, retrieved_at).run()
-          .then(({ success, error }) => {
-            if (success) console.log(`[${sourceName}] Successfully upserted event ${id} into D1 from USGS fallback.`);
-            else console.error(`[${sourceName}] Failed to upsert event ${id} into D1 from USGS fallback: ${error}`);
-          }).catch(err => console.error(`[${sourceName}] Exception during D1 upsert for event ${id} from USGS fallback: ${err.message}`, err));
-        ctx.waitUntil(d1WritePromise);
-      }
-    } else { console.log(`[${sourceName}] DB not available, skipping D1 upsert for event ${event_id} after USGS fetch.`); }
+      // ... (rest of the properties needed for the non-GeoJSON columns)
+      const upsertPromise = DB.prepare(
+        `INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature, retrieved_at, detail_fetched)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE)
+         ON CONFLICT(id) DO NOTHING`
+      ).bind(
+        id,
+        geojsonFeature.properties?.time,
+        geojsonFeature.geometry?.coordinates?.[1],
+        geojsonFeature.geometry?.coordinates?.[0],
+        geojsonFeature.geometry?.coordinates?.[2],
+        geojsonFeature.properties?.mag,
+        geojsonFeature.properties?.place,
+        usgsUrl,
+        "", // Write empty string for geojson_feature
+        Date.now()
+      ).run().catch(err => console.error(`[${sourceName}] D1 upsert from USGS fallback failed for ${id}: ${err.message}`, err));
+      ctx.waitUntil(upsertPromise);
+    }
     return new Response(JSON.stringify(geojsonFeature), { headers: { 'Content-Type': 'application/json', 'X-Data-Source': 'USGS-API' }});
   } catch (usgsOrGeneralError) {
-    console.error(`[${sourceName}] Error during USGS fetch/processing or other general error for event ${event_id}: ${usgsOrGeneralError.message}`, usgsOrGeneralError);
+    console.error(`[${sourceName}] Error during USGS fetch/processing for event ${event_id}: ${usgsOrGeneralError.message}`, usgsOrGeneralError);
     return jsonErrorResponse(`Error processing earthquake detail request: ${usgsOrGeneralError.message}`, 500, sourceName);
   }
 }

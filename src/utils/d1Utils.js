@@ -26,8 +26,8 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
 
   console.log(`[d1Utils-upsert] Starting D1 upsert for ${features.length} features.`);
   const upsertStmtText = `
-    INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature, retrieved_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
         event_time = excluded.event_time,
         latitude = excluded.latitude,
@@ -36,7 +36,6 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
         magnitude = excluded.magnitude,
         place = excluded.place,
         usgs_detail_url = excluded.usgs_detail_url,
-        geojson_feature = excluded.geojson_feature,
         retrieved_at = excluded.retrieved_at;
   `;
   // In a real worker environment, db.prepare() is synchronous.
@@ -63,7 +62,7 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
     const magnitude = feature.properties.mag;
     const place = feature.properties.place;
     const usgs_detail_url = feature.properties.detail || `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${feature.id}.geojson`;
-    const geojson_feature_string = JSON.stringify(feature);
+    const geojson_feature_string = ""; // Phase 2: Stop writing GeoJSON to D1
     const retrieved_at = Date.now();
 
     // Ensure no null values for required fields before adding to batch
@@ -73,7 +72,7 @@ export async function upsertEarthquakeFeaturesToD1(db, features) {
         continue;
     }
 
-    operations.push(stmt.bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, geojson_feature_string, retrieved_at));
+    operations.push(stmt.bind(id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at));
   }
 
   if (operations.length > 0) {
