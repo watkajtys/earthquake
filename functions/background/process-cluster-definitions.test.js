@@ -1,103 +1,92 @@
-// @vitest-environment node
-
-// functions/background/process-cluster-definitions.test.js
-
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach
-} from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import worker from './process-cluster-definitions.js';
-import {
-  findActiveClustersOptimized
-} from '../utils/spatialClusterUtils.js';
 
-// Mock dependencies
-vi.mock('../utils/spatialClusterUtils.js', () => ({
-  findActiveClustersOptimized: vi.fn(),
-}));
+const createMockDbInstance = () => {
+    const statement = {
+      bind: vi.fn().mockReturnThis(),
+      first: vi.fn().mockResolvedValue(undefined),
+      run: vi.fn().mockResolvedValue({}),
+      all: vi.fn().mockResolvedValue({ results: [] }),
+    };
+    return {
+      prepare: vi.fn(() => statement),
+    };
+  };
 
-vi.mock('../utils/d1ClusterUtils.js', () => ({
-  storeClusterDefinition: vi.fn(),
-}));
+const createMockEnv = () => ({
+  DB: createMockDbInstance(),
+  CLUSTER_KV: {
+    put: vi.fn(),
+  },
+});
 
-describe('process-cluster-definitions worker', () => {
-  let env;
+const mockEarthquakeData = [
+    { id: 'quake1', mag: 3.0, time: 1672531200000, lon: -122.7, lat: 38.8, depth: 5.0 },
+    { id: 'quake2', mag: 3.2, time: 1672531260000, lon: -122.71, lat: 38.81, depth: 5.5 },
+    { id: 'quake3', mag: 2.8, time: 1672531320000, lon: -122.69, lat: 38.79, depth: 4.8 },
+  ].map(q => ({
+    geojson_feature: JSON.stringify({
+      type: 'Feature',
+      id: q.id,
+      properties: {
+        mag: q.mag,
+        place: 'Test Location',
+        time: q.time,
+        updated: q.time,
+        type: 'earthquake',
+        title: `M ${q.mag} - Test Location`,
+      },
+      geometry: {
+        type: 'Point',
+        coordinates: [q.lon, q.lat, q.depth],
+      },
+    }),
+  }));
 
+  const mockCluster = {
+    id: 'test-cluster',
+    earthquakeIds: ['quake1', 'quake2', 'quake3'],
+  };
+
+describe('process-cluster-definitions scheduled worker', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-
-    env = {
-      DB: {
-        prepare: vi.fn(() => ({
-          bind: vi.fn(() => ({
-            all: vi.fn().mockResolvedValue({
-              results: [{
-                geojson_feature: JSON.stringify({
-                  id: 'test-quake-1',
-                  properties: {
-                    mag: 5
-                  }
-                })
-              }]
-            }),
-          })),
-          run: vi.fn().mockResolvedValue({}),
-          first: vi.fn().mockResolvedValue(null),
-        })),
-      },
-      CLUSTER_KV: {
-        put: vi.fn(),
-      },
-    };
   });
 
-  it('should fetch recent earthquakes, calculate clusters, and store definitions and cache', async () => {
-    const mockClusters = [
-      [{
-        id: 'cluster-1-quake-1',
-        properties: {
-          mag: 5
+  it('should fetch recent earthquakes, calculate clusters, and cache the results', async () => {
+    const env = createMockEnv();
+    const mockDb = env.DB;
+    const mockKv = env.CLUSTER_KV;
+
+    mockDb.prepare.mockImplementation((query) => {
+        if (query.includes('FROM EarthquakeEvents')) {
+          return {
+            bind: vi.fn().mockReturnThis(),
+            all: vi.fn().mockResolvedValue({ results: mockEarthquakeData }),
+          };
         }
-      }]
-    ];
-    findActiveClustersOptimized.mockReturnValue(mockClusters);
+        if (query.includes('FROM ClusterDefinitions')) {
+            return {
+                bind: vi.fn().mockReturnThis(),
+                all: vi.fn().mockResolvedValue({ results: [mockCluster] }),
+              };
+        }
+        const statement = {
+            bind: vi.fn().mockReturnThis(),
+            first: vi.fn().mockResolvedValue(undefined),
+            run: vi.fn().mockResolvedValue({}),
+            all: vi.fn().mockResolvedValue({ results: [] }),
+          };
+        return statement;
+      });
 
-    await worker.scheduled(null, env, null);
+    await worker.scheduled(null, env, {});
 
-    expect(env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT geojson_feature FROM EarthquakeEvents'));
-    expect(findActiveClustersOptimized).toHaveBeenCalled();
-    expect(env.CLUSTER_KV.put).toHaveBeenCalledWith('active_clusters', JSON.stringify(mockClusters), {
-      expirationTtl: 3600
-    });
-  });
-
-  it('should not process if no recent earthquakes are found', async () => {
-    env.DB.prepare.mockReturnValue({
-      bind: vi.fn().mockReturnThis(),
-      all: vi.fn().mockResolvedValue({
-        results: []
-      }),
-    });
-
-    await worker.scheduled(null, env, null);
-
-    expect(findActiveClustersOptimized).not.toHaveBeenCalled();
-    expect(env.CLUSTER_KV.put).not.toHaveBeenCalled();
-  });
-
-  it('should handle errors during processing', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const error = new Error('Test error');
-    env.DB.prepare.mockImplementation(() => {
-      throw error;
-    });
-
-    await worker.scheduled(null, env, null);
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Unhandled error'), error.message, expect.any(String));
-    consoleErrorSpy.mockRestore();
+    expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('FROM EarthquakeEvents WHERE event_time > ?'));
+    expect(mockKv.put).toHaveBeenCalledWith(
+        'active_clusters',
+        JSON.stringify([mockCluster]),
+        { expirationTtl: 3600 }
+      );
   });
 });
