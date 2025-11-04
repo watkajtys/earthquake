@@ -244,6 +244,15 @@ export const handlers = [
     return HttpResponse.json({ data: 'ok' }, { status: 200 });
   }),
 
+  http.get('http://example.com/earthquakes_large_feed', () => {
+    const mockFeatures = Array.from({ length: 200 }, (_, i) => ({
+      id: `quake${i}`,
+      properties: { time: Date.now() + i, mag: 2.5, place: `Place ${i}`, detail: `url_${i}`, updated: Date.now() + i },
+      geometry: { coordinates: [1, 2, 3] }
+    }));
+    return HttpResponse.json({ features: mockFeatures }, { status: 200 });
+  }),
+
   // Handlers for prerender-cluster.integration.test.js (USGS GeoJSON detail feeds)
   http.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us7000mfp9.geojson', () => {
     return HttpResponse.json(
