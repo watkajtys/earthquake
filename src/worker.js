@@ -28,6 +28,9 @@ import { onRequestGet as handleGetSystemHealth } from '../functions/api/system-h
 import { onRequestGet as handleGetTaskMetrics } from '../functions/api/task-metrics.js';
 import { onRequestGet as handleGetSystemLogs } from '../functions/api/system-logs.js';
 
+// Import the queue consumer
+import geojsonArchiveConsumer from '../functions/consumers/geojson-archive.js';
+
 // === Cache Management Functions ===
 // Cache management functions removed - cluster cache has been eliminated
 
@@ -439,6 +442,7 @@ async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
 // === Main Exported Worker Object ===
 
 export default {
+  ...geojsonArchiveConsumer,
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const pathname = url.pathname;
