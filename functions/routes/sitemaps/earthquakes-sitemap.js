@@ -28,8 +28,10 @@ async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
     // Fetch a broader set of events and filter in code.
     // We fetch everything above a lower magnitude to catch events that might have faulting data but are < 4.5
     // and also have at least two pieces of scientific data.
+    // OPTIMIZATION: Removed geojson_feature from selection. Selecting specific columns instead.
     const d1Results = await db.prepare(
-      `SELECT id, magnitude, place, event_time, geojson_feature FROM EarthquakeEvents
+      `SELECT id, magnitude, place, event_time, has_moment_tensor, has_focal_mechanism, has_finite_fault, has_shakemap, has_losspager
+       FROM EarthquakeEvents
        WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= ?
        AND (
          COALESCE(has_moment_tensor, 0) +
@@ -67,19 +69,18 @@ async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
       const place = originalPlace;
       let lastmodTimestamp;
 
-      if (event.geojson_feature) {
-        try {
-          const feature = JSON.parse(event.geojson_feature);
-          if (feature.properties && typeof feature.properties.updated === 'number') {
-            lastmodTimestamp = feature.properties.updated;
-          }
-        } catch (e) {
-          console.warn(`Failed to parse geojson_feature for event ${eventId} on page ${pageNumber}: ${e.message}`);
+      // Logic updated to rely on event_time since geojson_feature.properties.updated is no longer available/reliable.
+      if (typeof event.event_time === 'number') {
+        // event_time is in MS in D1 (INTEGER), based on production data verification.
+        // Check if it's very small (seconds) or large (ms)
+        // If < 20000000000, it's likely seconds.
+        if (event.event_time < 20000000000) {
+             lastmodTimestamp = event.event_time * 1000;
+        } else {
+             lastmodTimestamp = event.event_time;
         }
       }
-      if (typeof lastmodTimestamp !== 'number' && typeof event.event_time === 'number') {
-        lastmodTimestamp = event.event_time * 1000;
-      }
+
       if (!eventId || typeof lastmodTimestamp !== 'number') {
         console.warn(`Skipping event due to missing id or invalid/missing lastmodTimestamp on page ${pageNumber}:`, event);
         continue;
