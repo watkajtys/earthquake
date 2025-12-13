@@ -55,6 +55,7 @@ import { isValidGeoJson, isValidFeatureArray } from '../utils/geoJsonUtils.js'; 
 export const EarthquakeDataProvider = ({ children }) => {
     const [state, dispatch] = useReducer(earthquakeReducer, initialState);
     const dataCacheRef = useRef({}); // Initialize cache
+    const initialFetchPerformed = useRef(false);
 
     /**
      * Helper function to fetch earthquake data from the D1 database via the internal API.
@@ -311,7 +312,8 @@ export const EarthquakeDataProvider = ({ children }) => {
 
     // Effect for initiating initial daily/weekly fetch (Replaces part of original L146 effect)
     useEffect(() => {
-        if (state.isInitialAppLoad) {
+        if (state.isInitialAppLoad && !initialFetchPerformed.current) {
+            initialFetchPerformed.current = true;
             // Update loading message index at the beginning of the load sequence
             dispatch({ type: actionTypes.UPDATE_LOADING_MESSAGE_INDEX });
             performDataFetch(true); // true indicates initial fetch

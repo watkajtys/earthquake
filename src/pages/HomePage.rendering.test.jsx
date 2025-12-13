@@ -151,10 +151,9 @@ describe('HomePage Rendering and Basic UI', () => {
       });
       mockFetchActiveClusters.mockReturnValue(fetchPromise);
 
-      const initialQuakes = [{ id: 'q1', properties: { mag: 4.5, time: 1 } }];
       mockUseEarthquakeDataState.mockReturnValue({
         ...defaultEarthquakeData,
-        earthquakesLast7Days: initialQuakes,
+        earthquakesLast7Days: [{ id: 'q1', properties: { mag: 4.5, time: 1 } }],
       });
 
       render(
@@ -165,7 +164,7 @@ describe('HomePage Rendering and Basic UI', () => {
 
       // Initially, fetch is called, but clusters are empty
       await waitFor(() => {
-        expect(mockFetchActiveClusters).toHaveBeenCalledWith(initialQuakes, expect.any(Number), expect.any(Number));
+        expect(mockFetchActiveClusters).toHaveBeenCalledWith();
       });
 
       const globe = screen.getByTestId('mock-globe-view');

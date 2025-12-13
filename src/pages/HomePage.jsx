@@ -1,5 +1,5 @@
 // src/pages/HomePage.jsx
-import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState } from 'react'; // Add back useState for appCurrentTime, removed useRef
+import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState, useRef } from 'react'; // Add back useState for appCurrentTime, added useRef
 import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
@@ -319,6 +319,7 @@ function App() {
     // activeSidebarView, globeFocusLng, focusedNotableQuake are from useUIState()
     const [calculatedClusters, setCalculatedClusters] = useState([]); // NEW state for API fetched clusters
     // const [areClustersLoading, setAreClustersLoading] = useState(false); // Ensured this is removed
+    const geoJsonAssetsLoaded = useRef(false);
 
     // State for GeoJSON data
     const [coastlineData, setCoastlineData] = useState(null);
@@ -467,6 +468,10 @@ function App() {
 
     // Effect to load GeoJSON assets
     useEffect(() => {
+      if (geoJsonAssetsLoaded.current) {
+        return;
+      }
+      geoJsonAssetsLoaded.current = true;
       let isMounted = true;
       const loadGeoJsonAssets = async () => {
         if (isMounted) {
