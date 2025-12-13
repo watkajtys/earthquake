@@ -250,7 +250,10 @@ export default {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const thirtyDaysAgoTimestamp = thirtyDaysAgo.getTime();
 
-      const stmt = env.DB.prepare("SELECT geojson_feature FROM EarthquakeEvents WHERE event_time > ?").bind(thirtyDaysAgoTimestamp);
+      // OPTIMIZATION: Removed geojson_feature from query. Selecting only required columns.
+      const stmt = env.DB.prepare(
+        "SELECT id, event_time, latitude, longitude, depth, magnitude, place FROM EarthquakeEvents WHERE event_time > ?"
+      ).bind(thirtyDaysAgoTimestamp);
       const {
         results
       } = await stmt.all();
@@ -260,7 +263,20 @@ export default {
         return;
       }
 
-      const earthquakes = results.map(row => JSON.parse(row.geojson_feature));
+      // Reconstruct simple objects that look enough like GeoJSON for the clustering algorithm
+      // The clustering algorithm mainly needs geometry.coordinates and properties.time/mag
+      const earthquakes = results.map(row => ({
+        id: row.id,
+        geometry: {
+          coordinates: [row.longitude, row.latitude, row.depth] // GeoJSON is [lon, lat, depth]
+        },
+        properties: {
+          time: row.event_time,
+          mag: row.magnitude,
+          place: row.place
+        }
+      }));
+
       console.log(`process-cluster-definitions: Fetched ${earthquakes.length} recent earthquakes.`);
 
       // 2. Calculate clusters

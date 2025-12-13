@@ -20,30 +20,14 @@ const createMockEnv = () => ({
   },
 });
 
+// Mock data reflecting the NEW query (columns directly)
 const mockEarthquakeData = [
-    { id: 'quake1', mag: 3.0, time: 1672531200000, lon: -122.7, lat: 38.8, depth: 5.0 },
-    { id: 'quake2', mag: 3.2, time: 1672531260000, lon: -122.71, lat: 38.81, depth: 5.5 },
-    { id: 'quake3', mag: 2.8, time: 1672531320000, lon: -122.69, lat: 38.79, depth: 4.8 },
-  ].map(q => ({
-    geojson_feature: JSON.stringify({
-      type: 'Feature',
-      id: q.id,
-      properties: {
-        mag: q.mag,
-        place: 'Test Location',
-        time: q.time,
-        updated: q.time,
-        type: 'earthquake',
-        title: `M ${q.mag} - Test Location`,
-      },
-      geometry: {
-        type: 'Point',
-        coordinates: [q.lon, q.lat, q.depth],
-      },
-    }),
-  }));
+    { id: 'quake1', magnitude: 3.0, event_time: 1672531200000, longitude: -122.7, latitude: 38.8, depth: 5.0, place: 'Test Location' },
+    { id: 'quake2', magnitude: 3.2, event_time: 1672531260000, longitude: -122.71, latitude: 38.81, depth: 5.5, place: 'Test Location' },
+    { id: 'quake3', magnitude: 2.8, event_time: 1672531320000, longitude: -122.69, latitude: 38.79, depth: 4.8, place: 'Test Location' },
+  ];
 
-  const mockCluster = {
+const mockCluster = {
     id: 'test-cluster',
     earthquakeIds: ['quake1', 'quake2', 'quake3'],
   };

@@ -1,7 +1,7 @@
 import { onRequest } from './[[catchall]]';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-import { MIN_SIGNIFICANT_MAGNITUDE, isEventSignificant } from '../src/utils/significanceUtils.js';
+import { MIN_SIGNIFICANT_MAGNITUDE } from '../src/utils/significanceUtils.js';
 
 // --- Mocks for Cloudflare Environment ---
 const mockCache = {
@@ -48,7 +48,6 @@ const createMockContext = (request, env = {}, cf = {}, mockDbResults = { results
 
 // SITEMAP_PAGE_SIZE from the main module, assuming it's 40000 for tests
 const SITEMAP_PAGE_SIZE_FOR_TEST = 40000;
-// const MIN_FEELABLE_MAGNITUDE_FOR_TEST = 2.5; // Replaced by import
 
 
 describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
@@ -60,10 +59,10 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
 
     it('/sitemaps/earthquakes-1.xml should return XML with only significant earthquakes that have 3+ advanced data products', async () => {
         const now = Date.now();
-        const nowInSeconds = Math.floor(now / 1000);
+        // now is typically in ms.
+        // If event_time in DB is Ms (as I found from production sample), then:
+        const nowInMs = now;
 
-        // NOTE: The DB query filters for events with 3+ advanced data products.
-        // The in-code filter `isEventSignificant` then further refines this.
         const mockDbResults = {
             results: [
                 // 1. Significant by magnitude AND has 3+ advanced products. SHOULD BE IN SITEMAP.
@@ -71,8 +70,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     id: "ev_sig_mag_and_3_products",
                     magnitude: MIN_SIGNIFICANT_MAGNITUDE,
                     place: "Big Quake City",
-                    event_time: nowInSeconds - 3600,
-                    geojson_feature: JSON.stringify({ properties: { updated: now } }),
+                    event_time: nowInMs - 3600000,
                     has_shakemap: 1, has_moment_tensor: 1, has_finite_fault: 1,
                 },
                 // 2. Significant by geojson product, has 3+ advanced products. SHOULD BE IN SITEMAP.
@@ -80,8 +78,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     id: "ev_sig_product_and_3_products",
                     magnitude: 4.4,
                     place: "Faulty Towers",
-                    event_time: nowInSeconds - 7200,
-                    geojson_feature: JSON.stringify({ properties: { updated: now - 10000, products: { "focal-mechanism": [{}] } } }),
+                    event_time: nowInMs - 7200000,
                     has_losspager: 1, has_shakemap: 1, has_focal_mechanism: 1,
                 },
                 // 3. Not significant, but has 3+ products. SHOULD BE FILTERED by isEventSignificant.
@@ -89,17 +86,18 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     id: "ev_not_significant_but_3_products",
                     magnitude: 4.4,
                     place: "Quiet Corner",
-                    event_time: nowInSeconds - 5000,
-                    geojson_feature: JSON.stringify({ properties: { updated: now - 2000 } }),
-                    has_shakemap: 1, has_focal_mechanism: 1, has_losspager: 1,
+                    event_time: nowInMs - 5000000,
+                    has_shakemap: 1, has_losspager: 1, has_dyfi: 1, // Only 2 advanced products (shakemap, losspager). DYFI is not 'significant'.
+                    // Wait, isEventSignificant checks for moment-tensor or focal-mechanism.
+                    // This event has neither. So it returns false. Correct.
+                    // The test expectation says it SHOULD BE FILTERED.
                 },
                 // 4. Significant by magnitude, but <3 advanced products. SHOULD BE FILTERED by DB query.
                 {
                     id: "ev_sig_mag_too_few_products",
                     magnitude: MIN_SIGNIFICANT_MAGNITUDE,
                     place: "Lonely Outpost",
-                    event_time: nowInSeconds - 8000,
-                    geojson_feature: JSON.stringify({ properties: { updated: now - 15000 } }),
+                    event_time: nowInMs - 8000000,
                     has_shakemap: 1, has_moment_tensor: 1,
                 },
                 // 5. Significant, has 3+ products but one is 'dyfi' (not advanced). SHOULD BE FILTERED by DB query.
@@ -107,8 +105,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
                     id: "ev_sig_mag_dyfi_not_advanced",
                     magnitude: MIN_SIGNIFICANT_MAGNITUDE,
                     place: "User Reported Ville",
-                    event_time: nowInSeconds - 9000,
-                    geojson_feature: JSON.stringify({ properties: { updated: now - 20000 } }),
+                    event_time: nowInMs - 9000000,
                     has_shakemap: 1, has_moment_tensor: 1, has_dyfi: 1, // Only 2 advanced
                 }
             ]
@@ -136,7 +133,8 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(response.status).toBe(200);
         expect(response.headers.get('Content-Type')).toContain('application/xml');
 
-        const expectedQuery = `SELECT id, magnitude, place, event_time, geojson_feature FROM EarthquakeEvents
+        const expectedQuery = `SELECT id, magnitude, place, event_time, has_moment_tensor, has_focal_mechanism, has_finite_fault, has_shakemap, has_losspager
+       FROM EarthquakeEvents
        WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= ?
        AND (
          COALESCE(has_moment_tensor, 0) +
@@ -169,7 +167,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
     });
 
     it('/sitemaps/earthquakes-1.xml should use event_time if geojson_feature or properties.updated is missing/invalid', async () => {
-        const eventTime1 = Math.floor(Date.now() / 1000) - 86400;
+        const eventTime1 = Date.now() - 86400000;
 
         const mockDbResults = {
             results: [
@@ -187,7 +185,7 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
         expect(response.status).toBe(200);
         const expectedUrl1 = `https://earthquakeslive.com/quake/m5.0-no-geojson-here-ev_no_geojson`;
         expect(text).toContain(`<loc>${expectedUrl1}</loc>`);
-        expect(text).toContain(`<lastmod>${new Date(eventTime1 * 1000).toISOString()}</lastmod>`);
+        expect(text).toContain(`<lastmod>${new Date(eventTime1).toISOString()}</lastmod>`);
         const urlCount = (text.match(/<url>/g) || []).length;
         expect(urlCount).toBe(1);
     });
@@ -232,13 +230,12 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
             results: [
                  {
                     id: "ev_not_significant_1", magnitude: 4.4, place: "Almost Significant",
-                    event_time: Math.floor(now / 1000),
-                    geojson_feature: JSON.stringify({ properties: { updated: now } })
+                    event_time: now,
+                    has_shakemap: 1 // Not moment-tensor or focal-mechanism
                 },
                 {
                     id: "ev_not_significant_2", magnitude: 3.0, place: "Not even close",
-                    event_time: Math.floor(now / 1000),
-                    geojson_feature: JSON.stringify({ properties: { updated: now } })
+                    event_time: now
                 },
             ]
         };
@@ -260,18 +257,15 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
             results: [
                  {
                     /* id missing */ magnitude: 5.5, place: "Valid Place",
-                    event_time: Math.floor(now / 1000),
-                    geojson_feature: JSON.stringify({ properties: { updated: now } })
+                    event_time: now
                 },
                 {
                     id: "ev_no_place", magnitude: 4.2, /* place missing */
-                    event_time: Math.floor(now / 1000),
-                    geojson_feature: JSON.stringify({ properties: { updated: now } })
+                    event_time: now
                 },
                  {
                     id: "ev_valid", magnitude: 6.0, place: "Proper Event",
-                    event_time: Math.floor(now / 1000) - 3600,
-                    geojson_feature: JSON.stringify({ properties: { updated: now - 10000 } })
+                    event_time: now - 3600000
                 },
             ]
         };
@@ -296,13 +290,11 @@ describe('Paginated Earthquake Sitemaps Handler (D1)', () => {
             results: [
                 {
                     id: "ev_invalid_time", magnitude: 5.0, place: "Invalid Time",
-                    event_time: null,
-                    geojson_feature: JSON.stringify({ properties: { updated: "bad-date-string" }})
+                    event_time: null, // Invalid
                 },
                 {
                     id: "ev_valid_time", magnitude: 5.1, place: "Valid Time",
-                    event_time: Math.floor(Date.now() / 1000) - 7200, // valid
-                    geojson_feature: JSON.stringify({ properties: { updated: "another-bad-string" }})
+                    event_time: Date.now() - 7200000 // valid
                 }
             ]
         };
