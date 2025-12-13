@@ -162,16 +162,8 @@ DB = { preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" }
 
 
 [triggers]
-# Cron for fetching new data from USGS and generating front-end lists (more frequent)
-crons = ["*/5 * * * *", "*/30 * * * *"]
-
-[[crons]]
-cron = "0 0 * * *" # Daily reconciliation job
-module = "functions/background/reconcile-stats.js"
-
-[[crons]]
-cron = "*/10 * * * *" # Process cluster definitions every 10 minutes
-module = "functions/background/process-cluster-definitions.js"
+# Cron triggers for various background tasks.
+crons = ["*/5 * * * *", "*/30 * * * *", "0 0 * * *", "*/10 * * * *"]
 
 # If you have other bindings (like R2, Services), define them here too.
 # Refer to Cloudflare Wrangler documentation for more details.
