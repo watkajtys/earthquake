@@ -34,6 +34,10 @@ import geojsonArchiveConsumer from '../functions/consumers/geojson-archive.js';
 // Import the new list generator
 import { handleGenerateLists } from '../functions/background/generate-lists.js';
 
+// Import the other background task handlers
+import processClusterDefinitionsWorker from '../functions/background/process-cluster-definitions.js';
+import reconcileStatsWorker from '../functions/background/reconcile-stats.js';
+
 // === Cache Management Functions ===
 // Cache management functions removed - cluster cache has been eliminated
 
@@ -634,6 +638,18 @@ export default {
         // Task: Run the automated backfill process
         ctx.waitUntil(this.runAutomatedBackfill(event, env, ctx, logger));
 
+        break;
+
+      case '*/10 * * * *':
+        console.log(`[worker-scheduled] Cron matched '${event.cron}'. Running cluster definition processing.`);
+        logger.logMilestone('Cluster definition processing started');
+        ctx.waitUntil(processClusterDefinitionsWorker.scheduled(event, env, ctx));
+        break;
+
+      case '0 0 * * *':
+        console.log(`[worker-scheduled] Cron matched '${event.cron}'. Running daily stat reconciliation.`);
+        logger.logMilestone('Daily stat reconciliation started');
+        ctx.waitUntil(reconcileStatsWorker.scheduled(event, env, ctx));
         break;
 
       default:
