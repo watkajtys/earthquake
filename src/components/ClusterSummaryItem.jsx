@@ -44,6 +44,7 @@ function ClusterSummaryItem({ clusterData, onClusterSelect }) {
         <li className="border border-slate-600 rounded-md shadow-sm"> {/* Basic li styling, no interaction here */}
             <button
                 type="button" // Explicitly type as button
+                data-testid="cluster-summary-item"
                 className={`w-full text-left py-2 px-3 ${magnitudeColorStyle} transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md`}
                 onClick={() => onClusterSelect && onClusterSelect(clusterData)}
                 // title attribute can remain on the button or be moved to a specific element if more appropriate

@@ -146,10 +146,10 @@ describe('HomePage Cluster Logic', () => {
       geometry: { coordinates: [0, 0, 0] },
     });
 
-    const T_NOW = 100000000;
-    const T_1_HOUR_AGO = T_NOW - 3600;
-    const T_2_HOURS_AGO = T_NOW - 7200;
-    const T_3_HOURS_AGO = T_NOW - 10800;
+    const T_NOW = Date.now();
+    const T_1_HOUR_AGO = T_NOW - 3600 * 1000;
+    const T_2_HOURS_AGO = T_NOW - 7200 * 1000;
+    const T_3_HOURS_AGO = T_NOW - 10800 * 1000;
 
     const MAG_HIGH = MAJOR_QUAKE_THRESHOLD + 1.0;
     const MAG_MEDIUM = MAJOR_QUAKE_THRESHOLD + 0.5;
