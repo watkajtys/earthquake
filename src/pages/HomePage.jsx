@@ -451,12 +451,15 @@ function App() {
 
     // --- ADDED: Memoized lookup map for all earthquakes by ID for efficient cluster reconstruction ---
     const earthquakeMap = useMemo(() => {
-        if (!allEarthquakes || allEarthquakes.length === 0) {
+        // Prioritize allEarthquakes (30-day data) if available, otherwise fallback to 7-day data.
+        const sourceData = (allEarthquakes && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days;
+
+        if (!sourceData || sourceData.length === 0) {
             return new Map();
         }
         // Creates a Map where the key is the earthquake ID and the value is the full earthquake object.
-        return new Map(allEarthquakes.map(quake => [quake.id, quake]));
-    }, [allEarthquakes]);
+        return new Map(sourceData.map(quake => [quake.id, quake]));
+    }, [allEarthquakes, earthquakesLast7Days]);
 
 
     // Effect to fetch active clusters from the API
