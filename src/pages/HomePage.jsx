@@ -706,42 +706,30 @@ function App() {
         if (!activeClusters || activeClusters.length === 0) {
             return [];
         }
-
+        // The API now returns cluster definition objects directly.
+        // We just need to format them for the UI.
         const processed = activeClusters.map(cluster => {
-            if (!cluster || cluster.length === 0) {
+            if (!cluster) {
                 return null;
             }
 
-            let maxMag = -Infinity;
-            let earliestTime = Infinity;
-            let latestTime = -Infinity;
-            let strongestQuakeInCluster = null;
-
-            cluster.forEach(quake => {
-                if (quake.properties.mag > maxMag) {
-                    maxMag = quake.properties.mag;
-                    strongestQuakeInCluster = quake;
-                }
-                if (quake.properties.time < earliestTime) {
-                    earliestTime = quake.properties.time;
-                }
-                if (quake.properties.time > latestTime) {
-                    latestTime = quake.properties.time;
-                }
-            });
-
-            if (!strongestQuakeInCluster) strongestQuakeInCluster = cluster[0]; // Fallback if all mags are null/equal
-
-            const locationName = strongestQuakeInCluster.properties.place || 'Unknown Location';
+            const {
+                quake_count: quakeCount,
+                max_mag: maxMag,
+                start_time: earliestTime,
+                end_time: latestTime,
+                location: locationName,
+                strongest_quake_id: strongestQuakeId
+            } = cluster;
 
             // Determine time range object
             let timeRange = { prefix: "", value: "Time N/A", suffix: "" };
             const now = Date.now();
             const durationMillis = now - earliestTime; // Duration since the earliest quake in cluster started
 
-            if (earliestTime !== Infinity) {
+            if (earliestTime) {
                 // If the cluster's quakes are all very recent (e.g., within last 24 hours from now)
-                if (now - latestTime < 24 * 60 * 60 * 1000 && cluster.length > 1) {
+                if (now - latestTime < 24 * 60 * 60 * 1000 && quakeCount > 1) {
                     const clusterDurationMillis = latestTime - earliestTime;
                     if (clusterDurationMillis < 60 * 1000) { // less than a minute
                         timeRange = { prefix: "Active ", value: "just now", suffix: "" };
@@ -750,70 +738,38 @@ function App() {
                     } else {
                         timeRange = { prefix: "Active over ", value: formatTimeDuration(clusterDurationMillis), suffix: "" };
                     }
-                } else { // Older clusters or single quake "clusters" (if minQuakes was 1)
+                } else { // Older clusters or single quake "clusters"
                     timeRange = { prefix: "Started ", value: formatTimeAgo(durationMillis), suffix: "" };
                 }
             }
-            // A simpler alternative for timeRange (if chosen):
-            // if (earliestTime !== Infinity && latestTime !== Infinity) {
-            //    timeRange = { prefix: "Active: ", value: `${formatDate(earliestTime)} - ${formatDate(latestTime)}`, suffix: "" };
-            // }
 
             return {
-                id: `overview_cluster_${strongestQuakeInCluster.id}_${cluster.length}`, // Create a somewhat unique ID
-                locationName,
-                quakeCount: cluster.length,
+                id: `overview_cluster_${strongestQuakeId}_${quakeCount}`,
+                locationName: locationName || 'Unknown Location',
+                quakeCount: quakeCount,
                 maxMagnitude: maxMag,
-                timeRange: timeRange, // Assign the object here
+                timeRange: timeRange,
                 // For sorting and potential future use:
                 _maxMagInternal: maxMag,
-                _quakeCountInternal: cluster.length,
+                _quakeCountInternal: quakeCount,
                 _earliestTimeInternal: earliestTime,
-                _latestTimeInternal: latestTime, // **** ADDED _latestTimeInternal ****
-                originalQuakes: cluster,
-                strongestQuakeId: strongestQuakeInCluster.id,
+                _latestTimeInternal: latestTime,
+                strongestQuakeId: strongestQuakeId,
+                 // The full quake objects are not available here anymore,
+                 // the detail view will need to fetch them if required.
+                originalQuakes: [],
             };
-        }).filter(Boolean); // Remove any nulls if a cluster was empty
+        }).filter(Boolean);
 
-        // Sort clusters:
-        processed.sort((a, b) => {
-            // Primary sort: by latest time in cluster (descending - most recent first)
-            if (b._latestTimeInternal !== a._latestTimeInternal) {
-                return b._latestTimeInternal - a._latestTimeInternal;
-            }
-            // Secondary sort: by max magnitude (descending - strongest first)
-            if (b._maxMagInternal !== a._maxMagInternal) {
-                return b._maxMagInternal - a._maxMagInternal;
-            }
-            // Tertiary sort: by quake count (descending) for further tie-breaking
-            return b._quakeCountInternal - a._quakeCountInternal;
-        });
+        // The API should already return sorted and filtered clusters.
+        // If not, sorting can be re-enabled here.
+        // processed.sort((a, b) => { ... });
 
-        // Filter clusters to include only those with a max magnitude >= MAJOR_QUAKE_THRESHOLD
-        const significantClusters = processed.filter(cluster => cluster._maxMagInternal >= MAJOR_QUAKE_THRESHOLD);
+        // The API should also only return significant clusters.
+        // If not, filtering can be re-enabled here.
+        // const significantClusters = processed.filter(cluster => cluster._maxMagInternal >= MAJOR_QUAKE_THRESHOLD);
 
-        // Temporary debug logs - REMOVE AFTER DEBUGGING
-        // console.log("----------- DEBUG: Processed Clusters (before sort) -----------");
-        // activeClusters.map(clusterRaw => { // Renamed to avoid conflict
-        //     // Simplified reconstruction for logging - this is NOT the full component logic
-        //     if (!clusterRaw || clusterRaw.length === 0) return null;
-        //     let maxMag = -Infinity, earliestTime = Infinity, latestTime = -Infinity, strongestQuakeInCluster = null;
-        //     clusterRaw.forEach(quake => {
-        //         if (quake.properties.mag > maxMag) maxMag = quake.properties.mag;
-        //         if (quake.properties.time < earliestTime) earliestTime = quake.properties.time;
-        //         if (quake.properties.time > latestTime) latestTime = quake.properties.time;
-        //     });
-        //     strongestQuakeInCluster = clusterRaw.sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0))[0] || clusterRaw[0];
-        //     return { id: `overview_cluster_${strongestQuakeInCluster?.id}_${clusterRaw.length}`, _latestTimeInternal: latestTime, _maxMagInternal: maxMag, _quakeCountInternal: clusterRaw.length };
-        // }).filter(Boolean)
-        //   .forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
-        // console.log("----------- DEBUG: Processed Clusters (after sort) -----------");
-        // processed.forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
-        // console.log("----------- DEBUG: Significant Clusters (after filter) -----------");
-        // significantClusters.forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
-
-
-        return significantClusters;
+        return processed;
 
     }, [activeClusters, formatTimeAgo, formatTimeDuration]);
 

@@ -1,0 +1,73 @@
+
+[
+  {
+    "id": "nc73839106",
+    "event_time": 1672444800000,
+    "latitude": 38.82,
+    "longitude": -122.75,
+    "depth": 2.0,
+    "magnitude": 3.1,
+    "title": "M 3.1 - 8km NW of The Geysers, CA",
+    "place": "8km NW of The Geysers, CA"
+  },
+  {
+    "id": "nc73839107",
+    "event_time": 1672444800000,
+    "latitude": 38.83,
+    "longitude": -122.76,
+    "depth": 2.5,
+    "magnitude": 3.5,
+    "title": "M 3.5 - 9km NW of The Geysers, CA",
+    "place": "9km NW of The Geysers, CA"
+  },
+  {
+    "id": "nc73839108",
+    "event_time": 1672444800000,
+    "latitude": 38.81,
+    "longitude": -122.74,
+    "depth": 1.8,
+    "magnitude": 3.2,
+    "title": "M 3.2 - 7km NW of The Geysers, CA",
+    "place": "7km NW of The Geysers, CA"
+  },
+  {
+    "id": "ci40299544",
+    "event_time": 1672099200000,
+    "latitude": 34.0,
+    "longitude": -118.5,
+    "depth": 10.0,
+    "magnitude": 4.2,
+    "title": "M 4.2 - 5km SE of Universal City, CA",
+    "place": "5km SE of Universal City, CA"
+  },
+  {
+    "id": "ci40299545",
+    "event_time": 1672099200000,
+    "latitude": 34.01,
+    "longitude": -118.51,
+    "depth": 11.0,
+    "magnitude": 4.0,
+    "title": "M 4.0 - 6km SE of Universal City, CA",
+    "place": "6km SE of Universal City, CA"
+  },
+  {
+    "id": "ci40299546",
+    "event_time": 1672099200000,
+    "latitude": 33.99,
+    "longitude": -118.49,
+    "depth": 9.5,
+    "magnitude": 4.1,
+    "title": "M 4.1 - 4km SE of Universal City, CA",
+    "place": "4km SE of Universal City, CA"
+  },
+  {
+    "id": "ak022cpl5zvi",
+    "event_time": 1672358400000,
+    "latitude": 61.0,
+    "longitude": -150.0,
+    "depth": 30.0,
+    "magnitude": 5.5,
+    "title": "M 5.5 - 30km S of Anchorage, Alaska",
+    "place": "30km S of Anchorage, Alaska"
+  }
+]
