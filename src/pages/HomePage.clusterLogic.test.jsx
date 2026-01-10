@@ -162,16 +162,26 @@ describe('HomePage Cluster Logic', () => {
     const clusterD_Quakes = [createMockQuake('d1', T_1_HOUR_AGO, MAG_HIGH, "Cluster D High More Quakes"), createMockQuake('d2', T_1_HOUR_AGO - 1000, MAG_MEDIUM), createMockQuake('d3', T_2_HOURS_AGO, MAG_LOW_BUT_SIGNIFICANT)];
     const clusterE_Filtered_Quakes = [createMockQuake('e1', T_NOW, MAG_BELOW_THRESHOLD, "Cluster E Filtered Out")];
 
-    const mockActiveClustersInput = [
-      clusterA_Quakes, clusterB_Quakes, clusterC_Quakes, clusterD_Quakes, clusterE_Filtered_Quakes,
+    const allQuakesForTest = [
+        ...clusterA_Quakes, ...clusterB_Quakes, ...clusterC_Quakes,
+        ...clusterD_Quakes, ...clusterE_Filtered_Quakes,
     ];
 
+    const mockClusterSummaries = [
+      { earthquakeIds: JSON.stringify(clusterA_Quakes.map(q => q.id)) },
+      { earthquakeIds: JSON.stringify(clusterB_Quakes.map(q => q.id)) },
+      { earthquakeIds: JSON.stringify(clusterC_Quakes.map(q => q.id)) },
+      { earthquakeIds: JSON.stringify(clusterD_Quakes.map(q => q.id)) },
+      { earthquakeIds: JSON.stringify(clusterE_Filtered_Quakes.map(q => q.id)) },
+    ];
+
+
     it('sorts overviewClusters by latest time, then magnitude, then count, and filters by MAJOR_QUAKE_THRESHOLD', async () => {
-      mockFetchActiveClusters.mockResolvedValue(mockActiveClustersInput);
+      mockFetchActiveClusters.mockResolvedValue(mockClusterSummaries);
       mockUseEarthquakeDataState.mockReturnValue({
         ...defaultEarthquakeData,
-        earthquakesLast7Days: [createMockQuake('dummy', T_NOW, MAG_HIGH)],
-        isLoadingInitialData: false, isInitialAppLoad: false, // Ensure data is "loaded"
+        allEarthquakes: allQuakesForTest, // Provide all quakes for reconstruction
+        isLoadingInitialData: false, isInitialAppLoad: false,
       });
 
       render(
@@ -248,10 +258,14 @@ describe('HomePage Cluster Logic', () => {
           );
         }
 
-        mockFetchActiveClusters.mockResolvedValue([mockRawQuakesForCluster]);
+        const mockClusterSummary = {
+            earthquakeIds: JSON.stringify(mockRawQuakesForCluster.map(q => q.id)),
+        };
+
+        mockFetchActiveClusters.mockResolvedValue([mockClusterSummary]);
         mockUseEarthquakeDataState.mockReturnValue({
           ...defaultEarthquakeData,
-          earthquakesLast7Days: [createMockQuakeInternal('somequake', Date.now(), 4.0)],
+          allEarthquakes: mockRawQuakesForCluster,
           isLoadingInitialData: false, isInitialAppLoad: false,
         });
         mockUseUIState.mockReturnValue(defaultUIState);

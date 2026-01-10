@@ -142,19 +142,30 @@ describe('HomePage Rendering and Basic UI', () => {
   });
 
   describe('Cluster Loading State Management', () => {
-    it('passes the correct loading state to the globe', async () => {
-      // This test is now conceptual, as areClustersLoading is removed.
-      // We test the effect: activeClusters are updated asynchronously.
-      let resolveFetch;
-      const fetchPromise = new Promise(resolve => {
-        resolveFetch = resolve;
-      });
-      mockFetchActiveClusters.mockReturnValue(fetchPromise);
+    it('passes reconstructed clusters to the globe after fetching', async () => {
+      // 1. Define the mock earthquake that will be in a cluster.
+      const mockQuake = {
+        id: 'c1',
+        properties: { mag: 5.0, time: 2, place: 'Test' },
+        geometry: { coordinates: [0, 0, 0] }
+      };
 
+      // 2. Mock the data context to provide this earthquake in `allEarthquakes`.
+      // This is crucial for the reconstruction logic.
       mockUseEarthquakeDataState.mockReturnValue({
         ...defaultEarthquakeData,
-        earthquakesLast7Days: [{ id: 'q1', properties: { mag: 4.5, time: 1 } }],
+        allEarthquakes: [mockQuake],
       });
+
+      // 3. Mock the API call to return the new cluster summary format.
+      const mockClusterSummary = [{
+        clusterId: 'summary1',
+        earthquakeIds: JSON.stringify([mockQuake.id]),
+        // ... other summary properties can be added if needed by the component
+      }];
+      let resolveFetch;
+      const fetchPromise = new Promise(resolve => { resolveFetch = resolve; });
+      mockFetchActiveClusters.mockReturnValue(fetchPromise);
 
       render(
         <MemoryRouter initialEntries={['/']}>
@@ -162,22 +173,18 @@ describe('HomePage Rendering and Basic UI', () => {
         </MemoryRouter>
       );
 
-      // Initially, fetch is called, but clusters are empty
-      await waitFor(() => {
-        expect(mockFetchActiveClusters).toHaveBeenCalledWith();
-      });
-
-      const globe = screen.getByTestId('mock-globe-view');
+      // Initially, clusters are empty while fetching.
+      await waitFor(() => expect(mockFetchActiveClusters).toHaveBeenCalled());
       const clustersProp = screen.getByTestId('active-clusters-prop');
       expect(JSON.parse(clustersProp.textContent)).toEqual([]);
 
-      // Now, resolve the fetch with new clusters
-      const newClusters = [[{ id: 'c1', properties: { mag: 5.0, time: 2, place: 'Test' }, geometry: { coordinates: [0, 0, 0] } }]];
-      resolveFetch(newClusters);
+      // 4. Resolve the fetch with the cluster summary.
+      resolveFetch(mockClusterSummary);
 
-      // Wait for the state to update and be passed to the globe
+      // 5. Assert that the component correctly reconstructed the cluster data.
+      // The expected result is an array containing an array with the full mockQuake object.
       await waitFor(() => {
-        expect(JSON.parse(clustersProp.textContent)).toEqual(newClusters);
+        expect(JSON.parse(clustersProp.textContent)).toEqual([[mockQuake]]);
       });
     });
   });

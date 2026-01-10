@@ -449,6 +449,16 @@ function App() {
 
     // Old handleLoadMonthlyData is removed. `loadMonthlyData` from the hook is used instead.
 
+    // --- ADDED: Memoized lookup map for all earthquakes by ID for efficient cluster reconstruction ---
+    const earthquakeMap = useMemo(() => {
+        if (!allEarthquakes || allEarthquakes.length === 0) {
+            return new Map();
+        }
+        // Creates a Map where the key is the earthquake ID and the value is the full earthquake object.
+        return new Map(allEarthquakes.map(quake => [quake.id, quake]));
+    }, [allEarthquakes]);
+
+
     // Effect to fetch active clusters from the API
     useEffect(() => {
         fetchActiveClusters()
@@ -463,8 +473,46 @@ function App() {
 
     // Use calculatedClusters for the activeClusters memo
     const activeClusters = useMemo(() => {
-        return calculatedClusters;
-    }, [calculatedClusters]);
+        // This check is a safeguard. If the API returns an empty array, or if calculatedClusters is not yet populated,
+        // return an empty array to prevent downstream errors.
+        if (!calculatedClusters || calculatedClusters.length === 0) {
+            return [];
+        }
+
+        // The API now returns an array of cluster summary objects.
+        // We need to reconstruct the array of earthquake arrays that the rest of the component expects.
+        // The check `earthquakeMap.size > 0` ensures we don't try to process clusters before the main earthquake data is ready.
+        if (earthquakeMap.size === 0) {
+            return []; // Return empty if the lookup map isn't ready
+        }
+
+        const reconstructedClusters = calculatedClusters.map(clusterSummary => {
+            // The `earthquakeIds` property is a JSON string of an array of IDs, e.g., "[\"id1\",\"id2\"]"
+            // We need to parse it to get the actual array of IDs.
+            let ids = [];
+            try {
+                ids = JSON.parse(clusterSummary.earthquakeIds);
+            } catch (e) {
+                console.error("Failed to parse earthquakeIds from cluster summary:", clusterSummary, e);
+                return null; // Skip this cluster if the IDs are malformed
+            }
+
+            // For each ID, look up the full earthquake object in our memoized map.
+            const clusterQuakes = ids
+                .map(id => earthquakeMap.get(id))
+                .filter(Boolean); // Filter out any 'undefined' results if a quake ID wasn't found in the map
+
+            // Only return a cluster if it has a valid array of quakes. It's possible some quakes might
+            // not be in the `allEarthquakes` list if data is slightly out of sync.
+            if (clusterQuakes.length > 0) {
+                return clusterQuakes;
+            }
+            return null;
+        }).filter(Boolean); // Filter out any nulls that resulted from parsing errors or empty clusters.
+
+        return reconstructedClusters;
+
+    }, [calculatedClusters, earthquakeMap]); // Dependency on both the raw cluster data and the earthquake lookup map.
 
     // Effect to load GeoJSON assets
     useEffect(() => {
