@@ -13,7 +13,7 @@ import { FaGlobe, FaListAlt, FaStream, FaBook } from 'react-icons/fa';
  */
 const BottomNav = () => { // Removed activeMobileView and setActiveMobileView props
     const tabs = [
-        { name: 'Globe', path: '/', icon: <FaGlobe /> },
+        { name: 'World', path: '/', icon: <FaGlobe /> },
         { name: 'Overview', path: '/overview', icon: <FaListAlt /> },
         { name: 'Feeds', path: '/feeds', icon: <FaStream /> },
         { name: 'Learn', path: '/learn', icon: <FaBook /> },
