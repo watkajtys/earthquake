@@ -7,6 +7,8 @@ import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
 // import InteractiveGlobeView from '../components/InteractiveGlobeView'; // Will be lazy loaded
 import NotableQuakeFeature from '../components/NotableQuakeFeature';
 import PreviousNotableQuakeFeature from '../components/PreviousNotableQuakeFeature';
+import MostSignificantQuake from '../components/MostSignificantQuake';
+import LatestEvent from '../components/LatestEvent';
 import InfoSnippet from '../components/InfoSnippet';
 // import coastlineData from '../assets/ne_110m_coastline.json'; // Removed for dynamic import
 // import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
@@ -101,6 +103,8 @@ const GlobeLayout = (props) => {
     getMagnitudeColor,
     activeClusters,
     lastMajorQuake,
+    mostSignificantQuakeLast7Days,
+    formatDate,
     formatTimeDuration,
     handleNotableQuakeSelect,
     keyStatsForGlobe,
@@ -142,6 +146,18 @@ const GlobeLayout = (props) => {
                 getMagnitudeColorFunc={getMagnitudeColor}
             />
         </div>
+        <MostSignificantQuake
+            mostSignificantQuake={mostSignificantQuakeLast7Days}
+            getMagnitudeColor={getMagnitudeColor}
+            formatDate={formatDate}
+            handleQuakeClick={handleQuakeClick}
+        />
+        <LatestEvent
+            lastMajorQuake={lastMajorQuake}
+            getMagnitudeColor={getMagnitudeColor}
+            formatDate={formatDate}
+            handleQuakeClick={handleQuakeClick}
+        />
         <div className="p-2 sm:p-2.5 bg-slate-800 bg-opacity-80 text-white rounded-lg shadow-xl max-w-full sm:max-w-xs backdrop-blur-sm border border-slate-700">
             <h2 className="text-xs sm:text-sm font-semibold mb-0.5 sm:mb-1 text-indigo-300 uppercase">Live Statistics</h2>
             <div className="text-xs sm:text-sm">Last Hour: <span className="font-bold text-sm sm:text-base text-sky-300">{keyStatsForGlobe.lastHourCount}</span></div>
@@ -355,6 +371,7 @@ function App() {
         lastMajorQuake, // Setters (setLastMajorQuake, etc.) are managed by context
         // previousMajorQuake, // Removed, used by context in TimeSinceLastMajorQuakeBanner
         // timeBetweenPreviousMajorQuakes, // Removed, used by context in TimeSinceLastMajorQuakeBanner
+        mostSignificantQuakeLast7Days,
         currentLoadingMessage,
         isInitialAppLoad,
         isLoadingMonthly,
@@ -1074,6 +1091,8 @@ function App() {
                                       areGeoJsonAssetsLoading={areGeoJsonAssetsLoading}
                                       activeClusters={activeClusters} // This now uses calculatedClusters
                                       lastMajorQuake={lastMajorQuake}
+                                      mostSignificantQuakeLast7Days={mostSignificantQuakeLast7Days}
+                                      formatDate={formatDate}
                                       formatTimeDuration={formatTimeDuration}
                                       handleNotableQuakeSelect={handleNotableQuakeSelect}
                                       keyStatsForGlobe={keyStatsForGlobe}

@@ -41,6 +41,18 @@ export const consolidateMajorQuakesLogic = (currentLastMajor, currentPreviousMaj
     };
 };
 
+export const findMostSignificantQuake = (earthquakes) => {
+    if (!earthquakes || earthquakes.length === 0) {
+        return null;
+    }
+    return earthquakes.reduce((maxQuake, currentQuake) => {
+        if (!maxQuake || currentQuake.properties.mag > maxQuake.properties.mag) {
+            return currentQuake;
+        }
+        return maxQuake;
+    }, null);
+};
+
 export const sampleArray = (array, sampleSize) => {
     if (!Array.isArray(array) || array.length === 0) return [];
     if (sampleSize >= array.length) return [...array];
@@ -160,6 +172,7 @@ export const calculateMagnitudeDistribution = (earthquakes) => {
  * @property {object|null} lastMajorQuake - The most recent major earthquake.
  * @property {object|null} previousMajorQuake - The major earthquake before the `lastMajorQuake`.
  * @property {number|null} timeBetweenPreviousMajorQuakes - Time difference in milliseconds between the last two major quakes.
+ * @property {object|null} mostSignificantQuakeLast7Days - The earthquake with the highest magnitude in the last 7 days.
  * @property {number} loadingMessageIndex - Index for cycling through loading messages.
  * @property {Array<string>} currentLoadingMessages - Array of loading messages displayed during initial load.
  * @property {boolean} hasAttemptedMonthlyLoad - Flag indicating if an attempt has been made to load monthly data.
@@ -206,6 +219,7 @@ export const initialState = {
     lastMajorQuake: null,
     previousMajorQuake: null,
     timeBetweenPreviousMajorQuakes: null,
+    mostSignificantQuakeLast7Days: null,
     loadingMessageIndex: 0,
     currentLoadingMessages: INITIAL_LOADING_MESSAGES,
     hasAttemptedMonthlyLoad: false,
@@ -356,6 +370,8 @@ export function earthquakeReducer(state = initialState, action) {
             const sampledEarthquakesLast7Days = sampleArrayWithPriority(currentEarthquakesLast7Days, SCATTER_SAMPLING_THRESHOLD_7_DAYS, MAJOR_QUAKE_THRESHOLD);
             const magnitudeDistribution7Days = calculateMagnitudeDistribution(currentEarthquakesLast7Days);
 
+            const mostSignificantQuakeLast7Days = findMostSignificantQuake(currentEarthquakesLast7Days);
+
             newState = {
                 ...state,
                 isLoadingWeekly: false,
@@ -366,6 +382,7 @@ export function earthquakeReducer(state = initialState, action) {
                 dailyCounts7Days,
                 sampledEarthquakesLast7Days,
                 magnitudeDistribution7Days,
+                mostSignificantQuakeLast7Days,
                 ...majorQuakeUpdates,
                 weeklyDataSource: dataSource,
             };
