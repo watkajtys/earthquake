@@ -137,9 +137,11 @@ export const calculateMagnitudeDistribution = (earthquakes) => {
  * @property {boolean} isLoadingDaily - Flag indicating if daily data is currently being fetched.
  * @property {boolean} isLoadingWeekly - Flag indicating if weekly data is currently being fetched.
  * @property {boolean} isLoadingMonthly - Flag indicating if monthly data is currently being fetched.
+ * @property {boolean} isLoadingHistorical - Flag indicating if historical data is currently being fetched.
  * @property {boolean} isInitialAppLoad - Flag indicating if the application is performing its initial data load sequence.
  * @property {string|null} error - General error message for daily/weekly data fetching issues.
  * @property {string|null} monthlyError - Error message specific to monthly data fetching issues.
+ * @property {string|null} historicalError - Error message specific to historical data fetching issues.
  * @property {number|null} dataFetchTime - Timestamp of the last successful data fetch.
  * @property {string|null} lastUpdated - Formatted string indicating when the data was last updated (from source metadata or fetch time).
  * @property {Array<object>} earthquakesLastHour - Earthquakes from the last hour.
@@ -151,6 +153,7 @@ export const calculateMagnitudeDistribution = (earthquakes) => {
  * @property {Array<object>} prev7DayData - Earthquakes from the 7 days prior to the current 7-day window.
  * @property {Array<object>} prev14DayData - Earthquakes from the 14 days prior to the current 14-day window (used with 30-day view).
  * @property {Array<object>} allEarthquakes - All earthquakes loaded, typically representing the monthly data feed.
+ * @property {Array<object>} historicalEarthquakes - Earthquakes from a specific historical date.
  * @property {Array<object>} earthquakesLast14Days - Earthquakes from the last 14 days.
  * @property {Array<object>} earthquakesLast30Days - Earthquakes from the last 30 days.
  * @property {Array<object>} globeEarthquakes - Sampled earthquakes for globe visualization.
@@ -183,9 +186,11 @@ export const initialState = {
     isLoadingDaily: true,
     isLoadingWeekly: true,
     isLoadingMonthly: false,
+    isLoadingHistorical: false,
     isInitialAppLoad: true,
     error: null,
     monthlyError: null,
+    historicalError: null,
     dataFetchTime: null,
     lastUpdated: null,
     earthquakesLastHour: [],
@@ -197,6 +202,7 @@ export const initialState = {
     prev7DayData: [],
     prev14DayData: [],
     allEarthquakes: [],
+    historicalEarthquakes: [],
     earthquakesLast14Days: [],
     earthquakesLast30Days: [],
     globeEarthquakes: [],
@@ -248,6 +254,9 @@ export const actionTypes = {
     /** Action type for when monthly data has been fetched and processed.
      *  Payload should include `features`, `fetchTime`, and `dataSource`. */
     MONTHLY_DATA_PROCESSED: 'MONTHLY_DATA_PROCESSED',
+    /** Action type for when historical data has been fetched and processed.
+     *  Payload should include `features` and `fetchTime`. */
+    HISTORICAL_DATA_PROCESSED: 'HISTORICAL_DATA_PROCESSED',
     SET_INITIAL_LOAD_COMPLETE: 'SET_INITIAL_LOAD_COMPLETE',
     UPDATE_LOADING_MESSAGE_INDEX: 'UPDATE_LOADING_MESSAGE_INDEX',
     SET_LOADING_MESSAGES: 'SET_LOADING_MESSAGES',
@@ -275,6 +284,12 @@ export const actionTypes = {
  * @property {Array<object>} features - Array of earthquake GeoJSON features.
  * @property {number} fetchTime - Timestamp of when the data was fetched.
  * @property {('D1'|'USGS')} dataSource - The source of the data ('D1' or 'USGS').
+ */
+
+ /**
+ * @typedef {object} HistoricalDataProcessedPayload
+ * @property {Array<object>} features - Array of earthquake GeoJSON features.
+ * @property {number} fetchTime - Timestamp of when the data was fetched.
  */
 
 /**
@@ -413,6 +428,18 @@ export function earthquakeReducer(state = initialState, action) {
                 prev14DayData: filterMonthlyByTime(features, 28, 14, fetchTime),
                 ...majorQuakeUpdates,
                 monthlyDataSource: dataSource,
+            };
+            break;
+        }
+        case actionTypes.HISTORICAL_DATA_PROCESSED: {
+            /** @type {HistoricalDataProcessedPayload} */
+            const { features, fetchTime } = action.payload;
+            newState = {
+                ...state,
+                isLoadingHistorical: false,
+                historicalError: null,
+                historicalEarthquakes: features,
+                dataFetchTime: fetchTime,
             };
             break;
         }

@@ -35,3 +35,16 @@ export const fetchUsgsData = async (apiUrl) => {
     };
   }
 };
+
+/**
+ * Fetches earthquake data from the USGS API for a specific date range.
+ *
+ * @async
+ * @param {Date} startDate - The start date of the date range.
+ * @param {Date} endDate - The end date of the date range.
+ * @returns {Promise<Object>} A promise that resolves to the JSON data from the USGS API if successful.
+ */
+export const fetchUsgsDataByDate = async (startDate, endDate) => {
+  const apiUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${startDate.toISOString()}&endtime=${endDate.toISOString()}`;
+  return fetchUsgsData(apiUrl);
+};
