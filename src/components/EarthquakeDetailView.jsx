@@ -1,19 +1,12 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import RegionalSeismicityChart from './RegionalSeismicityChart';
-import SimplifiedDepthProfile from './SimplifiedDepthProfile';
-import InfoSnippet                                          from "./InfoSnippet.jsx";
-import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { calculateDistance } from '../../common/mathUtils.js'; // isValidNumber import removed, calculateDistance moved
-// getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
 
 // Define REGIONAL_RADIUS_KM
 const REGIONAL_RADIUS_KM = 804.672; // 500 miles
 
 // Helper Functions
 // MOVED to src/utils/detailViewUtils.js
-import SkeletonText from './skeletons/SkeletonText.jsx';
-import SkeletonBlock from './skeletons/SkeletonBlock.jsx';
 
 import ErrorBoundary from './ErrorBoundary'; // Assuming ErrorBoundary.jsx is in the same components folder
 // earthquakeDetail/* panel imports are correct and extensive, listed below.
@@ -72,8 +65,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     const [isLoading, setIsLoading] = useState(!!detailUrl);
     const [error, setError] = useState(null);
     const [selectedFaultPlaneKey, setSelectedFaultPlaneKey] = useState('np1');
-    const modalContentRef = React.useRef(null); // Ref for the modal content div
-    const closeButtonRef = React.useRef(null); // Ref for the close button
+    const modalContentRef = useRef(null); // Ref for the modal content div
+    const closeButtonRef = useRef(null); // Ref for the close button
 
     // Handle Escape key press for closing the modal & Focus Trapping
     useEffect(() => {
@@ -142,10 +135,10 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     useEffect(() => {
         // Check if monthly data has not been attempted to load yet and is not currently loading
         if (hasAttemptedMonthlyLoad === false && isLoadingMonthly === false && typeof handleLoadMonthlyData === 'function') {
-            console.log('EarthquakeDetailView: Triggering monthly data load.');
+            // console.log('EarthquakeDetailView: Triggering monthly data load.');
             handleLoadMonthlyData();
         }
-    }, [detailUrl, hasAttemptedMonthlyLoad, isLoadingMonthly]); // Dependencies for the effect - handleLoadMonthlyData REMOVED
+    }, [detailUrl, hasAttemptedMonthlyLoad, isLoadingMonthly, handleLoadMonthlyData]); // Dependencies for the effect - handleLoadMonthlyData re-added
 
     useEffect(() => {
         if (!detailUrl) {
@@ -166,7 +159,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                 event_id = fileName.substring(0, fileName.length - '.geojson'.length);
             }
         } catch (e) {
-            console.error('Error parsing detailUrl to get event_id:', detailUrl, e);
+            // console.error('Error parsing detailUrl to get event_id:', detailUrl, e);
             setError('Invalid earthquake detail URL format.');
             setIsLoading(false);
             setDetailData(null); // Clear any potentially stale data
@@ -174,7 +167,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
         }
 
         if (!event_id) {
-            console.error('Could not determine earthquake ID from URL:', detailUrl);
+            // console.error('Could not determine earthquake ID from URL:', detailUrl);
             setError('Could not determine earthquake ID from URL.');
             setIsLoading(false);
             setDetailData(null); // Clear any potentially stale data
@@ -216,7 +209,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                     }
                 }
             } catch (e) {
-                console.error("Failed to fetch detail data from application API:", e);
+                // console.error("Failed to fetch detail data from application API:", e);
                 if (isMounted) setError(`Failed to load details from application API: ${e.message}`);
             } finally {
                 if (isMounted) setIsLoading(false);
@@ -235,19 +228,19 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
         if (detailData && detailData.properties && detailData.properties.products) {
             const phaseDataProduct = detailData.properties.products['phase-data'];
             if (phaseDataProduct && Array.isArray(phaseDataProduct) && phaseDataProduct.length > 0) {
-                console.log("Phase Data Product (first element):", phaseDataProduct[0]);
+                // console.log("Phase Data Product (first element):", phaseDataProduct[0]);
                 if (phaseDataProduct[0].contents) {
-                    console.log("Phase Data Contents:", phaseDataProduct[0].contents);
+                    // console.log("Phase Data Contents:", phaseDataProduct[0].contents);
                 } else {
-                    console.log("No 'contents' found in phaseDataProduct[0].");
+                    // console.log("No 'contents' found in phaseDataProduct[0].");
                 }
                 if (phaseDataProduct[0].properties) {
-                    console.log("Phase Data Properties:", phaseDataProduct[0].properties);
+                    // console.log("Phase Data Properties:", phaseDataProduct[0].properties);
                 } else {
-                    console.log("No 'properties' found in phaseDataProduct[0].");
+                    // console.log("No 'properties' found in phaseDataProduct[0].");
                 }
             } else {
-                console.log("No 'phase-data' product found or it's empty in detailData.");
+                // console.log("No 'phase-data' product found or it's empty in detailData.");
             }
         } else {
             // This else block might be noisy if detailData is often null initially.
