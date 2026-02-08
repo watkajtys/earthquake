@@ -6,23 +6,42 @@ The Global Seismic Activity Monitor is a React-based web application that visual
 
 ## Project Status
 
-This project is under active development to enhance performance, data richness, and analytical capabilities. Key areas of focus include:
+This project is under active development to enhance performance, data richness, and analytical capabilities. The current focus is on addressing critical performance bottlenecks and expanding the application's data strategy.
 
-*   **Performance Optimization:** Critical bottlenecks in the earthquake clustering algorithm (O(N²) complexity) and sitemap generation are being addressed. The plan includes implementing spatial indexing and optimizing database queries to significantly improve performance.
-*   **Historical Data Integration:** A robust batch processing system is being developed to ingest and analyze historical earthquake data from USGS archives. This will enable richer historical analysis and a more comprehensive dataset.
-*   **Enhanced Regional Analysis:** New features are being built to provide more detailed regional seismic analysis, including the integration of regional fault data and dedicated regional views.
-*   **Educational Enhancements:** The project is expanding its educational content with interactive learning modules and better correlation between seismic events and known faults.
+### Performance Optimization
 
-The development roadmap is managed through a detailed task list, prioritizing critical performance fixes, followed by historical data integration and advanced feature enhancements.
+The following critical performance bottlenecks have been identified and are the top priority for optimization:
+
+*   **Earthquake Clustering Algorithm (O(N² Complexity)):** The current algorithm for identifying earthquake clusters (`findActiveClusters`) has a time complexity of O(N²), making it inefficient for large datasets. This is being addressed by:
+    *   **Implementing Spatial Indexing:** A more efficient approach using spatial indexing (e.g., k-d trees or quadtrees) is being developed to optimize the search for nearby earthquakes, significantly reducing calculation time.
+    *   **Optimizing Distance Calculations:** The Haversine formula for distance calculation is also being optimized to reduce computational overhead.
+
+*   **Sitemap Generation:** The process for generating the cluster sitemap (`handleClustersSitemapRequest`) has been identified as a potential bottleneck. To resolve this, the following actions are being taken:
+    *   **Storing Canonical Slugs:** Final, canonical URL slugs for each cluster are being stored directly in the `ClusterDefinitions` D1 table.
+    *   **Optimizing Sitemap Queries:** The sitemap generation process is being updated to use only the pre-generated slugs from the D1 table, eliminating the need for external API calls and improving query performance.
+
+### Data Strategy
+
+The project's data strategy is being expanded to include historical data and enhanced regional analysis:
+
+*   **Historical Data Integration:** A batch ingestion process is being developed to load historical earthquake data from USGS archives into the `EarthquakeEvents` D1 table. This will enable richer historical analysis and a more comprehensive dataset.
+*   **Enhanced Regional Analysis:** The application is being enhanced to provide more detailed regional seismic analysis, including the integration of regional fault data and dedicated regional views. This will be supported by server-side regional aggregation and spatial querying capabilities.
+
+The development roadmap is managed through a detailed and prioritized task list, which can be found in `update_todo.md`. The immediate focus is on resolving the critical performance issues, followed by the integration of historical data and the development of advanced analytical features.
 
 ## Development Roadmap
 
-The development of the Global Seismic Activity Monitor is prioritized to deliver the most critical improvements first. The roadmap is divided into the following phases:
+The development of the Global Seismic Activity Monitor is prioritized to deliver the most critical improvements first. The roadmap is divided into the following phases, with a more detailed and granular task list available in `update_todo.md`:
 
-1.  **Critical Performance Fixes:** The immediate focus is on optimizing the core algorithms for clustering and data processing to ensure the application is fast and responsive, even with large datasets.
-2.  **Historical Data Foundation:** Once performance is optimized, the next priority is to build the infrastructure for ingesting and processing historical earthquake data, which will form the foundation for richer analysis.
-3.  **Advanced Features:** With a performant and data-rich platform, the focus will shift to developing advanced features for regional analysis, educational content, and fault integration.
-4.  **Enhancement and Polish:** The final phase will involve refining the user experience, improving the API, and adding other advanced features.
+1.  **Phase 1: Critical Performance Fixes:** The immediate focus is on optimizing the core algorithms for clustering and data processing to ensure the application is fast and responsive, even with large datasets. This includes the implementation of spatial indexing for the clustering algorithm and the optimization of sitemap generation.
+
+2.  **Phase 2: Historical Data Foundation:** Once performance is optimized, the next priority is to build the infrastructure for ingesting and processing historical earthquake data. This will involve developing a batch processing system to load data from USGS archives and generate historical cluster definitions.
+
+3.  **Phase 3: Advanced Features:** With a performant and data-rich platform, the focus will shift to developing advanced features for regional analysis, educational content, and fault integration. This includes building out dedicated regional pages, creating interactive learning modules, and enhancing the fault data integration.
+
+4.  **Phase 4: Enhancement and Polish:** The final phase will involve refining the user experience, improving the API, and adding other advanced features, such as user-defined regions and alerts.
+
+For a detailed breakdown of the tasks within each phase, please refer to the `update_todo.md` file.
 
 ## Features
 
