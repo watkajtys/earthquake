@@ -4,6 +4,11 @@ compatibility_date = "2024-06-05" # Feel free to update to a more recent date
 compatibility_flags = ["nodejs_compat"]
 main = "src/worker.js"
 
+# Workers Caching (enabled live via API on 2026-08-31; keep in config so
+# future `wrangler deploy`s don't turn it off). Requires wrangler >= 4.69.
+[cache]
+enabled = true
+
 # Top-level main and workers_dev removed, now in [env.production]
 
 # Top-level bindings can define defaults or include preview IDs for 'wrangler dev'
