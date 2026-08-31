@@ -14,7 +14,13 @@ kv_namespaces = [
   # `wrangler kv:namespace create USGS_LAST_RESPONSE_KV`
   # `wrangler kv:namespace create USGS_LAST_RESPONSE_KV --preview`
   # Then, replace the placeholder IDs below with the actual IDs provided.
-  { binding = "USGS_LAST_RESPONSE_KV", id = "8bebf55e19a14299b35d1d4f6a53d2b5", preview_id = "21d89ac9c07c4845b08dd6d0e0a2b5eb" }
+  { binding = "USGS_LAST_RESPONSE_KV", id = "8bebf55e19a14299b35d1d4f6a53d2b5", preview_id = "21d89ac9c07c4845b08dd6d0e0a2b5eb" },
+  # STATIC_KV: serves the built frontend via STATIC_ASSET_MANIFEST inlined in src/worker.js
+  # (this is how the LIVE deployment serves static assets; there is no [assets] binding live).
+  # The deploy tooling that generated the manifest and uploaded dist/ assets into this
+  # namespace is lost (see RECONSTITUTION.md). Replace the placeholder ID with the real
+  # namespace ID from the Cloudflare dashboard before deploying.
+  { binding = "STATIC_KV", id = "REPLACE_WITH_STATIC_KV_NAMESPACE_ID", preview_id = "REPLACE_WITH_STATIC_KV_PREVIEW_ID" }
 ]
 
 [[r2_buckets]]
@@ -40,11 +46,21 @@ preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" # Preview D1 ID for
 # The previously existing `migrations = [...]` array within d1_databases was causing an error.
 # Wrangler should automatically detect the ./migrations directory for "PrimaryDB".
 
-[assets]
-directory = "./dist"
-not_found_handling = "single-page-application"
-binding = "ASSETS"
-run_worker_first = true
+# NOTE (2026-08 reconstitution): the LIVE worker does NOT use the Workers Static Assets
+# binding. Static assets are served from the STATIC_KV namespace by handleStaticAssetRequest
+# in src/worker.js, using the STATIC_ASSET_MANIFEST map inlined there. The [assets] block
+# below is therefore disabled to match the live deployment; env.ASSETS is not referenced
+# by the restored worker code.
+# [assets]
+# directory = "./dist"
+# not_found_handling = "single-page-application"
+# binding = "ASSETS"
+# run_worker_first = true
+
+# Custom domain: the live site is served on earthquakeslive.com. It is attached out-of-band
+# (dashboard/zone-level), so it is intentionally NOT declared here. If you want deploys to
+# manage it, uncomment:
+# custom_domains = [{ domain = "earthquakeslive.com" }]
 
 # KV Namespace binding for cluster definitions
 # -----------------------------------------------------------------------------------------
@@ -97,7 +113,11 @@ kv_namespaces = [
   { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" }, # Production KV
   # For production, ensure you have a production version of USGS_LAST_RESPONSE_KV
   # and have updated its id in the top-level kv_namespaces definition.
-  { binding = "USGS_LAST_RESPONSE_KV", id = "8bebf55e19a14299b35d1d4f6a53d2b5" } # This will use the id from the top-level definition
+  { binding = "USGS_LAST_RESPONSE_KV", id = "8bebf55e19a14299b35d1d4f6a53d2b5" }, # This will use the id from the top-level definition
+  # STATIC_KV serves the frontend assets live (see note at top-level kv_namespaces).
+  # NOTE: env-level arrays fully replace top-level ones in wrangler, so this binding
+  # must be repeated here. Replace the placeholder with the real namespace ID.
+  { binding = "STATIC_KV", id = "REPLACE_WITH_STATIC_KV_NAMESPACE_ID" }
 ]
 
 d1_databases = [
@@ -111,6 +131,13 @@ bucket_name = "geojson-bucket"
 [[env.production.queues.producers]]
 queue = "geojson-queue"
 binding = "GEOJSON_QUEUE"
+
+# Live runs a queue consumer on geojson-queue (geojson-archive.js); env-level queues
+# config replaces the top-level one, so the consumer must be repeated here.
+[[env.production.queues.consumers]]
+queue = "geojson-queue"
+max_batch_size = 10
+max_wait_ms = 1000
 
 # Example of other potential configurations (uncomment and adjust if needed):
 # [vars]

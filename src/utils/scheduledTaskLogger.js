@@ -1,13 +1,4 @@
-/**
- * @file src/utils/scheduledTaskLogger.js
- * @description Enhanced logging utility for scheduled tasks in Cloudflare Workers.
- * Provides structured logging, performance metrics, error tracking, and execution context.
- */
-
-/**
- * Enhanced logger for scheduled tasks with performance tracking and structured output
- */
-export class ScheduledTaskLogger {
+var ScheduledTaskLogger = class {
   constructor(taskName, scheduledTime = null) {
     this.taskName = taskName;
     this.scheduledTime = scheduledTime;
@@ -18,14 +9,12 @@ export class ScheduledTaskLogger {
       dbOperations: 0,
       kvOperations: 0,
       errorsEncountered: 0,
-      dataProcessed: 0
+      dataProcessed: 0,
     };
     this.context = {};
     this.events = [];
-    
     this.logTaskStart();
   }
-
   /**
    * Generates a unique execution ID for tracking this specific task run
    * @returns {string} Unique execution identifier
@@ -35,7 +24,6 @@ export class ScheduledTaskLogger {
     const random = Math.random().toString(36).substr(2, 5);
     return `${this.taskName}-${timestamp}-${random}`;
   }
-
   /**
    * Adds contextual information about the task execution environment
    * @param {string} key - Context key
@@ -44,29 +32,29 @@ export class ScheduledTaskLogger {
   addContext(key, value) {
     this.context[key] = value;
   }
-
   /**
    * Records the start of the scheduled task
    */
   logTaskStart() {
-    const scheduledTimeStr = this.scheduledTime ? new Date(this.scheduledTime).toISOString() : 'N/A';
+    const scheduledTimeStr = this.scheduledTime
+      ? new Date(this.scheduledTime).toISOString()
+      : "N/A";
     const startTimeStr = new Date(this.startTime).toISOString();
-    
     console.log(`[${this.taskName}] TASK_START`, {
       executionId: this.executionId,
       scheduledTime: scheduledTimeStr,
       actualStartTime: startTimeStr,
-      startDelay: this.scheduledTime ? this.startTime - this.scheduledTime : null
+      startDelay: this.scheduledTime
+        ? this.startTime - this.scheduledTime
+        : null,
     });
-
     this.events.push({
-      type: 'TASK_START',
+      type: "TASK_START",
       timestamp: this.startTime,
       scheduledTime: this.scheduledTime,
-      delay: this.scheduledTime ? this.startTime - this.scheduledTime : null
+      delay: this.scheduledTime ? this.startTime - this.scheduledTime : null,
     });
   }
-
   /**
    * Logs an API call with performance metrics
    * @param {string} apiUrl - The API URL being called
@@ -76,10 +64,16 @@ export class ScheduledTaskLogger {
    * @param {number} responseSize - Size of the response in bytes (optional)
    * @param {string} method - HTTP method (default: GET)
    */
-  logApiCall(apiUrl, startTime, endTime, statusCode, responseSize = null, method = 'GET') {
+  logApiCall(
+    apiUrl,
+    startTime,
+    endTime,
+    statusCode,
+    responseSize = null,
+    method = "GET",
+  ) {
     this.metrics.apiCalls++;
     const duration = endTime - startTime;
-    
     const logData = {
       executionId: this.executionId,
       apiUrl,
@@ -87,18 +81,15 @@ export class ScheduledTaskLogger {
       duration,
       statusCode,
       responseSize,
-      callNumber: this.metrics.apiCalls
+      callNumber: this.metrics.apiCalls,
     };
-
     console.log(`[${this.taskName}] API_CALL`, logData);
-    
     this.events.push({
-      type: 'API_CALL',
+      type: "API_CALL",
       timestamp: startTime,
-      ...logData
+      ...logData,
     });
   }
-
   /**
    * Logs database operations with performance metrics
    * @param {string} operation - Type of DB operation (SELECT, INSERT, UPDATE, etc.)
@@ -108,10 +99,16 @@ export class ScheduledTaskLogger {
    * @param {boolean} success - Whether the operation was successful
    * @param {string} error - Error message if operation failed
    */
-  logDbOperation(operation, table, recordsAffected, duration, success = true, error = null) {
+  logDbOperation(
+    operation,
+    table,
+    recordsAffected,
+    duration,
+    success = true,
+    error = null,
+  ) {
     this.metrics.dbOperations++;
     if (!success) this.metrics.errorsEncountered++;
-    
     const logData = {
       executionId: this.executionId,
       operation,
@@ -120,18 +117,15 @@ export class ScheduledTaskLogger {
       duration,
       success,
       error,
-      operationNumber: this.metrics.dbOperations
+      operationNumber: this.metrics.dbOperations,
     };
-
     console.log(`[${this.taskName}] DB_OPERATION`, logData);
-    
     this.events.push({
-      type: 'DB_OPERATION',
+      type: "DB_OPERATION",
       timestamp: Date.now(),
-      ...logData
+      ...logData,
     });
   }
-
   /**
    * Logs KV storage operations
    * @param {string} operation - Type of KV operation (GET, PUT, DELETE)
@@ -141,10 +135,16 @@ export class ScheduledTaskLogger {
    * @param {boolean} success - Whether the operation was successful
    * @param {string} error - Error message if operation failed
    */
-  logKvOperation(operation, key, dataSize = null, duration, success = true, error = null) {
+  logKvOperation(
+    operation,
+    key,
+    dataSize = null,
+    duration,
+    success = true,
+    error = null,
+  ) {
     this.metrics.kvOperations++;
     if (!success) this.metrics.errorsEncountered++;
-    
     const logData = {
       executionId: this.executionId,
       operation,
@@ -153,18 +153,15 @@ export class ScheduledTaskLogger {
       duration,
       success,
       error,
-      operationNumber: this.metrics.kvOperations
+      operationNumber: this.metrics.kvOperations,
     };
-
     console.log(`[${this.taskName}] KV_OPERATION`, logData);
-    
     this.events.push({
-      type: 'KV_OPERATION',
+      type: "KV_OPERATION",
       timestamp: Date.now(),
-      ...logData
+      ...logData,
     });
   }
-
   /**
    * Logs data processing metrics
    * @param {string} processType - Type of processing (parse, filter, transform, etc.)
@@ -173,27 +170,29 @@ export class ScheduledTaskLogger {
    * @param {number} duration - Processing duration in milliseconds
    * @param {object} details - Additional processing details
    */
-  logDataProcessing(processType, inputCount, outputCount, duration, details = {}) {
+  logDataProcessing(
+    processType,
+    inputCount,
+    outputCount,
+    duration,
+    details = {},
+  ) {
     this.metrics.dataProcessed += outputCount;
-    
     const logData = {
       executionId: this.executionId,
       processType,
       inputCount,
       outputCount,
       duration,
-      details
+      details,
     };
-
     console.log(`[${this.taskName}] DATA_PROCESSING`, logData);
-    
     this.events.push({
-      type: 'DATA_PROCESSING',
+      type: "DATA_PROCESSING",
       timestamp: Date.now(),
-      ...logData
+      ...logData,
     });
   }
-
   /**
    * Logs errors with context and stack traces
    * @param {string} errorType - Type/category of error
@@ -203,10 +202,8 @@ export class ScheduledTaskLogger {
    */
   logError(errorType, error, errorContext = {}, fatal = false) {
     this.metrics.errorsEncountered++;
-    
     const errorMessage = error instanceof Error ? error.message : error;
     const errorStack = error instanceof Error ? error.stack : null;
-    
     const logData = {
       executionId: this.executionId,
       errorType,
@@ -214,18 +211,15 @@ export class ScheduledTaskLogger {
       errorStack,
       errorContext,
       fatal,
-      errorNumber: this.metrics.errorsEncountered
+      errorNumber: this.metrics.errorsEncountered,
     };
-
     console.error(`[${this.taskName}] ERROR`, logData);
-    
     this.events.push({
-      type: 'ERROR',
+      type: "ERROR",
       timestamp: Date.now(),
-      ...logData
+      ...logData,
     });
   }
-
   /**
    * Logs important milestones during task execution
    * @param {string} milestone - Milestone name/description
@@ -236,18 +230,15 @@ export class ScheduledTaskLogger {
       executionId: this.executionId,
       milestone,
       data,
-      elapsedTime: Date.now() - this.startTime
+      elapsedTime: Date.now() - this.startTime,
     };
-
     console.log(`[${this.taskName}] MILESTONE`, logData);
-    
     this.events.push({
-      type: 'MILESTONE',
+      type: "MILESTONE",
       timestamp: Date.now(),
-      ...logData
+      ...logData,
     });
   }
-
   /**
    * Records the completion of the scheduled task with full metrics
    * @param {boolean} success - Whether the task completed successfully
@@ -256,7 +247,6 @@ export class ScheduledTaskLogger {
   logTaskCompletion(success = true, finalResults = {}) {
     const endTime = Date.now();
     const totalDuration = endTime - this.startTime;
-    
     const completionData = {
       executionId: this.executionId,
       success,
@@ -264,22 +254,17 @@ export class ScheduledTaskLogger {
       metrics: this.metrics,
       context: this.context,
       finalResults,
-      totalEvents: this.events.length
+      totalEvents: this.events.length,
     };
-
-    const logLevel = success ? 'log' : 'error';
+    const logLevel = success ? "log" : "error";
     console[logLevel](`[${this.taskName}] TASK_COMPLETE`, completionData);
-    
     this.events.push({
-      type: 'TASK_COMPLETE',
+      type: "TASK_COMPLETE",
       timestamp: endTime,
-      ...completionData
+      ...completionData,
     });
-
-    // Log summary metrics
     this.logExecutionSummary();
   }
-
   /**
    * Logs a comprehensive execution summary
    */
@@ -288,25 +273,33 @@ export class ScheduledTaskLogger {
       executionId: this.executionId,
       taskName: this.taskName,
       totalDuration: Date.now() - this.startTime,
-      schedulingAccuracy: this.scheduledTime ? (this.startTime - this.scheduledTime) : null,
+      schedulingAccuracy: this.scheduledTime
+        ? this.startTime - this.scheduledTime
+        : null,
       performanceMetrics: {
-        apiCallsPerSecond: this.metrics.apiCalls / ((Date.now() - this.startTime) / 1000),
-        dbOperationsPerSecond: this.metrics.dbOperations / ((Date.now() - this.startTime) / 1000),
-        kvOperationsPerSecond: this.metrics.kvOperations / ((Date.now() - this.startTime) / 1000),
-        dataProcessingRate: this.metrics.dataProcessed / ((Date.now() - this.startTime) / 1000),
-        errorRate: this.metrics.errorsEncountered / (this.metrics.apiCalls + this.metrics.dbOperations + this.metrics.kvOperations || 1)
+        apiCallsPerSecond:
+          this.metrics.apiCalls / ((Date.now() - this.startTime) / 1e3),
+        dbOperationsPerSecond:
+          this.metrics.dbOperations / ((Date.now() - this.startTime) / 1e3),
+        kvOperationsPerSecond:
+          this.metrics.kvOperations / ((Date.now() - this.startTime) / 1e3),
+        dataProcessingRate:
+          this.metrics.dataProcessed / ((Date.now() - this.startTime) / 1e3),
+        errorRate:
+          this.metrics.errorsEncountered /
+          (this.metrics.apiCalls +
+            this.metrics.dbOperations +
+            this.metrics.kvOperations || 1),
       },
       resourceUtilization: this.metrics,
-      eventTimeline: this.events.map(event => ({
+      eventTimeline: this.events.map((event) => ({
         type: event.type,
         timestamp: event.timestamp,
-        relativeTime: event.timestamp - this.startTime
-      }))
+        relativeTime: event.timestamp - this.startTime,
+      })),
     };
-
     console.log(`[${this.taskName}] EXECUTION_SUMMARY`, summary);
   }
-
   /**
    * Creates a timer function for measuring operation duration
    * @param {string} operationName - Name of the operation being timed
@@ -320,44 +313,14 @@ export class ScheduledTaskLogger {
         executionId: this.executionId,
         operationName,
         duration,
-        ...additionalData
+        ...additionalData,
       });
       return duration;
     };
   }
-}
-
-/**
- * Helper function to create a new scheduled task logger
- * @param {string} taskName - Name of the scheduled task
- * @param {number} scheduledTime - Scheduled execution time (timestamp)
- * @returns {ScheduledTaskLogger} New logger instance
- */
-export function createScheduledTaskLogger(taskName, scheduledTime = null) {
+};
+function createScheduledTaskLogger(taskName, scheduledTime = null) {
   return new ScheduledTaskLogger(taskName, scheduledTime);
 }
 
-/**
- * Decorator function to wrap functions with enhanced logging
- * @param {string} functionName - Name of the function being wrapped
- * @param {ScheduledTaskLogger} logger - Logger instance
- * @returns {function} Decorator function
- */
-export function withLogging(functionName, logger) {
-  return function(originalFunction) {
-    return async function(...args) {
-      const timer = logger.createTimer(functionName);
-      try {
-        logger.logMilestone(`Starting ${functionName}`, { args: args.length });
-        const result = await originalFunction.apply(this, args);
-        timer({ success: true, resultType: typeof result });
-        logger.logMilestone(`Completed ${functionName}`, { success: true });
-        return result;
-      } catch (error) {
-        timer({ success: false, error: error.message });
-        logger.logError(`${functionName}_ERROR`, error, { args }, false);
-        throw error;
-      }
-    };
-  };
-}
+export { ScheduledTaskLogger, createScheduledTaskLogger };

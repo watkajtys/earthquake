@@ -1,36 +1,25 @@
-/**
- * @file Generates sitemaps for earthquake events, including a sitemap index and paginated sitemap files.
- */
 import { escapeXml } from '../../utils/xml-utils.js';
 import { isEventSignificant } from '../../../src/utils/significanceUtils.js';
 
-const SITEMAP_PAGE_SIZE = 40000; // Number of URLs per paginated sitemap file
-const BASE_URL = "https://earthquakeslive.com";
-
-const slugify = (text) => {
-  if (!text) return 'unknown-location';
+var SITEMAP_PAGE_SIZE2 = 4e4;
+var BASE_URL2 = "https://earthquakeslive.com";
+var slugify = (text) => {
+  if (!text) return "unknown-location";
   return text
     .toString()
     .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w-]+/g, '') // remove non-alphanumeric characters except hyphen
-    .replace(/--+/g, '-')    // replace multiple hyphens with single
-    .replace(/^-+/, '')     // trim leading hyphen
-    .replace(/-+$/, '');    // trim trailing hyphen
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]+/g, "")
+    .replace(/--+/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "");
 };
-
-// Removed generateEarthquakeSitemapIndex function as it's no longer used.
-// The main sitemap index now directly lists paginated earthquake sitemaps.
-
 async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
-  const offset = (pageNumber - 1) * SITEMAP_PAGE_SIZE;
+  const offset = (pageNumber - 1) * SITEMAP_PAGE_SIZE2;
   try {
-    // Fetch a broader set of events and filter in code.
-    // We fetch everything above a lower magnitude to catch events that might have faulting data but are < 4.5
-    // and also have at least two pieces of scientific data.
-    // OPTIMIZATION: Removed geojson_feature from selection. Selecting specific columns instead.
-    const d1Results = await db.prepare(
-      `SELECT id, magnitude, place, event_time, has_moment_tensor, has_focal_mechanism, has_finite_fault, has_shakemap, has_losspager
+    const d1Results = await db
+      .prepare(
+        `SELECT id, magnitude, place, event_time, has_moment_tensor, has_focal_mechanism, has_finite_fault, has_shakemap, has_losspager
        FROM EarthquakeEvents
        WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= ?
        AND (
@@ -40,104 +29,107 @@ async function generatePaginatedEarthquakeSitemap(db, pageNumber) {
          COALESCE(has_shakemap, 0) +
          COALESCE(has_losspager, 0)
        ) >= 3
-       ORDER BY event_time DESC LIMIT ? OFFSET ?`
-    ).bind(2.5, SITEMAP_PAGE_SIZE, offset).all(); // Fetch M2.5+ to filter in code
-
+       ORDER BY event_time DESC LIMIT ? OFFSET ?`,
+      )
+      .bind(2.5, SITEMAP_PAGE_SIZE2, offset)
+      .all();
     const earthquakeEvents = d1Results.results;
-
     if (!earthquakeEvents || earthquakeEvents.length === 0) {
       console.log(`No valid earthquake events found for page ${pageNumber}.`);
-      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
+      return new Response(
+        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No events for page ${pageNumber} --></urlset>`,
+        { headers: { "Content-Type": "application/xml" } },
+      );
     }
-
     const significantEvents = earthquakeEvents.filter(isEventSignificant);
-
     if (significantEvents.length === 0) {
-      console.log(`No significant earthquake events found for sitemap on page ${pageNumber}.`);
-      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No significant events for page ${pageNumber} --></urlset>`, { headers: { "Content-Type": "application/xml" } });
+      console.log(
+        `No significant earthquake events found for sitemap on page ${pageNumber}.`,
+      );
+      return new Response(
+        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- No significant events for page ${pageNumber} --></urlset>`,
+        { headers: { "Content-Type": "application/xml" } },
+      );
     }
-
     let xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
     for (const event of significantEvents) {
       const eventId = event.id;
       const originalPlace = event.place;
       if (!eventId || !originalPlace) {
-        console.warn(`Skipping event due to missing id or original place from D1 on page ${pageNumber}:`, event);
+        console.warn(
+          `Skipping event due to missing id or original place from D1 on page ${pageNumber}:`,
+          event,
+        );
         continue;
       }
-      const mag = typeof event.magnitude === 'number' ? event.magnitude.toFixed(1) : 'unknown';
+      const mag =
+        typeof event.magnitude === "number"
+          ? event.magnitude.toFixed(1)
+          : "unknown";
       const place = originalPlace;
       let lastmodTimestamp;
-
-      // Logic updated to rely on event_time since geojson_feature.properties.updated is no longer available/reliable.
-      if (typeof event.event_time === 'number') {
-        // event_time is in MS in D1 (INTEGER), based on production data verification.
-        // Check if it's very small (seconds) or large (ms)
-        // If < 20000000000, it's likely seconds.
-        if (event.event_time < 20000000000) {
-             lastmodTimestamp = event.event_time * 1000;
+      if (typeof event.event_time === "number") {
+        if (event.event_time < 2e10) {
+          lastmodTimestamp = event.event_time * 1e3;
         } else {
-             lastmodTimestamp = event.event_time;
+          lastmodTimestamp = event.event_time;
         }
       }
-
-      if (!eventId || typeof lastmodTimestamp !== 'number') {
-        console.warn(`Skipping event due to missing id or invalid/missing lastmodTimestamp on page ${pageNumber}:`, event);
+      if (!eventId || typeof lastmodTimestamp !== "number") {
+        console.warn(
+          `Skipping event due to missing id or invalid/missing lastmodTimestamp on page ${pageNumber}:`,
+          event,
+        );
         continue;
       }
       const locationSlug = slugify(place);
       const sitemapPath = `m${mag}-${locationSlug}-${eventId}`;
-      const locUrl = `${BASE_URL}/quake/${sitemapPath}`;
+      const locUrl = `${BASE_URL2}/quake/${sitemapPath}`;
       try {
         const lastmodDate = new Date(lastmodTimestamp);
         if (isNaN(lastmodDate.getTime())) {
-            console.warn(`Invalid lastmod date for event ${eventId} on page ${pageNumber} with timestamp ${lastmodTimestamp}`);
-            continue;
+          console.warn(
+            `Invalid lastmod date for event ${eventId} on page ${pageNumber} with timestamp ${lastmodTimestamp}`,
+          );
+          continue;
         }
         const lastmod = lastmodDate.toISOString();
         xml += `<url><loc>${escapeXml(locUrl)}</loc><lastmod>${lastmod}</lastmod></url>`;
-      } catch(dateError) {
-         console.error(`Error processing date for event ${eventId} on page ${pageNumber}: ${dateError.message}`);
-         continue;
+      } catch (dateError) {
+        console.error(
+          `Error processing date for event ${eventId} on page ${pageNumber}: ${dateError.message}`,
+        );
+        continue;
       }
     }
     xml += `</urlset>`;
-    return new Response(xml, { headers: { "Content-Type": "application/xml" } });
-
+    return new Response(xml, {
+      headers: { "Content-Type": "application/xml" },
+    });
   } catch (error) {
-    console.error(`Error generating paginated earthquake sitemap for page ${pageNumber}:`, error.message);
-    return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- Error processing page ${pageNumber}: ${escapeXml(error.message)} --></urlset>`, { headers: { "Content-Type": "application/xml" }, status: 500 });
+    console.error(
+      `Error generating paginated earthquake sitemap for page ${pageNumber}:`,
+      error.message,
+    );
+    return new Response(
+      `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><!-- Error processing page ${pageNumber}: ${escapeXml(error.message)} --></urlset>`,
+      { headers: { "Content-Type": "application/xml" }, status: 500 },
+    );
   }
 }
-
-
-/**
- * Handles requests for earthquake sitemaps.
- * If the path is '/sitemaps/earthquakes-index.xml', it generates the sitemap index.
- * If the path matches '/sitemaps/earthquakes-(\\d+).xml', it generates a paginated sitemap.
- *
- * @param {object} context - The Cloudflare Pages function context.
- * @param {object} context.env - Environment variables.
- * @param {object} context.env.DB - The D1 database binding.
- * @param {Request} context.request - The incoming HTTP request.
- * @returns {Promise<Response>} An XML response.
- */
-export async function handleEarthquakesSitemap(context) {
+async function handleEarthquakesSitemap(context) {
   const { env, request } = context;
   const url = new URL(request.url);
   const pathname = url.pathname;
-
   if (!env.DB) {
     console.error("Database not configured in handleEarthquakesSitemap");
     const errorXml = `<?xml version="1.0" encoding="UTF-8"?><error><message>Database not configured</message></error>`;
-    return new Response(errorXml, { headers: { "Content-Type": "application/xml" }, status: 500 });
+    return new Response(errorXml, {
+      headers: { "Content-Type": "application/xml" },
+      status: 500,
+    });
   }
-
-  // Removed the block for handling '/sitemaps/earthquakes-index.xml'
-  // as this functionality is now part of the main index-sitemap.js
-
-  const pageMatch = pathname.match(/\/sitemaps\/earthquakes-(\d+)\.xml$/); // Reverted to /sitemaps/ prefix
-
+  const pageMatch = pathname.match(/\/sitemaps\/earthquakes-(\d+)\.xml$/);
   if (pageMatch && pageMatch[1]) {
     const pageNumber = parseInt(pageMatch[1], 10);
     if (isNaN(pageNumber) || pageNumber < 1) {
@@ -145,7 +137,7 @@ export async function handleEarthquakesSitemap(context) {
     }
     return generatePaginatedEarthquakeSitemap(env.DB, pageNumber);
   }
-
-  // Fallback or error for unexpected paths to this handler
   return new Response("Sitemap not found", { status: 404 });
 }
+
+export { handleEarthquakesSitemap };

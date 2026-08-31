@@ -1,19 +1,17 @@
-
-// functions/consumers/geojson-archive.js
-
-export default {
+var geojson_archive_default = {
   async queue(batch, env) {
     const promises = [];
     for (const message of batch.messages) {
       const { id, geojson } = message.body;
-
       if (!id || !geojson) {
         console.error("Invalid message body:", message.body);
         message.retry({ reason: "Invalid message body" });
         continue;
       }
-
-      const promise = env.GEOJSON_BUCKET.put(id + ".json", JSON.stringify(geojson))
+      const promise = env.GEOJSON_BUCKET.put(
+        id + ".json",
+        JSON.stringify(geojson),
+      )
         .then(() => {
           console.log(`Successfully archived GeoJSON for earthquake ${id}`);
           message.ack();
@@ -27,3 +25,5 @@ export default {
     await Promise.all(promises);
   },
 };
+
+export { geojson_archive_default as default };
