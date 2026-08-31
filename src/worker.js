@@ -857,7 +857,9 @@ async function handleClusterDefinitionPost({ request, env, ctx }) {
       return new Response(
         JSON.stringify({ status: "already_registered", id: clusterId }),
         {
-          status: 200,
+          // 201 even when already registered: the deployed frontend treats only
+          // 201 as success and retries on any other status.
+          status: 201,
           headers: { "Content-Type": "application/json" },
         },
       );
