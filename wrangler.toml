@@ -20,7 +20,7 @@ kv_namespaces = [
   # The deploy tooling that generated the manifest and uploaded dist/ assets into this
   # namespace is lost (see RECONSTITUTION.md). Replace the placeholder ID with the real
   # namespace ID from the Cloudflare dashboard before deploying.
-  { binding = "STATIC_KV", id = "REPLACE_WITH_STATIC_KV_NAMESPACE_ID", preview_id = "REPLACE_WITH_STATIC_KV_PREVIEW_ID" }
+  { binding = "STATIC_KV", id = "103d46c25b71471489abb0989cc2ecfa", preview_id = "103d46c25b71471489abb0989cc2ecfa" }
 ]
 
 [[r2_buckets]]
@@ -116,8 +116,8 @@ kv_namespaces = [
   { binding = "USGS_LAST_RESPONSE_KV", id = "8bebf55e19a14299b35d1d4f6a53d2b5" }, # This will use the id from the top-level definition
   # STATIC_KV serves the frontend assets live (see note at top-level kv_namespaces).
   # NOTE: env-level arrays fully replace top-level ones in wrangler, so this binding
-  # must be repeated here. Replace the placeholder with the real namespace ID.
-  { binding = "STATIC_KV", id = "REPLACE_WITH_STATIC_KV_NAMESPACE_ID" }
+  # must be repeated here. Real ID filled in from the deployed settings on 2026-08-31.
+  { binding = "STATIC_KV", id = "103d46c25b71471489abb0989cc2ecfa" }
 ]
 
 d1_databases = [
