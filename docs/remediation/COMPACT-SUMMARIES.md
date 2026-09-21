@@ -1,6 +1,6 @@
 # Compact stored cluster summaries
 
-Status: producer and consumer verified in production; a previous-build asset compatibility follow-up is being released. Previous block's production evidence was committed first as `02f044a`. This is the next bounded subrelease of package 5A; actual verification and rollout belong in the release ledger.
+Status: bounded stored-summary delivery block complete in production, including the previous-build asset compatibility follow-up. Previous block's production evidence was committed first as `02f044a`; producer, consumer and compatibility source commits are `c37ca19`, `8265d03` and `2b80dda`. Exact verification and rollout are in [RELEASE-LEDGER.md](RELEASE-LEDGER.md). This closes the large cluster-list transfer defect (PERF-1) for the current consumer; package 5A's scientifically canonical generation/identity work still depends on package 3.
 
 ## Scope and sequence
 

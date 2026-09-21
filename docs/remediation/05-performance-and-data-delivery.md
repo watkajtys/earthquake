@@ -1,6 +1,6 @@
 # 5. Performance and data delivery
 
-Status: planned. Owns PERF-1 through PERF-5 and F7. Depends on safe endpoints from package 2, reliable writers/canonical cluster identities from package 3 and compatible route/refresh behavior from package 4. Independent asset and list-rendering improvements may be developed earlier, but merge shared components sequentially.
+Status: partially implemented. The bounded [stored-summary delivery block](COMPACT-SUMMARIES.md) is complete in production: PERF-1's initial membership-graph download is removed, and F7's cards use stored counts without client-feed reconstruction. Exact prior-build assets are retained for this transition. Scientific generation/identity repair, complete feeds (5B), remaining rendering (5C), general asset retention/optimization (5D) and sitemaps (5E) remain open; see [RELEASE-LEDGER.md](RELEASE-LEDGER.md) for observed evidence. This brief preserves the broader planned scope below. It owns PERF-1 through PERF-5 and F7 and depends on packages 2–4; merge shared components sequentially.
 
 ## Outcome and observed baseline
 
