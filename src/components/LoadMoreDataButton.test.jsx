@@ -6,6 +6,12 @@ import LoadMoreDataButton from './LoadMoreDataButton';
 const mockLoadMonthlyData = vi.fn();
 
 describe('LoadMoreDataButton', () => {
+  it('keeps a retry action after the first monthly load fails', () => {
+    const retry = vi.fn();
+    render(<LoadMoreDataButton hasAttemptedMonthlyLoad monthlyHasLoaded={false} monthlyError="Unavailable" isLoadingMonthly={false} loadMonthlyData={retry} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry 14 & 30-Day Data' }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
   it('renders button when hasAttemptedMonthlyLoad is false', () => {
     render(
       <LoadMoreDataButton

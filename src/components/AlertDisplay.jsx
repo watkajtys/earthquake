@@ -1,5 +1,6 @@
 import React, { memo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { buildEarthquakePath, buildModalNavigationState, eventIdFromDetailUrl } from '../utils/entityRoutes.js';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext';
 import { getMagnitudeColorStyle, formatTimeAgo } from '../utils/utils'; // Added formatTimeAgo
 
@@ -18,6 +19,7 @@ import { getMagnitudeColorStyle, formatTimeAgo } from '../utils/utils'; // Added
 const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning }) => {
   const { tsunamiTriggeringQuake, activeAlertTriggeringQuakes } = useEarthquakeDataState();
   const navigate = useNavigate();
+  const location = useLocation();
 
   /**
    * Handles click events on an alert.
@@ -28,16 +30,9 @@ const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning }) => {
    * @param {Object} quake - The earthquake object associated with the alert.
    */
   const handleAlertClick = useCallback((quake) => {
-    if (quake && quake.properties && quake.properties.detail) {
-        const detailUrl = quake.properties.detail;
-        navigate(`/quake/${encodeURIComponent(detailUrl)}`);
-    } else if (quake && quake.id) {
-        const detailUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${quake.id}.geojson`;
-        navigate(`/quake/${encodeURIComponent(detailUrl)}`);
-    } else {
-        console.warn("Alert clicked, but no valid quake data found to navigate.", quake);
-    }
-  }, [navigate]);
+    const path = buildEarthquakePath(quake?.id || eventIdFromDetailUrl(quake?.properties?.detail));
+    if (path) navigate(path, { state: buildModalNavigationState(location) });
+  }, [navigate, location]);
 
   if (!currentAlertConfig && !hasRecentTsunamiWarning) {
     return null;

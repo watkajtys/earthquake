@@ -16,16 +16,17 @@
  *   which itself is an object with `message` (string) and optionally `status` (number).
  *   Example of error object: `{ error: { message: "HTTP error! status: 404", status: 404 } }`
  */
-export const fetchUsgsData = async (apiUrl) => {
+export const fetchUsgsData = async (apiUrl, { signal } = {}) => {
   try {
     const proxyUrl = `/api/usgs-proxy?apiUrl=${encodeURIComponent(apiUrl)}`;
-    const response = await fetch(proxyUrl);
+    const response = await fetch(proxyUrl, { signal });
     if (!response.ok) {
       throw { message: `HTTP error! status: ${response.status}`, status: response.status };
     }
     const data = await response.json();
     return data; // Or { data: data } if you prefer to wrap successful responses
   } catch (error) {
+    if (signal?.aborted) throw signal.reason || error;
     console.error("USGS API Service Error:", error);
     return { 
       error: { 

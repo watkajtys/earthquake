@@ -15,15 +15,22 @@ import { calculateDistance } from '../../common/mathUtils.js';
  * @param {object[]} nearbyEarthquakesData - An array of GeoJSON earthquake features representing potentially nearby events. This data is filtered by the component.
  * @param {number} dataSourceTimespanDays - The number of days of data the `nearbyEarthquakesData` prop typically represents (e.g., 30 for a monthly feed). Used for context in descriptive text.
  * @param {boolean} isLoadingMonthly - Indicates if the 30-day data is currently being loaded.
- * @param {boolean} hasAttemptedMonthlyLoad - Indicates if an attempt to load 30-day data has been made.
+ * @param {number} dataSourceGeneratedAtMs - Source generation time anchoring the rolling feed's coverage.
  * @returns {JSX.Element} The regional seismicity chart component or a message if data is insufficient.
  */
-function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dataSourceTimespanDays, isLoadingMonthly, hasAttemptedMonthlyLoad }) {
+function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dataSourceTimespanDays = 7, dataSourceGeneratedAtMs, isLoadingMonthly }) {
   const chartContainerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(380);
 
   const REGIONAL_RADIUS_KM = 160; // Approx 100 miles radius for nearby events
-  const TIME_WINDOW_DAYS = 30;    // Default look back 30 days for data search
+  const TIME_WINDOW_DAYS = 30;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const coverageDays = Number.isFinite(dataSourceTimespanDays) && dataSourceTimespanDays > 0 ? dataSourceTimespanDays : 7;
+  const coverageEnd = Number.isFinite(dataSourceGeneratedAtMs) ? dataSourceGeneratedAtMs : Date.now();
+  const coverageStart = coverageEnd - coverageDays * DAY_MS;
+  const eventTime = currentEarthquake?.properties?.time;
+  const hasHistoricalCoverage = Number.isFinite(eventTime) && eventTime > coverageStart;
+  const fullPrecedingWindowCovered = hasHistoricalCoverage && coverageStart <= eventTime - TIME_WINDOW_DAYS * DAY_MS && coverageEnd >= eventTime;
 
   useEffect(() => {
       const chartContainer = chartContainerRef.current;
@@ -75,10 +82,10 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
       const qId = quake.id;
 
       if (qId === currentEarthquake.id) return false; // currentEarthquake is already validated
-      if (qTime >= currentTime || qTime < startTimeWindow) return false;
+      if (qTime >= currentTime || qTime < startTimeWindow || qTime < coverageStart || qTime > coverageEnd) return false;
       return calculateDistance(currentLat, currentLon, qLat, qLon) <= REGIONAL_RADIUS_KM;
     });
-  }, [currentEarthquake, nearbyEarthquakesData, REGIONAL_RADIUS_KM, TIME_WINDOW_DAYS]);
+  }, [currentEarthquake, nearbyEarthquakesData, REGIONAL_RADIUS_KM, TIME_WINDOW_DAYS, coverageStart, coverageEnd]);
 
   const displayWindowDays = useMemo(() => {
     let calculatedDisplayDays = TIME_WINDOW_DAYS;
@@ -111,6 +118,7 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
     for (let i = 0; i < displayWindowDays; i++) {
         const dateKeyDate = new Date(currentEventDate);
         dateKeyDate.setDate(currentEventDate.getDate() - i);
+        if (dateKeyDate.getTime() > coverageEnd) continue;
         eventsByDay[dateKeyDate.toLocaleDateString('en-CA')] = { date: dateKeyDate, count: 0, magnitudes: [] };
     }
     regionalEvents.forEach(quake => {
@@ -125,26 +133,20 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
       }
     });
     return Object.values(eventsByDay)
+                 // Preserve observed events on the partial first day, but never
+                 // synthesize a zero for a day outside the available coverage.
+                 .filter(day => day.count > 0 || day.date.getTime() >= coverageStart)
                  .sort((a, b) => a.date - b.date)
                  .map(day => ({ ...day, avgMag: day.magnitudes.length > 0 ? (day.magnitudes.reduce((s,m)=>s+m,0) / day.magnitudes.length) : null }));
-  }, [regionalEvents, currentEarthquake, displayWindowDays]);
+  }, [regionalEvents, currentEarthquake, displayWindowDays, coverageStart, coverageEnd]);
 
   // Conditional returns for no current quake, loading, or no regional events
   if (!currentEarthquake) {
     return <div className="p-3 rounded-md text-center text-sm text-slate-500">Select an earthquake to see regional seismicity.</div>;
   }
 
-    // Determine if we are specifically waiting for monthly (30-day) data to load.
-    const isWaitingForMonthlyData =
-        dataSourceTimespanDays === 30 &&
-        hasAttemptedMonthlyLoad &&
-        isLoadingMonthly;
-
-    // Original condition for when nearbyEarthquakesData itself is absent (e.g., initial load of 7-day data).
-    const isNearbyDataMissing = !nearbyEarthquakesData;
-
-    // Combine conditions: show loader if nearby data is missing OR if we are specifically waiting for monthly data.
-    const shouldShowLoadingSkeleton = isNearbyDataMissing || isWaitingForMonthlyData;
+    // Keep available observations visible during a monthly refresh.
+    const shouldShowLoadingSkeleton = !nearbyEarthquakesData;
 
     if (shouldShowLoadingSkeleton) {
         return (
@@ -155,19 +157,26 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
               <div className="w-full h-40 bg-gray-200 rounded-md flex items-center justify-center mt-2">
                 {/* Make the message more specific if waiting for monthly data */}
                 <p className="text-gray-400 text-xs">
-                  {isWaitingForMonthlyData ? "Loading 30-day regional data..." : "Loading regional data..."}
+                  {isLoadingMonthly ? "Loading 30-day regional data..." : "Loading regional data..."}
                 </p>
               </div>
             </div>
           </div>
         );
     }
+  if (!hasHistoricalCoverage) {
+    return <div className="p-3 rounded-md">
+      <h3 className="text-md font-semibold text-blue-700 mb-2">Regional Activity</h3>
+      <p className="text-xs text-slate-600">The available {coverageDays}-day feed does not cover the period before this historical event. Historical activity is unavailable, not zero.</p>
+    </div>;
+  }
   if (regionalEvents.length === 0) {
     return (
       <div className="p-3 rounded-md">
         <h3 className="text-md font-semibold text-blue-700 mb-2">Regional Activity</h3>
         <p className="text-xs text-slate-600 text-center py-5">
-          No other significant earthquakes recorded within {REGIONAL_RADIUS_KM}km in the {TIME_WINDOW_DAYS} days prior to this event.
+          No matching earthquakes were found within {REGIONAL_RADIUS_KM}km in the available {coverageDays}-day feed before this event.
+          {!fullPrecedingWindowCovered && ' This feed does not cover the complete 30 days before the event; activity outside its coverage is unknown.'}
         </p>
       </div>
     );
@@ -207,8 +216,9 @@ function RegionalSeismicityChart({ currentEarthquake, nearbyEarthquakesData, dat
     <div className="p-3 rounded-md">
       <h3 className="text-md font-semibold text-blue-700 mb-1">Regional Activity Prior to Event</h3>
       <p className="text-xs text-slate-500 mb-2">
-        Using regional data from the last ~{dataSourceTimespanDays || 30} days, searching within {REGIONAL_RADIUS_KM}km.
-        Chart displays activity in the {displayWindowDays} days prior to this M{currentEarthquake.properties.mag?.toFixed(1)} event.
+        Using the available {coverageDays}-day feed, searching within {REGIONAL_RADIUS_KM}km.
+        Chart shows covered days within the {displayWindowDays} days prior to this M{currentEarthquake.properties.mag?.toFixed(1)} event.
+        {!fullPrecedingWindowCovered && ' The full preceding 30-day window is not covered; missing history is not shown as zero activity.'}
       </p>
       <div ref={chartContainerRef} className="w-full overflow-hidden">
         <svg width="100%" height={svgHeight} viewBox={`0 0 ${containerWidth} ${svgHeight}`} className="font-sans">

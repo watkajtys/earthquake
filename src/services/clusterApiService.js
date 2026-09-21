@@ -1,4 +1,3 @@
-import { findActiveClusters as localFindActiveClusters } from '../utils/clusterUtils.js';
 
 /**
  * @file clusterApiService.js
@@ -101,40 +100,19 @@ export async function fetchClusterDefinition(clusterId) {
  * @throws {Error} If `clusterId` is invalid, or if the fetch operation fails due to network
  *                 or server issues (other than 404), or if JSON parsing fails.
  */
-export async function fetchClusterWithQuakes(clusterId) {
-  if (!clusterId) {
-    console.error("fetchClusterWithQuakes: Invalid clusterId provided.");
-    throw new Error("Invalid clusterId");
-  }
-
-  try {
-    const response = await fetch(`/api/cluster-detail-with-quakes?id=${encodeURIComponent(clusterId)}`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
-
-    if (response.status === 200) {
-      const data = await response.json();
-      console.log(`Cluster with quakes for ${clusterId} fetched successfully.`);
-      return data; // Expected full cluster definition including 'quakes' array
-    } else if (response.status === 404) {
-      console.log(`Cluster with quakes for ${clusterId} not found (404).`);
-      return null;
-    } else {
-      const errorBody = await response.text();
-      console.error(
-        `Failed to fetch cluster with quakes for ${clusterId}. Status: ${response.status}`,
-        errorBody
-      );
-      throw new Error(`Failed to fetch cluster with quakes. Status: ${response.status}`);
-    }
-  } catch (error) {
-    // This catches network errors, or errors from response.json() if status was 200 but body wasn't valid JSON.
-    console.error(`Network or parsing error while fetching cluster with quakes for ${clusterId}:`, error);
-    throw error; // Re-throw the caught error
-  }
+export async function fetchClusterWithQuakes(selector, { signal } = {}) {
+  const entries = typeof selector === 'string' ? [['id', selector]] : Object.entries(selector || {});
+  if (entries.length !== 1 || !['id', 'clusterId', 'slug', 'route'].includes(entries[0][0]) ||
+      typeof entries[0][1] !== 'string' || !entries[0][1]) throw new Error('Invalid cluster selector');
+  const query = new URLSearchParams(entries);
+  const response = await fetch(`/api/cluster-detail-with-quakes?${query}`, {
+    method: 'GET', headers: { Accept: 'application/json' }, signal,
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Cluster details request failed (HTTP ${response.status}).`);
+  const data = await response.json();
+  if (!data || typeof data.id !== 'string' || !Array.isArray(data.quakes)) throw new Error('Invalid cluster details response.');
+  return data;
 }
 
 /**
@@ -153,30 +131,12 @@ export async function fetchClusterWithQuakes(clusterId) {
  * @returns {Promise<Array<Array<Object>>>} A promise that resolves to an array of clusters. Each cluster is an array of earthquake objects.
  * @throws {Error} If the backend request fails and the client-side fallback calculation also fails, or if input parameters are invalid.
  */
-export async function fetchActiveClusters() {
-  try {
-    const response = await fetch('/api/get-clusters', {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log(`Active clusters fetched from server. Cache-Status: ${response.headers.get('X-Cache-Status')}`);
-      return data;
-    } else {
-      const errorBody = await response.text();
-      console.error(
-        `Failed to fetch active clusters from server. Status: ${response.status}. Body: ${errorBody}.`
-      );
-      // Depending on requirements, you might want to return an empty array or throw an error.
-      // For a non-critical feature, returning an empty array might be preferable.
-      return [];
-    }
-  } catch (error) {
-    console.error('Network error while fetching active clusters:', error);
-    return []; // Return an empty array on network error to prevent UI crashes.
-  }
+export async function fetchActiveClusters({ signal } = {}) {
+  const response = await fetch('/api/get-clusters', {
+    method: 'GET', headers: { Accept: 'application/json' }, signal,
+  });
+  if (!response.ok) throw new Error(`Active clusters request failed (HTTP ${response.status}).`);
+  const data = await response.json();
+  if (!Array.isArray(data)) throw new Error('Invalid active clusters response.');
+  return data;
 }

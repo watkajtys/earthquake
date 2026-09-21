@@ -22,7 +22,7 @@ let mockOnDataLoadedForSeoCallback;
 // let mockOnCloseCallback; // Not directly used in SEO tests
 
 vi.mock('./EarthquakeDetailView', () => ({
-  default: vi.fn(({ onDataLoadedForSeo, onClose }) => {
+  default: vi.fn(({ onDataLoadedForSeo }) => {
     mockOnDataLoadedForSeoCallback = onDataLoadedForSeo;
     // mockOnCloseCallback = onClose; // Keep if renderComponent needs it
     return <div data-testid="mock-detail-view">Mock Detail View</div>;
@@ -144,7 +144,7 @@ describe('EarthquakeDetailModalComponent SEO', () => {
     const descriptionTime = new Date(props.time).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', timeZone: 'UTC'});
     const expectedDescription = `Detailed report of the M ${props.mag} earthquake that struck near ${props.place} on ${titleDate} at ${descriptionTime} (UTC). Magnitude: ${props.mag}, Depth: ${geom.coordinates[2]} km. Location: ${geom.coordinates[1]?.toFixed(2)}, ${geom.coordinates[0]?.toFixed(2)}. Stay updated with Earthquakes Live.`;
     const expectedKeywords = `earthquake, seismic event, M ${props.mag}, ${props.place.split(', ').join(', ')}, earthquake details, usgs event, ${usgsEventId}`;
-    const expectedCanonicalUrl = `https://earthquakeslive.com/quake/${encodeURIComponent('test-detail-url')}`;
+    const expectedCanonicalUrl = 'https://earthquakeslive.com/quake/id/testquake123';
 
     expect(lastSeoCall.eventJsonLd).toEqual({
         '@context': 'https://schema.org',

@@ -155,31 +155,27 @@ describe('clusterApiService', () => {
 
       const result = await fetchActiveClusters();
       expect(result).toEqual(mockServerCalculatedData);
-      expect(consoleLogSpy).toHaveBeenCalledWith('Active clusters fetched from server. Cache-Status: Hit');
+
     });
 
-    it('should return an empty array if the server responds with an error', async () => {
+    it('throws if the server responds with an error', async () => {
       server.use(
         http.get('/api/get-clusters', () => {
           return new HttpResponse('Internal Server Error', { status: 500 });
         })
       );
 
-      const result = await fetchActiveClusters();
-      expect(result).toEqual([]);
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch active clusters from server. Status: 500. Body: Internal Server Error.');
+      await expect(fetchActiveClusters()).rejects.toThrow('HTTP 500');
     });
 
-    it('should return an empty array on network error', async () => {
+    it('throws on network error', async () => {
       server.use(
         http.get('/api/get-clusters', () => {
           return HttpResponse.error();
         })
       );
 
-      const result = await fetchActiveClusters();
-      expect(result).toEqual([]);
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Network error while fetching active clusters:', expect.any(Error));
+      await expect(fetchActiveClusters()).rejects.toThrow();
     });
   });
 });

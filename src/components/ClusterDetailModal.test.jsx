@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react'; // Added 'within'
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react'; // Added 'within'
+import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { expect, describe, it, vi } from 'vitest';
 import ClusterDetailModal from './ClusterDetailModal';
@@ -102,7 +103,6 @@ describe('ClusterDetailModal Quake Item Rendering', () => {
       const quakeItemTitle = `Click to view details for ${magnitudeText} - ${locationText}`;
 
       const quakeButtonElement = screen.getByTitle(quakeItemTitle);
-      // eslint-disable-next-line testing-library/no-node-access
       expect(quakeButtonElement).toBeInTheDocument(); // Ensure the button itself is found
 
       // Use `within` to scope queries to this specific quake item's button
@@ -112,9 +112,7 @@ describe('ClusterDetailModal Quake Item Rendering', () => {
 
       // 1. Check if magnitude and location are on the same line
       // Both magnitudeEl (<p>) and locationEl (<p>) should be direct children of the same flex div
-      // eslint-disable-next-line testing-library/no-node-access
       const sharedParent = magnitudeEl.parentElement;
-      // eslint-disable-next-line testing-library/no-node-access
       expect(sharedParent).toBe(locationEl.parentElement); // Magnitude and Location are in the same div
       expect(sharedParent.className).toMatch(/flex justify-between items-center/);
 
@@ -141,7 +139,6 @@ describe('ClusterDetailModal Quake Item Rendering', () => {
 
       // 4. Check Date/Depth div for correct text color
       // The date/depth div is the second child div of the button
-      // eslint-disable-next-line testing-library/no-node-access
       const dateDepthDiv = quakeButtonElement.children[1];
       expect(dateDepthDiv).not.toBeNull();
       // Ensure it does NOT have text-slate-300 or other explicit color classes like text-red-500, text-cyan-900 etc.
@@ -154,5 +151,57 @@ describe('ClusterDetailModal Quake Item Rendering', () => {
 
       expect(mockProps.getMagnitudeColorStyle).toHaveBeenCalledWith(quake.properties.mag);
     });
+  });
+});
+
+
+describe('ClusterDetailModal keyboard behavior', () => {
+  it.each(['close', 'content', 'outside'])('dismisses once for Escape from %s focus', target => {
+    const onClose = vi.fn();
+    render(<><button>Outside</button><ClusterDetailModal {...mockProps} onClose={onClose} /></>);
+    const focusTarget = target === 'close' ? screen.getByRole('button', { name: 'Close modal' })
+      : target === 'content' ? screen.getByTitle(/details for M 5.8/) : screen.getByRole('button', { name: 'Outside' });
+    focusTarget.focus();
+    fireEvent.keyDown(focusTarget, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps focus through callback changes and calls the latest callback', () => {
+    const oldClose = vi.fn();
+    const newClose = vi.fn();
+    const { rerender } = render(<ClusterDetailModal {...mockProps} onClose={oldClose} />);
+    const event = screen.getByTitle(/details for M 5.8/);
+    event.focus();
+    rerender(<ClusterDetailModal {...mockProps} onClose={newClose} />);
+    expect(event).toHaveFocus();
+    fireEvent.keyDown(event, { key: 'Escape' });
+    expect(oldClose).not.toHaveBeenCalled();
+    expect(newClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('activates quake selection once per native Enter and Space', async () => {
+    const user = userEvent.setup();
+    const onIndividualQuakeSelect = vi.fn();
+    render(<ClusterDetailModal {...mockProps} onIndividualQuakeSelect={onIndividualQuakeSelect} />);
+    screen.getByTitle(/details for M 5.8/).focus();
+    await user.keyboard('{Enter}');
+    expect(onIndividualQuakeSelect).toHaveBeenCalledTimes(1);
+    await user.keyboard(' ');
+    expect(onIndividualQuakeSelect).toHaveBeenCalledTimes(2);
+  });
+
+  it('traps the current controls and restores the initiating button after dismissal', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<><button>Open cluster</button></>);
+    const trigger = screen.getByRole('button', { name: 'Open cluster' });
+    trigger.focus();
+    rerender(<><button>Open cluster</button><ClusterDetailModal {...mockProps} /></>);
+    expect(screen.getByRole('button', { name: 'Close modal' })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(screen.getByTitle(/details for M 4.5/)).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Close modal' })).toHaveFocus();
+    rerender(<><button>Open cluster</button></>);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open cluster' })).toHaveFocus());
   });
 });

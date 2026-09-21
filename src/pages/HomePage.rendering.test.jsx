@@ -117,6 +117,12 @@ describe('HomePage Rendering and Basic UI', () => {
     }, { timeout: 5000 });
   });
 
+  it('loads globe assets after Strict Mode replays mount effects', async () => {
+    localStorage.clear();
+    render(<React.StrictMode><MemoryRouter initialEntries={['/']}><App /></MemoryRouter></React.StrictMode>);
+    expect(await screen.findByTestId('mock-globe-view')).toBeInTheDocument();
+  });
+
   describe('Accessibility', () => {
     it('should have no axe violations on initial render', async () => {
       mockUseEarthquakeDataState.mockReturnValue({
@@ -141,6 +147,21 @@ describe('HomePage Rendering and Basic UI', () => {
     });
   });
 
+  it.each([['/overview', 'Overview'], ['/feeds', 'Feeds & Details'], ['/overview/', 'Overview'], ['/feeds/', 'Feeds & Details']])('renders %s in the main pane without a duplicate sidebar', async (path, heading) => {
+    render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: heading, exact: true })).toBeInTheDocument();
+    expect(screen.getByRole('main')).toHaveTextContent(heading);
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
+  });
+
+  it('renders a direct cluster route while global feed initialization remains pending', async () => {
+    mockUseEarthquakeDataState.mockReturnValue({ ...defaultEarthquakeData, isLoadingInitialData: true, isLoadingDaily: true, isLoadingWeekly: true });
+    render(<MemoryRouter initialEntries={['/cluster/stored-slug']}><App /></MemoryRouter>);
+    expect(await screen.findByTestId('mock-cluster-detail-wrapper')).toBeInTheDocument();
+    expect(screen.queryByText('Seismic Data Visualization')).not.toBeInTheDocument();
+  });
+
   describe('Cluster Loading State Management', () => {
     it('passes reconstructed clusters to the globe after fetching', async () => {
       // 1. Define the mock earthquake that will be in a cluster.
@@ -159,7 +180,7 @@ describe('HomePage Rendering and Basic UI', () => {
 
       // 3. Mock the API call to return the new cluster summary format.
       const mockClusterSummary = [{
-        clusterId: 'summary1',
+        id: 'summary1',
         earthquakeIds: JSON.stringify([mockQuake.id]),
         // ... other summary properties can be added if needed by the component
       }];

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import FeedsPageLayout from './FeedsPageLayout';
 // Corrected imports for Context objects
@@ -65,6 +65,51 @@ const mockProps = {
 describe('FeedsPageLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks(); // Reset mocks before each test
+  });
+
+  it('keeps weekly coverage labels after a failed first monthly attempt and exposes retry state', () => {
+    render(<EarthquakeDataContext.Provider value={{ ...mockEarthquakeDataContextValue, hasAttemptedMonthlyLoad: true, monthlyHasLoaded: false, monthlyError: 'Unavailable' }}>
+      <UIStateContext.Provider value={{ ...mockUIStateContextValue, activeFeedPeriod: 'feelable_quakes' }}><FeedsPageLayout {...mockProps} /></UIStateContext.Provider>
+    </EarthquakeDataContext.Provider>);
+    expect(PaginatedEarthquakeTable).toHaveBeenLastCalledWith(expect.objectContaining({ title: expect.stringContaining('Last 7 Days'), paginationKey: 'feelable_quakes' }), undefined);
+    expect(LoadMoreDataButton).toHaveBeenLastCalledWith(expect.objectContaining({ monthlyHasLoaded: false, monthlyError: 'Unavailable' }), undefined);
+  });
+
+  it('treats a successful empty month as loaded coverage', () => {
+    render(<EarthquakeDataContext.Provider value={{ ...mockEarthquakeDataContextValue, hasAttemptedMonthlyLoad: true, monthlyHasLoaded: true }}>
+      <UIStateContext.Provider value={{ ...mockUIStateContextValue, activeFeedPeriod: 'feelable_quakes' }}><FeedsPageLayout {...mockProps} /></UIStateContext.Provider>
+    </EarthquakeDataContext.Provider>);
+    expect(PaginatedEarthquakeTable).toHaveBeenLastCalledWith(expect.objectContaining({ title: expect.stringContaining('Last 30 Days'), earthquakes: [] }), undefined);
+    expect(FeedSelector).toHaveBeenLastCalledWith(expect.objectContaining({ monthlyHasLoaded: true }), undefined);
+  });
+
+  it('shows unavailable rather than zero statistics after an initial extended-period failure', () => {
+    render(<EarthquakeDataContext.Provider value={{ ...mockEarthquakeDataContextValue, hasAttemptedMonthlyLoad: true, monthlyHasLoaded: false, monthlyError: 'Unavailable' }}>
+      <UIStateContext.Provider value={{ ...mockUIStateContextValue, activeFeedPeriod: 'last_30_days' }}><FeedsPageLayout {...mockProps} /></UIStateContext.Provider>
+    </EarthquakeDataContext.Provider>);
+    expect(screen.getByText(/This period is unavailable/)).toBeInTheDocument();
+    expect(SummaryStatisticsCard).not.toHaveBeenCalled();
+    expect(PaginatedEarthquakeTable).not.toHaveBeenCalled();
+  });
+
+  it('retries the month when a filtered 30-day feed fails to refresh', () => {
+    const retry = vi.fn();
+    render(<EarthquakeDataContext.Provider value={{ ...mockEarthquakeDataContextValue, monthlyHasLoaded: true, monthlyError: 'Unavailable', loadMonthlyData: retry }}>
+      <UIStateContext.Provider value={{ ...mockUIStateContextValue, activeFeedPeriod: 'feelable_quakes' }}><FeedsPageLayout {...mockProps} /></UIStateContext.Provider>
+    </EarthquakeDataContext.Provider>);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry feed' }));
+    expect(retry).toHaveBeenCalledOnce();
+    expect(PaginatedEarthquakeTable).toHaveBeenLastCalledWith(expect.objectContaining({ isLoading: false }), undefined);
+  });
+
+  it('offers an explicit retry for a failed selected feed', () => {
+    const retry = vi.fn();
+    render(<EarthquakeDataContext.Provider value={{ ...mockEarthquakeDataContextValue, dailyError: 'Unavailable', refreshData: retry }}>
+      <UIStateContext.Provider value={mockUIStateContextValue}><FeedsPageLayout {...mockProps} /></UIStateContext.Provider>
+    </EarthquakeDataContext.Provider>);
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not refresh');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry feed' }));
+    expect(retry).toHaveBeenCalledOnce();
   });
 
   it('renders without crashing and displays child components', () => {
@@ -363,9 +408,10 @@ describe('FeedsPageLayout', () => {
       expect.objectContaining({
         title: 'Earthquakes (Last 14 Days)',
         earthquakes: [],
-        isLoading: false, // Changed to false to match current component behavior
+        isLoading: true,
       }),
       undefined
     );
+    expect(mockEarthquakeDataContextValue.loadMonthlyData).toHaveBeenCalledOnce();
   });
 });

@@ -12,17 +12,17 @@ import React, { memo } from 'react';
  * @param {function(): void} props.loadMonthlyData - Callback function to trigger the loading of monthly (extended) data.
  * @returns {JSX.Element} The LoadMoreDataButton component, or a loading message, or null if data has been loaded.
  */
-const LoadMoreDataButton = ({ hasAttemptedMonthlyLoad, isLoadingMonthly, loadMonthlyData }) => {
+const LoadMoreDataButton = ({ hasAttemptedMonthlyLoad, monthlyHasLoaded, monthlyError, isLoadingMonthly, loadMonthlyData }) => {
   return (
     <>
-      {!hasAttemptedMonthlyLoad && (
+      {(!hasAttemptedMonthlyLoad || monthlyHasLoaded === false || monthlyError) && (
         <div className="text-center py-3 mt-3 border-t border-slate-700">
           <button 
             onClick={loadMonthlyData} 
             disabled={isLoadingMonthly} 
             className="w-full bg-indigo-600 hover:bg-indigo-500 focus:bg-indigo-700 text-white px-4 py-2 text-sm font-medium rounded-md transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoadingMonthly ? 'Loading Extended Data...' : 'Load 14 & 30-Day Data'}
+            {isLoadingMonthly ? 'Loading Extended Data...' : monthlyError ? 'Retry 14 & 30-Day Data' : 'Load 14 & 30-Day Data'}
           </button>
         </div>
       )}

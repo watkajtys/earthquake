@@ -83,7 +83,7 @@ describe('EarthquakeDetailModalComponent Data and URL Handling', () => {
   });
 
   describe('dataSourceTimespanDays logic', () => {
-    test('passes correct props to EarthquakeDetailView when hasAttemptedMonthlyLoad is true', () => {
+    test('uses monthly coverage only after a successful monthly response', () => {
       const mockLoadMonthly = vi.fn();
       const mockAllEarthquakes = [{ id: 'a1' }];
       useEarthquakeDataState.mockReturnValue({
@@ -91,6 +91,7 @@ describe('EarthquakeDetailModalComponent Data and URL Handling', () => {
         earthquakesLast7Days: [{id: 's7'}],
         loadMonthlyData: mockLoadMonthly,
         hasAttemptedMonthlyLoad: true,
+        monthlyHasLoaded: true,
         isLoadingMonthly: false,
       });
 

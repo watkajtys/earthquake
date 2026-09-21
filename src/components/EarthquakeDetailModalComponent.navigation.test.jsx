@@ -66,7 +66,7 @@ describe('EarthquakeDetailModalComponent Navigation', () => {
     );
   };
 
-  test('calls navigate(-1) when onClose is triggered from EarthquakeDetailView', () => {
+  test('closes a direct entry to home regardless of external history length', () => {
     // Spy on and mock window.history.length to simulate a history stack
     vi.spyOn(window.history, 'length', 'get').mockReturnValue(3);
 
@@ -81,6 +81,12 @@ describe('EarthquakeDetailModalComponent Navigation', () => {
       }
     });
 
-    expect(mockNavigateGlobal).toHaveBeenCalledWith(-1);
+    expect(mockNavigateGlobal).toHaveBeenCalledWith('/', { replace: true, state: null });
   });
+  test('returns to a validated in-app cluster location', () => {
+    renderComponent({}, [{ pathname: '/quake/id/test-detail-url', state: { inAppNavigation: true, returnTo: '/cluster/stored?view=map' } }]);
+    act(() => mockOnCloseCallback());
+    expect(mockNavigateGlobal).toHaveBeenCalledWith('/cluster/stored?view=map', { replace: true, state: null });
+  });
+
 });

@@ -116,7 +116,7 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     expect(popup).toHaveTextContent(baseProps.highlightQuakeTitle);
     expect(popup).toHaveTextContent(`Magnitude: ${baseProps.highlightQuakeMagnitude}`);
     const detailLink = within(popup).getByRole('link', { name: /View Details/i });
-    expect(detailLink).toHaveAttribute('href', `/quake/${encodeURIComponent(baseProps.mainQuakeDetailUrl)}`);
+    expect(detailLink).toHaveAttribute('href', '/quake/id/test-quake-id');
   });
 
   it('displays ShakeMap link if mainQuakeDetailUrl is not provided but shakeMapUrl is', async () => {

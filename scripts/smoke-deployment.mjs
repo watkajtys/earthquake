@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 // GET-only release checks. Existing details can use the application's lazy cache.
 import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
 
-const args = process.argv.slice(2);
+const CANONICAL_ORIGIN = 'https://earthquakeslive.com';
+const CRAWLER_USER_AGENT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+const decodeXml = value => value.replace(/&(amp|quot|apos|lt|gt);/g, (_, entity) => ({ amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' })[entity]);
+
+export async function smokeDeployment(args = [], { fetchImpl = fetch, log = console.log } = {}) {
+
 if (args.includes('--help')) {
-  console.log('Usage: node scripts/smoke-deployment.mjs [http://localhost:8787] [--preview]\nOnly GET requests are used. Run against the reconciled deployment, not the previous KV-based release.');
-  process.exit(0);
+  log('Usage: node scripts/smoke-deployment.mjs [http://localhost:8787] [--preview]\nOnly GET requests are used. Run against the reconciled deployment, not the previous KV-based release.');
+  return;
 }
 const preview = args.includes('--preview');
 const positional = args.filter((arg) => arg !== '--preview');
@@ -15,18 +21,20 @@ assert(['http:', 'https:'].includes(base.protocol) && !base.username && !base.pa
 assert(base.pathname === '/' && !base.search && !base.hash, 'Base URL must be the deployment origin.');
 const assets = new Set();
 let checks = 0;
+let requests = 0;
 
-async function request(path, contentType, status = 200) {
+async function request(path, contentType, status = 200, userAgent = 'Earthquake-Deployment-Smoke/1.0') {
   const url = new URL(path, base);
   assert.equal(url.origin, base.origin, `Refusing external URL ${url}`);
-  const response = await fetch(url, {
+  assert(++requests <= 260, 'Smoke request budget exceeded (260 GET requests).');
+  const response = await fetchImpl(url, {
     method: 'GET', redirect: 'error', signal: AbortSignal.timeout(30_000),
-    headers: { 'User-Agent': 'Earthquake-Deployment-Smoke/1.0' },
+    headers: { 'User-Agent': userAgent },
   });
   assert.equal(response.status, status, `${url.pathname}: unexpected HTTP status`);
   assert.match(response.headers.get('Content-Type') || '', contentType, `${url.pathname}: wrong content type`);
   checks += 1;
-  console.log(`PASS ${response.status} ${url.pathname}${url.search}`);
+  log(`PASS ${response.status} ${url.pathname}${url.search}`);
   return response;
 }
 
@@ -36,15 +44,28 @@ function queueAsset(reference, parent = base) {
   if (url.origin === base.origin && /\.(?:js|css)$/.test(url.pathname)) assets.add(url.href);
 }
 
-async function checkPage(path) {
-  const response = await request(path, /text\/html/i);
+async function checkPage(path, { crawler = false, canonicalPath } = {}) {
+  const response = await request(path, /text\/html/i, 200, crawler ? CRAWLER_USER_AGENT : undefined);
   assert.equal(response.headers.get('Cache-Control'), 'no-store', `${path}: HTML must not be shared across user-agent variants`);
   const html = await response.text();
+  assert(!html.includes('/src/main.jsx'), `${path}: development entry leaked into deployed HTML`);
+  if (crawler) {
+    const canonicalTag = [...html.matchAll(/<link\b[^>]*>/gi)].map(match => match[0]).find(tag => /\brel=["']canonical["']/i.test(tag));
+    const canonical = canonicalTag?.match(/\bhref=["']([^"']+)["']/i)?.[1];
+    assert(canonical, `${path}: crawler canonical is missing`);
+    assert.equal(decodeXml(canonical), new URL(canonicalPath, CANONICAL_ORIGIN).href, `${path}: crawler canonical does not match the resolved entity`);
+    assert.match(html, /<h1\b[^>]*>[^<]+<\/h1>/i, `${path}: crawler entity heading is missing`);
+    if (path.startsWith('/cluster/')) assert(!/<meta\b[^>]*name=["']robots["'][^>]*content=["'][^"']*noindex/i.test(html), `${path}: resolved crawler cluster must not be an error page`);
+  }
   assert.match(html, /id=["']root["']/, `${path}: missing React root`);
-  const references = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css)(?:\?[^"']*)?)["']/g)];
+  const references = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css)(?:\?[^"']*)?)["']/g)]
+    .filter(match => new URL(match[1], base).origin === base.origin);
   assert(references.some((match) => /\.js(?:\?|$)/.test(match[1])), `${path}: missing built JS entry`);
   assert(references.some((match) => /\.css(?:\?|$)/.test(match[1])), `${path}: missing built CSS entry`);
-  for (const match of references) queueAsset(match[1]);
+  for (const match of references) {
+    queueAsset(match[1]);
+  }
+  return html;
 }
 
 async function checkAssets() {
@@ -70,8 +91,7 @@ async function readJson(path, status = 200) {
   return { response, data: await response.json() };
 }
 
-try {
-  console.log(`Checking ${base.origin}${preview ? ' with synthetic preview fixtures' : ''}`);
+  log(`Checking ${base.origin}${preview ? ' with synthetic preview fixtures' : ''}`);
   for (const path of ['/', '/overview', '/feeds', '/learn', '/learn/plate-tectonics']) await checkPage(path);
   const lists = {};
   for (const period of ['day', 'week', 'month']) {
@@ -99,12 +119,31 @@ try {
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
   }
 
+  let clusterSitemap;
   for (const path of ['/sitemap-index.xml', '/sitemap-static-pages.xml', '/sitemap-clusters.xml', '/sitemaps/earthquakes-1.xml']) {
     const response = await request(path, /(?:application|text)\/xml/i);
     const xml = await response.text();
+    if (path === '/sitemap-clusters.xml') clusterSitemap = xml;
     assert.match(xml, /<(?:sitemapindex|urlset)\b/, `${path}: missing sitemap document`);
     assert(!/<!--[^]*?(?:error|exception|database (?:not available|not configured))[^]*?-->/i.test(xml), `${path}: sitemap reports an internal error`);
   }
+
+  // Discover the route from the emitted sitemap, rather than synthesizing a
+  // friendly slug that could conceal a mismatch with persisted canonical slugs.
+  const emittedLocation = clusterSitemap.match(/<loc>\s*([^<]+)\s*<\/loc>/i)?.[1];
+  assert(emittedLocation, 'Cluster sitemap must emit an existing entity URL');
+  const emitted = new URL(decodeXml(emittedLocation.trim()));
+  assert([base.origin, CANONICAL_ORIGIN].includes(emitted.origin) && !emitted.username && !emitted.password,
+    'Refusing an unexpected cluster sitemap origin');
+  assert(/^\/cluster\/[^/]+$/.test(emitted.pathname) && !emitted.search && !emitted.hash, 'Unexpected cluster sitemap route');
+  // Canonicals intentionally use the public host, including on preview. Only
+  // rebase the origin, retaining the actual emitted route, and never fetch it remotely.
+  const sitemapPath = emitted.pathname;
+  const { data: sitemapCluster } = await readJson(`/api/cluster-detail-with-quakes?slug=${encodeURIComponent(decodeURIComponent(sitemapPath.slice('/cluster/'.length)))}`);
+  assert(sitemapCluster.id && sitemapCluster.slug && sitemapCluster.canonicalPath, 'Sitemap lookup must return canonical cluster identity');
+  assert.equal(sitemapCluster.canonicalPath, `/cluster/${encodeURIComponent(sitemapCluster.slug)}`, 'Cluster API canonical path must match its stored slug');
+  await checkPage(sitemapPath);
+  await checkPage(sitemapPath, { crawler: true, canonicalPath: sitemapCluster.canonicalPath });
 
   assert(clusters.length > 0, 'Expected a stored cluster for the release detail checks');
   {
@@ -125,12 +164,21 @@ try {
       assert(Array.isArray(data.quakes) && data.quakes.length > 0, 'Cluster detail must include stored earthquake summaries');
       assert(data.quakes.every((entry) => data.earthquakeIds.includes(entry.id)), 'Cluster quake IDs must match its definition');
     }
-    await checkPage(`/quake/m${detail.properties.mag}-release-check-${encodeURIComponent(quake.id)}`);
+    const quakePath = `/quake/id/${encodeURIComponent(quake.id)}`;
+    await checkPage(quakePath, { crawler: true, canonicalPath: `/quake/id/${encodeURIComponent(detail.id)}` });
+    // Legacy descriptive URLs remain compatible, including negative/null magnitudes.
+    const legacyMagnitude = Number.isFinite(detail.properties.mag) ? detail.properties.mag : 'unknown';
+    await checkPage(`/quake/m${legacyMagnitude}-release-check-${encodeURIComponent(quake.id)}`, { crawler: true, canonicalPath: `/quake/id/${encodeURIComponent(detail.id)}` });
     await checkPage(`/cluster/${encodeURIComponent(cluster.slug)}`);
   }
   await checkAssets();
-  console.log(`Deployment smoke passed: ${checks} GET checks, ${assets.size} built assets.`);
-} catch (error) {
-  console.error(`Deployment smoke failed: ${error.message}`);
-  process.exitCode = 1;
+  log(`Deployment smoke passed: ${checks} GET checks, ${assets.size} built assets.`);
+  return { checks, assets: assets.size };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  smokeDeployment(process.argv.slice(2)).catch(error => {
+    console.error(`Deployment smoke failed: ${error.message}`);
+    process.exitCode = 1;
+  });
 }

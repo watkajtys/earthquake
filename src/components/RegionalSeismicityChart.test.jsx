@@ -28,7 +28,7 @@ describe('RegionalSeismicityChart Loading States', () => {
     expect(screen.getByText(/Loading regional data.../i)).toBeInTheDocument();
   });
 
-  test('renders loading skeleton for 30-day data if conditions met, even with 7-day data present', () => {
+  test('retains available data while the monthly feed refreshes', () => {
     render(
       <RegionalSeismicityChart
         currentEarthquake={mockCurrentEarthquake}
@@ -38,7 +38,8 @@ describe('RegionalSeismicityChart Loading States', () => {
         hasAttemptedMonthlyLoad={true} // Attempted to load monthly
       />
     );
-    expect(screen.getByText(/Loading 30-day regional data.../i)).toBeInTheDocument();
+    expect(screen.queryByText(/Loading 30-day regional data.../i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Using the available 30-day feed/)).toBeInTheDocument();
   });
 
   test('renders loading skeleton with default message if nearbyEarthquakesData is undefined and not specifically waiting for 30-day data', () => {
@@ -85,7 +86,7 @@ describe('RegionalSeismicityChart Loading States', () => {
     expect(screen.getByText(/Select an earthquake to see regional seismicity./i)).toBeInTheDocument();
   });
 
-  test('renders "No other significant earthquakes" message if regionalEvents is empty', () => {
+  test('qualifies an empty seven-day result instead of claiming a full historical absence', () => {
     // This requires nearbyEarthquakesData that will result in an empty regionalEvents list
     // e.g., events outside the radius or time window. For this test, pass an empty array.
     render(
@@ -97,8 +98,36 @@ describe('RegionalSeismicityChart Loading States', () => {
         hasAttemptedMonthlyLoad={false}
       />
     );
-    expect(screen.getByText(/No other significant earthquakes recorded/i)).toBeInTheDocument();
+    expect(screen.getByText(/No matching earthquakes.*available 7-day feed/)).toBeInTheDocument();
+    expect(screen.getByText(/activity outside its coverage is unknown/)).toBeInTheDocument();
   });
 
   // Add more tests as needed for other functionalities.
+});
+
+
+it('distinguishes missing historical coverage from observed zero earthquakes', () => {
+  render(<RegionalSeismicityChart currentEarthquake={{ ...mockCurrentEarthquake, properties: { time: Date.UTC(2020, 0, 1), mag: 5 } }} nearbyEarthquakesData={[]} dataSourceTimespanDays={30} dataSourceGeneratedAtMs={Date.UTC(2026, 8, 21)} />);
+  expect(screen.getByText(/Historical activity is unavailable, not zero/)).toBeInTheDocument();
+  expect(screen.queryByText(/No matching earthquakes/)).not.toBeInTheDocument();
+});
+
+it('uses the source generation time for stale feeds instead of treating request time as new coverage', () => {
+  const end = Date.UTC(2020, 0, 8);
+  render(<RegionalSeismicityChart currentEarthquake={{ ...mockCurrentEarthquake, properties: { time: end - 1000, mag: 5 } }} nearbyEarthquakesData={[]} dataSourceTimespanDays={7} dataSourceGeneratedAtMs={end} />);
+  expect(screen.getByText(/No matching earthquakes.*available 7-day feed/)).toBeInTheDocument();
+  expect(screen.queryByText(/Historical activity is unavailable/)).not.toBeInTheDocument();
+});
+
+
+it('keeps observed events on the partial first day without manufacturing earlier zero bars', () => {
+  const end = new Date(2026, 8, 21, 12).getTime();
+  const start = end - 7 * 86400000;
+  const current = { ...mockCurrentEarthquake, properties: { time: end - 3600000, mag: 5 } };
+  const nearby = [{ ...mockNearbyEarthquakesData7Days[0], properties: { time: start + 7200000, mag: 3 } }];
+  const { container } = render(<RegionalSeismicityChart currentEarthquake={current} nearbyEarthquakesData={nearby} dataSourceTimespanDays={7} dataSourceGeneratedAtMs={end} />);
+  const days = [...container.querySelectorAll('svg title')].map(title => title.textContent);
+  expect(days[0]).toContain('1 event(s)');
+  expect(days).toHaveLength(8);
+  expect(screen.getByText(/missing history is not shown as zero activity/)).toBeInTheDocument();
 });

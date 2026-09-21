@@ -167,11 +167,11 @@ describe('HomePage Cluster Logic', () => {
     ];
 
     const mockClusterSummaries = [
-      { earthquakeIds: JSON.stringify(clusterA_Quakes.map(q => q.id)) },
-      { earthquakeIds: JSON.stringify(clusterB_Quakes.map(q => q.id)) },
-      { earthquakeIds: JSON.stringify(clusterC_Quakes.map(q => q.id)) },
-      { earthquakeIds: JSON.stringify(clusterD_Quakes.map(q => q.id)) },
-      { earthquakeIds: JSON.stringify(clusterE_Filtered_Quakes.map(q => q.id)) },
+      { id: "stored-a", earthquakeIds: JSON.stringify(clusterA_Quakes.map(q => q.id)) },
+      { id: "stored-b", earthquakeIds: JSON.stringify(clusterB_Quakes.map(q => q.id)) },
+      { id: "stored-c", earthquakeIds: JSON.stringify(clusterC_Quakes.map(q => q.id)) },
+      { id: "stored-d", earthquakeIds: JSON.stringify(clusterD_Quakes.map(q => q.id)) },
+      { id: "stored-e", earthquakeIds: JSON.stringify(clusterE_Filtered_Quakes.map(q => q.id)) },
     ];
 
 
@@ -196,10 +196,10 @@ describe('HomePage Cluster Logic', () => {
       });
 
       expect(mockClusterSummaryItemData.length).toBe(4);
-      expect(mockClusterSummaryItemData[0].id).toBe(`overview_cluster_d1_${clusterD_Quakes.length}`);
-      expect(mockClusterSummaryItemData[1].id).toBe(`overview_cluster_c1_${clusterC_Quakes.length}`);
-      expect(mockClusterSummaryItemData[2].id).toBe(`overview_cluster_b1_${clusterB_Quakes.length}`);
-      expect(mockClusterSummaryItemData[3].id).toBe(`overview_cluster_a1_${clusterA_Quakes.length}`);
+      expect(mockClusterSummaryItemData[0].id).toBe("stored-d");
+      expect(mockClusterSummaryItemData[1].id).toBe("stored-c");
+      expect(mockClusterSummaryItemData[2].id).toBe("stored-b");
+      expect(mockClusterSummaryItemData[3].id).toBe("stored-a");
 
       mockClusterSummaryItemData.forEach(cluster => {
         expect(cluster.maxMagnitude).toBeGreaterThanOrEqual(MAJOR_QUAKE_THRESHOLD);
@@ -219,6 +219,7 @@ describe('HomePage Cluster Logic', () => {
       properties: { ...weeklyQuakes[0].properties, mag: 6.3 },
     };
     mockFetchActiveClusters.mockResolvedValue([{
+      id: "weekly-stored-id",
       earthquakeIds: JSON.stringify(weeklyQuakes.map(quake => quake.id)),
     }]);
     mockUseEarthquakeDataState.mockReturnValue({
@@ -231,7 +232,7 @@ describe('HomePage Cluster Logic', () => {
 
     render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
 
-    await screen.findByTestId('mock-cluster-summary-item-overview_cluster_weekly1_3');
+    await screen.findByTestId('mock-cluster-summary-item-weekly-stored-id');
     const summary = mockClusterSummaryItemData.at(-1);
     expect(summary).toMatchObject({ quakeCount: 3, maxMagnitude: 6.3, strongestQuakeId: 'weekly1' });
     expect(summary.originalQuakes).toEqual([updatedDailyQuake, weeklyQuakes[1], weeklyQuakes[2]]);
@@ -242,36 +243,12 @@ describe('HomePage Cluster Logic', () => {
     // createMockQuakeInternal is already defined at the top of this file.
 
     const testCases = [
-      {
-        description: 'Basic valid input',
-        clusterDataInput: { quakeCount: 15, locationName: "Southern Sumatra, Indonesia", maxMagnitude: 5.8, strongestQuakeId: "us7000mfp9" },
-        expectedUrl: "/cluster/15-quakes-near-southern-sumatra-indonesia-up-to-m5.8-us7000mfp9"
-      },
-      {
-        description: 'Location name with extra spaces and mixed case, magnitude rounding',
-        clusterDataInput: { quakeCount: 5, locationName: "  Test  Location  ", maxMagnitude: 4.5, strongestQuakeId: "test123xyz" },
-        expectedUrl: "/cluster/5-quakes-near-test-location-up-to-m4.5-test123xyz"
-      },
-      {
-        description: 'Location name with special characters',
-        clusterDataInput: { quakeCount: 10, locationName: "North Island, N.Z.!", maxMagnitude: 6.0, strongestQuakeId: "nz2024abc" },
-        expectedUrl: "/cluster/10-quakes-near-north-island-nz-up-to-m6.0-nz2024abc"
-      },
-      {
-        description: 'Location name resulting in multiple hyphens (condensed by regex s+)',
-        clusterDataInput: { quakeCount: 3, locationName: "Region --- Sub-region", maxMagnitude: 4.6, strongestQuakeId: "regsub1" },
-        expectedUrl: "/cluster/3-quakes-near-region-sub-region-up-to-m4.6-regsub1"
-      },
-      {
-        description: 'Location name with multiple hyphens that should be preserved',
-        clusterDataInput: { quakeCount: 2, locationName: "Test-Location-With-Hyphens", maxMagnitude: 4.7, strongestQuakeId: "testhyphen" },
-        expectedUrl: "/cluster/2-quakes-near-test-location-with-hyphens-up-to-m4.7-testhyphen"
-      },
-      {
-        description: 'Empty locationName',
-        clusterDataInput: { quakeCount: 1, locationName: "", maxMagnitude: 4.8, strongestQuakeId: "unknownloc1" },
-        expectedUrl: "/cluster/1-quakes-near-unknown-location-up-to-m4.8-unknownloc1"
-      },
+      { description: 'stored slug survives changed local membership and title',
+        clusterDataInput: { id: 'canonical-uuid', slug: 'stored-cluster-slug', quakeCount: 3, locationName: 'New location', maxMagnitude: 5.8, strongestQuakeId: 'us7000mfp9' },
+        expectedUrl: '/cluster/stored-cluster-slug' },
+      { description: 'canonical ID is used when no stored slug exists',
+        clusterDataInput: { id: 'canonical-id-no-slug', quakeCount: 2, locationName: '', maxMagnitude: 4.8, strongestQuakeId: 'test123xyz' },
+        expectedUrl: '/cluster/canonical-id-no-slug' },
     ];
 
     testCases.forEach(({ description, clusterDataInput, expectedUrl }) => {
@@ -289,6 +266,7 @@ describe('HomePage Cluster Logic', () => {
         }
 
         const mockClusterSummary = {
+            id: clusterDataInput.id, slug: clusterDataInput.slug,
             earthquakeIds: JSON.stringify(mockRawQuakesForCluster.map(q => q.id)),
         };
 
@@ -306,14 +284,14 @@ describe('HomePage Cluster Logic', () => {
           </MemoryRouter>
         );
 
-        const expectedTestId = `mock-cluster-summary-item-overview_cluster_${clusterDataInput.strongestQuakeId}_${clusterDataInput.quakeCount}`;
+        const expectedTestId = `mock-cluster-summary-item-${clusterDataInput.id}`;
         const clusterItem = await screen.findByTestId(expectedTestId, {}, { timeout: 3000 });
 
         act(() => {
           clusterItem.click();
         });
 
-        expect(mockNavigate).toHaveBeenCalledWith(expectedUrl);
+        expect(mockNavigate).toHaveBeenCalledWith(expectedUrl, { state: { returnTo: '/', inAppNavigation: true } });
       });
     });
   });

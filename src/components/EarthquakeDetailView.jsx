@@ -1,3 +1,4 @@
+import { useDialogKeyboard } from '../hooks/useDialogKeyboard';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import RegionalSeismicityChart from './RegionalSeismicityChart';
@@ -65,9 +66,12 @@ import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfo
  *   earthquake data if it hasn't been loaded or attempted yet. This is often used to enrich regional context.
  * @param {boolean} [props.hasAttemptedMonthlyLoad] - Flag indicating if an attempt to load monthly data has already been made.
  * @param {boolean} [props.isLoadingMonthly] - Flag indicating if monthly data is currently being loaded.
+ * @param {boolean} [props.monthlyHasLoaded] - Whether a monthly request has succeeded, including an empty feed.
+ * @param {string|null} [props.monthlyError] - Latest monthly failure; leaves existing data visible and allows retry.
+ * @param {number} [props.dataSourceGeneratedAtMs] - Source generation time anchoring the selected feed coverage.
  * @returns {JSX.Element} The EarthquakeDetailView component, typically rendered within a modal structure.
  */
-function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly }) {
+function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly, monthlyHasLoaded, monthlyError, dataSourceGeneratedAtMs }) {
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(!!detailUrl);
     const [error, setError] = useState(null);
@@ -75,77 +79,16 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     const modalContentRef = React.useRef(null); // Ref for the modal content div
     const closeButtonRef = React.useRef(null); // Ref for the close button
 
-    // Handle Escape key press for closing the modal & Focus Trapping
+    useDialogKeyboard({ dialogRef: modalContentRef, initialFocusRef: closeButtonRef, onClose });
+
+    const initialMonthlyRequestSent = React.useRef(false);
     useEffect(() => {
-        const modalElement = modalContentRef.current;
-        if (!modalElement) return;
-
-        const focusableElements = modalElement.querySelectorAll(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        const firstElement = focusableElements[0];
-        const lastElement = focusableElements[focusableElements.length - 1];
-
-        // Focus the first focusable element (likely the close button) when modal opens
-        if (closeButtonRef.current) {
-            closeButtonRef.current.focus();
-        } else if (firstElement) {
-            firstElement.focus();
-        }
-
-        const handleKeyDown = (event) => {
-            if (event.key === 'Escape') {
-                onClose();
-                return; // Return early after closing
-            }
-
-            if (event.key === 'Tab') {
-                if (event.shiftKey) { // Shift + Tab
-                    if (document.activeElement === firstElement || document.activeElement === modalElement) { // also check if modalElement itself is focused (e.g. if no focusable elements initially)
-                        lastElement.focus();
-                        event.preventDefault();
-                    }
-                } else { // Tab
-                    if (document.activeElement === lastElement) {
-                        firstElement.focus();
-                        event.preventDefault();
-                    }
-                }
-            }
-        };
-
-        // Add keydown listener to the modal itself for tab trapping.
-        // Document listener for Escape is kept in case focus is somehow outside the modal initially.
-        modalElement.addEventListener('keydown', handleKeyDown);
-
-        // Cleanup function
-        return () => {
-            modalElement.removeEventListener('keydown', handleKeyDown);
-            // The global escape listener is cleaned up by its own useEffect
-        };
-    }, [onClose]); // Dependencies for focus trapping and escape key
-
-    // Separate useEffect for escape key to ensure it's always available even if modalContentRef isn't ready
-    useEffect(() => {
-        const handleGlobalEscape = (event) => {
-            if (event.key === 'Escape') {
-                onClose();
-            }
-        };
-        document.addEventListener('keydown', handleGlobalEscape);
-        return () => {
-            document.removeEventListener('keydown', handleGlobalEscape);
-        };
-    }, [onClose]);
-
-
-    useEffect(() => {
-        // Check if monthly data has not been attempted to load yet and is not currently loading
-        if (hasAttemptedMonthlyLoad === false && isLoadingMonthly === false && typeof handleLoadMonthlyData === 'function') {
-            console.log('EarthquakeDetailView: Triggering monthly data load.');
+        if (detailUrl && !initialMonthlyRequestSent.current && !monthlyHasLoaded && !monthlyError &&
+            hasAttemptedMonthlyLoad === false && isLoadingMonthly === false && typeof handleLoadMonthlyData === 'function') {
+            initialMonthlyRequestSent.current = true;
             handleLoadMonthlyData();
         }
-    }, [detailUrl, hasAttemptedMonthlyLoad, isLoadingMonthly]); // Dependencies for the effect - handleLoadMonthlyData REMOVED
+    }, [detailUrl, hasAttemptedMonthlyLoad, isLoadingMonthly, monthlyHasLoaded, monthlyError, handleLoadMonthlyData]);
 
     useEffect(() => {
         if (!detailUrl) {
@@ -332,9 +275,19 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
 
     // MOVED: InteractiveFaultDiagram component definition was here
 
-    if (isLoading) return ( <div data-testid="loading-skeleton-container" className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-8 rounded-lg max-w-3xl w-full animate-pulse"><SkeletonText width="w-3/4" height="h-8 mb-6 mx-auto" /><SkeletonBlock height="h-40 mb-4" /><SkeletonBlock height="h-64" /></div></div> );
-    if (error) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-red-600 mb-4">Error Loading Details</h3><p className="text-slate-700 mb-6">{error}</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div> );
-    if (!detailData || !properties) return ( <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white p-6 rounded-lg max-w-xl w-full text-center shadow-xl"><h3 className="text-xl font-semibold text-slate-700 mb-4">Details Not Available</h3><p className="text-slate-600 mb-6">Could not retrieve or parse details.</p><button onClick={onClose} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded transition-colors duration-150">Close</button></div></div> );
+    if (isLoading || error || !detailData || !properties) {
+        const statusTitle = isLoading ? 'Loading earthquake details' : error ? 'Error Loading Details' : 'Details Not Available';
+        return (
+            <div data-testid={isLoading ? 'loading-skeleton-container' : undefined} className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+                <div ref={modalContentRef} role="dialog" aria-modal="true" aria-label={statusTitle} tabIndex={-1} className="bg-white p-6 rounded-lg max-w-3xl w-full text-center shadow-xl">
+                    <h3 className={isLoading ? 'sr-only' : 'text-xl font-semibold text-slate-700 mb-4'}>{statusTitle}</h3>
+                    {isLoading ? <div className="animate-pulse"><SkeletonText width="w-3/4" height="h-8 mb-6 mx-auto" /><SkeletonBlock height="h-40 mb-4" /><SkeletonBlock height="h-64" /></div> :
+                        <p className="text-slate-700 mb-6">{error || 'Could not retrieve or parse details.'}</p>}
+                    <button type="button" ref={closeButtonRef} onClick={onClose} aria-label="Close detail view" className="mt-4 px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700">Close</button>
+                </div>
+            </div>
+        );
+    }
 
     const exhibitPanelClass = "bg-white rounded-xl p-3 md:p-4 shadow border-l-4";
     const exhibitTitleClass = "text-lg md:text-xl font-bold mb-3 pb-1 border-b";
@@ -351,11 +304,11 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
     const eventDepth = geometry?.coordinates?.[2]; // Depth in km
 
     return (
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+        // Keyboard dismissal is owned by useDialogKeyboard; the backdrop adds pointer dismissal.
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events
         <div
             className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-start z-[55] p-2 sm:p-4 pt-10 md:pt-16"
             onClick={(e) => { if (e.target === e.currentTarget) { onClose(); } }}
-            onKeyDown={(e) => { if (e.key === 'Escape') { onClose(); e.stopPropagation(); } }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="earthquake-detail-title"
@@ -369,6 +322,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                 tabIndex="-1" // Make the modal container focusable for the trap if no inner elements are
             >
                 <button
+                    type="button"
                     ref={closeButtonRef} // Assign ref to the close button
                     onClick={onClose}
                     className="absolute top-1 right-1 md:top-3 md:right-3 text-gray-300 bg-gray-700 bg-opacity-50 rounded-full w-8 h-8 flex items-center justify-center hover:bg-opacity-75 hover:text-white text-2xl font-light z-50 focus:outline-none focus:ring-2 focus:ring-white"
@@ -416,7 +370,10 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                         broaderEarthquakeData={broaderEarthquakeData}
                         dataSourceTimespanDays={dataSourceTimespanDays}
                         isLoadingMonthly={isLoadingMonthly}
-                        hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
+                        monthlyHasLoaded={monthlyHasLoaded}
+                        monthlyError={monthlyError}
+                        onRetryMonthly={handleLoadMonthlyData}
+                        dataSourceGeneratedAtMs={dataSourceGeneratedAtMs}
                         exhibitPanelClass={exhibitPanelClass}
                     />
 

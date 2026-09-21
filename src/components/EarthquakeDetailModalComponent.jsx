@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback } from 'react'; // Added useMemo and useCallback, removed useEffect
-import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { buildEarthquakePath, modalReturnTarget, parseEarthquakePath } from '../utils/entityRoutes.js';
+import RouteDetailStatus from './RouteDetailStatus.jsx';
 import EarthquakeDetailView from './EarthquakeDetailView'; // Path relative to src/components/
 import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
 import defaultEarthquakeLogo from '../assets/default-earthquake-logo.svg'; // Import the new SVG
@@ -9,7 +10,7 @@ import { isEventSignificant } from '../utils/significanceUtils.js';
 
 /**
  * A wrapper component that displays detailed information about a specific earthquake in a modal-like view.
- * It retrieves the earthquake's detail URL from routing parameters (`useParams`),
+ * It resolves the earthquake's identifier from the raw route pathname,
  * fetches context data using `useEarthquakeDataState` (like available earthquake lists and loading states),
  * and then renders the `EarthquakeDetailView` component.
  *
@@ -29,64 +30,28 @@ const EarthquakeDetailModalComponent = () => {
         earthquakesLast7Days,
         loadMonthlyData, // Renamed from handleLoadMonthlyData for clarity
         hasAttemptedMonthlyLoad,
-        isLoadingMonthly
+        isLoadingMonthly,
+        monthlyHasLoaded = false,
+        monthlyError,
+        monthlyLastSuccessfulAtMs,
+        monthlySourceGeneratedAtMs,
+        weeklySourceGeneratedAtMs
     } = useEarthquakeDataState();
 
-    // Memoized value to determine the primary earthquake data list (all vs. last 7 days)
-    // based on whether an attempt to load monthly data has been made and if it was successful.
-    const internalBroaderEarthquakeData = useMemo(() => {
-        return (hasAttemptedMonthlyLoad && allEarthquakes && allEarthquakes.length > 0) ? allEarthquakes : earthquakesLast7Days;
-    }, [hasAttemptedMonthlyLoad, allEarthquakes, earthquakesLast7Days]);
-
-    // Memoized value to determine the timespan (7 or 30 days) of the current data source.
-    const currentDataSourceTimespan = useMemo(() => {
-        // If an attempt has been made to load monthly data, we are targeting 30 days.
-        // Even if it's still loading or failed, the intent was 30 days.
-        // If allEarthquakes is also populated, it further confirms 30-day data is active.
-        // If no attempt for monthly load, then it's 7 days.
-        return hasAttemptedMonthlyLoad ? 30 : 7;
-    }, [hasAttemptedMonthlyLoad]);
-
-
-    const params = useParams();
+    const monthlyAvailable = monthlyHasLoaded && Array.isArray(allEarthquakes);
+    const internalBroaderEarthquakeData = useMemo(() => monthlyAvailable ? allEarthquakes : earthquakesLast7Days,
+        [monthlyAvailable, allEarthquakes, earthquakesLast7Days]);
+    const currentDataSourceTimespan = monthlyAvailable ? 30 : 7;
+    const location = useLocation();
     const navigate = useNavigate();
-    const detailUrlParam = params['*']; // This is our slug e.g. m6.5-northern-california-nc73649170
-
-    // New logic to construct detailUrl from usgs-id
-    let detailUrl;
-    if (detailUrlParam) {
-        const decodedParam = decodeURIComponent(detailUrlParam);
-        if (decodedParam.startsWith('http://') || decodedParam.startsWith('https://')) {
-            detailUrl = decodedParam;
-        } else {
-            const parts = decodedParam.split('-');
-            const commonSlugPattern = /^m\d[^\s-]*-[^-]+-[a-zA-Z0-9_.-]+$/; // Pattern: m<digit(s)>...-location-id
-                                                                         // Updated to be more specific: starts with m + digit, then anything not a space/hyphen,
-                                                                         // then a hyphen, then location part (at least one char not a hyphen), then a hyphen, then ID.
-            if (parts.length > 2 && commonSlugPattern.test(decodedParam)) { // Ensure at least 3 parts for typical slug m-loc-id
-                const usgsId = parts[parts.length - 1];
-                detailUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${usgsId}.geojson`;
-            } else {
-                // Not a recognized multi-part descriptive slug, or no hyphens (e.g. plain ID). Use the whole decoded param.
-                detailUrl = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${decodedParam}.geojson`;
-            }
-        }
-    } else {
-        console.warn("EarthquakeDetailModalComponent: detailUrlParam is undefined.");
-        detailUrl = undefined;
-    }
-
-    const [seoProps, setSeoProps] = useState(null); // Renamed from seoData to seoProps
-
-    const handleClose = () => {
-        // Check if there's a history to go back to. If not, navigate to the homepage.
-        // This handles the case where the user lands directly on a quake detail page.
-        if (window.history.length > 2) { // Changed from 1 to 2 to account for the current page
-            navigate(-1); // Go back to the previous page
-        } else {
-            navigate('/'); // Navigate to homepage
-        }
-    };
+    const route = parseEarthquakePath(location.pathname);
+    const detailUrl = route.ok ? route.detailUrl : null;
+    const [seoState, setSeoState] = useState(null);
+    const seoProps = seoState?.routeKey === location.pathname ? seoState.props : null;
+    const handleClose = useCallback(() => {
+        const target = modalReturnTarget(location.state);
+        navigate(target.path, { replace: true, state: target.state });
+    }, [navigate, location.state]);
 
     /**
      * Callback function passed to `EarthquakeDetailView`.
@@ -130,8 +95,7 @@ const EarthquakeDetailModalComponent = () => {
         const pageDescription = `Detailed report of the M ${mag} earthquake that struck near ${place} on ${titleDate} at ${descriptionTime} (UTC). Magnitude: ${mag}, Depth: ${depth} km. Location: ${latitude?.toFixed(2)}, ${longitude?.toFixed(2)}. Stay updated with Earthquakes Live.`;
 
         const pageKeywords = `earthquake, seismic event, M ${mag}, ${place ? place.split(', ').join(', ') : ''}, earthquake details, usgs event, ${usgsEventId}`;
-        // canonicalPageUrl uses detailUrlParam (which is params['*']) directly as per requirements.
-        const canonicalPageUrl = `https://earthquakeslive.com/quake/${detailUrlParam}`;
+        const canonicalPageUrl = `https://earthquakeslive.com${buildEarthquakePath(loadedData.id)}`;
 
         const eventLocation = {
             '@type': 'Place',
@@ -171,7 +135,7 @@ const EarthquakeDetailModalComponent = () => {
             // However, canonicalUrl serves a similar purpose for the event's own page.
         };
 
-        setSeoProps({
+        setSeoState({ routeKey: location.pathname, props: {
             title: pageTitle, // Use the more descriptive pageTitle for the HTML title tag
             description: pageDescription,
             keywords: pageKeywords,
@@ -183,15 +147,14 @@ const EarthquakeDetailModalComponent = () => {
             modifiedTime: updated ? new Date(updated).toISOString() : (time ? new Date(time).toISOString() : undefined),
             imageUrl: shakemapIntensityImageUrl || null,
             noIndex: !isSignificant,
-        });
-    }, [detailUrlParam]); // detailUrlParam (params['*']) is a dependency for canonicalPageUrl
+        } });
+    }, [location.pathname]);
 
     // Default/loading SEO values
     const initialPageTitle = "Loading Earthquake Details... | Earthquakes Live";
     const initialPageDescription = "Fetching detailed information for the selected seismic event.";
     const initialKeywords = "earthquake details, seismic event, seismology, earthquakes live";
-    // initialCanonicalUrl uses detailUrlParam (params['*']) directly as per requirements.
-    const initialCanonicalUrl = detailUrlParam ? `https://earthquakeslive.com/quake/${detailUrlParam}` : "https://earthquakeslive.com";
+    const initialCanonicalUrl = route.ok ? `https://earthquakeslive.com${route.canonicalPath}` : "https://earthquakeslive.com";
 
 
     return (
@@ -208,10 +171,12 @@ const EarthquakeDetailModalComponent = () => {
                 modifiedTime={seoProps?.modifiedTime}
                 imageUrl={seoProps?.imageUrl}
                 eventJsonLd={seoProps?.eventJsonLd}
-                noIndex={seoProps?.noIndex}
+                noIndex={seoProps?.noIndex ?? true}
             />
-            {detailUrl && ( // Only render EarthquakeDetailView if detailUrl is available
+            {!route.ok && <RouteDetailStatus title="Earthquake not found" message={route.message} onClose={handleClose} />}
+            {detailUrl && (
                 <EarthquakeDetailView
+                    key={route.eventId}
                     detailUrl={detailUrl}
                     onClose={handleClose}
                     // Note: onDataLoadedForSeo now receives the full GeoJSON feature data
@@ -222,13 +187,14 @@ const EarthquakeDetailModalComponent = () => {
                     handleLoadMonthlyData={loadMonthlyData}
                     hasAttemptedMonthlyLoad={hasAttemptedMonthlyLoad}
                     isLoadingMonthly={isLoadingMonthly}
+                    monthlyHasLoaded={monthlyHasLoaded}
+                    monthlyError={monthlyError}
+                    monthlyLastSuccessfulAtMs={monthlyLastSuccessfulAtMs}
+                    dataSourceGeneratedAtMs={monthlyAvailable ? monthlySourceGeneratedAtMs : weeklySourceGeneratedAtMs}
                 />
             )}
         </>
     );
 };
-
-// PropTypes remain the same as they are mostly for context-derived or route-derived props
-// which are not directly passed to EarthquakeDetailModalComponent anymore.
 
 export default EarthquakeDetailModalComponent;

@@ -127,4 +127,42 @@ describe('cluster details against the migrated D1 schema', () => {
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: 'Invalid earthquakeIds format in cluster definition eq1.' });
   });
+
+  it('resolves an exact cron-generated stored slug without deriving an earthquake ID', async () => {
+    const slug = '3-quakes-near-local-test-m6.3-12345-40d0--100d0';
+    database.prepare('UPDATE ClusterDefinitions SET slug = ? WHERE id = ?').run(slug, 'cluster1');
+    for (const selector of ['slug', 'route']) {
+      const response = await onRequestGet({ request: new Request(`https://example.com/api/cluster-detail-with-quakes?${selector}=${slug}`), env });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: 'cluster1', clusterId: 'cluster1', canonicalPath: `/cluster/${slug}` });
+    }
+  });
+
+  it('distinguishes exact IDs from the legacy strongest-first selector', async () => {
+    database.exec("INSERT INTO EarthquakeEvents (id, magnitude, place, event_time, longitude, latitude, depth) VALUES ('other-event', 0, 'Other', 0, 0, 0, 0)");
+    database.prepare(`INSERT INTO ClusterDefinitions (id, slug, strongestQuakeId, earthquakeIds, updatedAt)
+      VALUES (?, ?, ?, ?, ?)`).run('eq1', 'other-slug', 'other-event', '[]', '2026-01-01T00:00:00Z');
+    const explicit = await onRequestGet({ request: new Request('https://example.com/api/cluster-detail-with-quakes?clusterId=eq1'), env });
+    expect((await explicit.json()).id).toBe('eq1');
+    const legacy = await onRequestGet({ request: requestFor('eq1'), env });
+    expect((await legacy.json()).id).toBe('cluster1');
+  });
+
+  it.each(['overview_cluster_eq1_99', '99-quakes-near-previous-place-up-to-m-0.5-eq1'])('resolves documented legacy route %s after exact lookups miss', async (route) => {
+    const response = await onRequestGet({ request: new Request(`https://example.com/api/cluster-detail-with-quakes?route=${route}`), env });
+    expect((await response.json()).id).toBe('cluster1');
+  });
+
+  it('gives exact stored legacy-looking slugs precedence over strongest-ID interpretation', async () => {
+    database.exec("INSERT INTO EarthquakeEvents (id, magnitude, place, event_time, longitude, latitude, depth) VALUES ('other-event', 0, 'Other', 0, 0, 0, 0)");
+    database.prepare(`INSERT INTO ClusterDefinitions (id, slug, strongestQuakeId, earthquakeIds)
+      VALUES (?, ?, ?, ?)`).run('other', 'overview_cluster_eq1_3', 'other-event', '[]');
+    const response = await onRequestGet({ request: new Request('https://example.com/api/cluster-detail-with-quakes?route=overview_cluster_eq1_3'), env });
+    expect((await response.json()).id).toBe('other');
+  });
+
+  it.each(['slug=test-cluster-eq1&id=eq1', 'slug=a&slug=b', 'clusterId=', 'route=%2Fbad', 'route=invalid-slug-format-eq1'])('rejects conflicting or unknown selectors rather than guessing: %s', async (query) => {
+    const response = await onRequestGet({ request: new Request(`https://example.com/api/cluster-detail-with-quakes?${query}`), env });
+    expect(response.status).toBe(query === 'route=invalid-slug-format-eq1' ? 404 : 400);
+  });
 });

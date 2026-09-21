@@ -1,14 +1,13 @@
 import React from 'react';
 import { EarthquakeDataProvider, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext';
-import { initialState as contextInitialState, actionTypes } from '../../contexts/earthquakeDataContextUtils.js';
 
 // --- React specific testing imports ---
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { vi } from 'vitest';
 import { http, HttpResponse } from 'msw'; // Import MSW handlers
 import { server } from '../../mocks/server.js'; // Corrected MSW server import path
 import { fetchUsgsData } from '../../services/usgsApiService';
-import { isValidFeatureArray, isValidGeoJson } from '../../utils/geoJsonUtils';
+import { isValidGeoJson } from '../../utils/geoJsonUtils';
 import {
     USGS_API_URL_DAY,
     USGS_API_URL_WEEK,
@@ -73,72 +72,6 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
   afterAll(() => {
     server.close();
   });
-
-  // Helper to simulate D1 API response
-  const mockD1Response = (jsonData, {
-    dataSourceHeader = 'D1',
-    status = 200,
-    ok = (status >= 200 && status < 300),
-    errorTextOverride = null, // Specific text for error response body
-    contentType = 'application/json'
-  } = {}) => {
-    let bodyText;
-
-    if (ok) {
-      bodyText = JSON.stringify(jsonData);
-    } else {
-      // For non-ok responses, fetchFromD1 uses response.text()
-      bodyText = errorTextOverride !== null ? errorTextOverride : JSON.stringify(jsonData || { error: `Simulated server error ${status}` });
-    }
-
-    return Promise.resolve({
-      ok,
-      status,
-      headers: {
-        get: (headerName) => {
-          const lowerHeaderName = headerName.toLowerCase();
-          if (lowerHeaderName === 'x-data-source') {
-            return dataSourceHeader;
-          }
-          if (lowerHeaderName === 'content-type') {
-            return contentType;
-          }
-          return null;
-        }
-      },
-      json: () => {
-        // fetchFromD1 only calls .json() if ok and D1 source is confirmed.
-        // If !ok, it might try .text(), so .json() for errors should ideally throw
-        // if the body isn't valid JSON, or parse if it is.
-        // For simplicity here, assume if !ok, .json() might not be called or would fail if called on non-JSON text.
-        if (ok) {
-            try {
-                // Simulate parsing for the test, actual fetch would do this.
-                // If jsonData is already an object, this is fine.
-                // If jsonData is a string that's not valid JSON, JSON.parse would throw.
-                return Promise.resolve(typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData);
-            } catch (e) {
-                return Promise.reject(e); // Propagate parsing error
-            }
-        }
-        // Simulate Fetch API's behavior: .json() fails if body isn't valid JSON or if already read.
-        // If bodyText is not valid JSON, this will cause a SyntaxError.
-        try {
-            return Promise.resolve(JSON.parse(bodyText));
-        } catch (e) {
-            return Promise.reject(new SyntaxError(`Unexpected token in JSON at position 0: ${bodyText.charAt(0)}`));
-        }
-      },
-      text: () => Promise.resolve(bodyText),
-    });
-  };
-
-  // Helper to simulate USGS API response structure (as handled by fetchUsgsData)
-  const mockUsgsApiServiceResponse = (features, metadata = { generated: Date.now() }, error = null) => {
-    if (error) return Promise.resolve({ error });
-    return Promise.resolve({ features, metadata });
-  };
-
 
   describe('performDataFetch (Daily/Weekly Data)', () => {
     it('D1 Success Path: should fetch daily and weekly data from D1', async () => {
@@ -236,8 +169,8 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
 
       // Assertions
       // expect(fetchSpy).toHaveBeenCalledTimes(2); // Temporarily commented out
-      expect(fetchUsgsData).toHaveBeenCalledWith(USGS_API_URL_DAY);
-      expect(fetchUsgsData).toHaveBeenCalledWith(USGS_API_URL_WEEK);
+      expect(fetchUsgsData).toHaveBeenCalledWith(USGS_API_URL_DAY, { signal: expect.any(AbortSignal) });
+      expect(fetchUsgsData).toHaveBeenCalledWith(USGS_API_URL_WEEK, { signal: expect.any(AbortSignal) });
       expect(result.current.dailyDataSource).toBe('USGS');
       expect(result.current.weeklyDataSource).toBe('USGS');
       expect(result.current.earthquakesLast24Hours.find(q => q.id === mswUsgsDayId)).toBeDefined();

@@ -1,16 +1,14 @@
+import { parseClusterSelector, resolveClusterDefinition } from '../utils/clusterResolver.js';
+
 async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
-  const clusterId = url.searchParams.get("id");
-  if (!clusterId) {
-    return new Response(
-      JSON.stringify({ error: "Missing clusterId query parameter." }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-  }
+  let selector;
+  try { selector = parseClusterSelector(url.searchParams); }
+  catch (error) { return new Response(JSON.stringify({ error: error.message }), {
+    status: 400, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  }); }
+  const clusterId = selector.value;
   if (!env.DB) {
     console.error("D1 Database (env.DB) not available.");
     return new Response(
@@ -22,56 +20,17 @@ async function onRequestGet(context) {
     );
   }
   try {
-    console.log(
-      `Attempting to fetch cluster definition by strongestQuakeId: ${clusterId}`,
-    );
-    const clusterStmt = env.DB.prepare(
-      `SELECT id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
-              maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
-              radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore,
-              version, createdAt, updatedAt
-       FROM ClusterDefinitions WHERE strongestQuakeId = ? ORDER BY updatedAt DESC LIMIT 1`,
-    ).bind(clusterId);
-    let clusterDefinition = await clusterStmt.first();
-    if (!clusterDefinition) {
-      console.log(
-        `Cluster not found by strongestQuakeId: ${clusterId}. Checking by canonical id as a fallback.`,
-      );
-      const clusterByIdStmt = env.DB.prepare(
-        `SELECT id, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
-                maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
-                radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore,
-                version, createdAt, updatedAt
-         FROM ClusterDefinitions WHERE id = ?`,
-      ).bind(clusterId);
-      clusterDefinition = await clusterByIdStmt.first();
-      if (!clusterDefinition) {
-        console.log(
-          `Cluster definition also not found by canonical id: ${clusterId}. Returning 404.`,
-        );
-        return new Response(
-          JSON.stringify({
-            error: `Cluster definition for id ${clusterId} (interpreted as strongestQuakeId or canonical id) not found.`,
-          }),
-          {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      } else {
-        console.log(
-          `Cluster definition found by canonical id: ${clusterId} after failing to find by strongestQuakeId.`,
-        );
-      }
-    } else {
-      console.log(
-        `Cluster definition found by strongestQuakeId: ${clusterId}. ID of retrieved definition: ${clusterDefinition.id}, Slug: ${clusterDefinition.slug}`,
-      );
-    }
+    const clusterDefinition = await resolveClusterDefinition(env.DB, selector);
+    if (!clusterDefinition) return new Response(JSON.stringify({ error: 'Cluster not found.' }), {
+      status: 404, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
     try {
       clusterDefinition.earthquakeIds = JSON.parse(
         clusterDefinition.earthquakeIds || "[]",
       );
+      if (!Array.isArray(clusterDefinition.earthquakeIds) || !clusterDefinition.earthquakeIds.every((id) => typeof id === 'string')) {
+        throw new Error('Stored earthquake IDs must be an array of strings');
+      }
     } catch (e) {
       console.error(
         `Error parsing earthquakeIds for cluster ${clusterId}: ${e.message}`,
@@ -141,7 +100,7 @@ async function onRequestGet(context) {
     return new Response(
       JSON.stringify({
         error: "Failed to process request.",
-        details: e.message,
+
       }),
       {
         status: 500,

@@ -87,7 +87,7 @@ export function validateUsgsSummary(data, maxFeatures = USGS_LIMITS.summaryFeatu
   return data;
 }
 
-function validateDetail(data, requestedId) {
+export function validateUsgsDetail(data, requestedId) {
   validateFeature(data);
   if (data.id !== requestedId) {
     const aliases = typeof data.properties.ids === 'string' && data.properties.ids.length <= 10000
@@ -97,7 +97,7 @@ function validateDetail(data, requestedId) {
   return data;
 }
 
-async function readBoundedJson(response, maxBytes, signal) {
+export async function readBoundedJsonResponse(response, maxBytes, signal, { includeBody = false } = {}) {
   const declaredLength = response.headers.get('Content-Length');
   if (declaredLength && /^\d+$/u.test(declaredLength) && Number(declaredLength) > maxBytes) {
     await response.body?.cancel().catch(() => {});
@@ -109,6 +109,7 @@ async function readBoundedJson(response, maxBytes, signal) {
   signal.addEventListener('abort', cancelOnAbort, { once: true });
   const decoder = new TextDecoder('utf-8', { fatal: true });
   const pieces = [];
+  const bodyChunks = includeBody ? [] : null;
   let bytes = 0;
   try {
     while (true) {
@@ -118,10 +119,12 @@ async function readBoundedJson(response, maxBytes, signal) {
       if (done) break;
       bytes += value.byteLength;
       if (bytes > maxBytes) throw new UsgsTransportError('USGS response exceeds the size limit', { code: 'USGS_RESPONSE_TOO_LARGE' });
+      bodyChunks?.push(value);
       pieces.push(decoder.decode(value, { stream: true }));
     }
     pieces.push(decoder.decode());
-    return JSON.parse(pieces.join(''));
+    const data = JSON.parse(pieces.join(''));
+    return includeBody ? { data, body: new Blob(bodyChunks) } : data;
   } catch (error) {
     await reader.cancel().catch(() => {});
     if (error instanceof UsgsTransportError || signal.aborted) throw error;
@@ -155,7 +158,7 @@ async function fetchBoundedJson(url, { maxBytes, timeoutMs = USGS_LIMITS.timeout
           });
         }
         if (allowEmpty && response.status === 204) return { type: 'FeatureCollection', features: [] };
-        return await readBoundedJson(response, maxBytes, controller.signal);
+        return await readBoundedJsonResponse(response, maxBytes, controller.signal);
       })(),
       deadline,
     ]);
@@ -174,7 +177,7 @@ export async function fetchUsgsSummary(urlOrFeedKey, options = {}) {
 
 export async function fetchValidatedDetail(id, options = {}) {
   const data = await fetchBoundedJson(usgsDetailUrl(id), { maxBytes: USGS_LIMITS.detailBytes, ...options, detail: true });
-  return validateDetail(data, id);
+  return validateUsgsDetail(data, id);
 }
 
 export function validateUsgsDateRange(startDate, endDate) {

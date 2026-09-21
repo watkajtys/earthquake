@@ -173,7 +173,7 @@ const SeoMetadata = ({ title, description, imageUrl, pageUrl, type = 'website', 
       }
     };
 
-  }, [title, description, imageUrl, pageUrl, type, locale, canonicalUrl, publishedTime, modifiedTime, keywords, eventJsonLd]);
+  }, [title, description, imageUrl, pageUrl, type, locale, canonicalUrl, publishedTime, modifiedTime, keywords, eventJsonLd, noIndex]);
 
   return null; // This component does not render anything to the DOM itself
 };

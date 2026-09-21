@@ -2,6 +2,7 @@
 import { createContext } from 'react'; // Added import
 import { getMagnitudeColor } from '../utils/utils.js'; // Needed for calculateMagnitudeDistribution
 import { INITIAL_LOADING_MESSAGES, FEELABLE_QUAKE_THRESHOLD, MAJOR_QUAKE_THRESHOLD, ALERT_LEVELS } from '../constants/appConstants'; // Added ALERT_LEVELS
+import { reconcileFeedRevisions } from './earthquakeRevisionState.js';
 
 // --- Helper Function Definitions ---
 export const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0, now = Date.now()) => {
@@ -26,7 +27,7 @@ export const consolidateMajorQuakesLogic = (currentLastMajor, currentPreviousMaj
     if (currentPreviousMajor && !consolidated.find(q => q.id === currentPreviousMajor.id)) {
         consolidated.push(currentPreviousMajor);
     }
-    consolidated = consolidated
+    consolidated = consolidated.filter(quake => quake.properties.mag !== null && quake.properties.mag >= MAJOR_QUAKE_THRESHOLD)
         .sort((a, b) => b.properties.time - a.properties.time)
         .filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id));
 
@@ -223,6 +224,10 @@ export const initialState = {
     weeklyDataSource: null,
     monthlyDataSource: null,
     shouldFetchMonthlyData: false,
+    feedSnapshots: {},
+    knownEarthquakeRevisions: {},
+    completeFeedCoverage: {},
+    latestFeedSourceTimes: {},
 };
 
 // --- Context Object ---
@@ -285,7 +290,7 @@ export const actionTypes = {
  * @param {object} action.payload - The payload of the action.
  * @returns {EarthquakeDataState} The new state.
  */
-export function earthquakeReducer(state = initialState, action) {
+function reduceState(state = initialState, action) {
     let newState;
     switch (action.type) {
         case actionTypes.SET_LOADING_FLAGS:
@@ -301,8 +306,7 @@ export function earthquakeReducer(state = initialState, action) {
             const alertsIn24hr = l24.map(q => q.properties.alert).filter(a => a && a !== 'green' && ALERT_LEVELS[a.toUpperCase()]); // ALERT_LEVELS needs to be defined or imported
             const currentHighestAlert = alertsIn24hr.length > 0 ? alertsIn24hr.sort((a,b) => ({ 'red':0, 'orange':1, 'yellow':2 }[a] - { 'red':0, 'orange':1, 'yellow':2 }[b]))[0] : null;
 
-            const dailyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
-            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, dailyMajors);
+            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, features);
 
             let identifiedTsunamiQuake = null;
             const hasRecentTsunamiWarning = l24.some(q => q.properties.tsunami === 1);
@@ -343,8 +347,7 @@ export function earthquakeReducer(state = initialState, action) {
             });
 
             const currentEarthquakesLast7Days = filterByTime(features, 7 * 24, 0, fetchTime);
-            const weeklyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
-            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, weeklyMajors);
+            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, features);
 
             const dailyCounts7Days = getInitialDailyCounts(7, fetchTime);
             currentEarthquakesLast7Days.forEach(quake => {
@@ -374,8 +377,7 @@ export function earthquakeReducer(state = initialState, action) {
         case actionTypes.MONTHLY_DATA_PROCESSED: {
             /** @type {MonthlyDataProcessedPayload} */
             const { features, fetchTime, dataSource } = action.payload;
-            const monthlyMajors = features.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
-            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, monthlyMajors);
+            const majorQuakeUpdates = consolidateMajorQuakesLogic(state.lastMajorQuake, state.previousMajorQuake, features);
 
             const dailyCounts30Days = getInitialDailyCounts(30, fetchTime);
             const dailyCounts14Days = getInitialDailyCounts(14, fetchTime);
@@ -436,4 +438,39 @@ export function earthquakeReducer(state = initialState, action) {
             break;
     }
     return newState;
+}
+
+const resourceActions = {
+    [actionTypes.DAILY_DATA_PROCESSED]: 'day',
+    [actionTypes.WEEKLY_DATA_PROCESSED]: 'week',
+    [actionTypes.MONTHLY_DATA_PROCESSED]: 'month',
+};
+
+export function earthquakeReducer(state = initialState, action) {
+    const resource = resourceActions[action.type];
+    if (!resource) return reduceState(state, action);
+    const previous = state.feedSnapshots?.[resource];
+    const previousGenerated = state.latestFeedSourceTimes?.[resource] ?? previous?.sourceGeneratedAtMs ?? previous?.metadata?.generated;
+    const incomingGenerated = action.payload.sourceGeneratedAtMs ?? action.payload.metadata?.generated;
+    if (Number.isFinite(previousGenerated) && Number.isFinite(incomingGenerated) && incomingGenerated < previousGenerated) return state;
+    const { snapshots, known, completeCoverage, resolved, changedIds, features } = reconcileFeedRevisions(state, resource, action.payload);
+    let next = reduceState(state, { ...action, payload: resolved[resource] });
+    // Recompute dependent cards, alerts, globe points and distributions from the
+    // same accepted revisions without changing another request's lifecycle.
+    const lifecycle = Object.fromEntries(['isLoadingDaily', 'isLoadingWeekly', 'isLoadingMonthly',
+        'hasAttemptedMonthlyLoad', 'monthlyError', 'dataFetchTime', 'lastUpdated',
+        'dailyDataSource', 'weeklyDataSource', 'monthlyDataSource'].map(key => [key, next[key]]));
+    for (const [type, name] of Object.entries(resourceActions)) {
+        if (name !== resource && resolved[name] && snapshots[name].features.some(feature => changedIds.has(feature.id))) {
+            // Revisions can move an event beyond an older snapshot's receipt
+            // time. Re-evaluate rolling windows now, without rewriting that
+            // snapshot's actual source generation or receipt metadata.
+            next = reduceState(next, { type, payload: {
+                ...resolved[name], fetchTime: Math.max(resolved[name].fetchTime, action.payload.fetchTime),
+            } });
+        }
+    }
+    return { ...next, ...lifecycle, feedSnapshots: snapshots, knownEarthquakeRevisions: known, completeFeedCoverage: completeCoverage,
+        latestFeedSourceTimes: Number.isFinite(incomingGenerated) ? { ...state.latestFeedSourceTimes, [resource]: incomingGenerated } : state.latestFeedSourceTimes,
+        ...consolidateMajorQuakesLogic(null, null, features) };
 }

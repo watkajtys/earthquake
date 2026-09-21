@@ -1,6 +1,6 @@
 // src/pages/HomePage.jsx
 import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState, useRef } from 'react'; // Add back useState for appCurrentTime, added useRef
-import { Routes, Route, useNavigate, Outlet } from 'react-router-dom'; // Removed useParams, Added Outlet
+import { Routes, Route, useNavigate, useLocation, NavLink, Outlet } from 'react-router-dom';
 import SeoMetadata from '../components/SeoMetadata';
 import ErrorBoundary from '../components/ErrorBoundary'; // Import ErrorBoundary
 // EarthquakeDetailView is likely part of EarthquakeDetailModalComponent, removing direct import from HomePage
@@ -36,7 +36,8 @@ import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 const InteractiveGlobeView = lazy(() => import('../components/InteractiveGlobeView'));
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 import { useUIState } from '../contexts/UIStateContext.jsx';
-import { fetchActiveClusters } from '../services/clusterApiService.js';
+import { useActiveClusters } from '../hooks/useActiveClusters.js';
+import { buildEarthquakePath, buildClusterPath, buildModalNavigationState } from '../utils/entityRoutes.js';
 import {
     CLUSTER_MAX_DISTANCE_KM,
     CLUSTER_MIN_QUAKES,
@@ -191,6 +192,9 @@ const GlobeLayout = (props) => {
  * @returns {JSX.Element} The rendered App component.
  */
 function App() {
+    const location = useLocation();
+    const isDetailRoute = /^\/(?:quake|cluster)\//.test(location.pathname);
+    const hasFullWidthContent = /^\/(?:overview|feeds)\/*$/.test(location.pathname);
     const {
         activeSidebarView, setActiveSidebarView,
         // activeFeedPeriod, // Unused variable removed
@@ -317,7 +321,7 @@ function App() {
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Kept local
     // activeSidebarView, globeFocusLng, focusedNotableQuake are from useUIState()
-    const [calculatedClusters, setCalculatedClusters] = useState([]); // NEW state for API fetched clusters
+    const { clusters: calculatedClusters, loading: clustersLoading, error: clustersError, refresh: refreshClusters } = useActiveClusters();
     // const [areClustersLoading, setAreClustersLoading] = useState(false); // Ensured this is removed
     const geoJsonAssetsLoaded = useRef(false);
 
@@ -360,6 +364,8 @@ function App() {
         isLoadingMonthly,
         hasAttemptedMonthlyLoad,
         monthlyError,
+        monthlyHasLoaded,
+        refreshData,
         allEarthquakes,
         earthquakesLast14Days,
         earthquakesLast30Days,
@@ -372,6 +378,7 @@ function App() {
         // feelableQuakes30Days_ctx,
         // significantQuakes30Days_ctx
     } = useEarthquakeDataState();
+    const monthlyDataAvailable = monthlyHasLoaded ?? (hasAttemptedMonthlyLoad && !monthlyError && allEarthquakes.length > 0);
 
     // Unused currentFeedTitle, currentFeedisLoading, previousDataForCurrentFeed useMemo hooks will be removed below
 
@@ -462,20 +469,8 @@ function App() {
     }, [allEarthquakes, earthquakesLast7Days, earthquakesLast24Hours]);
 
 
-    // Effect to fetch active clusters from the API
-    useEffect(() => {
-        fetchActiveClusters()
-            .then(clusters => {
-                setCalculatedClusters(clusters);
-            })
-            .catch(error => {
-                console.error("Error fetching active clusters:", error);
-                setCalculatedClusters([]);
-            });
-    }, []); // Empty dependency array to run once on mount
-
     // Use calculatedClusters for the activeClusters memo
-    const activeClusters = useMemo(() => {
+    const resolvedClusterRecords = useMemo(() => {
         // This check is a safeguard. If the API returns an empty array, or if calculatedClusters is not yet populated,
         // return an empty array to prevent downstream errors.
         if (!calculatedClusters || calculatedClusters.length === 0) {
@@ -494,7 +489,7 @@ function App() {
             // We need to parse it to get the actual array of IDs.
             let ids = [];
             try {
-                ids = JSON.parse(clusterSummary.earthquakeIds);
+                ids = Array.isArray(clusterSummary.earthquakeIds) ? clusterSummary.earthquakeIds : JSON.parse(clusterSummary.earthquakeIds);
             } catch (e) {
                 console.error("Failed to parse earthquakeIds from cluster summary:", clusterSummary, e);
                 return null; // Skip this cluster if the IDs are malformed
@@ -508,7 +503,7 @@ function App() {
             // Only return a cluster if it has a valid array of quakes. It's possible some quakes might
             // not be in the `allEarthquakes` list if data is slightly out of sync.
             if (clusterQuakes.length > 0) {
-                return clusterQuakes;
+                return { quakes: clusterQuakes, definition: clusterSummary };
             }
             return null;
         }).filter(Boolean); // Filter out any nulls that resulted from parsing errors or empty clusters.
@@ -516,6 +511,7 @@ function App() {
         return reconstructedClusters;
 
     }, [calculatedClusters, earthquakeMap]); // Dependency on both the raw cluster data and the earthquake lookup map.
+    const activeClusters = useMemo(() => resolvedClusterRecords.map(record => record.quakes), [resolvedClusterRecords]);
 
     // Effect to load GeoJSON assets
     useEffect(() => {
@@ -583,15 +579,6 @@ function App() {
         }
 
         if (loadedFromCache) {
-            // If data was loaded from cache and states were set, ensure loading is false.
-            // The 'setAreGeoJsonAssetsLoading(false)' above handles this if parsing was successful.
-            // If isMounted became false during async parsing, this return prevents further work.
-            if (isMounted && !areGeoJsonAssetsLoading) {
-                 // This means it was set to false because cache loading was successful
-            } else if (isMounted) {
-                // This case might occur if parsing failed but component is still mounted
-                // setAreGeoJsonAssetsLoading(false); // Decided against this here, finally block handles it
-            }
             return; // Exit if successfully loaded from cache
         }
 
@@ -641,6 +628,7 @@ function App() {
 
       return () => {
         isMounted = false;
+        geoJsonAssetsLoaded.current = false;
       };
     }, []); // Empty dependency array to run once on mount
 
@@ -754,11 +742,11 @@ function App() {
     }, [earthquakesLast24Hours, REGIONS, getRegionForEarthquake]);
 
     const overviewClusters = useMemo(() => {
-        if (!activeClusters || activeClusters.length === 0) {
+        if (resolvedClusterRecords.length === 0) {
             return [];
         }
 
-        const processed = activeClusters.map(cluster => {
+        const processed = resolvedClusterRecords.map(({ quakes: cluster, definition }) => {
             if (!cluster || cluster.length === 0) {
                 return null;
             }
@@ -811,7 +799,8 @@ function App() {
             // }
 
             return {
-                id: `overview_cluster_${strongestQuakeInCluster.id}_${cluster.length}`, // Create a somewhat unique ID
+                id: definition.id,
+                slug: definition.slug, // Keep the stored identity while card aggregation is migrated separately.
                 locationName,
                 quakeCount: cluster.length,
                 maxMagnitude: maxMag,
@@ -866,25 +855,12 @@ function App() {
 
         return significantClusters;
 
-    }, [activeClusters, formatTimeAgo, formatTimeDuration]);
+    }, [resolvedClusterRecords, formatTimeAgo, formatTimeDuration]);
 
     // Removed useEffect hook for registering cluster definitions
 
     // --- Event Handlers ---
     const navigate = useNavigate();
-
-    // Slugify helper function
-    const slugify = useCallback((text) => {
-        if (!text) return 'unknown-location';
-        return text
-            .toString()
-            .toLowerCase()
-            .replace(/\s+/g, '-') // Replace spaces with -
-            .replace(/[^\w-]+/g, '') // Remove all non-word chars except -
-            .replace(/--+/g, '-') // Replace multiple - with single -
-            .replace(/^-+/, '') // Trim - from start of text
-            .replace(/-+$/, ''); // Trim - from end of text
-    }, []);
 
     const handleQuakeClick = useCallback((quake) => {
         if (quake?.isCluster && quake?.clusterDetails) {
@@ -913,18 +889,14 @@ function App() {
             const props = quake?.properties;
             const id = quake?.id;
             if (props && id) {
-                const mag = typeof props.mag === 'number' ? props.mag.toFixed(1) : 'unknown';
-                const place = props.place || 'Unknown Location';
-                const locationSlug = slugify(place);
-                // Construct the new URL: /quake/m[magnitude]-[location-slug]-[usgs-id]
-                const newDetailPath = `/quake/m${mag}-${locationSlug}-${id}`;
-                navigate(newDetailPath);
+                const newDetailPath = buildEarthquakePath(quake);
+                if (newDetailPath) navigate(newDetailPath, { state: buildModalNavigationState(location) });
             } else {
                 console.warn("Missing properties or id for individual earthquake:", quake);
                 alert(`Earthquake: M ${props?.mag?.toFixed(1) || 'N/A'} - ${props?.place || 'Unknown location'}. Insufficient data to show details.`);
             }
         }
-    }, [navigate, slugify]); // Added slugify to dependencies
+    }, [navigate, location]);
 
     // Helper function for /feeds SEO
     const getFeedPageSeoInfo = useCallback((feedTitle, activePeriod) => {
@@ -982,28 +954,18 @@ function App() {
         const id = quakeFromFeature?.id;
 
         if (props && id) {
-            const mag = typeof props.mag === 'number' ? props.mag.toFixed(1) : 'unknown';
-            const place = props.place || quakeFromFeature.name || 'Unknown Location'; // Use quakeFromFeature.name as fallback for place
-            const locationSlug = slugify(place);
-            // Construct the new URL: /quake/m[magnitude]-[location-slug]-[usgs-id]
-            const newDetailPath = `/quake/m${mag}-${locationSlug}-${id}`;
-            navigate(newDetailPath);
+            const newDetailPath = buildEarthquakePath(quakeFromFeature);
+            if (newDetailPath) navigate(newDetailPath, { state: buildModalNavigationState(location) });
         } else {
             console.warn("Missing properties or id for notable earthquake:", quakeFromFeature);
             alert(`Featured Quake: ${props?.place || quakeFromFeature?.name || 'N/A'}\nInsufficient data to show details.`);
         }
-    }, [navigate, setFocusedNotableQuake, slugify]); // Added slugify and setFocusedNotableQuake
+    }, [navigate, setFocusedNotableQuake, location]);
 
     const handleClusterSummaryClick = useCallback((clusterData) => {
-        const count = clusterData.quakeCount;
-        // Use the component's slugify utility for consistency
-        const locationSlug = slugify(clusterData.locationName);
-        const maxMagnitude = parseFloat(clusterData.maxMagnitude).toFixed(1);
-        const strongestQuakeId = clusterData.strongestQuakeId;
-
-        const newUrl = `/cluster/${count}-quakes-near-${locationSlug}-up-to-m${maxMagnitude}-${strongestQuakeId}`;
-        navigate(newUrl);
-    }, [navigate, slugify]); // Added slugify to dependencies
+        const newUrl = buildClusterPath(clusterData);
+        if (newUrl) navigate(newUrl, { state: buildModalNavigationState(location) });
+    }, [navigate, location]);
 
     const initialDataLoaded = useMemo(() => earthquakesLastHour || earthquakesLast24Hours || earthquakesLast72Hours || earthquakesLast7Days, [earthquakesLastHour, earthquakesLast24Hours, earthquakesLast72Hours, earthquakesLast7Days]);
 
@@ -1017,7 +979,7 @@ function App() {
     const handleSetSidebarLearnMore = useCallback(() => setActiveSidebarView('learn_more'), [setActiveSidebarView]);
 
     // --- Full Screen Loader ---
-    if (showFullScreenLoader) { // Uses isLoadingInitialData from hook
+    if (showFullScreenLoader && !isDetailRoute) {
         return (
             <div
                 className="flex flex-col items-center justify-center h-[100svh] bg-slate-900 text-white antialiased"
@@ -1040,16 +1002,23 @@ function App() {
             <header className="bg-slate-800 text-white pt-2 sm:pt-4 pb-1 sm:pb-2 px-2 shadow-lg z-40 border-b border-slate-700 flex-shrink-0">
                 <div className="mx-auto flex flex-col sm:flex-row justify-between items-center px-3">
                     <h1 className="text-base sm:text-lg md:text-xl font-bold text-indigo-400">Global Seismic Activity Monitor</h1>
+                    <nav aria-label="Main navigation" className="hidden lg:flex gap-1 text-sm">
+                        {[['/', 'Globe'], ['/overview', 'Overview'], ['/feeds', 'Feeds'], ['/learn', 'Learn']].map(([path, label]) => (
+                            <NavLink key={path} to={path} end={path === '/'} className={({ isActive }) => `rounded px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>{label}</NavLink>
+                        ))}
+                    </nav>
                     <p className="text-[0.7rem] sm:text-xs sm:text-sm text-slate-400 mt-0.5 sm:mt-0">{headerTimeDisplay}</p>
                 </div>
             </header>
+            {error && <div role="alert" className="border-b border-amber-700 bg-amber-950/30 px-4 py-2 text-sm text-amber-200">
+                <span>Some earthquake data could not be refreshed. Previously loaded data is still available. </span>
+                <button type="button" onClick={refreshData} className="rounded bg-slate-700 px-3 py-1 text-white">Retry data</button>
+            </div>}
 
             {/* Main content area with proper mobile height calculation */}
             <div className="flex flex-1 min-h-0 pb-16 lg:pb-0">
 
-                {/* MAIN CONTENT AREA - This will now adapt based on activeMobileView */}
-                {/* On mobile, only ONE of its direct children should be 'block', others 'hidden' */}
-                {/* On desktop (lg:), the globe wrapper is 'lg:block' and mobile content sections are 'lg:hidden' */}
+                {/* Routed content remains visible at every viewport width. */}
                 <main className="flex-1 relative bg-slate-900 lg:bg-black w-full min-w-0 overflow-y-auto">
                     <ErrorBoundary>
                         <Suspense fallback={<RouteLoadingFallback />}>
@@ -1100,7 +1069,7 @@ function App() {
                                       onIndividualQuakeSelect={handleQuakeClick}
                                       formatTimeAgo={formatTimeAgo}
                                       formatTimeDuration={formatTimeDuration}
-                                      areParentClustersLoading={false} // Pass static false
+                                      areParentClustersLoading={clustersLoading}
                                     />
                                   }
                                 />
@@ -1119,6 +1088,9 @@ function App() {
                                     getRegionForEarthquake={getRegionForEarthquake}
                                     calculateStats={calculateStats}
                                     overviewClusters={overviewClusters}
+                                    clustersLoading={clustersLoading}
+                                    clustersError={clustersError}
+                                    refreshClusters={refreshClusters}
                                     handleClusterSummaryClick={handleClusterSummaryClick}
                                     topActiveRegionsOverview={topActiveRegionsOverview}
                                     REGIONS={REGIONS}
@@ -1151,14 +1123,14 @@ function App() {
 
                 {/* DESKTOP SIDEBAR (hidden on small screens, flex on large) */}
                 {/* The desktop sidebar's visibility is controlled by CSS (hidden lg:flex) */}
-                <aside className="hidden lg:flex w-[480px] bg-slate-800 p-0 flex-col border-l border-slate-700 shadow-2xl z-20">
+                {!hasFullWidthContent && <aside className="hidden lg:flex w-[480px] shrink-0 bg-slate-800 p-0 flex-col border-l border-slate-700 shadow-2xl z-20">
                     <div className="p-3 border-b border-slate-700"> <h2 className="text-md font-semibold text-indigo-400">Detailed Earthquake Analysis</h2> </div>
                     <div className="flex-shrink-0 p-2 space-x-1 border-b border-slate-700 whitespace-nowrap overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
                         <button onClick={handleSetSidebarOverview} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'overview_panel' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Overview</button>
                         <button onClick={handleSetSidebarDetails1hr} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_1hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last Hour</button>
                         <button onClick={handleSetSidebarDetails24hr} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_24hr' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 24hr</button>
                         <button onClick={handleSetSidebarDetails7day} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_7day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Last 7day</button>
-                        {hasAttemptedMonthlyLoad && !isLoadingMonthly && allEarthquakes.length > 0 && ( <> <button onClick={handleSetSidebarDetails14day} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={handleSetSidebarDetails30day} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
+                        {monthlyDataAvailable && ( <> <button onClick={handleSetSidebarDetails14day} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_14day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>14-Day</button> <button onClick={handleSetSidebarDetails30day} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'details_30day' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>30-Day</button> </> )}
                         <button onClick={handleSetSidebarLearnMore} className={`px-2 py-1 text-xs rounded-md ${activeSidebarView === 'learn_more' ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Learn</button>
                     </div>
                     {/*
@@ -1248,9 +1220,11 @@ function App() {
                                 {/* Active Earthquake Clusters Section - Desktop Sidebar */}
                                 <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
                                 <h3 className="text-md font-semibold mb-2 text-indigo-300"> Active Earthquake Clusters </h3>
+                                {clustersError && <div role="alert" className="text-sm text-amber-200">Cluster refresh failed. <button type="button" onClick={refreshClusters} className="rounded bg-slate-700 px-3 py-1">Retry clusters</button></div>}
+                                {clustersLoading && !calculatedClusters.length && <p role="status">Loading clusters...</p>}
                                 {overviewClusters && overviewClusters.length > 0 ? (
                                     <ul className="space-y-2"> {overviewClusters.map(cluster => ( <ClusterSummaryItem clusterData={cluster} key={cluster.id} onClusterSelect={handleClusterSummaryClick} /> ))} </ul>
-                                ) : ( <p className="text-xs text-slate-400 text-center py-2"> No significant active clusters detected. </p> )}
+                                ) : (!clustersLoading && !clustersError && <p className="text-xs text-slate-400 text-center py-2"> No significant active clusters detected. </p> )}
                                 </div>
 
                             {recentSignificantQuakesForOverview.length > 0 && (
@@ -1419,11 +1393,11 @@ function App() {
                             <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="Earthquakes (Last 7 Days)" earthquakes={earthquakesLast7Days} isLoading={isLoadingWeekly} onQuakeClick={handleQuakeClick} periodName="last 7 days" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate} /></Suspense>
                         </div> )}
 
-                        {activeSidebarView !== 'overview_panel' && activeSidebarView !== 'learn_more' && !hasAttemptedMonthlyLoad && ( <div className="text-center py-3 mt-3 border-t border-slate-700"> <button onClick={loadMonthlyData} disabled={isLoadingMonthly} className="w-full bg-indigo-600 hover:bg-indigo-500 focus:bg-indigo-700 text-white px-4 py-2 text-sm font-medium rounded-md transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"> {isLoadingMonthly ? 'Loading Historical Data...' : 'Load Full 14 & 30-Day Analysis'} </button> </div> )}
+                        {activeSidebarView !== 'overview_panel' && activeSidebarView !== 'learn_more' && (!monthlyDataAvailable || monthlyError) && ( <div className="text-center py-3 mt-3 border-t border-slate-700"> <button onClick={loadMonthlyData} disabled={isLoadingMonthly} className="w-full bg-indigo-600 hover:bg-indigo-500 focus:bg-indigo-700 text-white px-4 py-2 text-sm font-medium rounded-md transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"> {isLoadingMonthly ? 'Loading Historical Data...' : monthlyError ? 'Retry 14 & 30-Day Analysis' : 'Load Full 14 & 30-Day Analysis'} </button> </div> )}
                         {hasAttemptedMonthlyLoad && isLoadingMonthly && <p className="text-xs text-slate-400 text-center py-3 animate-pulse">Loading extended data archives...</p>}
                         {hasAttemptedMonthlyLoad && monthlyError && !isLoadingMonthly && <p className="text-red-300 text-xs text-center py-1">Error loading monthly data: {monthlyError}</p>}
 
-                        {activeSidebarView === 'details_14day' && hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length > 0 && ( <div className="space-y-3">
+                        {activeSidebarView === 'details_14day' && monthlyDataAvailable && ( <div className="space-y-3">
                             {/*
                                 PERFORMANCE NOTE: SummaryStatisticsCard is memoized.
                                 Ensure any new complex props (objects, functions, arrays) passed to it
@@ -1461,7 +1435,7 @@ function App() {
                             */}
                             <Suspense fallback={<ChartLoadingFallback message="Loading table..." />}><PaginatedEarthquakeTable title="All Earthquakes (Last 14 Days)" earthquakes={earthquakesLast14Days} isLoading={isLoadingMonthly} onQuakeClick={handleQuakeClick} itemsPerPage={10} defaultSortKey="time" initialSortDirection="descending" getMagnitudeColorStyle={getMagnitudeColorStyle} formatTimeAgo={formatTimeAgo} formatDate={formatDate}/></Suspense>
                         </div> )}
-                        {activeSidebarView === 'details_30day' && hasAttemptedMonthlyLoad && !isLoadingMonthly && !monthlyError && allEarthquakes.length > 0 && ( <div className="space-y-3">
+                        {activeSidebarView === 'details_30day' && monthlyDataAvailable && ( <div className="space-y-3">
                             {/*
                                 PERFORMANCE NOTE: SummaryStatisticsCard is memoized.
                                 Ensure any new complex props (objects, functions, arrays) passed to it
@@ -1537,7 +1511,7 @@ function App() {
                     <footer className="p-1.5 text-center border-t border-slate-700 mt-auto">
                         <p className="text-[10px] text-slate-500">&copy; {new Date().getFullYear()} Built By Vibes | Data: USGS</p>
                     </footer>
-                </aside>
+                </aside>}
             </div> {/* End of main flex container (main + aside) */}
 
             <BottomNav onNavClick={setActiveSidebarView} activeView={activeSidebarView} />

@@ -22,6 +22,7 @@ const FeedSelector = ({
   setActiveFeedPeriod,
   // Props for conditional rendering of 14/30 day buttons
   hasAttemptedMonthlyLoad, // Corresponds to contextHasAttemptedMonthlyLoad
+  monthlyHasLoaded,
   allEarthquakes, // Corresponds to contextAllEarthquakes
   // Constants for button labels
   FEELABLE_QUAKE_THRESHOLD,
@@ -71,7 +72,7 @@ const FeedSelector = ({
         Last 7day
       </button>
       {/* Conditional rendering for 14-day and 30-day buttons */}
-      {hasAttemptedMonthlyLoad && allEarthquakes && allEarthquakes.length > 0 && (
+      {(monthlyHasLoaded ?? (hasAttemptedMonthlyLoad && allEarthquakes && allEarthquakes.length > 0)) && (
         <React.Fragment key="monthly-feed-buttons">
           <button
             onClick={() => setActiveFeedPeriod('last_14_days')}

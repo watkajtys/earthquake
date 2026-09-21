@@ -1,7 +1,6 @@
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useMemo, useState, useEffect, useId } from 'react';
 import PropTypes from 'prop-types';
 import SkeletonText from './skeletons/SkeletonText';
-import SkeletonTableRow from './skeletons/SkeletonTableRow';
 
 /**
  * Displays earthquake data in a paginated and sortable table.
@@ -25,6 +24,7 @@ import SkeletonTableRow from './skeletons/SkeletonTableRow';
  *   used in the message when no earthquakes are found.
  * @param {function(Object):boolean} [props.filterPredicate] - An optional predicate function to filter the `earthquakes` array
  *   before sorting and pagination. Receives an earthquake object and should return true to include it.
+ * @param {string} [props.paginationKey] - Stable selected feed/filter identity; defaults to title and period.
  * @param {function(number):string} props.getMagnitudeColorStyle - Function that returns Tailwind CSS class strings for magnitude-based row styling.
  * @param {function(number):string} props.formatTimeAgo - Function to format a timestamp difference into a "time ago" string.
  * @param {function(number):string} props.formatDate - Function to format a timestamp into a full date string.
@@ -33,11 +33,17 @@ import SkeletonTableRow from './skeletons/SkeletonTableRow';
 const PaginatedEarthquakeTable = memo(({
     title, earthquakes, isLoading, onQuakeClick, itemsPerPage = 10,
     defaultSortKey = 'time', initialSortDirection = 'descending',
-    periodName, filterPredicate,
+    periodName, filterPredicate, paginationKey,
     getMagnitudeColorStyle, formatTimeAgo, formatDate
 }) => {
-    const cardBg = "bg-slate-700"; const titleColor = "text-indigo-300"; const tableHeaderBg = "bg-slate-800"; const tableHeaderTextColor = "text-slate-400"; const tableRowHover = "hover:bg-slate-500"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"; const paginationText = "text-slate-300";
-    const [sortConfig, setSortConfig] = useState({key: defaultSortKey, direction: initialSortDirection}); const [currentPage, setCurrentPage] = useState(1);
+    const cardBg = "bg-slate-700"; const titleColor = "text-indigo-300"; const tableRowHover = "hover:bg-slate-500"; const borderColor = "border-slate-600"; const paginationButton = "bg-slate-600 hover:bg-slate-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"; const paginationText = "text-slate-300";
+    const [sortConfig, setSortConfig] = useState({key: defaultSortKey, direction: initialSortDirection});
+    // An explicit key can describe filters independently of display text. Array
+    // or callback identity is deliberately excluded: refreshes must keep the page.
+    const feedIdentity = paginationKey ?? JSON.stringify([title, periodName]);
+    const [pagination, setPagination] = useState({ identity: feedIdentity, page: 1 });
+    const sortSelectId = useId();
+    const pageSize = Number.isSafeInteger(itemsPerPage) && itemsPerPage > 0 ? itemsPerPage : 10;
 
     const sortableFields = [
         { value: 'time', label: 'Time' },
@@ -68,12 +74,20 @@ const PaginatedEarthquakeTable = memo(({
         return items;
     }, [earthquakes, sortConfig, filterPredicate]);
 
+    const totalPages = Math.ceil(processedEarthquakes.length / pageSize);
+    const currentPage = pagination.identity === feedIdentity
+        ? Math.min(pagination.page, Math.max(1, totalPages)) : 1;
+    // Render with the safe page immediately; persist it so later growth cannot
+    // restore a stale out-of-range selection.
+    useEffect(() => {
+        setPagination(previous => previous.identity === feedIdentity && previous.page === currentPage
+            ? previous : { identity: feedIdentity, page: currentPage });
+    }, [feedIdentity, currentPage]);
+    const setCurrentPage = page => setPagination({ identity: feedIdentity, page });
     const paginatedEarthquakes = useMemo(() => {
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        return processedEarthquakes.slice(startIndex, startIndex + itemsPerPage);
-    }, [processedEarthquakes, currentPage, itemsPerPage]);
-
-    const totalPages = Math.ceil(processedEarthquakes.length / itemsPerPage);
+        const startIndex = (currentPage - 1) * pageSize;
+        return processedEarthquakes.slice(startIndex, startIndex + pageSize);
+    }, [processedEarthquakes, currentPage, pageSize]);
 
     const handleSortKeyChange = (newKey) => {
         let newDirection = 'descending'; // Default for time and magnitude
@@ -92,21 +106,11 @@ const PaginatedEarthquakeTable = memo(({
         setCurrentPage(1);
     };
 
-    // const handleRowKeyDown = (event, quake) => { // Unused function removed
-    //     if (event.key === 'Enter' || event.key === ' ') {
-    //         onQuakeClick(quake);
-    //         event.preventDefault(); // Prevent scrolling if space is pressed
-    //     }
-    // };
-
-    // const getSortIndicator = (key) => (sortConfig.key === key ? (sortConfig.direction === 'ascending' ? ' ▲' : ' ▼') : <span className="text-slate-500"> ◇</span>);
-    // columns array definition removed as it's no longer needed for list layout
-
     const renderContent = () => {
         if (isLoading || earthquakes === null) {
             return (
                 <div className="overflow-x-auto"> {/* Wrapper for skeletons */}
-                    {[...Array(Math.min(itemsPerPage, 3))].map((_, i) => (
+                    {[...Array(Math.min(pageSize, 3))].map((_, i) => (
                         <div key={`skeleton-${i}`} className={`p-2 border-b border-slate-600 last:border-b-0`}>
                             <div className="flex justify-between items-center text-xs sm:text-sm">
                                 <SkeletonText width="w-1/4" className="bg-slate-600" />
@@ -133,29 +137,30 @@ const PaginatedEarthquakeTable = memo(({
                     {/* List container */}
                     <div>
                         {paginatedEarthquakes.map((quake) => (
-                            <div
+                            <button
+                                type="button"
                                 key={quake.id}
                                 onClick={() => onQuakeClick(quake)}
-                                className={`p-2 cursor-pointer ${getMagnitudeColorStyle(quake.properties.mag)} border-b border-slate-600 last:border-b-0 ${tableRowHover} hover:text-slate-100 transition-colors`}
+                                className={`block w-full text-left p-2 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${getMagnitudeColorStyle(quake.properties.mag)} border-b border-slate-600 last:border-b-0 ${tableRowHover} hover:text-slate-100 transition-colors`}
                             >
-                                <div className="flex justify-between items-center text-xs sm:text-sm">
+                                <span className="flex justify-between items-center text-xs sm:text-sm">
                                     <span className="font-bold">M {quake.properties.mag?.toFixed(1) || "N/A"}</span>
                                     <span>
                                         {Date.now() - quake.properties.time < 2 * 24 * 60 * 60 * 1000 ? formatTimeAgo(Date.now() - quake.properties.time) : formatDate(quake.properties.time)}
                                     </span>
-                                </div>
-                                <p className="text-xs sm:text-sm truncate font-medium mt-0.5" title={quake.properties.place}>
+                                </span>
+                                <span className="block text-xs sm:text-sm truncate font-medium mt-0.5" title={quake.properties.place}>
                                     {quake.properties.place || "N/A"}
-                                </p>
-                            </div>
+                                </span>
+                            </button>
                         ))}
                     </div>
                 </div>
                 {totalPages > 1 && (
                     <div className="mt-3 flex justify-between items-center">
-                        <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}>Prev</button>
+                        <button type="button" onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))} disabled={currentPage === 1} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}>Prev</button>
                         <span className={`text-xs ${paginationText}`}>Page {currentPage} of {totalPages} ({processedEarthquakes.length})</span>
-                        <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}>Next</button>
+                        <button type="button" onClick={() => setCurrentPage(Math.min(currentPage + 1, totalPages))} disabled={currentPage === totalPages} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}>Next</button>
                     </div>
                 )}
             </>
@@ -167,9 +172,9 @@ const PaginatedEarthquakeTable = memo(({
             <h3 className={`text-md font-semibold mb-2 ${titleColor}`}>{title}</h3>
             <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-2 space-y-2 sm:space-y-0">
                 <div className="flex items-center space-x-2">
-                    <label htmlFor="sort-key-select" className="text-xs text-slate-300">Sort by:</label>
+                    <label htmlFor={sortSelectId} className="text-xs text-slate-300">Sort by:</label>
                     <select
-                        id="sort-key-select"
+                        id={sortSelectId}
                         value={sortConfig.key}
                         onChange={(e) => handleSortKeyChange(e.target.value)}
                         className={`px-3 py-1.5 text-xs font-medium rounded-md bg-slate-600 text-white border border-slate-500 focus:ring-indigo-500 focus:border-indigo-500`}
@@ -180,6 +185,7 @@ const PaginatedEarthquakeTable = memo(({
                     </select>
                 </div>
                 <button
+                    type="button"
                     onClick={toggleSortDirection}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${paginationButton}`}
                 >
@@ -201,6 +207,7 @@ PaginatedEarthquakeTable.propTypes = {
     initialSortDirection: PropTypes.string,
     periodName: PropTypes.string,
     filterPredicate: PropTypes.func,
+    paginationKey: PropTypes.string,
     getMagnitudeColorStyle: PropTypes.func.isRequired,
     formatTimeAgo: PropTypes.func.isRequired,
     formatDate: PropTypes.func.isRequired,

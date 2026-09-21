@@ -5,6 +5,7 @@ import { handleUsgsProxy } from '../functions/routes/api/usgs-proxy.js';
 import { handleTrustedUsgsIngestion } from '../functions/background/ingest-usgs-feed.js';
 import { fetchValidatedDetail, isValidUsgsEventId, usgsDetailUrl } from '../functions/utils/usgs-transport.js';
 import { persistEarthquakeDetail } from '../functions/utils/earthquakeDetailPersistence.js';
+import { readArchivedEarthquakeDetail } from '../functions/utils/earthquakeDetailRead.js';
 import { createScheduledTaskLogger } from './utils/scheduledTaskLogger.js';
 import { onRequestGet as onRequestGet2 } from '../functions/api/get-earthquakes.js';
 import { onRequestGet as onRequestGet3 } from '../functions/api/get-clusters.js';
@@ -24,6 +25,8 @@ import { CLUSTER_MIN_QUAKES } from './constants/appConstants.js';
 import { handleLegacyStaticAsset } from './legacyStaticAssets.js';
 import { enforceRoutePolicy, finalizeResponse, policyError, readBoundedJson, RequestPolicyError, validateCalculation } from './utils/workerRequestPolicy.js';
 import { releaseIdentity } from './utils/releaseIdentity.js';
+import { buildEarthquakePath, parseEarthquakePath, parseClusterPath, timestampMilliseconds } from './utils/entityRoutes.js';
+import { resolveClusterDefinition } from '../functions/utils/clusterResolver.js';
 
 var jsonErrorResponse = (message, status, sourceName, upstreamStatus = void 0) => {
     const errorBody = {
@@ -261,347 +264,84 @@ async function handleClustersSitemapRequest(request, env) {
     },
   });
 }
-async function handlePrerenderEarthquake(
-  request,
-  env,
-  ctx,
-  quakeIdPathSegment,
-) {
-  const sourceName = "prerender-earthquake";
-  const siteUrl = "https://earthquakeslive.com";
+async function crawlerAssetTags(request, env) {
+  if (!env.ASSETS) return '';
   try {
-    const parts = quakeIdPathSegment ? quakeIdPathSegment.split("-") : [];
-    const usgsId = parts.length > 1 ? parts[parts.length - 1] : null;
-    if (!usgsId) {
-      console.error(
-        `[${sourceName}] Could not extract usgs-id from quakeIdPathSegment: ${quakeIdPathSegment}`,
-      );
-      return new Response(
-        `<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Invalid earthquake identifier.</body></html>`,
-        {
-          status: 404,
-          headers: {
-            "Content-Type": "text/html",
-            "Cache-Control": "public, s-maxage=3600",
-          },
-        },
-      );
-    }
-    const detailUrl = usgsDetailUrl(usgsId);
-    const quakeData = await fetchValidatedDetail(usgsId);
-    if (!quakeData || !quakeData.properties || !quakeData.geometry) {
-      console.error(
-        `[${sourceName}] Invalid earthquake data structure from ${detailUrl} (USGS ID: ${usgsId})`,
-      );
-      return new Response(
-        `<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Invalid earthquake data.</body></html>`,
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "text/html",
-            "Cache-Control": "public, s-maxage=3600",
-          },
-        },
-      );
-    }
-    const { mag, place, time } = quakeData.properties;
-    const dateObj = new Date(time);
-    const readableTime = dateObj.toLocaleString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZoneName: "short",
-      timeZone: "UTC",
-    });
-    const isoTime = dateObj.toISOString();
-    const depth = quakeData.geometry.coordinates[2];
-    const lat = quakeData.geometry.coordinates[1];
-    const lon = quakeData.geometry.coordinates[0];
-    const canonicalUrl = `${siteUrl}/quake/${quakeIdPathSegment}`;
-    const usgsEventUrl = quakeData.properties.detail;
-    const titleDate = dateObj.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      timeZone: "UTC",
-    });
-    const pageTitle = `M ${mag} Earthquake - ${place} - ${titleDate} | Earthquakes Live`;
-    const description = `Detailed report of the M ${mag} earthquake that struck near ${place} on ${titleDate} at ${dateObj.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })} (UTC). Magnitude: ${mag}, Depth: ${depth} km. Location: ${lat.toFixed(2)}, ${lon.toFixed(2)}. Stay updated with Earthquakes Live.`;
-    let significanceSentence = `This earthquake occurred at a depth of ${depth} km.`;
-    if (depth < 70)
-      significanceSentence = `This shallow earthquake (depth: ${depth} km) may have been felt by many people in the area.`;
-    else if (depth > 300)
-      significanceSentence = `This earthquake occurred very deep (depth: ${depth} km).`;
-    const keywordDateFormatter = new Intl.DateTimeFormat("en-US", {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-      timeZone: "UTC",
-    });
-    const keywordDateString = keywordDateFormatter
-      .format(dateObj)
-      .toLowerCase();
-    const baseKeywords = `earthquake, ${place ? place.split(", ").join(", ") : ""}, M${mag}, seismic event, earthquake report`;
-    const keywords = `${baseKeywords}, ${keywordDateString}`;
-    const jsonLd = {
-      "@context": "https://schema.org",
-      "@type": "Event",
-      name: `M ${mag} - ${place}`,
-      description: description,
-      startDate: isoTime,
-      endDate: isoTime,
-      // Setting endDate same as startDate for simplicity
-      eventStatus: "https://schema.org/EventHappened",
-      eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-      location: {
-        "@type": "Place",
-        name: place,
-        geo: {
-          "@type": "GeoCoordinates",
-          latitude: lat,
-          longitude: lon,
-          elevation: -depth * 1e3,
-          // Schema.org uses meters for elevation, depth is in km
-        },
-      },
-      image: ["https://earthquakeslive.com/social-default-earthquake.png"],
-      organizer: {
-        "@type": "Organization",
-        name: "Earthquakes Live",
-        url: "https://earthquakeslive.com",
-      },
-      identifier: quakeData.id,
-      url: canonicalUrl,
-      keywords: keywords.toLowerCase(),
-    };
-    if (usgsEventUrl) jsonLd.sameAs = usgsEventUrl;
-    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeXml2(pageTitle)}</title><meta name="description" content="${escapeXml2(description)}"><meta name="keywords" content="${escapeXml2(keywords.toLowerCase())}"><link rel="canonical" href="${escapeXml2(canonicalUrl)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@builtbyvibes"><meta property="og:title" content="${escapeXml2(pageTitle)}"><meta property="og:description" content="${escapeXml2(description)}"><meta property="og:url" content="${escapeXml2(canonicalUrl)}"><meta property="og:type" content="website"><meta property="og:image" content="https://earthquakeslive.com/social-default-earthquake.png"><script type="application/ld+json">${JSON.stringify(jsonLd, null, 2)}</script></head><body><h1>${escapeXml2(pageTitle)}</h1><p><strong>Time:</strong> ${escapeXml2(readableTime)}</p><p><strong>Location:</strong> ${escapeXml2(place)}</p><p><strong>Coordinates:</strong> ${lat.toFixed(4)}\xB0N, ${lon.toFixed(4)}\xB0E</p><p><strong>Magnitude:</strong> M ${mag}</p><p><strong>Depth:</strong> ${depth} km</p><p>${escapeXml2(significanceSentence)}</p>${usgsEventUrl ? `<p><a href="${escapeXml2(usgsEventUrl)}" target="_blank" rel="noopener noreferrer">View on USGS Event Page</a></p>` : ""}<div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>`;
-    return new Response(html, {
-      headers: {
-        "Content-Type": "text/html",
-        "Cache-Control": "public, s-maxage=3600",
-      },
+    const response = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url)));
+    if (!response.ok) return '';
+    const shell = await response.text();
+    // Only reuse built local assets from the trusted asset binding, never /src/main.jsx.
+    return (shell.match(/<script\b[^>]*src=["']\/assets\/[^"']+["'][^>]*><\/script>|<link\b[^>]*href=["']\/assets\/[^"']+["'][^>]*>/gi) || []).join('');
+  } catch { return ''; }
+}
+function crawlerError(message, status) {
+  return new Response(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${escapeXml2(message)} | Earthquakes Live</title><meta name="robots" content="noindex"></head><body><h1>${escapeXml2(message)}</h1><p><a href="/">Return to Earthquakes Live</a></p></body></html>`, {
+    status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+async function crawlerDocument(request, env, { title, description, canonicalPath, body, structuredData }) {
+  const canonicalUrl = `https://earthquakeslive.com${canonicalPath}`;
+  const assets = await crawlerAssetTags(request, env);
+  const jsonLd = JSON.stringify({ ...structuredData, url: canonicalUrl }).replace(/</g, '\\u003c');
+  return new Response(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeXml2(title)} | Earthquakes Live</title><meta name="description" content="${escapeXml2(description)}"><link rel="canonical" href="${escapeXml2(canonicalUrl)}"><meta property="og:title" content="${escapeXml2(title)}"><meta property="og:description" content="${escapeXml2(description)}"><meta property="og:url" content="${escapeXml2(canonicalUrl)}"><meta property="og:type" content="website"><meta property="og:image" content="https://earthquakeslive.com/social-default-earthquake.png"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${jsonLd}</script>${assets}</head><body><div id="root"><main><h1>${escapeXml2(title)}</h1>${body}<p><a href="/">Explore Earthquakes Live</a></p></main></div></body></html>`, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+async function handlePrerenderEarthquake(request, env) {
+  const route = parseEarthquakePath(new URL(request.url).pathname);
+  if (!route.ok) return crawlerError('Invalid earthquake URL', 404);
+  try {
+    const archived = await readArchivedEarthquakeDetail(env.GEOJSON_BUCKET, route.eventId);
+    const quake = archived?.data ?? await fetchValidatedDetail(route.eventId);
+    const { mag, place, time } = quake.properties;
+    const magnitude = Number.isFinite(mag) ? mag.toFixed(1) : 'unknown';
+    const location = place || 'Unknown location';
+    const isoTime = new Date(time).toISOString();
+    const title = `M ${magnitude} Earthquake — ${location}`;
+    const description = `Earthquake near ${location} at ${isoTime}, magnitude ${magnitude}.`;
+    const [longitude, latitude, depth] = quake.geometry.coordinates;
+    return crawlerDocument(request, env, {
+      title, description, canonicalPath: buildEarthquakePath(quake.id),
+      body: `<p>${escapeXml2(description)}</p><p>Depth: ${depth} km. Coordinates: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}.</p>`,
+      structuredData: { '@context': 'https://schema.org', '@type': 'Event', name: title, description, identifier: quake.id,
+        startDate: isoTime, endDate: isoTime, eventStatus: 'https://schema.org/EventHappened',
+        location: { '@type': 'Place', name: location, geo: { '@type': 'GeoCoordinates', latitude, longitude, elevation: -depth * 1000 } } },
     });
   } catch (error) {
-    console.error(`[${sourceName}] Error: ${error.message}`, error);
-    return new Response(
-      `<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error prerendering earthquake page.</body></html>`,
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "text/html",
-          "Cache-Control": "public, s-maxage=3600",
-        },
-      },
-    );
+    console.error('[prerender-earthquake] Failed to resolve earthquake:', error.message);
+    return crawlerError(error.status === 404 ? 'Earthquake not found' : 'Earthquake details unavailable', error.status === 404 ? 404 : error.status >= 500 ? error.status : 502);
   }
 }
-async function handlePrerenderCluster(request, env, ctx, urlSlugParam) {
-  const sourceName = "prerender-cluster";
-  const siteUrl = "https://earthquakeslive.com";
-  const urlSlug = urlSlugParam;
-  const slugRegex = /^(\d+)-quakes-near-.*?([a-zA-Z0-9]+)$/;
-  const match = urlSlug.match(slugRegex);
-  if (!match) {
-    console.warn(`[${sourceName}] Invalid cluster URL slug format: ${urlSlug}`);
-    return new Response(
-      `<!DOCTYPE html><html><head><title>Not Found</title><meta name="robots" content="noindex"></head><body>Invalid cluster URL format.</body></html>`,
-      {
-        status: 404,
-        headers: {
-          "Content-Type": "text/html",
-          "Cache-Control": "public, s-maxage=3600",
-        },
-      },
-    );
-  }
-  const extractedCount = match[1];
-  const extractedStrongestQuakeId = match[2];
-  const clusterIdForD1Query = `overview_cluster_${extractedStrongestQuakeId}_${extractedCount}`;
-  if (!env.DB) {
-    console.error(
-      `[${sourceName}] D1 Database (env.DB) not configured for prerendering cluster.`,
-    );
-    return new Response(
-      `<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Service configuration error.</body></html>`,
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "text/html",
-          "Cache-Control": "public, s-maxage=3600",
-        },
-      },
-    );
-  }
+async function handlePrerenderCluster(request, env) {
+  const route = parseClusterPath(new URL(request.url).pathname);
+  if (!route.ok) return crawlerError('Invalid cluster URL', 404);
+  if (!env.DB) return crawlerError('Cluster details unavailable', 503);
   try {
-    const stmt = env.DB.prepare(
-      "SELECT id, slug, title, description, earthquakeIds, strongestQuakeId, updatedAt, locationName, maxMagnitude, startTime, endTime, quakeCount FROM ClusterDefinitions WHERE slug = ?",
-    ).bind(clusterIdForD1Query);
-    const clusterInfo = await stmt.first();
-    if (!clusterInfo) {
-      console.warn(
-        `[${sourceName}] Cluster definition not found in D1 for slug: ${clusterIdForD1Query} (derived from URL slug: ${urlSlug})`,
-      );
-      return new Response(
-        `<!DOCTYPE html><html><head><title>Not Found</title><meta name="robots" content="noindex"></head><body>Cluster not found.</body></html>`,
-        {
-          status: 404,
-          headers: {
-            "Content-Type": "text/html",
-            "Cache-Control": "public, s-maxage=3600",
-          },
-        },
-      );
-    }
-    let earthquakeIds;
-    try {
-      earthquakeIds =
-        typeof clusterInfo.earthquakeIds === "string"
-          ? JSON.parse(clusterInfo.earthquakeIds)
-          : clusterInfo.earthquakeIds;
-    } catch (e) {
-      console.error(
-        `[${sourceName}] Error parsing earthquakeIds for D1 Query ID ${clusterIdForD1Query}: ${e.message}`,
-      );
-      return new Response(
-        `<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error processing cluster data.</body></html>`,
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "text/html",
-            "Cache-Control": "public, s-maxage=3600",
-          },
-        },
-      );
-    }
-    const d1StrongestQuakeId = clusterInfo.strongestQuakeId;
-    const { updatedAt } = clusterInfo;
-    const numEvents = earthquakeIds ? earthquakeIds.length : 0;
-    const canonicalUrl = `${siteUrl}/cluster/${urlSlug}`;
-    const formattedUpdatedAt = new Date(updatedAt).toLocaleString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZoneName: "short",
-      timeZone: "UTC",
-    });
-    let strongestQuakeDetails = null,
-      pageTitle,
-      description,
-      bodyContent,
-      keywords;
-    if (d1StrongestQuakeId) {
-      try {
-        const quakeData = await fetchValidatedDetail(d1StrongestQuakeId);
-        strongestQuakeDetails = {
-          mag: quakeData.properties.mag,
-          place: quakeData.properties.place,
-          time: new Date(quakeData.properties.time).toLocaleString("en-US", {
-            year: "numeric", month: "long", day: "numeric", hour: "2-digit",
-            minute: "2-digit", timeZoneName: "short", timeZone: "UTC",
-          }),
-          id: quakeData.id,
-          url: usgsDetailUrl(quakeData.id),
-          latitude: quakeData.geometry.coordinates[1],
-          longitude: quakeData.geometry.coordinates[0],
-        };
-      } catch (e) {
-        console.error(
-          `[${sourceName}] Error fetching strongest quake details for ${d1StrongestQuakeId}: ${e.message}`,
-        );
-      }
-    }
-    if (strongestQuakeDetails) {
-      pageTitle = `Earthquake Cluster near ${strongestQuakeDetails.place} | Earthquakes Live`;
-      description = `Explore an active earthquake cluster near ${strongestQuakeDetails.place}, featuring ${numEvents} seismic events. The largest event in this sequence is a M ${strongestQuakeDetails.mag}. Updated ${formattedUpdatedAt}.`;
-      keywords = `earthquake cluster, seismic sequence, ${strongestQuakeDetails.place ? strongestQuakeDetails.place.split(", ").join(", ") : ""}, tectonic activity, M${strongestQuakeDetails.mag}`;
-      bodyContent = `<p>This page provides details about an earthquake cluster located near <strong>${escapeXml2(strongestQuakeDetails.place)}</strong>.</p><p>This cluster contains <strong>${numEvents}</strong> individual seismic events.</p><p>The most significant earthquake in this cluster is a <strong>M ${strongestQuakeDetails.mag}</strong>, which occurred on ${escapeXml2(strongestQuakeDetails.time)}.</p>${strongestQuakeDetails.url ? `<p><a href="${escapeXml2(strongestQuakeDetails.url)}" target="_blank" rel="noopener noreferrer">View details for the largest event on USGS</a></p>` : ""}<p><em>Cluster information last updated: ${escapeXml2(formattedUpdatedAt)}.</em></p>`;
-    } else {
-      pageTitle = `Earthquake Cluster Summary (${numEvents} Events) | Earthquakes Live`;
-      description = `Details of an earthquake cluster containing ${numEvents} seismic events. This cluster is identified by the strongest quake ID: ${extractedStrongestQuakeId}. Updated ${formattedUpdatedAt}.`;
-      keywords = `earthquake cluster, seismic sequence, ${extractedStrongestQuakeId}, tectonic activity`;
-      bodyContent = `<p>This page provides details about an earthquake cluster associated with the primary event ID <strong>${escapeXml2(extractedStrongestQuakeId)}</strong>.</p><p>This cluster contains <strong>${numEvents}</strong> individual seismic events.</p><p><em>Cluster information last updated: ${escapeXml2(formattedUpdatedAt)}.</em></p><p><em>Further details about the most significant event in this cluster are currently unavailable.</em></p>`;
-    }
-    const jsonLd = {
-      "@context": "https://schema.org",
-      "@type": "CollectionPage",
-      name: pageTitle,
-      description,
-      url: canonicalUrl,
-      dateModified: new Date(updatedAt).toISOString(),
-      keywords: keywords.toLowerCase(),
-    };
-    if (strongestQuakeDetails) {
-      jsonLd.about = {
-        "@type": "Event",
-        name: `M ${strongestQuakeDetails.mag} - ${strongestQuakeDetails.place}`,
-        identifier: strongestQuakeDetails.id,
-        ...(strongestQuakeDetails.url && { url: strongestQuakeDetails.url }),
-      };
-      if (
-        typeof strongestQuakeDetails.latitude === "number" &&
-        typeof strongestQuakeDetails.longitude === "number"
-      ) {
-        jsonLd.location = {
-          "@type": "Place",
-          name: strongestQuakeDetails.place,
-          geo: {
-            "@type": "GeoCoordinates",
-            latitude: strongestQuakeDetails.latitude,
-            longitude: strongestQuakeDetails.longitude,
-          },
-        };
-      }
-    }
-    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeXml2(pageTitle)}</title><meta name="description" content="${escapeXml2(description)}"><meta name="keywords" content="${escapeXml2(keywords.toLowerCase())}"><link rel="canonical" href="${escapeXml2(canonicalUrl)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@builtbyvibes"><meta property="og:title" content="${escapeXml2(pageTitle)}"><meta property="og:description" content="${escapeXml2(description)}"><meta property="og:url" content="${escapeXml2(canonicalUrl)}"><meta property="og:type" content="website"><meta property="og:image" content="https://earthquakeslive.com/social-default-earthquake.png"><script type="application/ld+json">${JSON.stringify(jsonLd, null, 2)}</script></head><body><h1>${escapeXml2(pageTitle)}</h1>${bodyContent}<p>Explore the live map and detailed list of events in this cluster on our interactive platform.</p><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>`;
-    return new Response(html, {
-      headers: {
-        "Content-Type": "text/html",
-        "Cache-Control": "public, s-maxage=1800",
-      },
+    const cluster = await resolveClusterDefinition(env.DB, { kind: 'route', value: route.route });
+    if (!cluster) return crawlerError('Cluster not found', 404);
+    const magnitude = Number.isFinite(cluster.maxMagnitude) ? cluster.maxMagnitude.toFixed(1) : 'unknown';
+    const place = cluster.locationName || 'Unknown location';
+    const title = cluster.title || `Earthquake Cluster near ${place}`;
+    const description = cluster.description || `Earthquake cluster near ${place} with ${cluster.quakeCount ?? 'unknown'} events and maximum magnitude ${magnitude}.`;
+    const updated = timestampMilliseconds(cluster.updatedAt);
+    const modified = updated !== null && Number.isFinite(new Date(updated).getTime()) ? new Date(updated).toISOString() : null;
+    return crawlerDocument(request, env, {
+      title, description, canonicalPath: cluster.canonicalPath,
+      body: `<p>${escapeXml2(description)}</p><p>Events: ${escapeXml2(String(cluster.quakeCount ?? 'Unknown'))}. Maximum magnitude: ${escapeXml2(magnitude)}.</p>${modified ? `<p>Updated: ${escapeXml2(modified)}.</p>` : ''}`,
+      structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, description,
+        identifier: cluster.id, ...(modified && { dateModified: modified }) },
     });
   } catch (error) {
-    console.error(
-      `[${sourceName}] Error processing cluster slug ${urlSlug} (D1 ID: ${clusterIdForD1Query || "not_constructed"}): ${error.message}`,
-      error,
-    );
-    return new Response(
-      `<!DOCTYPE html><html><head><title>Error</title><meta name="robots" content="noindex"></head><body>Error prerendering cluster page.</body></html>`,
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "text/html",
-          "Cache-Control": "public, s-maxage=3600",
-        },
-      },
-    );
+    console.error('[prerender-cluster] Failed to resolve cluster:', error.message);
+    return crawlerError('Cluster details unavailable', 500);
   }
 }
 async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
   const sourceName = "earthquake-detail-handler";
   if (!isValidUsgsEventId(event_id)) return policyError('Invalid event ID.', 400);
-  if (env.GEOJSON_BUCKET) {
-    const r2Object = await env.GEOJSON_BUCKET.get(`${event_id}.json`);
-    if (r2Object !== null) {
-      console.log(
-        `[${sourceName}] Serving GeoJSON from R2 for event: ${event_id}.`,
-      );
-      const headers = new Headers();
-      r2Object.writeHttpMetadata(headers);
-      headers.set("etag", r2Object.httpEtag);
-      headers.set("Content-Type", "application/json");
-      headers.set("X-Data-Source", "R2-Storage");
-      return new Response(r2Object.body, { headers });
-    }
-    console.log(
-      `[${sourceName}] Event ${event_id} not found in R2. Proceeding to USGS fetch.`,
-    );
-  }
   try {
+    const archived = await readArchivedEarthquakeDetail(env.GEOJSON_BUCKET, event_id);
+    if (archived) return new Response(archived.body, { headers: archived.headers });
     const usgsUrl = usgsDetailUrl(event_id);
     console.log(
       `[${sourceName}] Fetching event ${event_id} from USGS: ${usgsUrl}`,

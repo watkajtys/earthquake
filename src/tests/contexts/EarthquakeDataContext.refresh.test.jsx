@@ -30,7 +30,7 @@ describe('EarthquakeDataProvider Data Refresh', () => {
     fetchUsgsData.mockReset();
 
     fetchSpy = vi.spyOn(global, 'fetch');
-    fetchSpy.mockImplementation(async (url, options) => {
+    fetchSpy.mockImplementation(async (url) => {
       const requestedUrl = typeof url === 'string' ? url : (url && typeof url.url === 'string' ? url.url : '');
       if (requestedUrl.includes('/api/get-earthquakes')) {
         // console.log(`Simulating D1 API failure for: ${requestedUrl} in refresh.test.jsx`);
@@ -126,7 +126,7 @@ describe('EarthquakeDataProvider Data Refresh', () => {
     const dateNowSpy = vi.spyOn(global.Date, 'now').mockReturnValue(refreshMockedNow); // Mock all Date.now() calls during refresh phase
 
     await act(async () => {
-        await runIntervals('refresh', 1); // Run only the refresh interval
+        await runIntervals('refresh'); // Each resource has its own bounded refresh timer.
         // Allow refresh fetches to complete by flushing promises
         await Promise.resolve(); // For performDataFetch async operations
         await Promise.resolve(); // Additional promise cycle if needed

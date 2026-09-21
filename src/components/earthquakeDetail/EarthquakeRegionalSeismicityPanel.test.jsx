@@ -1,6 +1,7 @@
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import userEvent from '@testing-library/user-event';
 import EarthquakeRegionalSeismicityPanel from './EarthquakeRegionalSeismicityPanel';
 
 // Mock the child component RegionalSeismicityChart
@@ -50,7 +51,7 @@ describe('EarthquakeRegionalSeismicityPanel', () => {
         nearbyEarthquakesData: props.broaderEarthquakeData,
         dataSourceTimespanDays: props.dataSourceTimespanDays,
         isLoadingMonthly: props.isLoadingMonthly,
-        hasAttemptedMonthlyLoad: props.hasAttemptedMonthlyLoad,
+
       })
     );
   });
@@ -85,9 +86,26 @@ describe('EarthquakeRegionalSeismicityPanel', () => {
     expect(MockedRegionalSeismicityChart.mock.calls[0][0]).toEqual(
       expect.objectContaining({
         isLoadingMonthly: false,
-        hasAttemptedMonthlyLoad: false,
+
         dataSourceTimespanDays: 7,
       })
     );
   });
+});
+
+
+it('shows weekly coverage and an explicit retry after the initial monthly failure', async () => {
+  const retry = vi.fn();
+  render(<EarthquakeRegionalSeismicityPanel detailData={{ id: 'main' }} broaderEarthquakeData={[]} dataSourceTimespanDays={30} monthlyHasLoaded={false} monthlyError="Unavailable" onRetryMonthly={retry} />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Showing the available 7-day feed');
+  expect(MockedRegionalSeismicityChart.mock.calls.at(-1)[0].dataSourceTimespanDays).toBe(7);
+  await userEvent.click(screen.getByRole('button', { name: 'Retry 30-day regional data' }));
+  expect(retry).toHaveBeenCalledTimes(1);
+});
+
+it('retains loaded monthly coverage during a refresh failure and disables duplicate retry while loading', () => {
+  render(<EarthquakeRegionalSeismicityPanel detailData={{ id: 'main' }} broaderEarthquakeData={[]} dataSourceTimespanDays={30} monthlyHasLoaded monthlyError="Unavailable" isLoadingMonthly onRetryMonthly={vi.fn()} dataSourceGeneratedAtMs={1234} />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Previously loaded data is shown');
+  expect(screen.getByRole('button', { name: 'Retry 30-day regional data' })).toBeDisabled();
+  expect(MockedRegionalSeismicityChart.mock.calls.at(-1)[0]).toMatchObject({ dataSourceTimespanDays: 30, dataSourceGeneratedAtMs: 1234 });
 });

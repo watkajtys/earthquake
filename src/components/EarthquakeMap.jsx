@@ -1,16 +1,15 @@
 import React, { useRef, useEffect, memo, useState, useMemo } from 'react'; // Added useState and useMemo
 // PropTypes import removed
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { buildEarthquakePath, buildModalNavigationState, eventIdFromDetailUrl, parseEarthquakePath } from '../utils/entityRoutes.js';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 // import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
 import { 
   calculateBoundingBoxFromPoints, 
-  filterGeoJSONByBoundingBox,
-  initializeSpatialIndex,
-  clearSpatialIndex
+  filterGeoJSONByBoundingBox
 } from '../utils/geoSpatialUtils.js';
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
@@ -160,6 +159,8 @@ const EarthquakeMap = ({
   fitMapToBounds = false,
   defaultZoom = 8,
 }) => {
+  const location = useLocation();
+  const detailNavigationState = buildModalNavigationState(location);
   const mapRef = useRef(null);
   const [tectonicPlatesDataJson, setTectonicPlatesDataJson] = useState(null);
   const [isTectonicPlatesLoading, setIsTectonicPlatesLoading] = useState(true);
@@ -345,7 +346,7 @@ const EarthquakeMap = ({
             {mainQuakeDetailUrl && (
               <>
                 <br />
-                <Link to={`/quake/${encodeURIComponent(mainQuakeDetailUrl)}`} className="text-blue-500 hover:underline">
+                <Link to={buildEarthquakePath(eventIdFromDetailUrl(mainQuakeDetailUrl) || parseEarthquakePath(mainQuakeDetailUrl).eventId) || "/"} state={detailNavigationState} className="text-blue-500 hover:underline">
                   View Details
                 </Link>
               </>
@@ -388,7 +389,7 @@ const EarthquakeMap = ({
               Time: {formatTimeAgo(quake.properties.time)}
               <br />
               {quake.properties.detail && (
-                 <Link to={`/quake/${encodeURIComponent(quake.properties.detail)}`} className="text-blue-500 hover:underline">
+                 <Link to={buildEarthquakePath(quake) || "/"} state={detailNavigationState} className="text-blue-500 hover:underline">
                    View Details
                  </Link>
               )}

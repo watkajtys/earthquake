@@ -185,6 +185,11 @@ describe('deployed Worker routing', () => {
   });
 
   it('prerenders earthquake links for crawlers before SPA fallback', async () => {
+    env.ASSETS.fetch.mockResolvedValue(new Response(`<!DOCTYPE html><html><head>
+      <script type="module" crossorigin src="/assets/index-current.js"></script>
+      <link rel="stylesheet" crossorigin href="/assets/index-current.css">
+      <script type="module" src="/src/main.jsx"></script>
+    </head><body><div id="root"></div></body></html>`, { headers: { 'Content-Type': 'text/html' } }));
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       type: 'Feature',
       id: 'us123',
@@ -198,7 +203,13 @@ describe('deployed Worker routing', () => {
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson', expect.objectContaining({ redirect: 'manual', signal: expect.any(AbortSignal) }));
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toContain('text/html');
-    expect(await response.text()).toContain('Test location');
-    expect(env.ASSETS.fetch).not.toHaveBeenCalled();
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    const html = await response.text();
+    expect(html).toContain('Test location');
+    expect(html).toContain('<script type="module" crossorigin src="/assets/index-current.js"></script>');
+    expect(html).toContain('<link rel="stylesheet" crossorigin href="/assets/index-current.css">');
+    expect(html).not.toContain('/src/main.jsx');
+    expect(env.ASSETS.fetch).toHaveBeenCalledOnce();
+    expect(env.ASSETS.fetch.mock.calls[0][0].url).toBe('https://earthquakeslive.com/index.html');
   });
 });
