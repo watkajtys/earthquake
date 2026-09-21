@@ -1,6 +1,6 @@
 # Complete period feed snapshots
 
-Status: implementation in progress on `codex/complete-period-feeds`. Package 5B; previous block is committed and production-verified at application source `2b80dda`, with final ledger commit `1b8a49a`.
+Status: package 5B producer `a47af43` is deployed and its real production publications are verified. Consumer preview review is in progress on `codex/complete-period-feeds`; exact rollout evidence is in [RELEASE-LEDGER.md](RELEASE-LEDGER.md).
 
 ## Contract and scope
 

@@ -2,7 +2,7 @@ import { summaryPage } from '../test-utils/clusterSummaryFixtures.js';
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { expect, describe, it, vi, beforeEach } from 'vitest';
+import { expect, describe, it, vi, beforeEach, afterEach } from 'vitest';
 import { axe } from 'jest-axe';
 
 // Mock child components
@@ -25,9 +25,6 @@ vi.mock('../components/SummaryStatisticsCard', () => ({ default: () => <div data
 vi.mock('../components/AlertDisplay', () => ({ default: () => <div data-testid="mock-alert-display"></div> }));
 vi.mock('../components/ClusterSummaryItem', () => ({ default: (props) => <div data-testid={`mock-cluster-summary-item-${props.clusterData.id}`}>Mock ClusterSummaryItem</div> }));
 vi.mock('../components/ClusterDetailModalWrapper', () => ({ default: () => <div data-testid="mock-cluster-detail-wrapper">Mock ClusterDetailModalWrapper</div> }));
-vi.mock('./LearnPage', () => ({ default: () => <p>Static learning page</p> }));
-vi.mock('./learn/PlateTectonicsPage', () => ({ default: () => <p>Static tectonics article</p> }));
-vi.mock('./MonitoringPage', () => ({ default: () => <p>Monitoring page</p> }));
 
 
 import App from './HomePage'; // Retain App import
@@ -83,6 +80,8 @@ const defaultUIState = {
 };
 
 describe('HomePage Rendering and Basic UI', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   beforeEach(() => {
     vi.resetAllMocks();
     mockUseEarthquakeDataState.mockReturnValue(defaultEarthquakeData);
@@ -166,16 +165,41 @@ describe('HomePage Rendering and Basic UI', () => {
     expect(screen.queryByText('Seismic Data Visualization')).not.toBeInTheDocument();
   });
 
-  it.each([['/learn', 'Static learning page'], ['/learn/plate-tectonics', 'Static tectonics article']])('renders %s before any global feed request has settled', async (path, text) => {
+  it.each([
+    ['/learn', 'Learn About Earthquakes'],
+    ['/learn/', 'Learn About Earthquakes'],
+    ['/learn/magnitude-vs-intensity', 'Understanding Earthquake Magnitude vs. Intensity'],
+    ['/learn/measuring-earthquakes', 'How Earthquakes Are Measured (Seismographs & Scales)'],
+    ['/learn/plate-tectonics', 'Plate Tectonics and Earthquakes'],
+    ['/learn/what-causes-earthquakes', 'What Causes Earthquakes?'],
+    ['/learn/earthquake-safety', 'Earthquake Safety and Preparedness'],
+    ['/learn/tsunamis-and-earthquakes', 'Tsunamis and Earthquakes'],
+    ['/monitoring', 'System Monitoring'],
+    ['/monitoring/', 'System Monitoring'],
+  ])('keeps the actual %s content full-width and visible while requests remain pending', async (path, title) => {
+    // Keep monitoring's independent requests pending too: its page shell must still render.
+    if (path.startsWith('/monitoring')) vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
     mockUseEarthquakeDataState.mockReturnValue({ ...defaultEarthquakeData, isLoadingInitialData: true,
       isInitialAppLoad: true, isLoadingDaily: true, isLoadingWeekly: true, dataFetchTime: null, allEarthquakes: [] });
     render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
-    expect(await screen.findByText(text)).toBeInTheDocument();
+    const heading = await screen.findByRole('heading', { name: title, level: 1 });
+    const main = screen.getByRole('main');
+    expect(main).toContainElement(heading);
+    expect(heading).toBeVisible();
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    // DOM tests do not apply Tailwind media queries. Inspect real content ancestors
+    // so desktop hiding or a reserved sidebar margin cannot pass behind a page mock.
+    for (let element = heading; element !== main.parentElement; element = element.parentElement) {
+      expect([...element.classList].filter(token => /(?:^|:)(?:hidden|invisible)$/.test(token))).toEqual([]);
+      expect([...element.classList].filter(token => /(?:^|:)m[lr]-\[480px\]$/.test(token))).toEqual([]);
+    }
     expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
     expect(screen.queryByText('Seismic Data Visualization')).not.toBeInTheDocument();
+    expect(mockFetchActiveClusters).not.toHaveBeenCalled();
   });
 
   it.each(['/learn', '/learn/plate-tectonics', '/monitoring', '/feeds'])('does not request or render cluster cards on %s', async path => {
+    if (path === '/monitoring') vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
     render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
     await screen.findByRole('main');
     await act(async () => { await Promise.resolve(); });
@@ -190,7 +214,7 @@ describe('HomePage Rendering and Basic UI', () => {
     await waitFor(() => expect(mockFetchActiveClusters).toHaveBeenCalledOnce());
     const signal = mockFetchActiveClusters.mock.calls[0][0].signal;
     fireEvent.click(screen.getByRole('link', { name: 'Learn', exact: true }));
-    expect(await screen.findByText('Static learning page')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Learn About Earthquakes', level: 1 })).toBeInTheDocument();
     expect(signal.aborted).toBe(true);
     await act(async () => { finishOld([{ id: 'obsolete', quakeCount: 20, maxMagnitude: 9 }]); });
     expect(screen.queryByRole('heading', { name: 'Active Earthquake Clusters' })).not.toBeInTheDocument();

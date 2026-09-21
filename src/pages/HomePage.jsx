@@ -200,7 +200,7 @@ function App() {
     const location = useLocation();
     const isStaticRoute = /^\/(?:learn(?:\/|$)|monitoring\/*$)/.test(location.pathname);
     const isDetailRoute = /^\/(?:quake|cluster)\//.test(location.pathname);
-    const hasFullWidthContent = /^\/(?:overview|feeds)\/*$/.test(location.pathname);
+    const hasFullWidthContent = isStaticRoute || /^\/(?:overview|feeds)\/*$/.test(location.pathname);
     const showClusterSummaries = location.pathname === '/' || /^\/overview\/*$/.test(location.pathname) || isDetailRoute;
     const {
         activeSidebarView, setActiveSidebarView,

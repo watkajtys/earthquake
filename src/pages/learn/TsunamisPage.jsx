@@ -15,7 +15,7 @@ const TsunamisPage = () => {
         locale="en_US"
         type="article"
       />
-      <div className="p-3 md:p-4 h-full space-y-4 text-slate-200 lg:mr-[480px]">
+      <div className="p-3 md:p-4 space-y-4 text-slate-200 max-w-3xl mx-auto">
         <h1 className="text-lg font-semibold text-indigo-400 sticky top-0 bg-slate-900 py-2 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 border-b border-slate-700">
           Tsunamis and Earthquakes
         </h1>
