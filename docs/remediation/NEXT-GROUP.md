@@ -1,5 +1,7 @@
 # Cluster integrity containment and summary rendering
 
+Historical execution plan: this group has shipped. See [STOPPING-POINT.md](STOPPING-POINT.md) for the current next task and [RELEASE-LEDGER.md](RELEASE-LEDGER.md) for results and remaining boundaries.
+
 Execution plan for the group following production revision `33cae393b203839fe184966c1a4d487f281a0d63`. This document states the plan; actual completion and deployment evidence belong in `RELEASE-LEDGER.md`.
 
 ## Scope and order

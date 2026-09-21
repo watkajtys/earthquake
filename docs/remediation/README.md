@@ -1,5 +1,7 @@
 # Earthquakes Live remediation handoff
 
+**Current checkpoint:** [Stopping point and resume plan](STOPPING-POINT.md) summarizes shipped work, remaining scope and the next bounded task. The briefs below preserve the original audit plan.
+
 Prepared 2026-09-21 UTC from the comprehensive audit of commit `aca32df909dc76f23483ab19779ac5fcbafed1b3`. This is an implementation plan for another model. The briefs preserve the original plan. Implementation has started; current status and evidence are recorded in [RELEASE-LEDGER.md](RELEASE-LEDGER.md). Do not treat a planned acceptance criterion as an observed result.
 
 ## Read this first
