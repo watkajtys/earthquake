@@ -1,6 +1,6 @@
 # Complete period feed snapshots
 
-Status: package 5B producer `a47af43` is deployed and its real production publications are verified. Consumer preview review is in progress on `codex/complete-period-feeds`; exact rollout evidence is in [RELEASE-LEDGER.md](RELEASE-LEDGER.md).
+Status: the bounded package 5B release is complete in production. Producer `a47af43` was verified before consumer `8e488e3`; final production version is `efd09f93-6a07-4c02-b756-b7af8c922171`. All 1,512 tests, preview/production gates, browser flows and actual scheduled publication passed. Exact evidence and remaining boundaries are in [RELEASE-LEDGER.md](RELEASE-LEDGER.md).
 
 ## Contract and scope
 

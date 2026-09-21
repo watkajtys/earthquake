@@ -1,6 +1,6 @@
 # 5. Performance and data delivery
 
-Status: partially implemented. The bounded [stored-summary delivery block](COMPACT-SUMMARIES.md) is complete in production: PERF-1's initial membership-graph download is removed, and F7's cards use stored counts without client-feed reconstruction. Exact prior-build assets are retained for this transition. Scientific generation/identity repair, complete feeds (5B), remaining rendering (5C), general asset retention/optimization (5D) and sitemaps (5E) remain open; see [RELEASE-LEDGER.md](RELEASE-LEDGER.md) for observed evidence. This brief preserves the broader planned scope below. It owns PERF-1 through PERF-5 and F7 and depends on packages 2–4; merge shared components sequentially.
+Status: partially implemented. The bounded [stored-summary delivery block](COMPACT-SUMMARIES.md) is complete in production: PERF-1's initial membership-graph download is removed, and F7's cards use stored counts without client-feed reconstruction. Exact prior-build assets are retained for this transition. The bounded [complete period-feed block](PERIOD-FEEDS.md) (5B) is also complete in production: healthy snapshots avoid a second upstream download, source clocks drive freshness, and static routes render independently. Scientific generation/identity repair, the rolling-window reconciliation edge, orphan cleanup, remaining rendering (5C), general asset retention/optimization (5D) and sitemaps (5E) remain open; see [RELEASE-LEDGER.md](RELEASE-LEDGER.md) for observed evidence. This brief preserves the broader planned scope below. It owns PERF-1 through PERF-5 and F7 and depends on packages 2–4; merge shared components sequentially.
 
 ## Outcome and observed baseline
 
@@ -46,6 +46,8 @@ Regression fixtures: cluster members spanning 30 days but only a weekly client f
 Acceptance: summary payload contains no membership arrays; measure the complete equivalent fixture summary set against the post-package-3 legacy response for the same canonical records. Aim initially for an 80% decoded reduction, revising that proposed budget with evidence if earlier identity/revision repairs have already reduced the baseline or required fields change it. Report database-repair savings separately from projection/pagination savings; do not count them twice or drop records to hit a percentage. The first page is capped and the Worker does not parse full historical membership to serve it. Initial page render does not fetch cluster members. Compatibility and detail consistency tests pass.
 
 ## 5B. Make the period-feed contract complete and economical
+
+Implemented and production-verified in [PERIOD-FEEDS.md](PERIOD-FEEDS.md). The original brief follows; its broad historical reconciliation boundaries remain as recorded in the release ledger.
 
 Current failure: the client requires every event's metadata timestamp to be recent, while hourly ingestion refreshes only recent events. An older earthquake can still be a valid member of a freshly checked monthly snapshot. Simply deleting the metadata guard would reintroduce lost alert/felt/tsunami/significance information.
 
