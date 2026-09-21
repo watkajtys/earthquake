@@ -2,6 +2,7 @@
 // GET-only release checks. Existing details can use the application's lazy cache.
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
+import { validateSummaryEnvelope } from '../shared/clusterSummaryContract.js';
 
 const CANONICAL_ORIGIN = 'https://earthquakeslive.com';
 const CRAWLER_USER_AGENT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
@@ -106,6 +107,14 @@ async function readJson(path, status = 200) {
   }
   const { data: clusters } = await readJson('/api/get-clusters');
   assert(Array.isArray(clusters), 'Expected a cluster array');
+  // Consumer releases require a real published compact snapshot. Missing data
+  // must fail the release gate rather than silently use the legacy download.
+  const { response: summaryResponse, data: summaries } = await readJson('/api/cluster-summaries?view=overview&limit=100');
+  validateSummaryEnvelope(summaries);
+  assert.equal(summaryResponse.headers.get('Cache-Control'), 'no-store');
+  assert.equal(summaries.items.length, Math.min(100, summaries.totalCount), 'Expected a complete bounded first summary page');
+  assert.equal(summaries.nextCursor === null, summaries.totalCount <= 100, 'Summary continuation must agree with total');
+  assert.equal(summaries.stale, false, 'Consumer release requires a recent stored summary publication');
   const { response: unknownResponse, data: unknown } = await readJson('/api/unknown-deployment-smoke-check', 404);
   assert.equal(unknown.status, 'error', 'Unknown API route must return a structured JSON error');
   assert.equal(unknownResponse.headers.get('Cache-Control'), 'no-store');

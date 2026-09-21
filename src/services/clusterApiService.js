@@ -1,9 +1,9 @@
+import { validateSummaryEnvelope, MAX_SUMMARY_CURSOR_LENGTH, MAX_SUMMARY_PAGE_BYTES, SUMMARY_DEFAULT_LIMIT } from '../../shared/clusterSummaryContract.js';
 
 /**
  * @file clusterApiService.js
  * @description Service functions for interacting with the backend API related to earthquake cluster definitions and calculations.
- * This includes registering new cluster definitions, fetching existing ones, and calculating active clusters
- * with a client-side fallback mechanism.
+ * Includes definition/detail requests and bounded pages of stored cluster summaries.
  */
 
 /**
@@ -115,28 +115,86 @@ export async function fetchClusterWithQuakes(selector, { signal } = {}) {
   return data;
 }
 
-/**
- * Fetches active earthquake clusters. It first attempts to retrieve them from a backend service
- * at `/api/calculate-clusters`. This backend service is responsible for calculating and potentially
- * caching the clusters (e.g., using data sourced from D1). The request body to the backend
- * includes the current list of earthquakes and clustering parameters.
- *
- * If the server request fails, or if the server indicates a cache miss or stale data
- * (e.g., via the `X-Cache-Hit` header), this function falls back to calculating clusters
- * client-side using the `localFindActiveClusters` utility.
- *
- * @param {Array<Object>} earthquakes - Array of earthquake objects (typically GeoJSON features) to be clustered.
- * @param {number} maxDistanceKm - Maximum distance in kilometers for earthquakes to be considered in the same cluster.
- * @param {number} minQuakes - Minimum number of earthquakes required to form a valid cluster.
- * @returns {Promise<Array<Array<Object>>>} A promise that resolves to an array of clusters. Each cluster is an array of earthquake objects.
- * @throws {Error} If the backend request fails and the client-side fallback calculation also fails, or if input parameters are invalid.
- */
-export async function fetchActiveClusters({ signal } = {}) {
-  const response = await fetch('/api/get-clusters', {
-    method: 'GET', headers: { Accept: 'application/json' }, signal,
-  });
-  if (!response.ok) throw new Error(`Active clusters request failed (HTTP ${response.status}).`);
-  const data = await response.json();
-  if (!Array.isArray(data)) throw new Error('Invalid active clusters response.');
+// The overview consumes only compact, immutable snapshot pages. It never falls
+// back to the legacy full-definition endpoint on failure.
+export const CLUSTER_SUMMARY_MAX_BYTES = MAX_SUMMARY_PAGE_BYTES;
+export const CLUSTER_SUMMARY_PAGE_SIZE = SUMMARY_DEFAULT_LIMIT;
+const SUMMARY_DEADLINE_MS = 30_000;
+
+export async function fetchActiveClusters({ signal, cursor } = {}) {
+  if (cursor !== undefined && (typeof cursor !== 'string' || !cursor || cursor.length > MAX_SUMMARY_CURSOR_LENGTH)) {
+    throw new Error('Invalid cluster continuation cursor.');
+  }
+  const query = cursor === undefined ? 'view=overview&limit=100' : new URLSearchParams({ cursor }).toString();
+  const controller = new AbortController();
+  const onAbort = () => controller.abort(signal.reason);
+  if (signal?.aborted) onAbort();
+  else signal?.addEventListener('abort', onAbort, { once: true });
+  const timeout = setTimeout(() => controller.abort(new DOMException('Cluster request timed out. Please retry.', 'TimeoutError')), SUMMARY_DEADLINE_MS);
+  let reader;
+  let abortListener;
+  try {
+    const cancelled = new Promise((_, reject) => {
+      abortListener = () => {
+        void reader?.cancel().catch(() => {});
+        reject(controller.signal.reason || new DOMException('Aborted', 'AbortError'));
+      };
+      if (controller.signal.aborted) abortListener();
+      else controller.signal.addEventListener('abort', abortListener, { once: true });
+    });
+    const work = (async () => {
+      const response = await fetch(`/api/cluster-summaries?${query}`, {
+        method: 'GET', headers: { Accept: 'application/json' }, signal: controller.signal,
+      });
+      if (controller.signal.aborted) {
+        void response.body?.cancel().catch(() => {});
+        throw controller.signal.reason;
+      }
+      if (Number(response.headers.get('content-length')) > CLUSTER_SUMMARY_MAX_BYTES) {
+        void response.body?.cancel().catch(() => {});
+        throw new Error('Cluster summary response is too large.');
+      }
+      if (!response.body) throw new Error('Invalid cluster summary response.');
+      reader = response.body.getReader();
+      const chunks = [];
+      let bytes = 0;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (controller.signal.aborted) throw controller.signal.reason;
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > CLUSTER_SUMMARY_MAX_BYTES) {
+          void reader.cancel().catch(() => {});
+          throw new Error('Cluster summary response is too large.');
+        }
+        chunks.push(value);
+      }
+      const buffer = new Uint8Array(bytes);
+      let offset = 0;
+      for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.byteLength; }
+      let data;
+      try { data = JSON.parse(new TextDecoder().decode(buffer)); }
+      catch { throw new Error(`Invalid cluster summary response (HTTP ${response.status}).`); }
+      if (!response.ok) {
+        const error = new Error(`Cluster summaries request failed (HTTP ${response.status}).`);
+        if (response.status === 410 && data?.code === 'GENERATION_EXPIRED') error.code = 'GENERATION_EXPIRED';
+        throw error;
+      }
+      return validateClusterSummaryPage(data);
+    })();
+    return await Promise.race([work, cancelled]);
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', onAbort);
+    controller.signal.removeEventListener('abort', abortListener);
+  }
+}
+
+export function validateClusterSummaryPage(data) {
+  validateSummaryEnvelope(data);
+  if (!Number.isFinite(new Date(data.generatedAtMs).getTime()) || typeof data.stale !== 'boolean' || data.items.length > CLUSTER_SUMMARY_PAGE_SIZE ||
+      (data.nextCursor !== null && (data.items.length !== CLUSTER_SUMMARY_PAGE_SIZE || data.items.length >= data.totalCount))) {
+    throw new Error('Invalid cluster summary response.');
+  }
   return data;
 }

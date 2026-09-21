@@ -1,3 +1,4 @@
+import { summaryItem, summaryPage } from '../test-utils/clusterSummaryFixtures.js';
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import { registerClusterDefinition, fetchClusterDefinition, fetchActiveClusters } from './clusterApiService';
 import { http, HttpResponse } from 'msw';
@@ -141,11 +142,11 @@ describe('clusterApiService', () => {
   });
 
   describe('fetchActiveClusters', () => {
-    const mockServerCalculatedData = [{ clusterId: 'serverCluster', quakes: ['eq1', 'eq2'] }];
+    const mockServerCalculatedData = summaryPage([summaryItem()]);
 
-    it('should return data from the /api/get-clusters endpoint', async () => {
+    it('should return data from the /api/cluster-summaries endpoint', async () => {
       server.use(
-        http.get('/api/get-clusters', () => {
+        http.get('/api/cluster-summaries', () => {
           return HttpResponse.json(mockServerCalculatedData, {
             status: 200,
             headers: { 'X-Cache-Status': 'Hit' }
@@ -160,7 +161,7 @@ describe('clusterApiService', () => {
 
     it('throws if the server responds with an error', async () => {
       server.use(
-        http.get('/api/get-clusters', () => {
+        http.get('/api/cluster-summaries', () => {
           return new HttpResponse('Internal Server Error', { status: 500 });
         })
       );
@@ -170,7 +171,7 @@ describe('clusterApiService', () => {
 
     it('throws on network error', async () => {
       server.use(
-        http.get('/api/get-clusters', () => {
+        http.get('/api/cluster-summaries', () => {
           return HttpResponse.error();
         })
       );

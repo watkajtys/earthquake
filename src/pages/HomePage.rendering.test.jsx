@@ -1,3 +1,4 @@
+import { summaryPage } from '../test-utils/clusterSummaryFixtures.js';
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -48,7 +49,7 @@ vi.mock('../contexts/UIStateContext.jsx', () => ({
   UIStateProvider: ({ children }) => <div>{children}</div>,
 }));
 vi.mock('../services/clusterApiService.js', () => ({
-  fetchActiveClusters: mockFetchActiveClusters,
+  fetchActiveClusters: options => mockFetchActiveClusters(options).then(items => Array.isArray(items) ? summaryPage(items) : items),
   registerClusterDefinition: mockRegisterClusterDefinition,
 }));
 

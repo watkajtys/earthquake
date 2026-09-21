@@ -63,6 +63,7 @@ const OverviewPage = ({
     // prev24HourData, // Will get from context
     calculateStats,
     overviewClusters,
+    clusterSummaryState,
     clustersLoading,
     clustersError,
     refreshClusters,
@@ -164,13 +165,12 @@ const OverviewPage = ({
                     </h3>
                     {clustersError && <div role="alert" className="text-sm text-amber-200">Cluster refresh failed. <button type="button" onClick={refreshClusters} className="rounded bg-slate-600 px-3 py-1">Retry clusters</button></div>}
                     {clustersLoading && !overviewClusters?.length && <p role="status">Loading clusters...</p>}
-                    {overviewClusters && overviewClusters.length > 0 ? (
-                        <ClusterSummaryList clusters={overviewClusters} onClusterSelect={handleClusterSummaryClick} />
-                    ) : (!clustersLoading && !clustersError &&
+                    <ClusterSummaryList {...clusterSummaryState} clusters={overviewClusters ?? []} onClusterSelect={handleClusterSummaryClick} />
+                    {!overviewClusters?.length && !clustersLoading && !clustersError &&
                         <p className="text-xs text-slate-300 text-center py-2"> {/* Changed from text-slate-400 */}
                             No significant active clusters detected currently.
                         </p>
-                    )}
+                    }
                 </div>
 
                 {/* Render the ActiveRegionDisplay component */}

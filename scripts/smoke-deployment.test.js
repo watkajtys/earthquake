@@ -8,7 +8,7 @@ const EVENT_ID = 'previewquake001';
 const cluster = { id: 'cluster-uuid', slug: 'other-stored-slug', strongestQuakeId: EVENT_ID, title: 'SYNTHETIC PREVIEW cluster' };
 const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers } });
 
-function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = false, emptySitemap = false, badCrawlerAsset = false, devEntry = false, noCrawlerCss = false, quakeNoindex = false } = {}) {
+function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = false, emptySitemap = false, badCrawlerAsset = false, devEntry = false, noCrawlerCss = false, quakeNoindex = false, summaryUnavailable = false, summaryStale = false } = {}) {
   const calls = [];
   const fetchImpl = vi.fn(async (input, options) => {
     const url = new URL(input);
@@ -20,6 +20,12 @@ function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = f
     const path = url.pathname;
     if (path === '/api/get-earthquakes') return json([{ id: EVENT_ID, place: 'SYNTHETIC PREVIEW event' }], 200, { 'X-Data-Source': 'R2' });
     if (path === '/api/get-clusters') return json([cluster]);
+    if (path === '/api/cluster-summaries') return summaryUnavailable ? json({ code: 'SUMMARY_UNAVAILABLE' }, 503) : json({
+      schemaVersion: 2, source: 'stored-cluster-definitions', sourceWatermarkMs: null, view: 'overview',
+      generationId: '12345678-1234-4123-8123-123456789abc', snapshotSequence: 1,
+      sourceObservedAtMs: 1700000000000, generatedAtMs: 1700000000001,
+      totalCount: 0, items: [], nextCursor: null, stale: summaryStale,
+    });
     if (path === '/api/unknown-deployment-smoke-check') return json({ status: 'error' }, 404);
     if (['/api/batch-usgs-fetch', '/api/backfill-earthquake-details', '/api/fix-enhanced-data-flag'].includes(path)) return json({}, 405, { Allow: 'POST' });
     if (path === '/api/usgs-proxy') return json({}, 400);
@@ -78,6 +84,8 @@ describe('deployment smoke crawler contract', () => {
     [{ badCrawlerAsset: true }, /wrong content type/],
     [{ devEntry: true }, /development entry leaked/],
     [{ noCrawlerCss: true }, /missing built CSS/],
+    [{ summaryUnavailable: true }, /unexpected HTTP status/],
+    [{ summaryStale: true }, /recent stored summary/],
   ])('rejects an invalid crawler deployment %#', async (options, message) => {
     const { fetchImpl } = fixture(options);
     await expect(smokeDeployment([ORIGIN, '--preview'], { fetchImpl, log: vi.fn() })).rejects.toThrow(message);

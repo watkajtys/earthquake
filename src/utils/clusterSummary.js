@@ -2,9 +2,10 @@ import { timestampMilliseconds } from './entityRoutes.js';
 
 // Project only stored scalar metadata. Client event feeds are incomplete views
 // and must never change a cluster's identity, member count or scientific range.
-export function buildClusterSummaries(definitions, { minimumMagnitude, formatTimeAgo, formatTimeDuration, now = Date.now() }) {
-  return definitions.filter(definition => definition && typeof definition.id === 'string' && definition.id &&
-    Number.isFinite(definition.maxMagnitude) && definition.maxMagnitude >= minimumMagnitude).map(definition => {
+export function buildClusterSummaries(definitions, { minimumMagnitude, preserveOrder = false, formatTimeAgo, formatTimeDuration, now = Date.now() }) {
+  const eligible = preserveOrder ? definitions : definitions.filter(definition => definition && typeof definition.id === 'string' && definition.id &&
+    Number.isFinite(definition.maxMagnitude) && definition.maxMagnitude >= minimumMagnitude);
+  const summaries = eligible.map(definition => {
     const startTime = timestampMilliseconds(definition.startTime);
     const endTime = timestampMilliseconds(definition.endTime);
     const quakeCount = Number.isSafeInteger(definition.quakeCount) && definition.quakeCount >= 0 ? definition.quakeCount : null;
@@ -19,8 +20,9 @@ export function buildClusterSummaries(definitions, { minimumMagnitude, formatTim
       id: definition.id, slug: definition.slug, title: definition.title,
       locationName: definition.locationName || 'Unknown Cluster Location',
       quakeCount, maxMagnitude: definition.maxMagnitude, startTime, endTime,
-      strongestQuakeId: definition.strongestQuakeId || null, timeRange,
+      strongestQuakeId: definition.strongestQuakeId || null, summaryRevision: definition.summaryRevision, timeRange,
     };
-  }).sort((a, b) => (b.endTime ?? -Infinity) - (a.endTime ?? -Infinity) ||
-    b.maxMagnitude - a.maxMagnitude || (b.quakeCount ?? -1) - (a.quakeCount ?? -1) || a.id.localeCompare(b.id));
+  });
+  return preserveOrder ? summaries : summaries.sort((a, b) => (b.endTime ?? -Infinity) - (a.endTime ?? -Infinity) ||
+    b.maxMagnitude - a.maxMagnitude || (b.quakeCount ?? -1) - (a.quakeCount ?? -1) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }

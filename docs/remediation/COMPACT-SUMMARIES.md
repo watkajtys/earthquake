@@ -1,6 +1,6 @@
 # Compact stored cluster summaries
 
-Status: implementation in progress. Previous block's production evidence was committed first as `02f044a`. This is the next bounded subrelease of package 5A; actual verification and rollout belong in the release ledger.
+Status: producer verified in production; consumer implemented and locally verified, rollout in progress. Previous block's production evidence was committed first as `02f044a`. This is the next bounded subrelease of package 5A; actual verification and rollout belong in the release ledger.
 
 ## Scope and sequence
 
@@ -19,6 +19,8 @@ The version 2 envelope identifies an immutable delivery generation, increasing p
 Items contain only ID, slug, title, location, full stored member count, maximum magnitude, start/end times, strongest event ID and a SHA-256 `summaryRevision` of those scalar fields. That digest does not establish membership or hydrated-event snapshot equivalence. Detail views already load their own current definition and members; they do not merge a summary's counts into a newly fetched membership list.
 
 Apply the existing overview threshold M >= 4.5 before pagination. Sort by end time descending, magnitude descending, count descending, then ID in deterministic code-point order; null time/count sorts last. No membership list, growing legacy version, or full event geometry enters summary delivery. Reject an oversized or malformed generation rather than silently dropping eligible records. Maximum eligible records: 20,000, enforced with one extra row as an overflow sentinel.
+
+This threshold chooses clusters by their maximum magnitude; it does not filter members. The scheduled clustering source query still includes stored events of all magnitudes in its 30-day window, and detail requests retain small and negative-magnitude members. Existing definition eligibility (at least three events and a maximum of at least M3) and overview eligibility (maximum at least M4.5) remain distinct from membership.
 
 ## Publication and reads
 

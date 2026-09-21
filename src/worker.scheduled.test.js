@@ -163,4 +163,23 @@ describe('exported Worker ten-minute cluster lifetime with migrated SQLite', () 
     expect(clusterEnv.CLUSTER_KV.put).toHaveBeenCalledOnce();
     expect(clusterEnv.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY)).toBeNull();
   });
+
+  it('keeps small and negative-magnitude members from clustering through compact counts and full detail', async () => {
+    const update = fixture.database.prepare('UPDATE EarthquakeEvents SET magnitude = ? WHERE id = ?');
+    [5, 1.1, 0, -0.5].forEach((magnitude, index) => update.run(magnitude, `quake${index + 1}`));
+    const { results } = await runScheduled('*/10 * * * *', clusterEnv);
+    expect(results[0].status).toBe('fulfilled');
+    const [definition] = JSON.parse(clusterEnv.CLUSTER_KV.put.mock.calls[0][1]);
+    expect(definition.quakeCount).toBe(4);
+    expect(JSON.parse(definition.earthquakeIds).sort()).toEqual(['quake1', 'quake2', 'quake3', 'quake4']);
+    const headers = { 'User-Agent': 'Mozilla/5.0' };
+    const summaryResponse = await worker.fetch(new Request('https://earthquakeslive.com/api/cluster-summaries', { headers }), clusterEnv, {});
+    const summaries = await summaryResponse.json();
+    expect(summaries.items[0]).toMatchObject({ id: definition.id, quakeCount: 4, maxMagnitude: 5 });
+    const detailResponse = await worker.fetch(new Request(`https://earthquakeslive.com/api/cluster-detail-with-quakes?clusterId=${definition.id}`, { headers }), clusterEnv, {});
+    expect(detailResponse.status).toBe(200);
+    const detail = await detailResponse.json();
+    expect(detail.quakes.map(quake => quake.properties.mag).sort((a, b) => a - b)).toEqual([-0.5, 0, 1.1, 5]);
+    expect(detail.quakes).toHaveLength(4);
+  });
 });

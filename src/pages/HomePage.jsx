@@ -326,7 +326,8 @@ function App() {
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Kept local
     // activeSidebarView, globeFocusLng, focusedNotableQuake are from useUIState()
-    const { clusters: calculatedClusters, loading: clustersLoading, error: clustersError, refresh: refreshClusters } = useActiveClusters({ enabled: showClusterSummaries });
+    const clusterSummaryState = useActiveClusters({ enabled: showClusterSummaries });
+    const { clusters: calculatedClusters, loading: clustersLoading, error: clustersError, refresh: refreshClusters } = clusterSummaryState;
     // const [areClustersLoading, setAreClustersLoading] = useState(false); // Ensured this is removed
     const geoJsonAssetsLoaded = useRef(false);
 
@@ -690,7 +691,7 @@ function App() {
     }, [earthquakesLast24Hours, REGIONS, getRegionForEarthquake]);
 
     const overviewClusters = useMemo(() => buildClusterSummaries(calculatedClusters, {
-        minimumMagnitude: MAJOR_QUAKE_THRESHOLD, formatTimeAgo, formatTimeDuration,
+        preserveOrder: true, formatTimeAgo, formatTimeDuration,
     }), [calculatedClusters, formatTimeAgo, formatTimeDuration]);
 
     // Removed useEffect hook for registering cluster definitions
@@ -924,6 +925,7 @@ function App() {
                                     getRegionForEarthquake={getRegionForEarthquake}
                                     calculateStats={calculateStats}
                                     overviewClusters={overviewClusters}
+                                    clusterSummaryState={clusterSummaryState}
                                     clustersLoading={clustersLoading}
                                     clustersError={clustersError}
                                     refreshClusters={refreshClusters}
@@ -1058,9 +1060,8 @@ function App() {
                                 <h3 className="text-md font-semibold mb-2 text-indigo-300"> Active Earthquake Clusters </h3>
                                 {clustersError && <div role="alert" className="text-sm text-amber-200">Cluster refresh failed. <button type="button" onClick={refreshClusters} className="rounded bg-slate-700 px-3 py-1">Retry clusters</button></div>}
                                 {clustersLoading && !calculatedClusters.length && <p role="status">Loading clusters...</p>}
-                                {overviewClusters && overviewClusters.length > 0 ? (
-                                    <ClusterSummaryList clusters={overviewClusters} onClusterSelect={handleClusterSummaryClick} />
-                                ) : (!clustersLoading && !clustersError && <p className="text-xs text-slate-400 text-center py-2"> No significant active clusters detected. </p> )}
+                                <ClusterSummaryList {...clusterSummaryState} clusters={overviewClusters} onClusterSelect={handleClusterSummaryClick} />
+                                {!overviewClusters.length && !clustersLoading && !clustersError && <p className="text-xs text-slate-400 text-center py-2"> No significant active clusters detected. </p>}
                                 </div>}
 
                             {recentSignificantQuakesForOverview.length > 0 && (
