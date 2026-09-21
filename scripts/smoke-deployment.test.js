@@ -15,6 +15,18 @@ const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(
 
 function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = false, emptySitemap = false, badCrawlerAsset = false, badPreviousAsset = false, devEntry = false, noCrawlerCss = false, quakeNoindex = false, summaryUnavailable = false, summaryStale = false, periodFeedsResponse } = {}) {
   const calls = [];
+  let publishedFeeds;
+  async function feedResponse(url, options) {
+    if (periodFeedsResponse) return periodFeedsResponse(url, options);
+    publishedFeeds ??= (async () => {
+      const now = Date.now();
+      const sources = createPreviewFeedCollections([], now, { includeEdgeCases: true });
+      const env = { GEOJSON_BUCKET: createMemorySummaryBucket() };
+      await publishEarthquakeFeeds(env, { now, fetchFeed: async period => sources[period] });
+      return env;
+    })();
+    return onRequestGet({ request: new Request(url, options), env: await publishedFeeds });
+  }
   const fetchImpl = vi.fn(async (input, options) => {
     const url = new URL(input);
     calls.push({ url, options });
@@ -23,7 +35,7 @@ function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = f
     expect(options.redirect).toBe('error');
     expect(options.signal).toBeInstanceOf(AbortSignal);
     const path = url.pathname;
-    if (path === '/api/earthquake-feeds' && periodFeedsResponse) return periodFeedsResponse(url, options);
+    if (path === '/api/earthquake-feeds') return feedResponse(url, options);
     if (path === '/api/get-earthquakes') return json([{ id: EVENT_ID, place: 'SYNTHETIC PREVIEW event' }], 200, { 'X-Data-Source': 'R2' });
     if (path === '/api/get-clusters') return json([cluster]);
     if (path === '/api/cluster-summaries') return summaryUnavailable ? json({ code: 'SUMMARY_UNAVAILABLE' }, 503) : json({
@@ -77,7 +89,7 @@ describe('deployment smoke crawler contract', () => {
     expect(calls.some(({ url }) => url.pathname === `/quake/id/${EVENT_ID}`)).toBe(true);
     expect(calls.some(({ url }) => url.pathname === `/quake/m${Number.isFinite(magnitude) ? magnitude : 'unknown'}-release-check-${EVENT_ID}`)).toBe(true);
     expect(calls.length).toBeLessThan(60 + Object.keys(PREVIOUS_RELEASE_ASSETS).length);
-    expect(calls.some(({ url }) => url.pathname === '/api/earthquake-feeds')).toBe(false);
+    expect(calls.filter(({ url }) => url.pathname === '/api/earthquake-feeds').map(({ url }) => url.searchParams.get('period'))).toEqual(['day', 'week', 'month']);
     for (const path of Object.keys(PREVIOUS_RELEASE_ASSETS)) expect(calls.some(call => call.url.pathname === path)).toBe(true);
   });
 
@@ -103,19 +115,24 @@ describe('deployment smoke crawler contract', () => {
 });
 
 
-describe('opt-in period-feed release gate', () => {
-  it('validates three actual published snapshots while preserving the default producer gate', async () => {
-    const now = Date.now();
-    const sources = createPreviewFeedCollections([], now, { includeEdgeCases: true });
-    const env = { GEOJSON_BUCKET: createMemorySummaryBucket() };
-    await publishEarthquakeFeeds(env, { now, fetchFeed: async period => sources[period] });
-    const { fetchImpl, calls } = fixture({ periodFeedsResponse: (url, options) => onRequestGet({ request: new Request(url, options), env }) });
-    await smokeDeployment([ORIGIN, '--preview', '--require-period-feeds'], { fetchImpl, log: vi.fn() });
+describe('mandatory period-feed release gate', () => {
+  it.each([[[]], [['--require-period-feeds']]])('validates all three actual publications with flags %j', async flags => {
+    const { fetchImpl, calls } = fixture();
+    await smokeDeployment([ORIGIN, '--preview', ...flags], { fetchImpl, log: vi.fn() });
     expect(calls.filter(({ url }) => url.pathname === '/api/earthquake-feeds').map(({ url }) => url.searchParams.get('period'))).toEqual(['day', 'week', 'month']);
   });
 
-  it('fails a required but absent publication', async () => {
+  it('fails an absent publication by default', async () => {
     const { fetchImpl } = fixture({ periodFeedsResponse: () => json({}, 503) });
-    await expect(smokeDeployment([ORIGIN, '--require-period-feeds'], { fetchImpl, log: vi.fn() })).rejects.toThrow(/unexpected HTTP status/);
+    await expect(smokeDeployment([ORIGIN], { fetchImpl, log: vi.fn() })).rejects.toThrow(/unexpected HTTP status/);
+  });
+
+  it('offers no skip flag and documents the mandatory gate', async () => {
+    const fetchImpl = vi.fn();
+    await expect(smokeDeployment([ORIGIN, '--skip-period-feeds'], { fetchImpl })).rejects.toThrow(/Expected one base URL/);
+    const log = vi.fn();
+    await smokeDeployment(['--help'], { fetchImpl, log });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('All three complete fresh period feeds are mandatory'));
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

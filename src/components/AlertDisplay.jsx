@@ -17,7 +17,8 @@ import { getMagnitudeColorStyle, formatTimeAgo } from '../utils/utils'; // Added
  * @returns {JSX.Element|null} The AlertDisplay component or null if there are no alerts to display.
  */
 const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning }) => {
-  const { tsunamiTriggeringQuake, activeAlertTriggeringQuakes } = useEarthquakeDataState();
+  const { tsunamiTriggeringQuake, activeAlertTriggeringQuakes, dailyFeedStatus } = useEarthquakeDataState();
+  const retainedAlert = dailyFeedStatus?.stale || Boolean(dailyFeedStatus?.error);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -73,6 +74,7 @@ const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning }) => {
 
   return (
     <>
+      {retainedAlert && <p className="text-xs text-amber-200">Alerts below are from retained USGS data; current alert status could not be verified.</p>}
       {currentAlertConfig && (
         <div
             className={pagerAlertClasses} // Use the new pagerAlertClasses
@@ -81,7 +83,7 @@ const AlertDisplay = ({ currentAlertConfig, hasRecentTsunamiWarning }) => {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { activeAlertTriggeringQuakes && activeAlertTriggeringQuakes.length > 0 && handleAlertClick(activeAlertTriggeringQuakes[0]); } }}
         >
-          <p className="font-bold text-sm mb-1">Active USGS Alert: {currentAlertConfig.text}</p>
+          <p className="font-bold text-sm mb-1">{retainedAlert ? 'USGS Alert in retained data' : 'Active USGS Alert'}: {currentAlertConfig.text}</p>
           <p className="text-xs">{currentAlertConfig.description}</p>
         </div>
       )}

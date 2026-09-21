@@ -96,6 +96,15 @@ describe('AlertDisplay', () => {
     expect(screen.queryByText('Tsunami Information')).toBeNull();
   });
 
+  it('qualifies retained alerts after a stale source or failed refresh', () => {
+    renderWithProviders(<AlertDisplay currentAlertConfig={{ text: 'RED', description: 'Stored alert.' }} hasRecentTsunamiWarning={false} />, {
+      providerProps: { ...mockProviderProps, dailyFeedStatus: { hasLoaded: true, stale: true, error: 'Offline' } },
+    });
+    expect(screen.getByText('USGS Alert in retained data: RED')).toBeInTheDocument();
+    expect(screen.getByText(/current alert status could not be verified/)).toBeInTheDocument();
+    expect(screen.queryByText('Active USGS Alert: RED')).not.toBeInTheDocument();
+  });
+
   it('uses default color class if alert level text does not match ALERT_LEVELS keys', () => {
     const alertConfig = {
       text: 'PURPLE', // Not in our mocked ALERT_LEVELS

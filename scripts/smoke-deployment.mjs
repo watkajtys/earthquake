@@ -13,11 +13,10 @@ const decodeXml = value => value.replace(/&(amp|quot|apos|lt|gt);/g, (_, entity)
 export async function smokeDeployment(args = [], { fetchImpl = fetch, log = console.log } = {}) {
 
 if (args.includes('--help')) {
-  log('Usage: node scripts/smoke-deployment.mjs [http://localhost:8787] [--preview] [--require-period-feeds]\nOnly GET requests are used. Run against the reconciled deployment, not the previous KV-based release.');
+  log('Usage: node scripts/smoke-deployment.mjs [http://localhost:8787] [--preview]\nAll three complete fresh period feeds are mandatory. --require-period-feeds is accepted as a redundant compatibility flag. Only GET requests are used. Run against the reconciled deployment, not the previous KV-based release.');
   return;
 }
 const preview = args.includes('--preview');
-const requirePeriodFeeds = args.includes('--require-period-feeds');
 const positional = args.filter((arg) => !['--preview', '--require-period-feeds'].includes(arg));
 assert(positional.length <= 1 && !positional.some((arg) => arg.startsWith('--')), 'Expected one base URL and optional --preview / --require-period-feeds.');
 const base = new URL(positional[0] || 'http://localhost:8787');
@@ -111,7 +110,7 @@ async function readJson(path, status = 200) {
     }
     lists[period] = data;
   }
-  if (requirePeriodFeeds) await checkPeriodFeeds(base.origin, {
+  await checkPeriodFeeds(base.origin, {
     preview, log: () => {},
     fetchImpl: (url, options) => request(url, /application\/json/i, 200, options.headers['User-Agent'], options.signal),
   });

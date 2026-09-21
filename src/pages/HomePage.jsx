@@ -1,3 +1,4 @@
+import FeedStatus from '../components/FeedStatus.jsx';
 // src/pages/HomePage.jsx
 import React, { useEffect, useMemo, useCallback, lazy, Suspense, useState, useRef } from 'react'; // Add back useState for appCurrentTime, added useRef
 import { Routes, Route, useNavigate, useLocation, NavLink, Outlet } from 'react-router-dom';
@@ -197,6 +198,7 @@ const GlobeLayout = (props) => {
  */
 function App() {
     const location = useLocation();
+    const isStaticRoute = /^\/(?:learn(?:\/|$)|monitoring\/*$)/.test(location.pathname);
     const isDetailRoute = /^\/(?:quake|cluster)\//.test(location.pathname);
     const hasFullWidthContent = /^\/(?:overview|feeds)\/*$/.test(location.pathname);
     const showClusterSummaries = location.pathname === '/' || /^\/overview\/*$/.test(location.pathname) || isDetailRoute;
@@ -350,8 +352,10 @@ function App() {
         isLoadingWeekly,
         isLoadingInitialData,
         error,
-        dataFetchTime,
-        lastUpdated,
+        dailyFeedStatus,
+        weeklyFeedStatus,
+        dailyHasLoaded,
+        weeklyHasLoaded,
         earthquakesLastHour,
         earthquakesPriorHour,
         earthquakesLast24Hours,
@@ -366,7 +370,6 @@ function App() {
         // previousMajorQuake, // Removed, used by context in TimeSinceLastMajorQuakeBanner
         // timeBetweenPreviousMajorQuakes, // Removed, used by context in TimeSinceLastMajorQuakeBanner
         currentLoadingMessage,
-        isInitialAppLoad,
         isLoadingMonthly,
         hasAttemptedMonthlyLoad,
         monthlyError,
@@ -621,19 +624,10 @@ function App() {
         <div className="p-4 text-center text-slate-400">{message}</div>
     );
 
-    // headerTimeDisplay now uses isInitialAppLoad (value) from the hook
-    const headerTimeDisplay = useMemo(() => {
-        const connectingMsg = "Connecting to Seismic Network...";
-        const awaitingMsg = "Awaiting Initial Data...";
-        if (isInitialAppLoad && (isLoadingDaily || isLoadingWeekly) && !dataFetchTime) {
-            return <span role="status" aria-live="polite">{connectingMsg}</span>;
-        }
-        if (!dataFetchTime) {
-            return awaitingMsg;
-        }
-        const timeSinceFetch = appCurrentTime - dataFetchTime;
-        return `Live Data (7-day): ${timeSinceFetch < 30000 ? 'just now' : formatTimeAgo(timeSinceFetch)} | USGS Feed Updated: ${lastUpdated || 'N/A'}`;
-    }, [isLoadingDaily, isLoadingWeekly, dataFetchTime, appCurrentTime, lastUpdated, isInitialAppLoad, formatTimeAgo]);
+    const headerTimeDisplay = <span className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+        <FeedStatus label="Daily feed" status={dailyFeedStatus} now={appCurrentTime} />
+        <FeedStatus label="Weekly feed" status={weeklyFeedStatus} now={appCurrentTime} />
+    </span>;
 
     const currentAlertConfig = useMemo(() => {
         if (highestRecentAlert && ALERT_LEVELS[highestRecentAlert.toUpperCase()]) {
@@ -816,7 +810,7 @@ function App() {
     const handleSetSidebarLearnMore = useCallback(() => setActiveSidebarView('learn_more'), [setActiveSidebarView]);
 
     // --- Full Screen Loader ---
-    if (showFullScreenLoader && !isDetailRoute) {
+    if (showFullScreenLoader && !isDetailRoute && !isStaticRoute) {
         return (
             <div
                 className="flex flex-col items-center justify-center h-[100svh] bg-slate-900 text-white antialiased"
@@ -848,7 +842,7 @@ function App() {
                 </div>
             </header>
             {error && <div role="alert" className="border-b border-amber-700 bg-amber-950/30 px-4 py-2 text-sm text-amber-200">
-                <span>Some earthquake data could not be refreshed. Previously loaded data is still available. </span>
+                <span>{dailyHasLoaded || weeklyHasLoaded ? 'Some earthquake data could not be refreshed. Previously loaded data is still available. ' : 'Earthquake data is currently unavailable. '}</span>
                 <button type="button" onClick={refreshData} className="rounded bg-slate-700 px-3 py-1 text-white">Retry data</button>
             </div>}
 

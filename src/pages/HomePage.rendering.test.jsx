@@ -166,6 +166,15 @@ describe('HomePage Rendering and Basic UI', () => {
     expect(screen.queryByText('Seismic Data Visualization')).not.toBeInTheDocument();
   });
 
+  it.each([['/learn', 'Static learning page'], ['/learn/plate-tectonics', 'Static tectonics article']])('renders %s before any global feed request has settled', async (path, text) => {
+    mockUseEarthquakeDataState.mockReturnValue({ ...defaultEarthquakeData, isLoadingInitialData: true,
+      isInitialAppLoad: true, isLoadingDaily: true, isLoadingWeekly: true, dataFetchTime: null, allEarthquakes: [] });
+    render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
+    expect(screen.queryByText('Seismic Data Visualization')).not.toBeInTheDocument();
+  });
+
   it.each(['/learn', '/learn/plate-tectonics', '/monitoring', '/feeds'])('does not request or render cluster cards on %s', async path => {
     render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
     await screen.findByRole('main');

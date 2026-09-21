@@ -2,16 +2,12 @@ import React from 'react';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EarthquakeDataProvider, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext.jsx';
-import { fetchUsgsData } from '../../services/usgsApiService.js';
+import { earthquakeFeature, feedEnvelope, feedResponse } from '../../test-utils/earthquakeFeedFixtures.js';
 import { EXTENDED_REFRESH_INTERVAL_MS } from '../../hooks/useRefreshableResource.js';
 import { REFRESH_INTERVAL_MS } from '../../constants/appConstants';
 
-vi.mock('../../services/usgsApiService.js', () => ({ fetchUsgsData: vi.fn() }));
 const wrapper = ({ children }) => <EarthquakeDataProvider>{children}</EarthquakeDataProvider>;
 const now = Date.UTC(2026, 8, 21);
-const record = (id = 'A', magnitude = 5) => ({ id, event_time: now - 60_000, magnitude, place: 'Fixture', latitude: 0, longitude: 0, depth: 10,
-  properties: { alert: null, tsunami: 0, felt: 0, sig: 100, updated: Date.now() }, summary_updated_at: Date.now() });
-const response = (records = [record()]) => Response.json(records, { headers: { 'X-Data-Source': 'R2' } });
 const flush = async () => { await act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); }); };
 let calls;
 let failing;
@@ -20,11 +16,11 @@ beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(now);
   calls = { day: 0, week: 0, month: 0 };
   failing = new Set();
-  fetchUsgsData.mockReset().mockResolvedValue({ error: { message: 'Upstream unavailable' } });
   fetchMock = vi.fn(async (url) => {
-    const period = new URL(url, 'https://example.test').searchParams.get('timeWindow');
+    if (String(url).startsWith('/api/usgs-proxy')) return new Response(null, { status: 503 });
+    const period = new URL(url, 'https://example.test').searchParams.get('period');
     calls[period]++;
-    return failing.has(period) ? new Response('Unavailable', { status: 503 }) : response([record(`${period}-${calls[period]}`)]);
+    return failing.has(period) ? new Response('Unavailable', { status: 503 }) : feedResponse(feedEnvelope(period, [earthquakeFeature(`${period}-${calls[period]}`, period === 'month' ? { time: Date.now() - 15 * 86400000 } : {})], { snapshotSequence: calls[period] }));
   });
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -36,8 +32,8 @@ describe('provider refresh and failure recovery', () => {
     await flush();
     expect(fetchMock.mock.calls.slice(0, 2).every(([, options]) => options.signal.aborted)).toBe(true);
     expect(result.current.isInitialAppLoad).toBe(false);
-    expect(result.current.dailyDataSource).toBe('R2');
-    expect(result.current.weeklyDataSource).toBe('R2');
+    expect(result.current.dailyDataSource).toBe('USGS snapshot');
+    expect(result.current.weeklyDataSource).toBe('USGS snapshot');
     expect(result.current.error).toBeNull();
   });
 
@@ -55,7 +51,7 @@ describe('provider refresh and failure recovery', () => {
     expect(calls).toEqual({ day: 6, week: 6, month: 2 });
     expect(result.current.allEarthquakes[0].id).toBe('month-2');
     expect(result.current.monthlyLastSuccessfulAtMs).toBe(now + EXTENDED_REFRESH_INTERVAL_MS);
-    expect(result.current.monthlySourceGeneratedAtMs).toBeNull();
+    expect(result.current.monthlySourceGeneratedAtMs).toBe(now + EXTENDED_REFRESH_INTERVAL_MS);
   });
 
   it('permits an immediate explicit retry after the first monthly failure', async () => {
@@ -65,7 +61,7 @@ describe('provider refresh and failure recovery', () => {
     act(() => result.current.loadMonthlyData());
     await flush();
     expect(result.current).toMatchObject({ hasAttemptedMonthlyLoad: true, monthlyHasLoaded: false, isLoadingMonthly: false });
-    expect(result.current.monthlyError).toContain('Upstream unavailable');
+    expect(result.current.monthlyError).toContain('HTTP 503');
     failing.delete('month');
     act(() => result.current.loadMonthlyData());
     await flush();
@@ -93,7 +89,7 @@ describe('provider refresh and failure recovery', () => {
     expect(result.current.allEarthquakes).toEqual(successfulData);
     expect(result.current.monthlyLastSuccessfulAtMs).toBe(now);
     expect(result.current.monthlyHasLoaded).toBe(true);
-    expect(result.current.monthlyError).toContain('Upstream unavailable');
+    expect(result.current.monthlyError).toContain('HTTP 503');
   });
 
   it('recovers failed initial day/week data and does not reopen the initial loading screen', async () => {
@@ -119,7 +115,7 @@ describe('provider refresh and failure recovery', () => {
     expect(requests).toHaveLength(2);
     unmount(); await flush();
     expect(requests.every(signal => signal.aborted)).toBe(true);
-    expect(fetchUsgsData).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.every(([url]) => !String(url).startsWith('/api/usgs-proxy'))).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
   });
 });

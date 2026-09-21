@@ -34,7 +34,7 @@ export function useRefreshableResource(load, { intervalMs, enabled = true, timeo
           onAbort = () => reject(controller.signal.reason || new DOMException('Aborted', 'AbortError'));
           controller.signal.addEventListener('abort', onAbort, { once: true });
         });
-        const data = await Promise.race([load({ signal: controller.signal }), cancelled]);
+        const data = await Promise.race([load({ signal: controller.signal, previousData: previous.data }), cancelled]);
         if (controller.signal.aborted) return null;
         commit({ data, hasLoaded: true, lastSuccessfulAtMs: Date.now(), error: null });
         return data;

@@ -1,3 +1,4 @@
+import FeedStatus from './FeedStatus.jsx';
 import React, { useEffect, useMemo, memo } from 'react';
 import PropTypes from 'prop-types';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
@@ -52,6 +53,7 @@ const FeedsPageLayout = ({
         hasAttemptedMonthlyLoad: contextHasAttemptedMonthlyLoad, // Renamed
         monthlyHasLoaded: contextMonthlyHasLoaded,
         monthlyError, dailyError, weeklyError, refreshData,
+        dailyFeedStatus, weeklyFeedStatus, monthlyFeedStatus,
         loadMonthlyData // This is the actual function from context
     } = useEarthquakeDataState();
 
@@ -61,6 +63,7 @@ const FeedsPageLayout = ({
     const isFilteredPeriod = activeFeedPeriod === 'feelable_quakes' || activeFeedPeriod === 'significant_quakes';
     const usesMonthlyData = isExtendedPeriod || (isFilteredPeriod && monthlyAvailable);
     const feedError = usesMonthlyData ? monthlyError : activeFeedPeriod === 'last_hour' || activeFeedPeriod === 'last_24_hours' ? dailyError : weeklyError;
+    const currentFeedStatus = usesMonthlyData ? monthlyFeedStatus : activeFeedPeriod === 'last_hour' || activeFeedPeriod === 'last_24_hours' ? dailyFeedStatus : weeklyFeedStatus;
     const monthlyUnavailable = isExtendedPeriod && !monthlyAvailable && Boolean(monthlyError);
     useEffect(() => {
         if (isExtendedPeriod && !monthlyAvailable && !contextHasAttemptedMonthlyLoad && !contextIsLoadingMonthly && !monthlyError) loadMonthlyData();
@@ -149,6 +152,7 @@ const FeedsPageLayout = ({
                     FEELABLE_QUAKE_THRESHOLD={FEELABLE_QUAKE_THRESHOLD}
                     MAJOR_QUAKE_THRESHOLD={MAJOR_QUAKE_THRESHOLD}
                 />
+                <p className="text-xs text-slate-300"><FeedStatus status={currentFeedStatus} label="Selected feed" /></p>
                 {feedError && <div role="alert" className="rounded border border-amber-700 bg-amber-950/30 p-3 text-sm text-amber-200">
                     <p>Could not refresh this feed. Previously loaded data, when available, is still shown.</p>
                     <button type="button" onClick={usesMonthlyData ? loadMonthlyData : refreshData} className="mt-2 rounded bg-slate-700 px-3 py-2 text-white">Retry feed</button>

@@ -46,6 +46,18 @@ describe('bounded resource lifecycle', () => {
     expect(result.current).toMatchObject({ data: ['new'], loading: false, error: null, lastSuccessfulAtMs: acceptedAt });
   });
 
+  it('supplies only the last successfully accepted payload to a conditional loader after failures', async () => {
+    const first = { etag: 'first', features: [] };
+    const load = vi.fn().mockResolvedValueOnce(first).mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce(first);
+    const { result } = renderHook(() => useRefreshableResource(load, { intervalMs: 60_000 }));
+    await flush();
+    await act(async () => { await result.current.refresh(); await result.current.refresh(); });
+    expect(load.mock.calls[0][0].previousData).toBeNull();
+    expect(load.mock.calls[1][0].previousData).toBe(first);
+    expect(load.mock.calls[2][0].previousData).toBe(first);
+    expect(result.current.data).toBe(first);
+  });
+
   it('aborts on unmount and prevents stale finally from interfering with a replacement loader', async () => {
     const pending = deferred();
     const oldLoad = vi.fn(() => pending.promise);

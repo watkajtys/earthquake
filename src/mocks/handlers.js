@@ -1,9 +1,21 @@
+import { earthquakeFeature, feedEnvelope, feedHeaders } from '../test-utils/earthquakeFeedFixtures.js';
 // src/mocks/handlers.js
 import { http, HttpResponse } from 'msw';
 
 const d1ApiBasePath = '/api/get-earthquakes';
 
 export const handlers = [
+  http.get('/api/earthquake-feeds', ({ request }) => {
+    const period = new URL(request.url).searchParams.get('period');
+    if (!['day', 'week', 'month'].includes(period)) return HttpResponse.json({}, { status: 400 });
+    const generated = Math.floor(Date.now() / 60_000) * 60_000;
+    const envelope = feedEnvelope(period, [earthquakeFeature(`msw-${period}`, { time: generated - 60_000, updated: generated - 30_000 })], {
+      snapshotSequence: Math.floor(generated / 60_000), generatedAtMs: generated,
+      sourceObservedAtMs: generated, upstreamGeneratedAtMs: generated,
+    });
+    return HttpResponse.json(envelope, { headers: feedHeaders(envelope) });
+  }),
+
   http.get(`${d1ApiBasePath}`, ({ request }) => {
     const url = new URL(request.url);
     const timeWindow = url.searchParams.get('timeWindow');
@@ -345,13 +357,13 @@ export const handlers = [
   }),
 
   // Default handlers for clusterApiService.js (used in ClusterDetailModalWrapper.test.jsx)
-  http.get('/api/cluster-definition', ({ request }) => {
+  http.get('/api/cluster-definition', () => {
     // const url = new URL(request.url);
     // const clusterId = url.searchParams.get('id');
     // console.log(`[MSW] GET /api/cluster-definition called for id: ${clusterId} (defaulting to 404)`);
     return new HttpResponse(null, { status: 404 }); // Default to not found
   }),
-  http.post('/api/calculate-clusters', async ({ request }) => {
+  http.post('/api/calculate-clusters', async () => {
     // const body = await request.json();
     // console.log('[MSW] POST /api/calculate-clusters called with body:', body);
     return HttpResponse.json({ clusters: [], cacheHit: 'false' }, { // Default to empty clusters object, cache miss

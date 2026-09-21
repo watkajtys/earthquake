@@ -1,140 +1,65 @@
 import React from 'react';
-import { EarthquakeDataProvider, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext';
-// --- React specific testing imports ---
-import { renderHook, act } from '@testing-library/react'; // Removed waitFor as it's not used in the moved test
-import { vi } from 'vitest';
-import { fetchUsgsData } from '../../services/usgsApiService';
-import {
-    USGS_API_URL_DAY,
-    USGS_API_URL_WEEK,
-    REFRESH_INTERVAL_MS
-    // LOADING_MESSAGE_INTERVAL_MS // Not used here
-} from '../../constants/appConstants';
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EarthquakeDataProvider, useEarthquakeDataState } from '../../contexts/EarthquakeDataContext.jsx';
+import { earthquakeFeature, feedEnvelope, feedResponse } from '../../test-utils/earthquakeFeedFixtures.js';
+import { REFRESH_INTERVAL_MS } from '../../constants/appConstants.js';
+const now = Date.UTC(2026, 8, 21);
+const wrapper = ({ children }) => <EarthquakeDataProvider>{children}</EarthquakeDataProvider>;
+const flush = async () => { await act(async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); }); };
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
-// Mock the usgsApiService
-vi.mock('../../services/usgsApiService', () => ({
-  fetchUsgsData: vi.fn(),
-}));
-
-const AllTheProviders = ({ children }) => (<EarthquakeDataProvider>{children}</EarthquakeDataProvider>);
-
-describe('EarthquakeDataProvider Data Refresh', () => {
-  let setIntervalSpy;
-  let clearIntervalSpy;
-  let intervalCallbacks = {};
-  let intervalIdCounter = 0;
-  let fetchSpy; // Standardized name
-
-  beforeEach(() => {
-    vi.useFakeTimers();
-    fetchUsgsData.mockReset();
-
-    fetchSpy = vi.spyOn(global, 'fetch');
-    fetchSpy.mockImplementation(async (url) => {
-      const requestedUrl = typeof url === 'string' ? url : (url && typeof url.url === 'string' ? url.url : '');
-      if (requestedUrl.includes('/api/get-earthquakes')) {
-        // console.log(`Simulating D1 API failure for: ${requestedUrl} in refresh.test.jsx`);
-        return Promise.resolve({
-          ok: false,
-          status: 503, // Service Unavailable
-          headers: { get: (headerName) => headerName.toLowerCase() === 'x-data-source' ? 'D1_Error_Simulated' : null },
-          json: () => Promise.resolve({ error: "Simulated D1 Service Unavailable" }),
-          text: () => Promise.resolve("Simulated D1 Service Unavailable"),
-        });
-      }
-      console.error(`Unexpected global.fetch call to ${requestedUrl} in refresh.test.jsx. Ensure it is intended and mocked.`);
-      return Promise.reject(new Error(`Unexpected global.fetch call to ${requestedUrl} in refresh.test.jsx.`));
+describe('provider conditional refresh', () => {
+  it('revalidates each cached period without replacing upstream time with recent receipt time', async () => {
+    const envelopes = Object.fromEntries(['day', 'week'].map(period => [period, feedEnvelope(period, [earthquakeFeature(period)])]));
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
+      const period = new URL(url, 'https://example.test').searchParams.get('period');
+      return feedResponse(envelopes[period], { status: options.headers['If-None-Match'] ? 304 : 200 });
     });
-
-    intervalCallbacks = {};
-    intervalIdCounter = 0;
-
-    setIntervalSpy = vi.spyOn(global, 'setInterval');
-    clearIntervalSpy = vi.spyOn(global, 'clearInterval');
-
-    setIntervalSpy.mockImplementation((callback, timeout) => {
-      const id = ++intervalIdCounter;
-      // In this file, we are primarily interested in the 'refresh' interval
-      intervalCallbacks[id] = { callback, timeout, type: timeout === REFRESH_INTERVAL_MS ? 'refresh' : 'other' };
-      return id;
+    const { result } = renderHook(() => useEarthquakeDataState(), { wrapper });
+    await flush();
+    expect(result.current.dailyHasLoaded).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS); });
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(result.current.dailyLastSuccessfulAtMs).toBe(now + REFRESH_INTERVAL_MS);
+    expect(result.current.dailySourceGeneratedAtMs).toBe(now);
+    expect(result.current.feedSnapshots.day.coverage.asOfMs).toBe(now);
+    expect(result.current.error).toBeNull();
+  });
+  it('marks the retained source stale at its own deadline even after a successful 304 receipt', async () => {
+    const envelopes = Object.fromEntries(['day', 'week'].map(period => [period, feedEnvelope(period, [earthquakeFeature(period)])]));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
+      const period = new URL(url, 'https://example.test').searchParams.get('period');
+      return feedResponse(envelopes[period], { status: options.headers['If-None-Match'] ? 304 : 200 });
     });
-
-    clearIntervalSpy.mockImplementation((id) => {
-      delete intervalCallbacks[id];
-    });
+    const { result } = renderHook(() => useEarthquakeDataState(), { wrapper });
+    await flush();
+    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60_000); });
+    expect(result.current.dailyFeedStatus.stale).toBe(false);
+    expect(result.current.dailyLastSuccessfulAtMs).toBe(now + 10 * 60_000);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(result.current.dailyFeedStatus.stale).toBe(true);
+    expect(result.current.weeklyFeedStatus.stale).toBe(true);
+    expect(result.current.dailySourceGeneratedAtMs).toBe(now);
   });
 
-  afterEach(() => {
-    setIntervalSpy.mockRestore();
-    clearIntervalSpy.mockRestore();
-    vi.runOnlyPendingTimers();
-    vi.useRealTimers();
-    vi.clearAllTimers();
-    intervalCallbacks = {};
-    if (fetchSpy) {
-      fetchSpy.mockRestore();
-    }
+  it('applies a fresh corrected snapshot across loaded period state without resurrecting older scientific fields', async () => {
+    let sequence = 1;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async url => {
+      const period = new URL(url, 'https://example.test').searchParams.get('period');
+      const feature = earthquakeFeature('shared', { mag: sequence === 1 ? 5 : 4, updated: now + (sequence - 1) * REFRESH_INTERVAL_MS,
+        alert: sequence === 1 ? 'red' : null, tsunami: sequence === 1 ? 1 : 0 });
+      return feedResponse(feedEnvelope(period, [feature], { snapshotSequence: sequence }));
+    });
+    const { result } = renderHook(() => useEarthquakeDataState(), { wrapper });
+    await flush();
+    expect(result.current.lastMajorQuake.id).toBe('shared');
+    sequence = 2;
+    await act(async () => { await vi.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS); });
+    expect(result.current.lastMajorQuake).toBeNull();
+    expect(result.current.highestRecentAlert).toBeNull();
+    expect(result.current.hasRecentTsunamiWarning).toBe(false);
+    expect(result.current.earthquakesLast7Days[0].properties.mag).toBe(4);
   });
-
-  // Helper to run specific intervals by type
-  const runIntervals = async (type, runMax = Infinity) => {
-    let runCount = 0;
-    for (const id in intervalCallbacks) {
-        if (intervalCallbacks[id].type === type && runCount < runMax) {
-            await act(async () => {
-                intervalCallbacks[id].callback();
-            });
-            runCount++;
-        }
-    }
-  };
-
-  it('should refresh data when refresh interval callback is manually triggered', async () => {
-    const initialDailyTime = Date.now();
-    const initialWeeklyTime = initialDailyTime - 1000;
-
-    fetchUsgsData.mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_initial_daily', properties: {time: initialDailyTime, mag: 1, place: 'Initial Daily Place'}}], metadata: {generated: initialDailyTime, title: 'Initial Daily Feed'} })
-                   .mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_initial_weekly', properties: {time: initialWeeklyTime, mag: 1, place: 'Initial Weekly Place'}}], metadata: {generated: initialWeeklyTime, title: 'Initial Weekly Feed'} });
-
-    let result;
-    await act(async () => {
-        const { result: hookResult } = renderHook(() => useEarthquakeDataState(), { wrapper: AllTheProviders });
-        result = hookResult;
-        // Allow initial fetches to complete
-        await Promise.resolve();
-        await Promise.resolve();
-        // If there were loading message intervals set up by initial load, run them to simulate passing time
-        // This might be needed if the refresh interval setup depends on initial load completing.
-        // Using 'other' type for loading messages if they are not REFRESH_INTERVAL_MS
-        await runIntervals('other', 2);
-    });
-
-    expect(fetchUsgsData).toHaveBeenCalledTimes(2); // Initial daily and weekly
-
-    fetchUsgsData.mockClear(); // Clear for the refresh call
-
-    // Get the timestamp that was actually used for caching during the initial load
-    const initialCacheTimestamp = result.current.dataFetchTime || initialDailyTime;
-
-    // Ensure the mocked Date.now() for refresh makes the cache stale
-    const refreshMockedNow = initialCacheTimestamp + REFRESH_INTERVAL_MS + 5000; // 5s after cache should expire
-    const refreshedDailyQuakeTime = refreshMockedNow - 1000; // Arbitrary time for the quake itself
-
-    fetchUsgsData.mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_refresh_daily', properties: {time: refreshedDailyQuakeTime, mag: 2, place: 'Refreshed Daily Place'}}], metadata: {generated: refreshMockedNow, title: 'Refreshed Daily Feed'} })
-                   .mockResolvedValueOnce({ type: "FeatureCollection", features: [{id:'q_refresh_weekly', properties: {time: refreshedDailyQuakeTime - 2000, mag: 2, place: 'Refreshed Weekly Place'}}], metadata: {generated: refreshMockedNow, title: 'Refreshed Weekly Feed'} });
-
-    const dateNowSpy = vi.spyOn(global.Date, 'now').mockReturnValue(refreshMockedNow); // Mock all Date.now() calls during refresh phase
-
-    await act(async () => {
-        await runIntervals('refresh'); // Each resource has its own bounded refresh timer.
-        // Allow refresh fetches to complete by flushing promises
-        await Promise.resolve(); // For performDataFetch async operations
-        await Promise.resolve(); // Additional promise cycle if needed
-    });
-
-    dateNowSpy.mockRestore();
-
-    expect(fetchUsgsData).toHaveBeenCalledTimes(2); // Daily and weekly for refresh, D1 is mocked to fail
-    expect(result.current.earthquakesLastHour.some(q => q.id === 'q_refresh_daily')).toBe(true);
-  }, 10000);
 });
