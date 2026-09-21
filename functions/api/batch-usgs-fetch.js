@@ -1,101 +1,43 @@
 import { upsertEarthquakeFeaturesToD1 } from '../../src/utils/d1Utils.js';
+import { readBoundedJson, RequestPolicyError } from '../../src/utils/workerRequestPolicy.js';
+import { fetchUsgsCatalogPage, UsgsTransportError, usgsDetailUrl } from '../utils/usgs-transport.js';
 
-var jsonResponse = (data, status = 200) => {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-};
-async function handleBatchUsgsFetch(context) {
-  const { request, env } = context;
-  const url = new URL(request.url);
-  const startDate = url.searchParams.get("startDate");
-  const endDate = url.searchParams.get("endDate");
-  if (!startDate || !endDate) {
-    return jsonResponse(
-      {
-        message:
-          "Missing startDate or endDate query parameter. Use YYYY-MM-DD format.",
-      },
-      400,
-    );
+const PAGE_SIZE = 1000;
+const jsonResponse = (data, status = 200) => new Response(JSON.stringify(data), {
+  status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+});
+
+// The exported Worker's administrative route gate authenticates this handler before body parsing.
+export async function handleBatchUsgsFetch({ request, env }) {
+  if (request.method !== 'POST') {
+    const response = jsonResponse({ message: 'Method not allowed' }, 405);
+    response.headers.set('Allow', 'POST');
+    return response;
   }
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-    return jsonResponse(
-      { message: "Invalid date format. Use YYYY-MM-DD." },
-      400,
-    );
-  }
-  if (!env.DB) {
-    console.error("[batch-usgs-fetch] D1 Database (DB) binding not provided.");
-    return jsonResponse(
-      { message: "Service configuration error: D1 database not available." },
-      500,
-    );
-  }
-  const usgsApiUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${startDate}&endtime=${endDate}&minmagnitude=0`;
-  console.log(
-    `[batch-usgs-fetch] Fetching data from USGS for range: ${startDate} to ${endDate}. URL: ${usgsApiUrl}`,
-  );
   try {
-    const response = await fetch(usgsApiUrl, {
-      headers: {
-        "User-Agent":
-          "EarthquakesLive-BatchFetch/1.0 (+https://earthquakeslive.com)",
-      },
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(
-        `[batch-usgs-fetch] Error fetching data from USGS API: ${response.status} - ${errorText}`,
-      );
-      return jsonResponse(
-        {
-          message: `Error from USGS API: ${response.status} - ${errorText.substring(0, 200)}`,
-        },
-        response.status,
-      );
+    if (new URL(request.url).search) return jsonResponse({ message: 'Use JSON body parameters' }, 400);
+    const input = await readBoundedJson(request, 4096);
+    if (Object.keys(input).some((key) => !['startDate', 'endDate', 'offset'].includes(key))) {
+      return jsonResponse({ message: 'Unsupported batch parameters' }, 400);
     }
-    const data = await response.json();
-    if (!data || !data.features) {
-      console.warn(
-        `[batch-usgs-fetch] No features found in USGS response for ${startDate}-${endDate}. Response metadata:`,
-        data.metadata,
-      );
-      return jsonResponse({
-        message: "No features found in USGS response for the given date range.",
-        startDate,
-        endDate,
-        metadata: data.metadata,
-        count: 0,
-      });
-    }
-    console.log(
-      `[batch-usgs-fetch] Fetched ${data.features.length} features from USGS for ${startDate}-${endDate}. Starting D1 upsert.`,
-    );
-    const { successCount, errorCount } = await upsertEarthquakeFeaturesToD1(
-      env.DB,
-      data.features,
-    );
-    console.log(
-      `[batch-usgs-fetch] D1 upsert complete for ${startDate}-${endDate}. Success: ${successCount}, Errors: ${errorCount}`,
-    );
+    if (!env.DB) return jsonResponse({ message: 'Earthquake database is unavailable' }, 503);
+    const { startDate, endDate, offset = 1 } = input;
+    const data = await fetchUsgsCatalogPage({ startDate, endDate, offset, limit: PAGE_SIZE });
+    const features = data.features.map((feature) => ({ ...feature, properties: { ...feature.properties, detail: usgsDetailUrl(feature.id) } }));
+    const outcome = await upsertEarthquakeFeaturesToD1(env.DB, features);
+    const hasMore = features.length === PAGE_SIZE;
     return jsonResponse({
-      message: "Batch fetch and upsert process complete.",
-      startDate,
-      endDate,
-      fetched: data.features.length,
-      upserted: successCount,
-      errors: errorCount,
-    });
+      message: outcome.complete ? 'Catalog page persisted.' : 'Catalog page persistence was incomplete; retry the same page.',
+      startDate, endDate, offset, fetched: features.length,
+      upserted: outcome.successCount, errors: outcome.errorCount,
+      complete: outcome.complete === true,
+      hasMore,
+      nextOffset: outcome.complete && hasMore && offset + PAGE_SIZE <= 20000 ? offset + PAGE_SIZE : null,
+      rangeMustBeSplit: hasMore && offset + PAGE_SIZE > 20000,
+      ingestion: outcome,
+    }, outcome.complete ? 200 : 503);
   } catch (error) {
-    console.error(
-      `[batch-usgs-fetch] Unexpected error during batch fetch for ${startDate}-${endDate}: ${error.message}`,
-      error,
-    );
-    return jsonResponse({ message: `Unexpected error: ${error.message}` }, 500);
+    const known = error instanceof UsgsTransportError || error instanceof RequestPolicyError;
+    return jsonResponse({ message: known ? error.message : 'Catalog ingestion failed' }, known ? error.status : 503);
   }
 }
-
-export { handleBatchUsgsFetch };

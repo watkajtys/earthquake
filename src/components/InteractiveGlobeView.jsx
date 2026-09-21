@@ -3,6 +3,14 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Globe from 'react-globe.gl';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
 
+// String labels are interpreted as HTML by the tooltip dependency. A DOM
+// container with textContent keeps upstream place names literal on every point.
+const safePointLabel = point => {
+    const label = document.createElement('span');
+    label.textContent = point.label ?? '';
+    return label;
+};
+
 /**
  * Utility function to take a color string (hex or rgba) and return a new rgba string
  * with its opacity multiplied by `opacityFactor`.
@@ -108,11 +116,9 @@ const InteractiveGlobeView = ({
     const [points, setPoints] = useState([]);
     const [paths, setPaths] = useState([]);
     const [globeDimensions, setGlobeDimensions] = useState({ width: null, height: null });
-    const [initialLayoutComplete, setInitialLayoutComplete] = useState(false); // Added
     const [isGlobeHovered, setIsGlobeHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const mouseMoveTimeoutRef = useRef(null);
-    const windowLoadedRef = useRef(false); // To track if window.load has fired
     const [ringsData, setRingsData] = useState([]);
 
     const debounce = (func, delay) => {
@@ -581,7 +587,7 @@ const InteractiveGlobeView = ({
 
                     pointsData={points}
                     pointLat="lat" pointLng="lng" pointAltitude="altitude"
-                    pointRadius="radius" pointColor="color" pointLabel="label"
+                    pointRadius="radius" pointColor="color" pointLabel={safePointLabel}
                     pointsMerge={false} pointsTransitionDuration={0}
                     onPointClick={handlePointClick}
 

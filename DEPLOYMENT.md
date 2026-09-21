@@ -59,29 +59,51 @@ Review the preview in a browser using the same flows as local. Preview has no cr
 
 Seed immediately before browser testing: after ten minutes the fixture metadata expires and the frontend intentionally falls back to live USGS summaries. Preview responses carry `X-Robots-Tag: noindex, nofollow`.
 
-## Production release
+## Production release and automatic Builds
 
-After local checks and preview review, deploy the same reviewed checkout:
+GitHub Actions (`.github/workflows/main.yml`) runs repository checks; it does not deploy. **Cloudflare Workers Builds is an independent push-triggered publisher** and must run its own gates for the exact revision. Inspect its connected repository, Worker, production branch, root directory, build/deploy commands, branch builds, watched paths and environment overrides before pushing a branch. Do not assume a successful GitHub check gates Cloudflare.
+
+The routine release command is:
 
 ```bash
-npx wrangler deployments list --env production
-npm run deploy:production
-npm run smoke -- https://earthquakeslive.com
-npx wrangler deployments list --env production
+npm run release:production -- --revision <full-reviewed-commit-sha>
 ```
 
-Record the commit, deployment/version ID, commands, results, and browser observations in the release report. `npm run deploy` aliases `deploy:production`. The repository's GitHub workflow validates changes; it does not publish them automatically. Production smoke uses existing feeds and does not seed synthetic data or invoke administrative write endpoints.
+`npm run deploy` also invokes this gate. In Workers Builds, set the production deploy command to `npm run release:production`; `WORKERS_CI_COMMIT_SHA` supplies the expected SHA. GitHub CI can supply `GITHUB_SHA`. Local releases must pass `--revision`. Conflicting CI SHAs, a dirty checkout (including untracked source), an unexpected account/Worker, or missing readback access fail before upload. The npm entrypoint selects `--env production`; the script rejects missing or other environments and arbitrary Worker-name overrides.
+
+Authenticate through Wrangler OAuth or a scoped `CLOUDFLARE_API_TOKEN`. The same identity needs permission to deploy and to read Worker deployments, version/settings/bindings, schedules, subdomain, custom domains and Queue consumers. The wrapper uses the pinned Wrangler's official `auth token --json` command to refresh/retrieve credentials privately; token stdout is captured in memory and its debug log discarded. Missing permissions are a failed preflight, never a skipped successful check. Do not put tokens in shell arguments, source, evidence files or release reports.
+
+The wrapper performs these gates:
+
+1. Read the current single 100% deployment and compare existing production bindings, resource IDs, domain, crons and Queue consumer settings with Wrangler's schema-normalized config.
+2. Run `npm test`, explicitly build the frontend, and dry-run the production package. Wrangler's existing custom build hook also runs Vite during packaging and deployment. These repeated builds are intentional for this first release control; removing them requires proof the same tested asset manifest is published.
+3. Recheck the clean revision and unchanged current deployment, then run pinned local Wrangler with explicit production environment, full revision tag and release identity variable.
+4. Capture the new version from Wrangler's machine-readable output, read back its bindings/revision and live configuration, and check release identity plus the bounded GET smoke on **both public hosts**. Recheck identity and live version after each smoke so a concurrent replacement fails the release.
+
+The no-store `/api/release-identity` response reports revision, environment and the platform version ID. Missing required bindings return an error; identity does not write probes. Existing smoke checks exercise stored application data; this release does not claim feed freshness/completeness beyond the existing contract. Package 5 adds that contract. Known crawler resolution and layout defects remain separately tracked.
+
+A redacted JSON result is written to `.reconciliation.local/releases/<revision>-<timestamp>.json` (override with `--report <path>`). It records UTC timestamps, revision, Worker/environment, previous/new version and each check. Save that report with actual preview/browser evidence and the automatic build run in `docs/remediation/RELEASE-LEDGER.md`; do not commit raw cloud API responses. A failed post-upload gate exits nonzero but **does not undo publication**. Upload failures can also occur after publication; read back the live state before deciding recovery.
+
+Before first publishing this wrapper, contain the existing automatic trigger or save/read back the temporary command `npm test && npm run deploy:production` with explicit frontend build. Once the wrapper is on the intended branch, switch the existing trigger to `npm run release:production`, read back the setting, and execute one controlled automatic build. Keep feature-branch production Builds disabled; use the dedicated preview Worker for isolated resources. An uploaded preview version attached to the production Worker is not a data sandbox. Dashboard state and a real automatic run are external validation gates, not established by this file.
+
+`npm run deploy:production` remains an explicit emergency primitive (`wrangler deploy --env production`) and bypasses the wrapper. Use it only after equivalent manual tests/build/packaging and a reviewed recovery decision; pass `--tag <sha> --var RELEASE_REVISION:<sha> --var DEPLOYMENT_ENVIRONMENT:production` so identity is meaningful. Manually verify configuration, both hosts and current version afterward. This escape hatch can repair configuration drift that the routine wrapper deliberately refuses to publish over.
+
+After release, observe actual scheduled executions at the next 5/10/30-minute intervals. Record the next daily job separately. An inferred health/log endpoint is not execution evidence. Local tests, a dry run or a manual deployment do not close OPS-1; the existing automatic trigger must deploy the reviewed SHA and pass these checks.
 
 ## Rollback
 
-The captured pre-reconciliation baseline is Worker version **`5eae3e4d-d96c-42c4-9f05-6e7e4c1d458a`**, deployed **August 31, 2026 at 18:33:28 UTC**. For this migration, restore it with:
+1. Contain a competing or incorrect automatic trigger before recovery. Read the current deployment and determine whether another operator has replaced the failed release. Never automatically roll back over a newer release.
+2. Consult the release ledger and inspect recent versions/configuration to select the most recent **compatible, verified good** version. The wrapper's `previousVersion` is a candidate, not proof that it is healthy or compatible. Check retained bindings and current schema/data requirements.
+3. Restore that explicitly selected version, then read back configuration and run the smoke appropriate to that version on both public hosts:
 
 ```bash
-npx wrangler rollback 5eae3e4d-d96c-42c4-9f05-6e7e4c1d458a --env production --message "Rollback deployment reconciliation"
+npx wrangler deployments list --env production
+npx wrangler versions view <selected-version-id> --env production --json
+npx wrangler rollback <selected-version-id> --env production --message "Restore reviewed compatible release"
 npx wrangler deployments list --env production
 ```
 
-Verify the homepage, its original JS/CSS assets, earthquake feeds, and normal browser interactions after rollback. The new smoke script expects the reconciled API contract, so it is not a pass/fail gate for the August version. For later releases, first identify the appropriate known-good version rather than always returning to this migration baseline.
+Historical versions `5eae3e4d-d96c-42c4-9f05-6e7e4c1d458a` (August baseline) and `2b0d2f34-8faf-4dd7-8433-4c7702f47ef9` (September binding restoration) are audit references, not default rollback targets. Older releases may not implement the release identity or reconciled API contract; use the documented compatible checks and verify original assets and browser flows.
 
 A Worker rollback does not restore D1/KV/R2 contents. Keep the old bound resources available; deleted resources can prevent rollback. See [Cloudflare's rollback documentation](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/).
 

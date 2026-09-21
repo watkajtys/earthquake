@@ -8,11 +8,12 @@ const createMockDbInstance = () => {
         state.binds = binds;
         return stmt;
       },
-      run: vi.fn(),
+      run: vi.fn().mockResolvedValue({ success: true }),
     };
     return {
       prepare: vi.fn(() => stmt),
       _getBinds: () => state.binds,
+      _run: stmt.run,
     };
   };
 
@@ -20,8 +21,8 @@ describe('storeClusterDefinition', () => {
   let mockDb;
 
   beforeEach(() => {
-    mockDb = createMockDbInstance();
     vi.resetAllMocks();
+    mockDb = createMockDbInstance();
   });
 
   it('should correctly bind all parameters to the SQL statement', async () => {
@@ -50,7 +51,7 @@ describe('storeClusterDefinition', () => {
       createdAt: 1672531200000,
     };
 
-    await storeClusterDefinition(mockDb, clusterData);
+    expect(await storeClusterDefinition(mockDb, clusterData)).toEqual({ success: true, id: clusterData.id });
 
     const binds = mockDb._getBinds();
     expect(binds[0]).toBe(clusterData.id);
@@ -77,4 +78,13 @@ describe('storeClusterDefinition', () => {
     expect(binds[21]).toBe(clusterData.createdAt);
     expect(binds[22]).toBeGreaterThan(0);
   });
+});
+
+it.each([undefined, {}, { success: false }])('does not report an unconfirmed D1 result as persisted: %j', async result => {
+  const db = createMockDbInstance(); db._run.mockResolvedValue(result);
+  const outcome = await storeClusterDefinition(db, {
+    id: 'id', slug: 'slug', strongestQuakeId: 'quake', earthquakeIds: ['quake'],
+    maxMagnitude: 4, startTime: 1, endTime: 2, quakeCount: 1,
+  });
+  expect(outcome.success).toBe(false);
 });

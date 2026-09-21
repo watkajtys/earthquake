@@ -134,7 +134,8 @@ async function storeClusterDefinition(db, clusterData) {
       "[storeClusterDefinition] Binding parameters:",
       JSON.stringify(params, null, 2),
     );
-    await stmt.bind(...params).run();
+    const result = await stmt.bind(...params).run();
+    if (result?.success !== true) throw new Error("D1 did not confirm cluster persistence");
     return { success: true, id };
   } catch (e) {
     console.error("Error storing cluster definition in D1:", e);

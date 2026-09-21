@@ -414,3 +414,50 @@ describe('Integration Tests', () => {
     expect(clusters).toBeDefined();
   });
 });
+describe('polar, wrapped and bounded clustering regressions', () => {
+  const quake = (id, lng, lat, mag = 3) => ({ id, properties: { mag }, geometry: { type: 'Point', coordinates: [lng, lat, 10] } });
+
+  it('finishes valid pole/minimum-one inputs and keeps bounded index coordinates', () => {
+    for (const lat of [90, -90]) {
+      const events = [quake('pole', 0, lat)];
+      expect(findActiveClustersOptimized(events, 50, 1)).toEqual([events]);
+      const index = buildEarthquakeSpatialIndex(events, 50);
+      expect(index.bounds.north).toBeLessThanOrEqual(90);
+      expect(index.bounds.south).toBeGreaterThanOrEqual(-90);
+    }
+  });
+  it('clusters all three antimeridian neighbors with the strongest first', () => {
+    const events = [quake('east', 179.9, 0, 5), quake('west1', -179.9, 0, 4), quake('west2', -179.8, 0, 3)];
+    const clusters = findActiveClustersOptimized(events, 50, 3);
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0][0].id).toBe('east');
+    expect(clusters[0].map(item => item.id).sort()).toEqual(['east', 'west1', 'west2']);
+  });
+  it('finds near-pole neighbors on opposite meridians', () => {
+    const events = [quake('a', -170, 89.9, 5), quake('b', 10, 89.9, 4), quake('c', 170, 89.95, 3)];
+    expect(findActiveClustersOptimized(events, 50, 3)[0]).toHaveLength(3);
+  });
+  it('queries both representations of the date-line at zero distance', () => {
+    const index = buildEarthquakeSpatialIndex([quake('east', 180, 0), quake('west', -180, 0)], 1);
+    // Floating-point sin(pi) makes the exact great-circle comparison tiny but nonzero.
+    expect(index.findWithinRadius(0, 180, 0.000001).map(item => item.id).sort()).toEqual(['east', 'west']);
+  });
+  it('drops nonfinite and out-of-world coordinates before any query', () => {
+    const events = [quake('inf', Infinity, 0), quake('nan', 0, NaN), quake('badlat', 0, 91), quake('badlng', 181, 0), quake('ok', 0, 0)];
+    expect(findActiveClustersOptimized(events, 50, 1).map(cluster => cluster[0].id)).toEqual(['ok']);
+  });
+  it('enforces a shared budget across insertion, grid cells and candidate work', () => {
+    const events = [quake('a', 0, 0), quake('b', 0.01, 0)];
+    expect(() => findActiveClustersOptimized(events, 50, 1, { maxWork: 5 })).toThrow(expect.objectContaining({ code: 'SPATIAL_BUDGET_EXCEEDED' }));
+  });
+  it('terminates a large empty-cell scan under the default one-million budget', () => {
+    const index = new EarthquakeSpatialIndex({ north: 90, south: -90, east: 180, west: -180 }, 0.01);
+    expect(() => index.findWithinRadius(89.9, 0, 500)).toThrow(expect.objectContaining({ code: 'SPATIAL_BUDGET_EXCEEDED' }));
+  });
+  it('does not scan outside the actual grid for very large queries', () => {
+    const index = new EarthquakeSpatialIndex({ north: 1, south: 0, east: 1, west: 0 }, 1);
+    index.insert(quake('a', 0, 0));
+    expect(index.query({ north: 1e20, south: -1e20, east: 1e20, west: -1e20 })).toHaveLength(1);
+    expect(index.workBudget.remaining).toBeGreaterThan(999_980);
+  });
+});

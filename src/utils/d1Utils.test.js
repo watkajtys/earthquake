@@ -1,168 +1,225 @@
-import { upsertEarthquakeFeaturesToD1 } from './d1Utils';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { upsertEarthquakeFeaturesToD1 } from './d1Utils.js';
 
-// Mock console
-global.console = {
-  log: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-};
+const migrations = readdirSync(resolve('migrations'))
+  .filter(name => name.endsWith('.sql'))
+  .sort()
+  .map(name => readFileSync(resolve('migrations', name), 'utf8'));
+const now = Date.UTC(2026, 8, 21);
+const makeFeature = (id = 'quake1') => ({
+  type: 'Feature',
+  id,
+  properties: {
+    time: now - 60 * 60 * 1000,
+    updated: now,
+    mag: 5.1,
+    place: 'Test location',
+    detail: `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${id}.geojson`,
+  },
+  geometry: { type: 'Point', coordinates: [-118, 34, 10] },
+});
+const expectedOutcome = (overrides = {}) => ({
+  successCount: 0, errorCount: 0, complete: true,
+  persistedIds: [], unchangedIds: [], failedIds: [], rejectedIds: [],
+  ...overrides,
+});
 
-describe('d1Utils - upsertEarthquakeFeaturesToD1', () => {
-  let mockDb;
-  let mockStmt;
+describe('earthquake persistence against the migrated D1 schema', () => {
+  let database;
+  let db;
 
   beforeEach(() => {
-    vi.clearAllMocks(); // Use vi for vitest
-    mockStmt = {
-      bind: vi.fn().mockReturnThis(), // bind still returns the statement for chaining
-      // run is no longer called directly on the statement from the loop in upsertEarthquakeFeaturesToD1
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    database = new DatabaseSync(':memory:');
+    migrations.forEach(sql => database.exec(sql));
+    db = {
+      prepare: vi.fn(sql => {
+        const statement = database.prepare(sql);
+        return {
+          bind(...values) {
+            if (values.length > 100) throw new Error('D1 bound parameter limit exceeded');
+            return { run: () => ({ success: true, meta: statement.run(...values) }) };
+          },
+        };
+      }),
+      batch: vi.fn(async operations => {
+        // D1 batches are transactional. Exercise the actual SQL with that
+        // boundary rather than mocking successful calls without result metadata.
+        database.exec('BEGIN');
+        try {
+          const results = operations.map(operation => operation.run());
+          database.exec('COMMIT');
+          return results;
+        } catch (error) {
+          database.exec('ROLLBACK');
+          throw error;
+        }
+      }),
     };
-    mockDb = {
-      prepare: vi.fn().mockReturnValue(mockStmt),
-      batch: vi.fn().mockResolvedValue([]), // Default successful batch execution
-    };
   });
 
-  it('should successfully upsert valid features', async () => {
-    const mockFeatures = [
-      {
-        id: 'quake1',
-        properties: { time: 1678886400000, mag: 5.5, place: 'Location A', detail: 'url_a' },
-        geometry: { coordinates: [10, 20, 5] }
-      },
-      {
-        id: 'quake2',
-        properties: { time: 1678887400000, mag: 4.3, place: 'Location B', detail: 'url_b' },
-        geometry: { coordinates: [12, 22, 8] }
-      },
-    ];
-
-    const result = await upsertEarthquakeFeaturesToD1(mockDb, mockFeatures);
-
-    expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO EarthquakeEvents'));
-    expect(mockStmt.bind).toHaveBeenCalledTimes(mockFeatures.length);
-    // expect(mockStmt.run).toHaveBeenCalledTimes(mockFeatures.length); // run is no longer called per feature
-    expect(mockDb.batch).toHaveBeenCalledTimes(1); // batch is called once with all operations
-
-    // Check that db.batch was called with an array of operations, and verify the first one
-    const batchOperations = mockDb.batch.mock.calls[0][0];
-    expect(Array.isArray(batchOperations)).toBe(true);
-    expect(batchOperations.length).toBe(mockFeatures.length);
-
-    // Check first feature binding (the mockStmt.bind calls are still valid as they prepare operations for batch)
-    // No direct way to check Nth call on the statement object passed to batch easily without more complex mocking.
-    // The fact that bind was called correctly N times and batch was called with N operations is a good indicator.
-    // We can still check the arguments of the bind calls on the mockStmt directly as before.
-    expect(mockStmt.bind).toHaveBeenNthCalledWith(1,
-      'quake1', 1678886400000, 20, 10, 5, 5.5, 'Location A', 'url_a', expect.any(Number), expect.any(Number)
-    );
-    expect(mockStmt.bind).toHaveBeenNthCalledWith(2,
-      'quake2', 1678887400000, 22, 12, 8, 4.3, 'Location B', 'url_b', expect.any(Number), expect.any(Number)
-    );
-
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] Starting D1 upsert for ${mockFeatures.length} features.`));
-    // The success log message changed slightly with batching
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] Batch upsert successful for ${mockFeatures.length} operations.`));
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`[d1Utils-upsert] D1 upsert processing complete. Total features: ${mockFeatures.length}, Attempted: ${mockFeatures.length}, Success: ${mockFeatures.length}, Errors: 0`));
-    expect(result).toEqual({ successCount: mockFeatures.length, errorCount: 0 });
+  afterEach(() => {
+    database.close();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
-  it('should return zero counts and log if no features are provided', async () => {
-    const result = await upsertEarthquakeFeaturesToD1(mockDb, []);
-    expect(console.log).toHaveBeenCalledWith("[d1Utils-upsert] No features provided to upsert.");
-    expect(result).toEqual({ successCount: 0, errorCount: 0 });
-    expect(mockDb.prepare).not.toHaveBeenCalled();
-  });
+  const rows = () => database.prepare('SELECT * FROM EarthquakeEvents ORDER BY id').all();
 
-  it('should log error and return error count if DB is not provided', async () => {
-    const features = [{ id: 'q1' }]; // Dummy features
-    const result = await upsertEarthquakeFeaturesToD1(null, features);
-    expect(console.error).toHaveBeenCalledWith("[d1Utils-upsert] D1 Database (DB) binding not provided.");
-    expect(result).toEqual({ successCount: 0, errorCount: features.length });
-  });
+  it('persists valid summaries, including explicit null and zero scientific values', async () => {
+    const feature = makeFeature();
+    feature.properties.mag = null;
+    feature.properties.place = null;
+    feature.geometry.coordinates = [0, 0, 0];
+    feature.properties.time = 0;
 
-  it('should skip features with missing critical data and log warnings', async () => {
-    const validFeature = {
-      id: 'valid1',
-      properties: { time: 1678886400000, mag: 5.5, place: 'Valid Place', detail: 'valid_url' },
-      geometry: { coordinates: [10, 20, 5] }
-    };
-    const invalidFeature1 = { id: 'invalid1' }; // Missing properties and geometry
-    const invalidFeature2 = {
-      id: 'invalid2',
-      properties: { time: null, mag: 2.0, place: 'Incomplete Place', detail: 'incomplete_url'}, // null time
-      geometry: { coordinates: [1,2,3]}
-    };
-
-
-    const features = [validFeature, invalidFeature1, invalidFeature2];
-    const result = await upsertEarthquakeFeaturesToD1(mockDb, features);
-
-    expect(mockDb.prepare).toHaveBeenCalledTimes(1); // Called once for the batch
-    expect(mockStmt.bind).toHaveBeenCalledTimes(1); // Only called for the valid feature
-    expect(mockStmt.bind).toHaveBeenCalledWith(
-      'valid1', 1678886400000, 20, 10, 5, 5.5, 'Valid Place', 'valid_url', expect.any(Number), expect.any(Number)
-    );
-    // expect(mockStmt.run).toHaveBeenCalledTimes(1); // run is no longer called per feature
-    expect(mockDb.batch).toHaveBeenCalledTimes(1); // batch is called once with the valid operations
-    const batchOpsInvalid = mockDb.batch.mock.calls[0][0];
-    expect(batchOpsInvalid.length).toBe(1); // Only one valid operation
-
-    expect(console.warn).toHaveBeenCalledWith("[d1Utils-upsert] Skipping feature due to missing critical data:", "invalid1");
-    expect(console.warn).toHaveBeenCalledWith("[d1Utils-upsert] Skipping feature invalid2 due to null value in one of the required fields.");
-    expect(result).toEqual({ successCount: 1, errorCount: 2 });
-  });
-
-  it('should handle D1 batch errors and count all batched operations as errors', async () => {
-    const features = [
-      { id: 'q1', properties: { time: 1, mag: 1, place: 'P1', detail: 'u1' }, geometry: { coordinates: [1,1,1] } },
-      { id: 'q2-error', properties: { time: 2, mag: 2, place: 'P2-error', detail: 'u2' }, geometry: { coordinates: [2,2,2] } },
-      { id: 'q3', properties: { time: 3, mag: 3, place: 'P3', detail: 'u3' }, geometry: { coordinates: [3,3,3] } }
-    ];
-
-    // Simulate the batch operation failing
-    const batchError = new Error('D1 batch execute error');
-    mockDb.batch.mockRejectedValueOnce(batchError);
-
-    const result = await upsertEarthquakeFeaturesToD1(mockDb, features);
-
-    expect(mockStmt.bind).toHaveBeenCalledTimes(features.length); // bind is still called for all valid features
-    expect(mockDb.batch).toHaveBeenCalledTimes(1); // batch is attempted once
-    const batchOperations = mockDb.batch.mock.calls[0][0];
-    expect(batchOperations.length).toBe(features.length); // All features were prepared for batching
-
-    expect(console.error).toHaveBeenCalledWith(`[d1Utils-upsert] Error during batch D1 upsert for slice starting at index 0: ${batchError.message}`, batchError);
-    // If batch fails, all operations in it are counted as errors.
-    // successCount remains 0 (or its initial value if there were prior successful batches, not applicable here).
-    // errorCount becomes the number of operations attempted in the failed batch.
-    expect(result).toEqual({ successCount: 0, errorCount: features.length });
-  });
-
-  // More tests:
-  // - Defaulting usgs_detail_url if feature.properties.detail is missing
-
-  it('should process features in batches', async () => {
-    // Create a large number of features to trigger batching
-    const mockFeatures = Array.from({ length: 200 }, (_, i) => ({
-      id: `quake${i}`,
-      properties: { time: 1678886400000 + i, mag: 3.0 + i / 100, place: `Location ${i}`, detail: `url_${i}` },
-      geometry: { coordinates: [10 + i / 10, 20 + i / 10, 5 + i / 10] }
+    expect(await upsertEarthquakeFeaturesToD1(db, [feature])).toEqual(expectedOutcome({
+      successCount: 1, persistedIds: ['quake1'],
     }));
+    expect(rows()[0]).toMatchObject({
+      id: 'quake1', event_time: 0, magnitude: null, place: null,
+      longitude: 0, latitude: 0, depth: 0,
+      retrieved_at: now, next_detail_fetch_attempt: now + 45 * 60 * 1000,
+    });
+  });
 
-    const result = await upsertEarthquakeFeaturesToD1(mockDb, mockFeatures);
+  it('distinguishes an identical summary from a changed row without rewriting retrieval/retry times', async () => {
+    const feature = makeFeature();
+    await upsertEarthquakeFeaturesToD1(db, [feature]);
+    const original = rows()[0];
+    vi.setSystemTime(now + 60 * 1000);
 
-    // Batch size is 90, so 200 features should result in 3 batches (90, 90, 20)
-    expect(mockDb.batch).toHaveBeenCalledTimes(3);
+    expect(await upsertEarthquakeFeaturesToD1(db, [feature])).toEqual(expectedOutcome({
+      successCount: 1, unchangedIds: ['quake1'],
+    }));
+    expect(rows()[0]).toEqual(original);
+  });
 
-    // Check the size of each batch
-    expect(mockDb.batch.mock.calls[0][0].length).toBe(90);
-    expect(mockDb.batch.mock.calls[1][0].length).toBe(90);
-    expect(mockDb.batch.mock.calls[2][0].length).toBe(20);
+  it.each([
+    ['event_time', feature => { feature.properties.time += 1; }, now - 60 * 60 * 1000 + 1],
+    ['longitude', feature => { feature.geometry.coordinates[0] = -117.8; }, -117.8],
+    ['latitude', feature => { feature.geometry.coordinates[1] = 34.2; }, 34.2],
+    ['depth', feature => { feature.geometry.coordinates[2] = 22; }, 22],
+    ['magnitude', feature => { feature.properties.mag = 0; }, 0],
+    ['place', feature => { feature.properties.place = 'Revised location'; }, 'Revised location'],
+    ['usgs_detail_url', feature => { feature.properties.detail = 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=quake1&format=geojson'; }, 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=quake1&format=geojson'],
+  ])('persists a correction to %s when other source fields do not change', async (column, revise, expected) => {
+    const feature = makeFeature();
+    await upsertEarthquakeFeaturesToD1(db, [feature]);
+    revise(feature);
+    vi.setSystemTime(now + 1000);
 
-    // Verify the total counts
-    expect(result).toEqual({ successCount: 200, errorCount: 0 });
+    expect(await upsertEarthquakeFeaturesToD1(db, [feature])).toEqual(expectedOutcome({
+      successCount: 1, persistedIds: ['quake1'],
+    }));
+    expect(rows()[0][column]).toBe(expected);
+    expect(rows()[0].retrieved_at).toBe(now + 1000);
+    expect(rows()[0].next_detail_fetch_attempt).toBe(now + 45 * 60 * 1000);
+  });
 
-    // Verify bind was called for every feature
-    expect(mockStmt.bind).toHaveBeenCalledTimes(200);
+  it('applies null transitions and then recognizes unchanged nulls', async () => {
+    const feature = makeFeature();
+    await upsertEarthquakeFeaturesToD1(db, [feature]);
+    feature.properties.mag = null;
+    feature.properties.place = null;
+    expect((await upsertEarthquakeFeaturesToD1(db, [feature])).persistedIds).toEqual(['quake1']);
+    expect(rows()[0]).toMatchObject({ magnitude: null, place: null });
+    expect((await upsertEarthquakeFeaturesToD1(db, [feature])).unchangedIds).toEqual(['quake1']);
+    feature.properties.mag = -0.5;
+    feature.properties.place = 'Revised location';
+    expect((await upsertEarthquakeFeaturesToD1(db, [feature])).persistedIds).toEqual(['quake1']);
+    expect(rows()[0]).toMatchObject({ magnitude: -0.5, place: 'Revised location' });
+  });
+
+  it('derives the detail URL when it is absent', async () => {
+    const feature = makeFeature();
+    delete feature.properties.detail;
+    await upsertEarthquakeFeaturesToD1(db, [feature]);
+    expect(rows()[0].usgs_detail_url).toBe('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/quake1.geojson');
+  });
+
+  it('reports the failed first 90 features separately from a successful last feature and recovers on retry', async () => {
+    const features = Array.from({ length: 91 }, (_, i) => makeFeature(`quake${i}`));
+    db.batch.mockRejectedValueOnce(new Error('Transient D1 outage'));
+
+    expect(await upsertEarthquakeFeaturesToD1(db, features)).toEqual(expectedOutcome({
+      successCount: 1, errorCount: 90, complete: false,
+      persistedIds: ['quake90'], failedIds: features.slice(0, 90).map(feature => feature.id),
+    }));
+    expect(rows().map(row => row.id)).toEqual(['quake90']);
+    expect(db.batch.mock.calls.map(([operations]) => operations.length)).toEqual([90, 1]);
+
+    expect(await upsertEarthquakeFeaturesToD1(db, features)).toEqual(expectedOutcome({
+      successCount: 91,
+      persistedIds: features.slice(0, 90).map(feature => feature.id), unchangedIds: ['quake90'],
+    }));
+    expect(rows()).toHaveLength(91);
+  });
+
+  it.each([
+    ['missing results', []],
+    ['unsuccessful result', [{ success: false, meta: { changes: 0 } }]],
+    ['missing changes', [{ success: true, meta: {} }]],
+    ['negative changes', [{ success: true, meta: { changes: -1 } }]],
+  ])('does not claim persistence for %s', async (_label, result) => {
+    db.batch.mockResolvedValueOnce(result);
+    expect(await upsertEarthquakeFeaturesToD1(db, [makeFeature()])).toEqual(expectedOutcome({
+      errorCount: 1, complete: false, failedIds: ['quake1'],
+    }));
+  });
+
+  it('safely retries a committed batch whose persistence result was lost', async () => {
+    const executeBatch = db.batch.getMockImplementation();
+    db.batch.mockImplementationOnce(async operations => {
+      await executeBatch(operations);
+      return [];
+    });
+
+    expect(await upsertEarthquakeFeaturesToD1(db, [makeFeature()])).toEqual(expectedOutcome({
+      errorCount: 1, complete: false, failedIds: ['quake1'],
+    }));
+    expect(rows()).toHaveLength(1);
+    expect(await upsertEarthquakeFeaturesToD1(db, [makeFeature()])).toEqual(expectedOutcome({
+      successCount: 1, unchangedIds: ['quake1'],
+    }));
+    expect(rows()).toHaveLength(1);
+  });
+
+  it('does not checkpoint rejected features even if other features persist', async () => {
+    const invalidTime = makeFeature('invalid-time');
+    invalidTime.properties.time = null;
+    const invalidCoordinate = makeFeature('invalid-coordinate');
+    invalidCoordinate.geometry.coordinates[2] = Infinity;
+    const result = await upsertEarthquakeFeaturesToD1(db, [
+      makeFeature('valid'), { id: 'missing-properties' }, invalidTime, invalidCoordinate, null,
+    ]);
+
+    expect(result).toEqual(expectedOutcome({
+      successCount: 1, errorCount: 4, complete: false, persistedIds: ['valid'],
+      rejectedIds: ['missing-properties', 'invalid-time', 'invalid-coordinate', null],
+    }));
+    expect(rows().map(row => row.id)).toEqual(['valid']);
+  });
+
+  it('reports a missing binding and preparation errors as failed valid features', async () => {
+    const expected = expectedOutcome({ errorCount: 1, complete: false, failedIds: ['quake1'] });
+    expect(await upsertEarthquakeFeaturesToD1(null, [makeFeature()])).toEqual(expected);
+    db.prepare.mockImplementationOnce(() => { throw new Error('D1 unavailable'); });
+    expect(await upsertEarthquakeFeaturesToD1(db, [makeFeature()])).toEqual(expected);
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it('accepts a validated empty list but rejects a non-array input', async () => {
+    expect(await upsertEarthquakeFeaturesToD1(db, [])).toEqual(expectedOutcome());
+    expect(await upsertEarthquakeFeaturesToD1(db, null)).toEqual(expectedOutcome({
+      errorCount: 1, complete: false, rejectedIds: [null],
+    }));
+    expect(db.prepare).not.toHaveBeenCalled();
   });
 });

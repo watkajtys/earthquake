@@ -39,20 +39,82 @@ function memoize(fn, keyFn) {
  * @param {number} bufferKm - Buffer distance in kilometers
  * @returns {Object} Bounding box with north, south, east, west coordinates
  */
+export function isValidCoordinate(lat, lng) {
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
+
+function normalizeLongitude(value) {
+  return ((value + 180) % 360 + 360) % 360 - 180;
+}
+
 export function calculateBoundingBox(centerLat, centerLng, bufferKm) {
-  // Approximate degrees per kilometer (varies by latitude)
-  const latDegreesPerKm = 1 / 110.574; // Roughly constant
-  const lngDegreesPerKm = 1 / (110.574 * Math.cos(centerLat * Math.PI / 180)); // Varies by latitude
-  
-  const latBuffer = bufferKm * latDegreesPerKm;
-  const lngBuffer = bufferKm * lngDegreesPerKm;
-  
+  if (!isValidCoordinate(centerLat, centerLng) || !Number.isFinite(bufferKm) || bufferKm < 0) {
+    throw new RangeError('Expected valid coordinates and a finite nonnegative radius.');
+  }
+  // Spherical cap using the same 6371 km radius as exact clustering distance.
+  const angular = Math.min(Math.PI, bufferKm / 6371);
+  const latitude = centerLat * Math.PI / 180;
+  const south = Math.max(-90, centerLat - angular * 180 / Math.PI);
+  const north = Math.min(90, centerLat + angular * 180 / Math.PI);
+  if (south <= -90 || north >= 90) return { south, north, west: -180, east: 180 };
+  const longitudeDelta = Math.asin(Math.min(1, Math.sin(angular) / Math.cos(latitude))) * 180 / Math.PI;
+  return { south, north, west: normalizeLongitude(centerLng - longitudeDelta), east: normalizeLongitude(centerLng + longitudeDelta) };
+}
+
+// Wrapped boxes use west > east. Older callers may also supply unwrapped bounds.
+export function longitudeIntervals(bbox) {
+  if (!bbox || ![bbox.south, bbox.north, bbox.west, bbox.east].every(Number.isFinite) || bbox.south > bbox.north) {
+    throw new RangeError('Expected a finite, ordered latitude bounding box.');
+  }
+  if (Math.abs(bbox.east - bbox.west) >= 360) return [[-180, 180]];
+  const west = normalizeLongitude(bbox.west);
+  const east = normalizeLongitude(bbox.east);
+  if (west === -180 && east !== -180) return [[west, east], [180, 180]];
+  if (west === -180 && east === -180) return [[-180, -180], [180, 180]];
+  return west <= east ? [[west, east]] : [[west, 180], [-180, east]];
+}
+
+export function createSpatialWorkBudget(limit = 1_000_000) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1_000_000) throw new RangeError('Invalid spatial work budget.');
   return {
-    north: centerLat + latBuffer,
-    south: centerLat - latBuffer,
-    east: centerLng + lngBuffer,
-    west: centerLng - lngBuffer
+    remaining: limit,
+    consume(count = 1) {
+      this.remaining -= count;
+      if (this.remaining < 0) {
+        const error = new Error('Spatial calculation exceeded its bounded work budget.');
+        error.code = 'SPATIAL_BUDGET_EXCEEDED';
+        throw error;
+      }
+    },
   };
+}
+
+export function gridCellRanges(bounds, cellSize, bbox) {
+  if (!bounds || ![bounds.south, bounds.north, bounds.west, bounds.east, cellSize].every(Number.isFinite) ||
+      cellSize <= 0 || bounds.south > bounds.north || bounds.west > bounds.east) {
+    throw new RangeError('Expected finite grid bounds and a positive cell size.');
+  }
+  const intervals = longitudeIntervals(bbox);
+  const south = Math.max(bounds.south, bbox.south, -90);
+  const north = Math.min(bounds.north, bbox.north, 90);
+  if (south > north) return [];
+  const startRow = Math.max(0, Math.floor((south - bounds.south) / cellSize));
+  const endRow = Math.min(Math.floor((bounds.north - bounds.south) / cellSize), Math.floor((north - bounds.south) / cellSize));
+  const ranges = intervals.flatMap(([west, east]) => {
+    const left = Math.max(bounds.west, west);
+    const right = Math.min(bounds.east, east);
+    if (left > right) return [];
+    const startCol = Math.max(0, Math.floor((left - bounds.west) / cellSize));
+    const endCol = Math.min(Math.floor((bounds.east - bounds.west) / cellSize), Math.floor((right - bounds.west) / cellSize));
+    if (![startRow, endRow, startCol, endCol].every(Number.isSafeInteger)) throw new RangeError('Grid resolution is too small.');
+    return [{ startRow, endRow, startCol, endCol }];
+  }).sort((left, right) => left.startCol - right.startCol);
+  // Coarse cells may overlap the two longitude intervals. Visit each cell once.
+  if (ranges.length === 2 && ranges[0].endCol >= ranges[1].startCol) {
+    ranges[0].endCol = Math.max(ranges[0].endCol, ranges[1].endCol);
+    ranges.pop();
+  }
+  return ranges;
 }
 
 /**
@@ -71,42 +133,27 @@ export function calculateBoundingBoxFromPoints(earthquakePoints, bufferKm = 50) 
   const validPoints = earthquakePoints.filter(point => 
     Array.isArray(point) && 
     point.length >= 2 && 
-    typeof point[0] === 'number' && 
-    typeof point[1] === 'number' &&
-    !isNaN(point[0]) && !isNaN(point[1])
+    isValidCoordinate(point[0], point[1])
   );
   
   if (validPoints.length === 0) {
     return null;
   }
   
-  // Find min/max coordinates
-  let minLat = validPoints[0][0];
-  let maxLat = validPoints[0][0];
-  let minLng = validPoints[0][1];
-  let maxLng = validPoints[0][1];
-  
-  validPoints.forEach(([lat, lng]) => {
-    minLat = Math.min(minLat, lat);
-    maxLat = Math.max(maxLat, lat);
-    minLng = Math.min(minLng, lng);
-    maxLng = Math.max(maxLng, lng);
-  });
-  
-  // Add buffer
-  const centerLat = (minLat + maxLat) / 2;
-  const latDegreesPerKm = 1 / 110.574;
-  const lngDegreesPerKm = 1 / (110.574 * Math.cos(centerLat * Math.PI / 180));
-  
-  const latBuffer = bufferKm * latDegreesPerKm;
-  const lngBuffer = bufferKm * lngDegreesPerKm;
-  
-  return {
-    north: maxLat + latBuffer,
-    south: minLat - latBuffer,
-    east: maxLng + lngBuffer,
-    west: minLng - lngBuffer
-  };
+  // Union the spherical buffers conservatively; a wrapped component needs all
+  // longitudes in this single-box representation of several point circles.
+  const combined = { north: -90, south: 90, east: -180, west: 180 };
+  let fullLongitude = false;
+  for (const [lat, lng] of validPoints) {
+    const box = calculateBoundingBox(lat, lng, bufferKm);
+    combined.north = Math.max(combined.north, box.north);
+    combined.south = Math.min(combined.south, box.south);
+    combined.east = Math.max(combined.east, box.east);
+    combined.west = Math.min(combined.west, box.west);
+    fullLongitude ||= box.west > box.east || box.west === -180 && box.east === 180;
+  }
+  if (fullLongitude) { combined.west = -180; combined.east = 180; }
+  return combined;
 }
 
 /**
@@ -118,7 +165,9 @@ export function calculateBoundingBoxFromPoints(earthquakePoints, bufferKm = 50) 
  * @returns {boolean} True if point is within bounding box
  */
 export function isPointInBoundingBox(lat, lng, bbox) {
-  return lat >= bbox.south && lat <= bbox.north && lng >= bbox.west && lng <= bbox.east;
+  if (!isValidCoordinate(lat, lng)) return false;
+  return lat >= bbox.south && lat <= bbox.north && longitudeIntervals(bbox).some(([west, east]) =>
+    lng >= west && lng <= east || lng === 180 && west === -180 || lng === -180 && east === 180);
 }
 
 /**
@@ -147,8 +196,9 @@ export function doesLineStringIntersectBoundingBox(coordinates, bbox) {
 /**
  * Simple spatial index using a grid system for faster lookups
  */
-class SpatialGrid {
+export class SpatialGrid {
   constructor(bounds, cellSize = 1.0) {
+    gridCellRanges(bounds, cellSize, bounds);
     this.bounds = bounds;
     this.cellSize = cellSize;
     this.grid = new Map();
@@ -202,21 +252,20 @@ class SpatialGrid {
   query(bbox) {
     const results = new Set();
     
-    const startRow = Math.floor((bbox.south - this.bounds.south) / this.cellSize);
-    const endRow = Math.floor((bbox.north - this.bounds.south) / this.cellSize);
-    const startCol = Math.floor((bbox.west - this.bounds.west) / this.cellSize);
-    const endCol = Math.floor((bbox.east - this.bounds.west) / this.cellSize);
-    
-    for (let row = startRow; row <= endRow; row++) {
-      for (let col = startCol; col <= endCol; col++) {
-        const cellKey = `${row},${col}`;
-        const cellFeatures = this.grid.get(cellKey);
-        if (cellFeatures) {
-          cellFeatures.forEach(item => results.add(item));
+    const budget = createSpatialWorkBudget();
+    for (const { startRow, endRow, startCol, endCol } of gridCellRanges(this.bounds, this.cellSize, bbox)) {
+      for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) {
+          budget.consume();
+          const cellFeatures = this.grid.get(`${row},${col}`);
+          if (cellFeatures) for (const item of cellFeatures) {
+            budget.consume();
+            results.add(item);
+          }
         }
       }
     }
-    
+
     return Array.from(results);
   }
 }
@@ -289,7 +338,7 @@ export const filterGeoJSONByBoundingBox = memoize((geoJson, bbox) => {
   const filteredFeatures = [];
   
   // Pre-calculate bbox bounds for faster comparison
-  const { north, south, east, west } = bbox;
+  const { north, south } = bbox;
   
   for (let i = 0; i < geoJson.features.length; i++) {
     const feature = geoJson.features[i];
@@ -317,7 +366,7 @@ export const filterGeoJSONByBoundingBox = memoize((geoJson, bbox) => {
       }
       
       // Quick bbox intersection test
-      if (maxLat >= south && minLat <= north && maxLng >= west && minLng <= east) {
+      if (maxLat >= south && minLat <= north && longitudeIntervals(bbox).some(([left, right]) => maxLng >= left && minLng <= right)) {
         intersects = true;
       }
     } else if (feature.geometry.type === 'MultiLineString') {
@@ -383,6 +432,11 @@ export function initializeSpatialIndex(geoJson) {
     }
   });
   
+  if (![minLat, maxLat, minLng, maxLng].every(Number.isFinite)) {
+    globalSpatialIndex = null;
+    return;
+  }
+
   const bounds = {
     north: maxLat,
     south: minLat,

@@ -1,0 +1,104 @@
+# 5. Performance and data delivery
+
+Status: planned. Owns PERF-1 through PERF-5 and F7. Depends on safe endpoints from package 2, reliable writers/canonical cluster identities from package 3 and compatible route/refresh behavior from package 4. Independent asset and list-rendering improvements may be developed earlier, but merge shared components sequentially.
+
+## Outcome and observed baseline
+
+Deliver complete, current scientific summaries with bounded requests, payloads and rendering work. Keep event corrections, alerts, complete cluster counts and historical links correct while reducing the workload.
+
+Audit observations at `aca32df`:
+
+| Workload | Observed value | Target direction |
+|---|---|---|
+| `/api/get-clusters` | 11,227,728 decoded bytes; 586,331 Brotli bytes; 3,486 definitions; 500,622 member references | Summary-only response, bounded pages and on-demand members |
+| Projection of the same definitions | 1,393,109 decoded bytes, 87.6% smaller | Preserve this order of reduction without silently dropping clusters |
+| Feed gate | Day/week/month all rejected: only 11 rows per period passed the ten-minute freshness gate | Healthy published snapshots accepted without a second full upstream fetch |
+| 1,217-event detail | 8,544 DOM elements and 1,218 buttons before map/chart | Bounded visible rows and markers |
+| Main/globe/fault JS | 530,911 / 1,713,786 / 5,106,389 decoded bytes | Remove unused eager dependencies and reduce regional-map data |
+| Cold legacy cluster sitemap | Potentially one sequential USGS request per row, up to 500 | No upstream fetch in the sitemap request path |
+
+These are a historical workload snapshot and single HTTP measurements, not p95 latency, Core Web Vitals or a bill estimate. Refresh baselines using the same fixture set and measurement conditions. Check decoded size and transferred size separately.
+
+## Files and ownership
+
+- API/publishers: `functions/api/get-clusters.js`, `functions/api/cluster-detail-with-quakes.js`, `functions/background/process-cluster-definitions.js`, `functions/background/generate-lists.js`, `functions/api/get-earthquakes.js`, `src/worker.js`.
+- Clients: `src/services/clusterApiService.js`, `src/services/usgsApiService.js`, `src/contexts/EarthquakeDataContext.jsx`, `src/contexts/earthquakeDataContextUtils.js`, `src/pages/HomePage.jsx`.
+- Rendering: `ClusterSummaryItem.jsx`, `ClusterDetailModal.jsx`, `ClusterDetailModalWrapper.jsx`, `ClusterMiniMap.jsx`, `EarthquakeMap.jsx`, `EarthquakeSequenceChart.jsx`, `InteractiveGlobeView.jsx` under `src/components/`.
+- Assets/tests: `vite.config.js`, `public/`, `scripts/smoke-deployment.mjs`, component/API tests.
+
+Package 3 owns durable identity, numerical revision, safe ingestion and publication prerequisites. Package 4 owns refresh state/route parsing, not a competing data provider. Build on their contracts. Keep dependency major upgrades in package 6.
+
+## 5A. Publish compact canonical cluster summaries
+
+1. Inventory every consumer of `active_clusters`, `/api/get-clusters` and `earthquakeIds`, including crawler output, globe points, cards and detail modals. Write the existing response compatibility contract before changing it.
+2. Use package 3's canonical identity/revision and exact slug/ID resolver. A summary must contain enough information for existing cards and any enabled map consumer without intersecting a partially loaded weekly feed: canonical ID, slug, title/location, full member count, time range, maximum magnitude, strongest-event ID and required strongest-event summary fields, representative coordinates, numeric revision and updated timestamp. Define null behavior and units. Do not use the strongest ID alone as globally unique cluster identity.
+3. Use package 3g's shared versioned wire schema: `schemaVersion`, immutable `generationId`, `generatedAtMs`, `sourceWatermarkMs`, `view`, filtered `totalCount`, `items`, `nextCursor`. Times in the envelope are UTC epoch milliseconds. Recommended additive route: `/api/cluster-summaries`; keep the old array endpoint for existing open clients during the transition. Document final names in tests and runbook rather than creating a second incompatible envelope.
+4. Publish summaries separately from full membership. No `earthquakeIds`, huge legacy revision strings, full event GeoJSON, or arrays proportional to cluster membership belong in the list. Summary creation happens on trusted scheduled work, not on every user request.
+5. Apply the existing view's eligibility filter before pagination, including the overview's significant-cluster threshold where used; inventory the actual policy rather than introducing a new scientific threshold. Return `totalCount` for that filter, with a deterministic order and ID tie-breaker. Bind cursors to generation, filter and order. Start with a default page of 100 and a maximum of 200; tune only with evidence. A cursor must not permit arbitrary SQL. If its snapshot has expired, return a defined restart response, not a silently inconsistent next page. Retain a prior generation long enough for normal pagination. Test a qualifying cluster after 100 ineligible rows so client-side filtering cannot hide it.
+6. Do not make every page request download/parse the entire 11 MB blob in the Worker. Store bounded summary pages or query an indexed summary projection. Prefer immutable KV/R2 objects resolved through package 3's authoritative D1 committed-generation pointer; a KV pointer is only a derived cache. If using an R2 pointer instead, prove monotonic publication with conditional ETag updates and generation validation. A delayed writer cannot publish merely because it once held a D1 lease. Never assume cross-key atomic publication or KV compare-and-swap; missing new-generation objects must retain/serve the prior complete generation or return a truthful unavailable result.
+7. Load initial visible summaries independently from event feeds, with subsequent pages on demand for existing consumers. Cluster overlay rendering in the audited globe is commented out; do not add a new overlay or download every summary just to satisfy this optimization plan. If an existing enabled view needs all pages, load them in bounded work and expose partial loading accurately. Learn/static routes need no cluster fetch merely to render.
+8. Replace F7's client reconstruction in `HomePage.jsx`: preserve server count, ID, slug, strongest event and range when weekly/monthly data changes. An explicitly labeled local subset may be used for visualization, never as canonical metadata. Remove repeated membership scans from first render.
+9. Fetch members only when opening a cluster. Use package 4's exact cluster selectors and package 3's canonical/alias resolution. Keep revision/generation in the detail response; do not combine a newly regenerated member list with stale metadata without detecting the mismatch. Use server pagination if measured maximum detail size justifies it, while keeping full-cluster statistics independent of the visible page. Maintain the existing bounded 100-ID D1 query batches where applicable.
+10. Preserve old routes and API response shape through a compatibility adapter until a separate retirement decision backed by usage evidence. Do not delete the old endpoint just because the new UI no longer imports it.
+
+Regression fixtures: cluster members spanning 30 days but only a weekly client feed; anchor correction; equal magnitudes; empty result; removed/superseded identity alias; page boundary with a new generation; cursor tampering; missing published page; reordered members; null magnitude/location; membership longer than one D1 batch. Verify a monthly load never changes canonical summary ID/count/strongest event.
+
+Acceptance: summary payload contains no membership arrays; measure the complete equivalent fixture summary set against the post-package-3 legacy response for the same canonical records. Aim initially for an 80% decoded reduction, revising that proposed budget with evidence if earlier identity/revision repairs have already reduced the baseline or required fields change it. Report database-repair savings separately from projection/pagination savings; do not count them twice or drop records to hit a percentage. The first page is capped and the Worker does not parse full historical membership to serve it. Initial page render does not fetch cluster members. Compatibility and detail consistency tests pass.
+
+## 5B. Make the period-feed contract complete and economical
+
+Current failure: the client requires every event's metadata timestamp to be recent, while hourly ingestion refreshes only recent events. An older earthquake can still be a valid member of a freshly checked monthly snapshot. Simply deleting the metadata guard would reintroduce lost alert/felt/tsunami/significance information.
+
+Recommended first implementation: a trusted periodic publisher retrieves the approved full USGS period summaries, validates them and publishes versioned complete snapshots. This is easier to prove correct than reconstructing complete, corrected monthly summaries from an hourly-only ingestion stream. Keep hourly D1 ingestion and full-snapshot publication as distinct responsibilities. Compare three period fetches with deriving day/week from a validated month response in preview; select the simpler approach that meets cadence, payload and runtime budgets. Do not infer deleted events or old corrections from absence in an hourly feed.
+
+1. Specify a versioned envelope: `schemaVersion`, `period`, `generatedAtMs`, `upstreamGeneratedAtMs` when present, `coverageStartMs`/`coverageEndMs`, `complete`, authoritative source, generation/revision, and event summaries. All suffixed times are UTC epoch milliseconds. Keep event occurrence time, source revision time and feed verification time distinct. Required alert fields must exist even if their legitimate value is null.
+2. Start with a five-minute publication cadence and ten-minute client freshness budget, matching current expectations. Check actual scheduled duration and upstream behavior before enabling. A generation timestamp must mean successful validation of the complete chosen source window, never merely that an old list was rewritten.
+3. Validate upstream type, finite coordinates/times, IDs, payload size and metadata presence using package 2's trusted fetch boundary. Negative or null magnitudes can be legitimate. Define deletion/correction handling from the complete authoritative snapshot. Preserve fields needed by all ranking, alert and detail-link consumers.
+4. Publish immutable generation objects first and a pointer only after all required objects validate. Preserve a last-known-good generation. Handle overlapping jobs through package 3's authoritative D1 generation commit and read resolution, or a tested R2 conditional-pointer update that verifies monotonic generation. A previously held D1 lease alone cannot fence a delayed mutable R2/KV write. Do not rely on unsupported KV CAS or wall-clock last-writer-wins. Verify stale publishers cannot replace a newer generation.
+5. On read/parse/upstream/storage failure, retain the last good object and propagate/record failure. An empty successful authoritative feed must be distinguishable from a failed bootstrap. Inherit DB-11's failure behavior. Never label sparse D1 bootstrap records as complete summaries.
+6. Serve the new contract through an additive version or route; retain legacy arrays for open clients. Add ETag/conditional requests if supported by the actual response path, with cache freshness aligned to feed freshness. Preserve metadata headers on 304 responses. Make stale status explicit; reject it for current-alert claims or fetch a current upstream fallback.
+7. Update the provider's acceptance gate only after a complete preview snapshot passes. A healthy snapshot should incur one internal fetch per period, not an internal download followed by an unconditional upstream download. Missing/malformed/stale snapshots retain bounded USGS fallback through the allowlisted read proxy.
+8. Reuse package 4's lifecycle service for in-flight deduplication, timeouts and cancellation; move source selection into it without a competing scheduler. Fetch independent initial periods concurrently using per-period error handling, so a failed week cannot suppress a valid day. Month remains opt-in and refreshes once requested, as repaired in package 4. Inherit its configured client deadline (initially 30 seconds) and bound the entire primary/fallback attempt chain, with one fallback per refresh and no unbounded immediate retry. Package 2's upstream Worker deadline remains a separate shorter bound. Retune either only with measured source latency and shared tests.
+9. Prevent stale request completion from overwriting a newer request/period. Clean up intervals and aborts on unmount/visibility policy changes. A 304 reuses the matching stored payload; it cannot manufacture data on a cold client. Avoid timers that repeatedly refetch after unmount or duplicate in React Strict Mode.
+10. Remove the global feed-loading screen from static routes. The shell and Learn content render immediately; feed widgets show their own pending/error state. Preserve visible stale data during a refresh and distinguish it from fresh data.
+
+Tests: old event in a current complete month snapshot accepted; absent alert metadata rejected; timestamp from the future rejected within an explicit clock-skew policy; one failed period; timeout/abort; reordered completion; valid empty period; upstream correction below the significant threshold; deleted event; stale pointer; concurrent publishers; failed R2 put; 304 with/without a cached generation; no network work required for static content to render.
+
+Acceptance: no double fetch on a healthy generation; no fabricated complete feed after any injected producer failure; package 4 refresh regressions remain fixed; metadata/corrections match controlled authoritative fixtures; visible source/freshness labels reflect actual coverage. Measure source request counts and Worker duration before scheduling the full-period publisher in production.
+
+## 5C. Bound list, map and chart work
+
+1. Begin with accessible pagination in `ClusterDetailModal` (50 rows per page is a reasonable starting default), using full-cluster aggregates for headings and statistics. Reuse package 4's page reset/clamp behavior. A chart/map must not silently become a page-only scientific summary.
+2. Measure map marker cost separately. At dense zoom levels, aggregate spatially with counts and expand on zoom or selection. Retain an explicit strongest/selected event. Avoid one DOM/SVG icon per historical event when thousands overlap.
+3. Bound chart draw work by the display resolution, with a documented sampling/aggregation rule preserving extremes and selection. Distinguish visual sampling from statistical data; counts and maxima use the full dataset. Test antimeridian/polar extents after package 2's fixes.
+4. Test 0, 1, 50, 51, 1,217 and an upper-bound realistic cluster. Compare DOM nodes, visible rows, marker counts, heap and interaction traces where tools permit. Suggested deterministic budget: at most 50 event rows per page, rather than a fragile whole-document node total. Do not add a virtualization dependency if pagination meets the need.
+
+## 5D. Load only needed code and geographic assets
+
+1. Make the direct `HomePage` import of `ClusterDetailModal` lazy with an appropriate Suspense/error boundary. Confirm Leaflet, regional maps and sequence charts leave the eager entry where no other required import pulls them back in. The globe already has a lazy chunk; preserve it.
+2. Verify cold `/learn`, `/overview`, `/feeds`, `/`, direct detail and opening a modal using the actual built import graph and browser network records. A smaller entry is not a win if preload immediately downloads the same unused modules.
+3. Profile active-fault data after the simple lazy-import fix. `EarthquakeMap` already filters the global dataset spatially after downloading it. If its 5.1 MB decoded payload remains material, prefer a reproducible build-time regional index/chunk split before adding a new hosted tile service. Preserve source attribution/license, geometry fidelity, regions crossing the date line, and chunks spanning a viewport. Validate equivalence of the returned features against the existing filter using fixed viewports. Deduplicate shared chunk fetches.
+4. Add immutable caching only to successful content-hashed assets, keeping HTML and APIs under their separate policies. A `public/_headers` rule is a candidate for actual static asset responses; Worker-generated responses need their own headers. With `run_worker_first`, test the deployed response path instead of assuming the file controls it. Do not cache a SPA fallback or asset error immutably. [Cloudflare static asset headers](https://developers.cloudflare.com/workers/static-assets/headers/).
+5. Keep old hashed assets available to existing tabs and the legacy bridge intact. A direct old chunk URL, a fresh deep link and an unknown API must still behave correctly after deployment.
+
+Acceptance: document before/after main/lazy asset bytes and actual requests per route; non-map routes avoid regional-map and fault payloads; no new eager dependency compensates for the removed import; hashed asset success is immutable while HTML/errors remain appropriately revalidated/non-cacheable. Regional splitting is evidence-gated: if it adds complexity without measured benefit, record the measurement and defer it explicitly.
+
+## 5E. Remove upstream work from sitemap requests
+
+The active handler is in `src/worker.js`; changing only a similarly named legacy Pages file is insufficient. Use package 3's stored canonical slug/summary metadata and package 4's URL resolver. For old aliases, use a stored mapping or a bounded offline backfill, not live per-row USGS fetches. Return the previous valid sitemap if regeneration fails, with honest freshness.
+
+Combine with DB-08's shared eligibility predicate/count and normalized timestamps. Generate XML from stored data or publish a validated artifact on a schedule. Test XML escaping, exact page boundaries, empty results, alias canonicalization, timestamp validity and >500 legacy rows. Cold and warm sitemap requests must perform zero upstream detail fetches. Do not silently drop all legacy URLs to meet the performance budget.
+
+## Validation, rollout and recovery
+
+Split this package into separately reviewable releases: 5A summaries; 5B feeds/provider; 5C rendering; 5D assets; 5E sitemaps. Shared contracts may require two deployments: server support first, consumer cutover second. Publish compatibility producers before new consumers and retain the old reader path until rollback is no longer needed.
+
+Run targeted regression tests, the full suite and packaging check; seed/update the isolated preview to produce both legacy and new contracts. Exercise desktop/mobile, direct links, failure states and old open clients. Take controlled before/after workload measurements with fixture sizes, device/viewport, cache state and sample count recorded. Use browser traces if available; otherwise report the missing capability and avoid inventing Core Web Vitals scores. Do not perform production load tests as part of ordinary smoke.
+
+After production publication, verify source revision, bounded summary response, one member fetch on detail open, feed generation/source/freshness, route-specific chunks, cache headers and zero request-path sitemap fan-out. Compare real scheduled errors, duration, rows read/written and fallback frequency with the prior observed window; small samples should remain labeled as such.
+
+For recovery, restore the prior consumer or published generation without reverting repaired writers. API compatibility and alias tables must permit this. A code rollback cannot recreate overwritten snapshots, which is why immutable/last-good objects are part of the producer design. Do not rollback to the old checkpoint-loss behavior merely to undo a rendering regression.
+
+## Handoff prompt
+
+> Implement package 5 in docs/remediation/05-performance-and-data-delivery.md after checking docs/remediation/README.md and the contracts completed by packages 2–4. Start with compact canonical summaries and on-demand members, then a complete feed snapshot contract, bounded rendering, lazy assets/cache headers and stored-data sitemaps. Preserve alerts, corrections, cluster identity/counts, historical links and legacy clients. Land producer support before consumer cutover. Use deterministic workload budgets and report measured before/after sizes, requests and render costs without claiming unmeasured latency/CWV improvements. Keep dependency majors separate and record each subrelease, validation and recovery path in the release ledger.

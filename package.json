@@ -10,7 +10,7 @@
     "preview": "wrangler dev --env preview --local",
     "test": "vitest run",
     "docs": "npx jsdoc -c jsdoc.json",
-    "deploy": "npm run deploy:production",
+    "deploy": "npm run release:production",
     "deploy:staging": "npm run deploy:preview",
     "deploy:production": "wrangler deploy --env production",
     "dev:ui": "vite",
@@ -18,7 +18,8 @@
     "deploy:preview": "wrangler deploy --env preview",
     "check:deploy": "wrangler deploy --env production --dry-run",
     "seed:preview": "node scripts/seed-preview.mjs",
-    "smoke": "node scripts/smoke-deployment.mjs"
+    "smoke": "node scripts/smoke-deployment.mjs",
+    "release:production": "node scripts/release-production.mjs --env production"
   },
   "dependencies": {
     "d3-array": "^3.2.4",

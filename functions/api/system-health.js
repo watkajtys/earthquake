@@ -48,13 +48,6 @@ async function onRequestGet5(context) {
         type: "text",
       });
       const kvDuration = Date.now() - kvStartTime;
-      await env.USGS_LAST_RESPONSE_KV.put(
-        "health-check",
-        JSON.stringify({
-          timestamp: Date.now(),
-          status: "healthy",
-        }),
-      );
       healthReport.components.kvStorage = {
         status: "healthy",
         responseTime: kvDuration,

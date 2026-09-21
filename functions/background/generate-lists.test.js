@@ -32,7 +32,10 @@ describe('cached earthquake list summary metadata', () => {
     };
   });
 
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it('preserves complete upstream properties while keeping existing fields and time windows', async () => {
     const events = [feature('daily', 0.1), feature('weekly', 3), feature('monthly', 20)];
@@ -89,7 +92,7 @@ describe('cached earthquake list summary metadata', () => {
 
   it('leaves D1 bootstrap rows detectably sparse until their own upstream refresh', async () => {
     const bootstrap = { id: 'bootstrap', magnitude: 4, place: 'Older event', event_time: now - 1000, latitude: 1, longitude: 2, depth: 3 };
-    const all = vi.fn().mockResolvedValue({ results: [bootstrap] });
+    const all = vi.fn().mockResolvedValue({ success: true, results: [bootstrap] });
     const bind = vi.fn().mockReturnValue({ all });
     env.DB = { prepare: vi.fn().mockReturnValue({ bind }) };
     env.GEOJSON_BUCKET.get.mockResolvedValue(null);
@@ -106,5 +109,87 @@ describe('cached earthquake list summary metadata', () => {
         alert: 'yellow', tsunami: 1, felt: 456, sig: 987,
       });
     }
+  });
+
+  it('retains every existing list when R2 reading fails, even if D1 is also unavailable', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    env.GEOJSON_BUCKET.get.mockRejectedValue(new Error('R2 unavailable'));
+    const all = vi.fn().mockRejectedValue(new Error('D1 unavailable'));
+    env.DB = { prepare: vi.fn().mockReturnValue({ bind: () => ({ all }) }) };
+
+    await expect(handleGenerateLists({ env, newFeatures: [feature('fresh')] }))
+      .rejects.toThrow('R2 unavailable');
+    expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+    // A failed read does not establish that the object is missing.
+    expect(env.DB.prepare).not.toHaveBeenCalled();
+  });
+
+  it('does not replace day/week when the later month bootstrap fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    env.GEOJSON_BUCKET.get.mockImplementation(async key => key === 'list-month.json'
+      ? null : { json: async () => [{ id: 'existing', event_time: now - 1000 }] });
+    const all = vi.fn().mockRejectedValue(new Error('D1 unavailable'));
+    env.DB = { prepare: vi.fn().mockReturnValue({ bind: () => ({ all }) }) };
+
+    await expect(handleGenerateLists({ env, newFeatures: [feature('fresh')] }))
+      .rejects.toThrow('D1 unavailable');
+    expect(env.GEOJSON_BUCKET.get).toHaveBeenCalledTimes(3);
+    expect(all).toHaveBeenCalledTimes(1);
+    expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+  });
+
+  it('requires a successful D1 read before creating a missing list', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    env.GEOJSON_BUCKET.get.mockResolvedValue(null);
+
+    await expect(handleGenerateLists({ env, newFeatures: [feature('fresh')] }))
+      .rejects.toThrow('DB binding is missing');
+    expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['unsuccessful D1 response', { success: false, results: [] }],
+    ['unconfirmed D1 response', { results: [] }],
+    ['missing D1 results', {}],
+  ])('does not treat %s as an empty list', async (_label, response) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    env.GEOJSON_BUCKET.get.mockResolvedValue(null);
+    env.DB = { prepare: () => ({ bind: () => ({ all: async () => response }) }) };
+
+    await expect(handleGenerateLists({ env, newFeatures: [feature('fresh')] }))
+      .rejects.toThrow('D1 bootstrap did not return a successful list');
+    expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+  });
+
+  it('accepts a confirmed empty D1 bootstrap result', async () => {
+    env.GEOJSON_BUCKET.get.mockResolvedValue(null);
+    env.DB = { prepare: () => ({ bind: () => ({ all: async () => ({ success: true, results: [] }) }) }) };
+
+    await handleGenerateLists({ env, newFeatures: [feature('fresh')] });
+
+    expect(env.GEOJSON_BUCKET.put).toHaveBeenCalledTimes(3);
+    for (const rows of written.values()) expect(rows.map(row => row.id)).toEqual(['fresh']);
+  });
+
+  it('preserves existing lists on malformed R2 JSON instead of bootstrapping over it', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    env.GEOJSON_BUCKET.get.mockResolvedValue({ json: async () => { throw new SyntaxError('Invalid JSON'); } });
+    env.DB = { prepare: vi.fn() };
+
+    await expect(handleGenerateLists({ env, newFeatures: [feature('fresh')] }))
+      .rejects.toThrow('Invalid JSON');
+    expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+    expect(env.DB.prepare).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['non-array', { events: [] }],
+    ['invalid row', [{ id: 'bad', event_time: null }]],
+  ])('does not publish over a %s snapshot', async (_label, snapshot) => {
+    env.GEOJSON_BUCKET.get.mockResolvedValue({ json: async () => snapshot });
+
+    await expect(handleGenerateLists({ env, newFeatures: [feature('fresh')] }))
+      .rejects.toThrow('Invalid cached earthquake list');
+    expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
   });
 });

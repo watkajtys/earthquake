@@ -17,15 +17,15 @@ describe('POST /api/calculate-clusters through the deployed Worker handler', () 
   it.each([null, {}, { earthquakes: 'invalid' }])('rejects a payload without an earthquake array: %j', async payload => {
     const response = await requestClusters(payload);
     expect(response.status).toBe(400);
-    expect(await response.text()).toContain('earthquakes must be an array');
+    expect(await response.json()).toMatchObject({ status: 'error', message: expect.any(String) });
   });
 
   it('rejects malformed JSON', async () => {
     const response = await worker.fetch(new Request('https://example.com/api/calculate-clusters', {
-      method: 'POST', headers: { 'User-Agent': 'Mozilla/5.0' }, body: '{',
+      method: 'POST', headers: { 'User-Agent': 'Mozilla/5.0', 'Content-Type': 'application/json' }, body: '{',
     }), {}, { waitUntil: vi.fn() });
     expect(response.status).toBe(400);
-    expect(await response.text()).toContain('Invalid JSON payload');
+    expect(await response.text()).toContain('Invalid JSON body');
   });
 
   it('returns the API response and caching headers for an empty array', async () => {
@@ -33,7 +33,7 @@ describe('POST /api/calculate-clusters through the deployed Worker handler', () 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('application/json');
     expect(response.headers.get('X-Cache-Hit')).toBe('false');
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(await response.json()).toEqual({ clusters: [], cacheHit: 'false' });
   });
 

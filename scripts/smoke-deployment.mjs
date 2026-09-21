@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Read-only release checks. Preview mode additionally verifies seeded fixture details.
+// GET-only release checks. Existing details can use the application's lazy cache.
 import assert from 'node:assert/strict';
 
 const args = process.argv.slice(2);
@@ -38,6 +38,7 @@ function queueAsset(reference, parent = base) {
 
 async function checkPage(path) {
   const response = await request(path, /text\/html/i);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store', `${path}: HTML must not be shared across user-agent variants`);
   const html = await response.text();
   assert.match(html, /id=["']root["']/, `${path}: missing React root`);
   const references = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css)(?:\?[^"']*)?)["']/g)];
@@ -77,16 +78,26 @@ try {
     const { response, data } = await readJson(`/api/get-earthquakes?timeWindow=${period}`);
     assert.equal(response.headers.get('X-Data-Source'), 'R2', `${period}: expected the R2 feed`);
     assert(Array.isArray(data), `${period}: expected an earthquake array`);
+    assert(data.length > 0, `${period}: published feed is unexpectedly empty`);
     if (preview) {
-      assert(data.length > 0, `${period}: seed the preview fixtures before checking`);
       assert(data.every((quake) => /^previewquake/.test(quake.id) && /SYNTHETIC PREVIEW/.test(quake.place)), `${period}: expected synthetic preview rows only`);
     }
     lists[period] = data;
   }
   const { data: clusters } = await readJson('/api/get-clusters');
   assert(Array.isArray(clusters), 'Expected a cluster array');
-  const { data: unknown } = await readJson('/api/unknown-deployment-smoke-check', 404);
+  const { response: unknownResponse, data: unknown } = await readJson('/api/unknown-deployment-smoke-check', 404);
   assert.equal(unknown.status, 'error', 'Unknown API route must return a structured JSON error');
+  assert.equal(unknownResponse.headers.get('Cache-Control'), 'no-store');
+  for (const path of ['/api/batch-usgs-fetch', '/api/backfill-earthquake-details', '/api/fix-enhanced-data-flag']) {
+    const { response } = await readJson(path, 405);
+    assert.equal(response.headers.get('Allow'), 'POST', `${path}: maintenance must require POST`);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  }
+  for (const path of ['/api/usgs-proxy?isCron=true', '/api/usgs-proxy?apiUrl=https%3A%2F%2Fexample.invalid%2Ffeed']) {
+    const { response } = await readJson(path, 400);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  }
 
   for (const path of ['/sitemap-index.xml', '/sitemap-static-pages.xml', '/sitemap-clusters.xml', '/sitemaps/earthquakes-1.xml']) {
     const response = await request(path, /(?:application|text)\/xml/i);
@@ -95,24 +106,26 @@ try {
     assert(!/<!--[^]*?(?:error|exception|database (?:not available|not configured))[^]*?-->/i.test(xml), `${path}: sitemap reports an internal error`);
   }
 
-  if (preview) {
-    assert(clusters.length > 0, 'Seed the preview cluster before checking');
-    assert(clusters.every((cluster) => /SYNTHETIC PREVIEW/.test(cluster.title)), 'Expected synthetic preview clusters only');
-    const quake = lists.day[0];
+  assert(clusters.length > 0, 'Expected a stored cluster for the release detail checks');
+  {
+    if (preview) assert(clusters.every((cluster) => /SYNTHETIC PREVIEW/.test(cluster.title)), 'Expected synthetic preview clusters only');
+    const cluster = clusters[0];
+    const quake = preview ? lists.day[0] : { id: cluster.strongestQuakeId };
+    assert(quake.id && /^[A-Za-z0-9_-]{1,100}$/.test(quake.id), 'Detail check requires a valid stored event ID');
     const { response, data: detail } = await readJson(`/api/earthquake/${encodeURIComponent(quake.id)}`);
-    assert.equal(response.headers.get('X-Data-Source'), 'R2-Storage', 'Preview detail must come from seeded R2 storage');
-    assert.equal(detail.id, quake.id);
+    if (preview) assert.equal(response.headers.get('X-Data-Source'), 'R2-Storage', 'Preview detail must come from seeded R2 storage');
+    assert(detail.id === quake.id || detail.properties?.ids?.split(',').includes(quake.id), 'Detail ID must match the requested event or its documented alias');
     assert.equal(detail.type, 'Feature');
     assert(Array.isArray(detail.geometry?.coordinates), 'Preview detail needs GeoJSON coordinates');
-    const cluster = clusters[0];
-    assert(cluster.id && cluster.strongestQuakeId && cluster.slug, 'Preview cluster needs canonical ID, strongest quake, and slug');
+    assert(cluster.id && cluster.strongestQuakeId && cluster.slug, 'Stored cluster needs canonical ID, strongest quake, and slug');
     for (const id of new Set([cluster.strongestQuakeId, cluster.id])) {
       const { data } = await readJson(`/api/cluster-detail-with-quakes?id=${encodeURIComponent(id)}`);
-      assert.equal(data.id, cluster.id, 'Cluster lookup returned a different cluster');
+      if (id === cluster.id) assert.equal(data.id, cluster.id, 'Canonical cluster lookup returned a different cluster');
+      else assert.equal(data.strongestQuakeId, id, 'Strongest-event lookup returned an unrelated cluster');
       assert(Array.isArray(data.quakes) && data.quakes.length > 0, 'Cluster detail must include stored earthquake summaries');
       assert(data.quakes.every((entry) => data.earthquakeIds.includes(entry.id)), 'Cluster quake IDs must match its definition');
     }
-    await checkPage(`/quake/m${quake.magnitude}-synthetic-preview-${encodeURIComponent(quake.id)}`);
+    await checkPage(`/quake/m${detail.properties.mag}-release-check-${encodeURIComponent(quake.id)}`);
     await checkPage(`/cluster/${encodeURIComponent(cluster.slug)}`);
   }
   await checkAssets();

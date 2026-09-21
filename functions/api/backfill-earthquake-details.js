@@ -1,394 +1,157 @@
 import { updateStatsInKV } from '../utils/kv-stats-updater.js';
+import { fetchValidatedDetail } from '../utils/usgs-transport.js';
+import { persistEarthquakeDetail } from '../utils/earthquakeDetailPersistence.js';
+import { readBoundedJson, RequestPolicyError, policyError } from '../../src/utils/workerRequestPolicy.js';
 
-function extractProductFlags(detailData) {
-  const flags = {
-    has_shakemap: false,
-    has_moment_tensor: false,
-    has_focal_mechanism: false,
-    has_dyfi: false,
-    has_losspager: false,
-    has_finite_fault: false,
-    has_enhanced_data: false,
-    // Computed flag
-    products_json: null,
-  };
-  if (!detailData?.properties?.products) {
-    return flags;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const jsonResponse = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
+
+function boundedNumber(value, fallback, name, min, max, integer, fromQuery) {
+  if (value === undefined || (fromQuery && value === null)) return fallback;
+  if (fromQuery && (typeof value !== 'string' || !/^-?\d+(?:\.\d+)?$/.test(value))) {
+    throw new RequestPolicyError(`Invalid ${name}.`);
   }
-  const products = detailData.properties.products;
-  flags.has_shakemap = !!(products.shakemap && products.shakemap.length > 0);
-  flags.has_moment_tensor = !!(
-    products["moment-tensor"] && products["moment-tensor"].length > 0
-  );
-  flags.has_focal_mechanism = !!(
-    products["focal-mechanism"] && products["focal-mechanism"].length > 0
-  );
-  flags.has_dyfi = !!(products.dyfi && products.dyfi.length > 0);
-  flags.has_losspager = !!(products.losspager && products.losspager.length > 0);
-  flags.has_finite_fault = !!(
-    products["finite-fault"] && products["finite-fault"].length > 0
-  );
-  flags.has_enhanced_data =
-    flags.has_shakemap ||
-    flags.has_moment_tensor ||
-    flags.has_focal_mechanism ||
-    flags.has_finite_fault ||
-    flags.has_losspager ||
-    flags.has_dyfi;
-  const productKeys = Object.keys(products);
-  flags.products_json = JSON.stringify(productKeys);
-  return flags;
+  const number = fromQuery ? Number(value) : value;
+  if (!Number.isFinite(number) || number < min || number > max || (integer && !Number.isInteger(number))) {
+    throw new RequestPolicyError(`Invalid ${name}.`);
+  }
+  return number;
 }
-async function onRequestGet8(context) {
+
+function parameters(input, fromQuery = false) {
+  const get = name => fromQuery ? input.get(name) : input[name];
+  return {
+    batchSize: boundedNumber(get('batch_size'), 10, 'batch_size', 1, 100, true, fromQuery),
+    minMagnitude: boundedNumber(get('min_magnitude'), 3, 'min_magnitude', -2, 10, false, fromQuery),
+    maxAgeDays: boundedNumber(get('max_age_days'), 365, 'max_age_days', 1, 365, true, fromQuery),
+  };
+}
+
+function pendingSelection(criteria, now) {
+  return {
+    where: `detail_fetched = FALSE
+      AND COALESCE(detail_fetch_attempts, 0) < 3
+      AND ((COALESCE(detail_fetch_attempts, 0) = 0 AND event_time <= ? AND
+              (next_detail_fetch_attempt IS NULL OR next_detail_fetch_attempt <= ?))
+        OR (next_detail_fetch_attempt IS NOT NULL AND next_detail_fetch_attempt <= ?))
+      AND magnitude >= ? AND event_time >= ?`,
+    values: [now - 45 * 60 * 1000, now, now, criteria.minMagnitude, now - criteria.maxAgeDays * DAY_MS],
+  };
+}
+
+function safeFailure(error) {
+  if (error instanceof RequestPolicyError) return policyError(error.message, error.status);
+  console.error('[backfill] Operation failed:', error);
+  return policyError('Backfill operation failed.', 500);
+}
+
+// Internal scheduled entrypoint. The Worker rejects public GET requests and
+// authenticates POST requests before invoking this module.
+async function onRequestGet(context) {
   const { request, env } = context;
-  const url = new URL(request.url);
-  const batchSize = Math.min(
-    parseInt(url.searchParams.get("batch_size") || "10"),
-    100,
-  );
-  const minMagnitude = parseFloat(
-    url.searchParams.get("min_magnitude") || "3.0",
-  );
-  const maxAgeDays = parseInt(url.searchParams.get("max_age_days") || "365");
-  const continueFrom = url.searchParams.get("continue_from");
-  if (!env.DB) {
-    return jsonResponse2({ error: "Database not configured" }, 500);
-  }
-  const startTime = Date.now();
-  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1e3;
-  const minEventTime = Date.now() - maxAgeMs;
   try {
-    const fortyFiveMinutesAgo = Date.now() - 45 * 60 * 1e3;
-    let query = `
-      SELECT id, magnitude, place, event_time, usgs_detail_url, detail_fetch_attempts
-      FROM EarthquakeEvents
-      WHERE
-        detail_fetched = FALSE
-        AND detail_fetch_attempts < 3 -- Max 3 retries
-        AND (
-          -- First attempt: event must be at least 45 minutes old to allow for data availability
-          ((detail_fetch_attempts = 0 OR detail_fetch_attempts IS NULL) AND event_time <= ?) OR
-          -- Retry attempt: scheduled retry time must be in the past
-          (next_detail_fetch_attempt IS NOT NULL AND next_detail_fetch_attempt <= ?)
-        )
-        AND magnitude >= ?
-        AND event_time >= ?
-    `;
-    const params = [
-      fortyFiveMinutesAgo,
-      Date.now(),
-      minMagnitude,
-      minEventTime,
-    ];
-    if (continueFrom) {
-      query += ` AND id > ?`;
-      params.push(continueFrom);
-    }
-    query += ` ORDER BY magnitude DESC, event_time DESC LIMIT ?`;
-    params.push(batchSize);
-    const stmt = env.DB.prepare(query).bind(...params);
-    const result = await stmt.all();
-    if (!result.results || result.results.length === 0) {
-      return jsonResponse2({
-        message: "No earthquakes to backfill",
-        criteria: { minMagnitude, maxAgeDays, batchSize },
-      });
-    }
-    const earthquakes = result.results;
+    const url = new URL(request.url);
+    const criteria = parameters(url.searchParams, true);
+    if (!env.DB) return policyError('Database not configured.', 500);
+    const startTime = Date.now();
+    const selection = pendingSelection(criteria, startTime);
+    const result = await env.DB.prepare(`
+      SELECT id, magnitude, detail_fetch_attempts FROM EarthquakeEvents
+      WHERE ${selection.where}
+      ORDER BY magnitude DESC, event_time DESC, id ASC LIMIT ?
+    `).bind(...selection.values, criteria.batchSize).all();
+    if (result?.success !== true || !Array.isArray(result.results)) throw new Error('Failed to select pending earthquake details');
     const processed = [];
     const errors = [];
-    console.log(`[backfill] Processing ${earthquakes.length} earthquakes`);
-    for (const earthquake of earthquakes) {
+    for (const [index, earthquake] of result.results.entries()) {
+      let fetchedDetail = false;
       try {
-        const detailUrl =
-          earthquake.usgs_detail_url ||
-          `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${earthquake.id}.geojson`;
-        console.log(
-          `[backfill] Fetching details for ${earthquake.id} (M${earthquake.magnitude})`,
-        );
-        const response = await fetch(detailUrl, {
-          headers: {
-            "User-Agent":
-              "EarthquakesLive-Backfill/1.0 (+https://earthquakeslive.com)",
-          },
+        // Never fetch the stored detail URL: only the validated official URL
+        // derived from the selected event ID is permitted.
+        const detailData = await fetchValidatedDetail(earthquake.id);
+        fetchedDetail = true;
+        const { flags, archiveDisposition } = await persistEarthquakeDetail({
+          env, detailData, requestedId: earthquake.id, previousAttempts: earthquake.detail_fetch_attempts || 0,
         });
-        const responseText = await response.text();
-        if (!response.ok) {
-          if (response.status === 409) {
-            const attempts = earthquake.detail_fetch_attempts || 0;
-            const nextAttempt = scheduleRetry(attempts);
-            console.log(
-              `[backfill] Received 409 for ${earthquake.id}. Scheduling retry.`,
-            );
-            const retryStmt = env.DB.prepare(
-              `
-              UPDATE EarthquakeEvents
-              SET detail_fetch_attempts = ?,
-                  last_detail_fetch_attempt = ?,
-                  next_detail_fetch_attempt = ?
-              WHERE id = ?
-            `,
-            ).bind(attempts + 1, Date.now(), nextAttempt, earthquake.id);
-            await retryStmt.run();
-            errors.push({
-              id: earthquake.id,
-              error: `USGS API returned 409. Scheduled retry.`,
-              status: 409,
-            });
-          } else {
-            throw new Error(
-              `USGS API returned ${response.status}: ${responseText}`,
-            );
-          }
-          continue;
-        }
-        const detailData = JSON.parse(responseText);
-        const flags = extractProductFlags(detailData);
-        const updateStmt = env.DB.prepare(
-          `
-          UPDATE EarthquakeEvents
-          SET has_shakemap = ?,
-              has_moment_tensor = ?,
-              has_focal_mechanism = ?,
-              has_dyfi = ?,
-              has_losspager = ?,
-              has_finite_fault = ?,
-              has_enhanced_data = ?,
-              products_json = ?,
-              detail_fetched = TRUE,
-              detail_fetch_time = ?,
-              detail_fetch_attempts = ? -- Record the successful attempt
-          WHERE id = ?
-        `,
-        ).bind(
-          flags.has_shakemap,
-          flags.has_moment_tensor,
-          flags.has_focal_mechanism,
-          flags.has_dyfi,
-          flags.has_losspager,
-          flags.has_finite_fault,
-          flags.has_enhanced_data,
-          flags.products_json,
-          Date.now(),
-          (earthquake.detail_fetch_attempts || 0) + 1,
-          earthquake.id,
-        );
-        await updateStmt.run();
-        const statsToUpdate = {
-          fetched: 1,
-          with_shakemap: flags.has_shakemap ? 1 : 0,
-          with_moment_tensor: flags.has_moment_tensor ? 1 : 0,
-        };
-        const statsUpdatePromise = updateStatsInKV(
-          context,
-          "USGS_LAST_RESPONSE_KV",
-          "earthquake_stats",
-          statsToUpdate,
-        );
-        context.ctx.waitUntil(statsUpdatePromise);
-        if (env.GEOJSON_QUEUE) {
-          await env.GEOJSON_QUEUE.send({
-            id: earthquake.id,
-            geojson: detailData,
-          });
-          console.log(
-            `[backfill] Queued GeoJSON for ${earthquake.id} for R2 archiving.`,
-          );
+        // These legacy counters remain approximate until the D1 statistics
+        // migration. Their failure must not undo a completed detail operation.
+        if (env.USGS_LAST_RESPONSE_KV) {
+          const update = updateStatsInKV(context, 'USGS_LAST_RESPONSE_KV', 'earthquake_stats', {
+            fetched: 1, with_shakemap: Number(flags.has_shakemap), with_moment_tensor: Number(flags.has_moment_tensor),
+          }).catch(error => console.error('[backfill] Approximate statistics update failed:', error));
+          if (context.ctx?.waitUntil) context.ctx.waitUntil(update);
+          else await update;
         }
         processed.push({
-          id: earthquake.id,
-          magnitude: earthquake.magnitude,
+          id: earthquake.id, magnitude: earthquake.magnitude, archive_disposition: archiveDisposition,
           products_found: {
-            shakemap: flags.has_shakemap,
-            moment_tensor: flags.has_moment_tensor,
-            focal_mechanism: flags.has_focal_mechanism,
-            dyfi: flags.has_dyfi,
-            losspager: flags.has_losspager,
-            finite_fault: flags.has_finite_fault,
+            shakemap: flags.has_shakemap, moment_tensor: flags.has_moment_tensor,
+            focal_mechanism: flags.has_focal_mechanism, dyfi: flags.has_dyfi,
+            losspager: flags.has_losspager, finite_fault: flags.has_finite_fault,
           },
         });
-        await delay(1e3);
       } catch (error) {
-        console.error(
-          `[backfill] Error processing ${earthquake.id}: ${error.message}`,
-        );
+        console.error(`[backfill] Detail operation failed for ${earthquake.id}:`, error);
         const attempts = earthquake.detail_fetch_attempts || 0;
-        const nextAttempt = scheduleRetry(attempts);
-        const retryStmt = env.DB.prepare(
-          `
-          UPDATE EarthquakeEvents
-          SET detail_fetch_attempts = ?,
-              last_detail_fetch_attempt = ?,
-              next_detail_fetch_attempt = ?
-          WHERE id = ?
-        `,
-        ).bind(attempts + 1, Date.now(), nextAttempt, earthquake.id);
-        context.ctx.waitUntil(retryStmt.run());
-        errors.push({
-          id: earthquake.id,
-          error: error.message,
-        });
+        // Infrastructure failures do not consume the upstream fetch budget.
+        // Await scheduling so a successful HTTP response cannot hide its loss.
+        const retry = await env.DB.prepare(`
+          UPDATE EarthquakeEvents SET
+            detail_fetch_attempts = MAX(COALESCE(detail_fetch_attempts, 0), ?),
+            last_detail_fetch_attempt = ?, next_detail_fetch_attempt = ?
+          WHERE id = ? AND detail_fetched = FALSE
+        `).bind(
+          fetchedDetail ? attempts : attempts + 1,
+          Date.now(), Date.now() + (fetchedDetail ? HOUR_MS : [HOUR_MS, 4 * HOUR_MS, 12 * HOUR_MS][attempts]),
+          earthquake.id,
+        ).run();
+        if (retry?.success !== true) throw new Error('Failed to persist detail retry');
+        errors.push({ id: earthquake.id, error: fetchedDetail ? 'Detail persistence failed; retry scheduled.' : 'USGS detail fetch failed; retry scheduled.',
+          ...(error.upstreamStatus ? { status: error.upstreamStatus } : {}) });
       }
+      if (index + 1 < result.results.length) await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    let stats = {};
-    if (env.USGS_LAST_RESPONSE_KV) {
-      try {
-        stats =
-          (await env.USGS_LAST_RESPONSE_KV.get("earthquake_stats", "json")) ||
-          {};
-        console.log(`[backfill] Successfully read stats from KV.`);
-      } catch (e) {
-        console.error(`[backfill] Error reading stats from KV: ${e.message}`);
-      }
-    }
-    const elapsedSeconds = (Date.now() - startTime) / 1e3;
-    const lastProcessedId =
-      processed.length > 0 ? processed[processed.length - 1].id : null;
-    return jsonResponse2({
-      success: true,
-      processed: processed.length,
-      errors: errors.length,
-      elapsed_seconds: elapsedSeconds,
-      last_processed_id: lastProcessedId,
-      continue_url: lastProcessedId
-        ? `${url.pathname}?batch_size=${batchSize}&min_magnitude=${minMagnitude}&max_age_days=${maxAgeDays}&continue_from=${lastProcessedId}`
-        : null,
-      statistics: {
-        total_earthquakes: stats.total_earthquakes || 0,
-        total_fetched: stats.fetched || 0,
-        remaining: (stats.total_earthquakes || 0) - (stats.fetched || 0),
-        with_shakemap: stats.with_shakemap || 0,
-        with_moment_tensor: stats.with_moment_tensor || 0,
-        completion_percentage: (
-          ((stats.fetched || 0) / (stats.total_earthquakes || 1)) *
-          100
-        ).toFixed(2),
-        // Avoid division by zero
-      },
-      processed_earthquakes: processed,
-      error_earthquakes: errors,
+    const nextUrl = new URL(url.pathname, 'https://internal.invalid');
+    nextUrl.searchParams.set('batch_size', String(criteria.batchSize));
+    nextUrl.searchParams.set('min_magnitude', String(criteria.minMagnitude));
+    nextUrl.searchParams.set('max_age_days', String(criteria.maxAgeDays));
+    return jsonResponse({
+      success: errors.length === 0, processed: processed.length, errors: errors.length,
+      elapsed_seconds: (Date.now() - startTime) / 1000,
+      last_processed_id: processed.at(-1)?.id || null,
+      // Advisory internal URL only. Each invocation selects the next eligible
+      // rows; lexical IDs cannot be a cursor for magnitude/time ordering.
+      continue_url: result.results.length ? `${nextUrl.pathname}${nextUrl.search}` : null,
+      criteria, processed_earthquakes: processed, error_earthquakes: errors,
+      ...(result.results.length ? {} : { message: 'No earthquakes to backfill' }),
     });
   } catch (error) {
-    console.error(`[backfill] Unexpected error: ${error.message}`, error);
-    return jsonResponse2(
-      {
-        error: `Unexpected error: ${error.message}`,
-        stack: error.stack,
-      },
-      500,
-    );
+    return safeFailure(error);
   }
 }
-async function onRequestPost(context) {
-  const { env } = context;
-  if (!env.DB) {
-    return jsonResponse2({ error: "Database not configured" }, 500);
-  }
-  try {
-    const cacheKey = "backfill_post_count_v1";
-    let total = null;
-    let cacheStatus = "MISS";
-    if (env.USGS_LAST_RESPONSE_KV) {
-      try {
-        const cachedResult = await env.USGS_LAST_RESPONSE_KV.get(
-          cacheKey,
-          "json",
-        );
-        if (cachedResult && typeof cachedResult.total === "number") {
-          total = cachedResult.total;
-          cacheStatus = "HIT";
-          console.log(`[backfill-post] Count cache HIT. Total: ${total}`);
-        }
-      } catch (e) {
-        console.error(
-          `[backfill-post] Error reading count from KV cache: ${e.message}`,
-        );
-      }
-    }
-    if (cacheStatus === "MISS") {
-      console.log(`[backfill-post] Count cache MISS. Querying D1 for count.`);
-      const countStmt = env.DB.prepare(`
-        SELECT COUNT(*) as total
-        FROM EarthquakeEvents
-        WHERE detail_fetched = FALSE
-          AND magnitude >= 3.0
-      `);
-      const countResult = await countStmt.first();
-      total = countResult.total;
-      if (env.USGS_LAST_RESPONSE_KV) {
-        context.ctx.waitUntil(
-          env.USGS_LAST_RESPONSE_KV.put(cacheKey, JSON.stringify({ total }), {
-            expirationTtl: 300,
-            // 5 minutes
-          }).catch((e) => {
-            console.error(
-              `[backfill-post] Error writing count to KV cache: ${e.message}`,
-            );
-          }),
-        );
-      }
-    }
-    if (total === 0) {
-      return jsonResponse2({
-        message: "All earthquakes already have detail data",
-        total_fetched: total,
-      });
-    }
-    if (env.USGS_LAST_RESPONSE_KV) {
-      await env.USGS_LAST_RESPONSE_KV.put(
-        "backfill_status",
-        JSON.stringify({
-          status: "started",
-          total,
-          processed: 0,
-          started_at: /* @__PURE__ */ new Date().toISOString(),
-        }),
-        {
-          expirationTtl: 86400,
-          // 24 hours
-        },
-      );
-    }
-    return jsonResponse2({
-      message: "Backfill job initiated",
-      total_to_process: total,
-      estimated_hours: (total / 3600).toFixed(2),
-      note: "Use GET endpoint with batch processing to execute the backfill",
-    });
-  } catch (error) {
-    console.error(`[backfill] Error initiating backfill: ${error.message}`);
-    return jsonResponse2(
-      {
-        error: `Failed to initiate backfill: ${error.message}`,
-      },
-      500,
-    );
-  }
-}
-const jsonResponse2 = (data, status = 200) => {
-      return new Response(JSON.stringify(data), {
-        status,
-        headers: { "Content-Type": "application/json" },
-      });
-    };
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const scheduleRetry = (attempts) => {
-      const now = Date.now();
-      let delay2;
-      switch (attempts) {
-        case 0:
-          delay2 = 60 * 60 * 1e3;
-          break;
-        case 1:
-          delay2 = 4 * 60 * 60 * 1e3;
-          break;
-        case 2:
-          delay2 = 12 * 60 * 60 * 1e3;
-          break;
-        default:
-          return null;
-      }
-      return now + delay2;
-    };
 
-export { onRequestGet8 as onRequestGet, onRequestPost };
+async function onRequestPost(context) {
+  try {
+    const body = await readBoundedJson(context.request, 4096);
+    if (!['run_batch', 'status'].includes(body.operation)) throw new RequestPolicyError('operation must be run_batch or status.');
+    const criteria = parameters(body);
+    if (!context.env.DB) return policyError('Database not configured.', 500);
+    if (body.operation === 'run_batch') {
+      const url = new URL('https://internal.invalid/api/backfill-earthquake-details');
+      url.searchParams.set('batch_size', String(criteria.batchSize));
+      url.searchParams.set('min_magnitude', String(criteria.minMagnitude));
+      url.searchParams.set('max_age_days', String(criteria.maxAgeDays));
+      return onRequestGet({ ...context, request: new Request(url) });
+    }
+    const selection = pendingSelection(criteria, Date.now());
+    const result = await context.env.DB.prepare(`SELECT COUNT(*) AS total FROM EarthquakeEvents WHERE ${selection.where}`)
+      .bind(...selection.values).first();
+    if (!Number.isSafeInteger(result?.total) || result.total < 0) throw new Error('Failed to count pending earthquake details');
+    return jsonResponse({ success: true, operation: 'status', eligible_count: result.total, criteria });
+  } catch (error) {
+    return safeFailure(error);
+  }
+}
+
+export { onRequestGet, onRequestPost };

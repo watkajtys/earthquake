@@ -15,6 +15,7 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/cypress/**',
+      '**/.reconciliation.local/**', // Local audit reproductions assert historical defects, not release behavior.
       '**/.{idea,git,cache,output,temp}/**',
       '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',
       'src/components/InteractiveGlobeView.test.jsx', // Exclude this specific test file

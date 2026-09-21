@@ -216,7 +216,7 @@ async function storeClusterDefinitions(db, clusters) {
                 title = ?, description = ?, significanceScore = ?, version = ?,
                 updatedAt = CURRENT_TIMESTAMP
             WHERE id = ?`;
-          await db
+          const updateResult = await db
             .prepare(updateSql)
             .bind(
               JSON.stringify(newEarthquakeIds),
@@ -238,6 +238,7 @@ async function storeClusterDefinitions(db, clusters) {
               existingDefinition.id,
             )
             .run();
+          if (updateResult?.success !== true) throw new Error("Cluster update was not confirmed");
           console.log(
             `storeClusterDefinitions: Successfully updated definition for cluster with stableKey ${stableKey}`,
           );
@@ -277,7 +278,7 @@ async function storeClusterDefinitions(db, clusters) {
             db,
             clusterDataForStoreUtil,
           );
-          if (result.success) {
+          if (result?.success === true) {
             console.log(
               `storeClusterDefinitions: Successfully stored new definition for cluster ${newClusterId}`,
             );
@@ -306,9 +307,10 @@ async function storeClusterDefinitions(db, clusters) {
   console.log(
     `storeClusterDefinitions: Finished processing. Found ${significantClusterCount} significant clusters. Processed: ${processedCount}, Errors: ${errorCount}.`,
   );
+  if (errorCount) throw new Error(`Cluster persistence failed for ${errorCount} definitions; retaining the previous published snapshot`);
 }
 var process_cluster_definitions_default = {
-  async scheduled(controller, env, ctx) {
+  async scheduled(controller, env) {
     console.log("process-cluster-definitions: Cron job started.");
     try {
       const thirtyDaysAgo = /* @__PURE__ */ new Date();
@@ -317,8 +319,10 @@ var process_cluster_definitions_default = {
       const stmt = env.DB.prepare(
         "SELECT id, event_time, latitude, longitude, depth, magnitude, place FROM EarthquakeEvents WHERE event_time > ?",
       ).bind(thirtyDaysAgoTimestamp);
-      const { results } = await stmt.all();
-      if (!results || results.length === 0) {
+      const readResult = await stmt.all();
+      if (readResult?.success !== true || !Array.isArray(readResult.results)) throw new Error("Recent-earthquake query failed");
+      const { results } = readResult;
+      if (results.length === 0) {
         console.log(
           "process-cluster-definitions: No recent earthquakes found. Exiting.",
         );
@@ -380,7 +384,9 @@ var process_cluster_definitions_default = {
           ORDER BY significanceScore DESC
         `,
         ).bind(thirtyDaysAgoTimestamp);
-        const { results: activeClusters } = await stmt2.all();
+        const clusterResult = await stmt2.all();
+        if (clusterResult?.success !== true || !Array.isArray(clusterResult.results)) throw new Error("Active-cluster query failed");
+        const activeClusters = clusterResult.results;
         try {
           const cacheKey = "active_clusters";
           await env.CLUSTER_KV.put(cacheKey, JSON.stringify(activeClusters), {
@@ -396,6 +402,7 @@ var process_cluster_definitions_default = {
             kvError.message,
             kvError.stack,
           );
+          throw kvError;
         }
       }
       console.log(
@@ -407,6 +414,7 @@ var process_cluster_definitions_default = {
         error.message,
         error.stack,
       );
+      throw error;
     }
   },
 };

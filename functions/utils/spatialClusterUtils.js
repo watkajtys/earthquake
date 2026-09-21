@@ -1,8 +1,10 @@
-import { calculateBoundingBox, isPointInBoundingBox } from '../../src/utils/geoSpatialUtils.js';
+import { calculateBoundingBox, isPointInBoundingBox, isValidCoordinate, gridCellRanges, createSpatialWorkBudget } from '../../src/utils/geoSpatialUtils.js';
 import { calculateDistance } from './mathUtils.js';
 
 var EarthquakeSpatialIndex = class {
-  constructor(bounds, cellSize = 1) {
+  constructor(bounds, cellSize = 1, workBudget = createSpatialWorkBudget()) {
+    gridCellRanges(bounds, cellSize, bounds);
+    this.workBudget = workBudget;
     this.bounds = bounds;
     this.cellSize = cellSize;
     this.grid = /* @__PURE__ */ new Map();
@@ -40,6 +42,7 @@ var EarthquakeSpatialIndex = class {
       return false;
     }
     const [lng, lat] = coords;
+    if (!isValidCoordinate(lat, lng)) return false;
     if (
       lng < this.bounds.west ||
       lng > this.bounds.east ||
@@ -48,6 +51,7 @@ var EarthquakeSpatialIndex = class {
     ) {
       return false;
     }
+    this.workBudget.consume();
     const cellKey = this._getCellKey(lat, lng);
     const earthquakeId = id || earthquake.id;
     if (!this.grid.has(cellKey)) {
@@ -81,6 +85,7 @@ var EarthquakeSpatialIndex = class {
     const results = [];
     let exactDistanceCalculations = 0;
     for (const candidate of candidates) {
+      this.workBudget.consume();
       const distance = calculateDistance(
         centerLat,
         centerLng,
@@ -107,22 +112,16 @@ var EarthquakeSpatialIndex = class {
    */
   _getCandidatesInBounds(bbox) {
     const candidates = [];
-    const startRow = Math.max(
-      0,
-      Math.floor((bbox.south - this.bounds.south) / this.cellSize),
-    );
-    const endRow = Math.floor((bbox.north - this.bounds.south) / this.cellSize);
-    const startCol = Math.max(
-      0,
-      Math.floor((bbox.west - this.bounds.west) / this.cellSize),
-    );
-    const endCol = Math.floor((bbox.east - this.bounds.west) / this.cellSize);
-    for (let row = startRow; row <= endRow; row++) {
-      for (let col = startCol; col <= endCol; col++) {
-        const cellKey = `${row},${col}`;
-        const cellEarthquakes = this.grid.get(cellKey);
-        if (cellEarthquakes) {
-          cellEarthquakes.forEach((item) => candidates.push(item));
+    for (const { startRow, endRow, startCol, endCol } of gridCellRanges(this.bounds, this.cellSize, bbox)) {
+      for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) {
+          this.workBudget.consume();
+          const cellKey = `${row},${col}`;
+          const cellEarthquakes = this.grid.get(cellKey);
+          if (cellEarthquakes) for (const item of cellEarthquakes) {
+            this.workBudget.consume();
+            candidates.push(item);
+          }
         }
       }
     }
@@ -186,18 +185,13 @@ var EarthquakeSpatialIndex = class {
     if (!earthquakes || earthquakes.length === 0) {
       return 1;
     }
-    const _avgLat =
-      earthquakes.reduce((sum, eq) => {
-        const coords = eq.geometry?.coordinates;
-        return sum + (coords ? coords[1] : 0);
-      }, 0) / earthquakes.length;
     const degreesPerKm = 1 / 110.574;
     const baseCellSize = maxDistanceKm * degreesPerKm;
     const densityFactor = Math.min(2, earthquakes.length / 1e3);
     return Math.max(0.1, baseCellSize * (1 + densityFactor));
   }
 };
-function buildEarthquakeSpatialIndex(earthquakes, maxDistanceKm = 100) {
+function buildEarthquakeSpatialIndex(earthquakes, maxDistanceKm = 100, workBudget = createSpatialWorkBudget()) {
   if (!earthquakes || earthquakes.length === 0) {
     return null;
   }
@@ -206,19 +200,13 @@ function buildEarthquakeSpatialIndex(earthquakes, maxDistanceKm = 100) {
   let minLng = Infinity,
     maxLng = -Infinity;
   const validEarthquakes = earthquakes.filter((eq) => {
-    const coords = eq.geometry?.coordinates;
+    workBudget.consume();
+    const coords = eq?.geometry?.coordinates;
     if (!coords || !Array.isArray(coords) || coords.length < 2) {
       return false;
     }
     const [lng, lat] = coords;
-    if (
-      typeof lat !== "number" ||
-      typeof lng !== "number" ||
-      isNaN(lat) ||
-      isNaN(lng)
-    ) {
-      return false;
-    }
+    if (!isValidCoordinate(lat, lng)) return false;
     minLat = Math.min(minLat, lat);
     maxLat = Math.max(maxLat, lat);
     minLng = Math.min(minLng, lng);
@@ -231,41 +219,46 @@ function buildEarthquakeSpatialIndex(earthquakes, maxDistanceKm = 100) {
   const latBuffer = Math.max(0.1, (maxLat - minLat) * 0.1);
   const lngBuffer = Math.max(0.1, (maxLng - minLng) * 0.1);
   const bounds = {
-    north: maxLat + latBuffer,
-    south: minLat - latBuffer,
-    east: maxLng + lngBuffer,
-    west: minLng - lngBuffer,
+    north: Math.min(90, maxLat + latBuffer),
+    south: Math.max(-90, minLat - latBuffer),
+    east: Math.min(180, maxLng + lngBuffer),
+    west: Math.max(-180, minLng - lngBuffer),
   };
   const cellSize = EarthquakeSpatialIndex.calculateOptimalCellSize(
     validEarthquakes,
     maxDistanceKm,
   );
-  const spatialIndex = new EarthquakeSpatialIndex(bounds, cellSize);
+  const spatialIndex = new EarthquakeSpatialIndex(bounds, cellSize, workBudget);
   validEarthquakes.forEach((earthquake) => {
     spatialIndex.insert(earthquake);
   });
   return spatialIndex;
 }
-function findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes) {
+function findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes, { maxWork = 1_000_000 } = {}) {
+  if (!Number.isFinite(maxDistanceKm) || maxDistanceKm < 0 || !Number.isSafeInteger(minQuakes) || minQuakes < 1) {
+    throw new RangeError('Expected a finite nonnegative distance and positive minimum quake count.');
+  }
+  const workBudget = createSpatialWorkBudget(maxWork);
   if (!earthquakes || earthquakes.length === 0) {
     return [];
   }
   if (!earthquakes || earthquakes.length < minQuakes) {
     return [];
   }
-  const spatialIndex = buildEarthquakeSpatialIndex(earthquakes, maxDistanceKm);
+  const spatialIndex = buildEarthquakeSpatialIndex(earthquakes, maxDistanceKm, workBudget);
   if (!spatialIndex) {
     return [];
   }
   const sortedEarthquakes = [...earthquakes].sort((a, b) => {
-    const magA = a.properties?.mag || 0;
-    const magB = b.properties?.mag || 0;
+    const magA = a?.properties?.mag || 0;
+    const magB = b?.properties?.mag || 0;
     return magB - magA;
   });
   const processedQuakeIds = /* @__PURE__ */ new Set();
   const clusters = [];
   for (const baseQuake of sortedEarthquakes) {
-    if (!baseQuake.id || processedQuakeIds.has(baseQuake.id)) {
+    workBudget.consume();
+    if (!baseQuake?.id || processedQuakeIds.has(baseQuake.id)) {
       continue;
     }
     const baseCoords = baseQuake.geometry?.coordinates;
@@ -276,6 +269,7 @@ function findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes) {
       continue;
     }
     const [baseLng, baseLat] = baseCoords;
+    if (!isValidCoordinate(baseLat, baseLng)) continue;
     const nearbyEarthquakes = spatialIndex.findWithinRadius(
       baseLat,
       baseLng,
@@ -284,6 +278,7 @@ function findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes) {
     const newCluster = [baseQuake];
     processedQuakeIds.add(baseQuake.id);
     for (const nearbyItem of nearbyEarthquakes) {
+      workBudget.consume();
       const nearbyQuake = nearbyItem.earthquake;
       if (
         nearbyQuake.id === baseQuake.id ||
@@ -296,23 +291,9 @@ function findActiveClustersOptimized(earthquakes, maxDistanceKm, minQuakes) {
         processedQuakeIds.add(nearbyQuake.id);
       }
     }
-    if (newCluster.length >= minQuakes) {
-      const newClusterQuakeIds = new Set(newCluster.map((q) => q.id));
-      let isDuplicate = false;
-      for (const existingCluster of clusters) {
-        const existingIds = new Set(existingCluster.map((q) => q.id));
-        if (
-          newClusterQuakeIds.size === existingIds.size &&
-          [...newClusterQuakeIds].every((id) => existingIds.has(id))
-        ) {
-          isDuplicate = true;
-          break;
-        }
-      }
-      if (!isDuplicate) {
-        clusters.push(newCluster);
-      }
-    }
+    // Processed IDs make clusters disjoint; a second quadratic duplicate scan
+    // cannot remove any additional cluster and defeats the work bound.
+    if (newCluster.length >= minQuakes) clusters.push(newCluster);
   }
   return clusters;
 }

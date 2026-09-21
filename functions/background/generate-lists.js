@@ -18,14 +18,17 @@ async function fetchInitialEarthquakeDataFromD1(db, timeWindow) {
   `;
   try {
     const stmt = db.prepare(query).bind(startTimeMilliseconds);
-    const { results } = await stmt.all();
-    return results || [];
+    const result = await stmt.all();
+    if (result?.success !== true || !Array.isArray(result?.results)) {
+      throw new Error("D1 bootstrap did not return a successful list");
+    }
+    return result.results;
   } catch (error) {
     console.error(
       `[generate-lists] D1 bootstrap query failed for '${timeWindow}':`,
       error,
     );
-    return [];
+    throw error;
   }
 }
 var transformFeatureToListObject = (feature) => {
@@ -75,6 +78,7 @@ async function handleGenerateLists({ env, newFeatures }) {
   }
   const timeWindows = ["day", "week", "month"];
   const now = /* @__PURE__ */ new Date();
+  const replacements = [];
   for (const timeWindow of timeWindows) {
     const fileName = `list-${timeWindow}.json`;
     let existingData = [];
@@ -86,26 +90,19 @@ async function handleGenerateLists({ env, newFeatures }) {
         console.log(
           `[generate-lists] R2 object '${fileName}' not found. Attempting to bootstrap from D1.`,
         );
-        if (DB) {
-          existingData = await fetchInitialEarthquakeDataFromD1(DB, timeWindow);
-        } else {
-          console.warn(
-            `[generate-lists] Cannot bootstrap '${fileName}': DB binding is missing. Starting with an empty list.`,
-          );
-        }
+        if (!DB) throw new Error(`Cannot bootstrap '${fileName}': DB binding is missing`);
+        existingData = await fetchInitialEarthquakeDataFromD1(DB, timeWindow);
       }
     } catch (e) {
       console.error(
-        `[generate-lists] Error reading or parsing R2 object '${fileName}'. Attempting to bootstrap from D1.`,
+        `[generate-lists] Could not safely load '${fileName}'. Retaining existing lists.`,
         e,
       );
-      if (DB) {
-        existingData = await fetchInitialEarthquakeDataFromD1(DB, timeWindow);
-      } else {
-        console.warn(
-          `[generate-lists] Cannot bootstrap '${fileName}' after parse error: DB binding is missing. Starting fresh.`,
-        );
-      }
+      throw e;
+    }
+    if (!Array.isArray(existingData) || existingData.some(eq =>
+      !eq || typeof eq.id !== "string" || !eq.id || !Number.isFinite(eq.event_time))) {
+      throw new Error(`Invalid cached earthquake list '${fileName}'; retaining existing lists`);
     }
     const earthquakeMap = new Map(existingData.map((eq) => [eq.id, eq]));
     newEarthquakes.forEach((eq) => earthquakeMap.set(eq.id, eq));
@@ -121,6 +118,12 @@ async function handleGenerateLists({ env, newFeatures }) {
       (eq) => eq.event_time >= startTimeMs,
     );
     trimmedList.sort((a, b) => b.event_time - a.event_time);
+    replacements.push({ fileName, trimmedList });
+  }
+  // Read and validate every input before replacing any period. In particular,
+  // a failed month bootstrap must not follow successful day/week replacements.
+  // These R2 writes are still separate operations, not an atomic publication.
+  for (const { fileName, trimmedList } of replacements) {
     await GEOJSON_BUCKET.put(fileName, JSON.stringify(trimmedList), {
       httpMetadata: {
         contentType: "application/json",

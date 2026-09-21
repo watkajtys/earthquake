@@ -100,7 +100,10 @@ describe('deployed Worker routing', () => {
     const assetResponse = new Response('asset unavailable', { status: 404 });
     env.ASSETS.fetch.mockResolvedValue(assetResponse);
 
-    expect(await worker.fetch(request, env, ctx)).toBe(assetResponse);
+    const response = await worker.fetch(request, env, ctx);
+    expect(response.status).toBe(404);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(await response.text()).toBe('asset unavailable');
     expect(env.ASSETS.fetch).toHaveBeenCalledExactlyOnceWith(request);
   });
 
@@ -110,7 +113,10 @@ describe('deployed Worker routing', () => {
     const assetResponse = new Response('asset unavailable', { status: 404 });
     env.ASSETS.fetch.mockResolvedValue(assetResponse);
 
-    expect(await worker.fetch(request, env, ctx)).toBe(assetResponse);
+    const response = await worker.fetch(request, env, ctx);
+    expect(response.status).toBe(404);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(await response.text()).toBe('asset unavailable');
     expect(env.ASSETS.fetch).toHaveBeenCalledExactlyOnceWith(request);
   });
 
@@ -180,15 +186,16 @@ describe('deployed Worker routing', () => {
 
   it('prerenders earthquake links for crawlers before SPA fallback', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      type: 'Feature',
       id: 'us123',
-      properties: { mag: 5.1, place: 'Test location', time: Date.UTC(2026, 8, 20) },
-      geometry: { coordinates: [-120, 35, 10] },
+      properties: { mag: 5.1, place: 'Test location', time: Date.UTC(2026, 8, 20), updated: Date.UTC(2026, 8, 20) },
+      geometry: { type: 'Point', coordinates: [-120, 35, 10] },
     }), { headers: { 'Content-Type': 'application/json' } }));
     vi.stubGlobal('fetch', fetchMock);
 
     const response = await worker.fetch(makeRequest('/quake/m5-test-location-us123', { headers: { 'User-Agent': 'Googlebot' } }), env, ctx);
 
-    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson');
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson', expect.objectContaining({ redirect: 'manual', signal: expect.any(AbortSignal) }));
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toContain('text/html');
     expect(await response.text()).toContain('Test location');
