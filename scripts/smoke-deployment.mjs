@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { validateSummaryEnvelope } from '../shared/clusterSummaryContract.js';
+import { PREVIOUS_RELEASE_ASSETS } from '../src/previousReleaseAssets.js';
 
 const CANONICAL_ORIGIN = 'https://earthquakeslive.com';
 const CRAWLER_USER_AGENT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
@@ -70,6 +71,9 @@ async function checkPage(path, { crawler = false, canonicalPath } = {}) {
 }
 
 async function checkAssets() {
+  // Already-open clients retain the previous entry's complete lazy import graph.
+  // Verify every explicitly retained public path, including MIME (SPA HTML is a failure).
+  for (const path of Object.keys(PREVIOUS_RELEASE_ASSETS)) assets.add(new URL(path, base).href);
   // Set iteration includes subsequently discovered entries, so lazy chunks are checked too.
   for (const href of assets) {
     assert(assets.size <= 200, 'Unexpectedly large asset graph; stopping after 200 assets.');

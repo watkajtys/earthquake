@@ -1,6 +1,6 @@
 # Compact stored cluster summaries
 
-Status: producer verified in production; consumer implemented and locally verified, rollout in progress. Previous block's production evidence was committed first as `02f044a`. This is the next bounded subrelease of package 5A; actual verification and rollout belong in the release ledger.
+Status: producer and consumer verified in production; a previous-build asset compatibility follow-up is being released. Previous block's production evidence was committed first as `02f044a`. This is the next bounded subrelease of package 5A; actual verification and rollout belong in the release ledger.
 
 ## Scope and sequence
 
@@ -55,3 +55,5 @@ Measure complete equivalent eligible records before/after separately from the fi
 No D1 migration, historical repair or production synthetic write is part of this block. Producer rollback leaves the additive objects unused; consumer rollback returns to the compatible legacy endpoint while retaining writer containment. A failed compact publication preserves the prior pointer and the old API. Do not manually move a pointer backwards: publish a freshly validated observation with a new sequence instead.
 
 Automatic object deletion is deferred from the first release. This avoids deleting a last-good generation during an outage or racing a staged publication. Public readability is bounded, but stored orphan/expired objects accumulate under the new prefix. Follow-up must measure growth and implement narrowly scoped, age-based cleanup with current/history protection and a minimum staging grace; do not apply a whole-bucket lifecycle rule.
+
+The cutover also exposed missing lazy chunks for already-open prior-build tabs. The exact previous asset graph is retained in `src/previousReleaseAssets.js`; public bytes are archived under content-hash keys in existing R2 using `scripts/archive-previous-assets.mjs <preview|production> <verified-dist-assets-directory>`. The uploader checks configured account/bucket and every source/stored checksum; the Worker exposes only mapped URLs. Smoke checks all retained paths and MIME types. Keep this graph until explicit retirement. Future frontend releases must preserve their immediate predecessor before promotion; general archival automation remains a separate package 5D follow-up.

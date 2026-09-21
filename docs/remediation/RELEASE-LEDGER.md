@@ -163,7 +163,7 @@ Producer rollout:
 
 ## Compact summary consumer — 2026-09-21 UTC
 
-Status: implemented and local verified; producer prerequisite observed, consumer rollout pending.
+Status: consumer deployed and verified; previous-build asset compatibility follow-up in progress below.
 
 - First-page loading is bounded to 100 summaries and 512 KiB with a 30-second deadline. Lists render 20 cards, fetch further pages only on demand, preserve stored ordering/counts and show the original stored snapshot time. No failure falls back to the large legacy array.
 - Same-generation refresh retains loaded pages even when the server issues a different signed cursor. New generations reset atomically; expired current-generation cursors also restart with a fresh cursor chain. Lower sequences, generation/total mismatch, duplicate IDs, repeated cursors, malformed streams and stale completions are rejected while last-good cards remain visible.
@@ -172,6 +172,23 @@ Status: implemented and local verified; producer prerequisite observed, consumer
 - Deterministic 1,200-summary fixture: 29,396-byte first response, 100 loaded records, 20 visible cards and one request through visible page five; page six fetches one continuation. This is fixture evidence, not a measured network transfer or latency claim.
 - Local mobile browser at 390×844: stored snapshot label and cards rendered, compact card opened its independent full cluster detail, and Escape returned to the overview. Overview and detail had no horizontal overflow. Remote preview/production browser and rollout evidence remain pending.
 - User clarification: summary delivery must preserve small earthquakes within clusters. A new actual-Worker regression passes M5, M1.1, M0 and M−0.5 through scheduled clustering, stored membership, compact count and full detail, preserving all four. A production GET probe independently found 43/43 members, including 12 below M4.5 (range M3.9–5.5). Existing overview eligibility is based on each cluster's maximum magnitude, not a member-level magnitude filter. The separate existing definition threshold M3 and overview threshold M4.5 are not changed by this block.
+
+Consumer rollout:
+
+- Source `8265d03436e0836026c46dffc8fbf310b9ace358`. Dedicated preview `ab44f1ee-8e3a-416d-8a01-f83d1d3a54cc` passed identity/binding checks, complete compact/legacy equivalence, and **53 GET / 24 asset checks**. Browser at 1280×900 and 390×844 showed the stored snapshot, full three-member synthetic detail and one-Escape return without horizontal overflow or new console errors.
+- [Cloudflare build 560d5725](https://dash.cloudflare.com/f7e27d63f4766d7fb6a0f5b4789e2cdb/workers/services/view/earthquake/production/builds/560d5725-d013-432c-a72c-69e5f0d1aebd) passed **1,336 tests / 115 files, four skips**, all release gates and **53 GET / 24 assets on each public host**. Version `4bbe630a-cd19-4f8b-a83d-ebf47838a551` published at **05:09:48 UTC**; gate finished **05:10:08 UTC**. [GitHub CI](https://github.com/watkajtys/earthquake/actions/runs/35563427164) passed.
+- Report: `/opt/buildhome/repo/.reconciliation.local/releases/8265d03436e0836026c46dffc8fbf310b9ace358-1789967305761.json (passed)`. Production browser showed 20 of 738 cards and advanced through the first five visible pages; page six invoked continuation loading. Desktop had no horizontal overflow. Final post-follow-up browser evidence is recorded below.
+- Live generation-continuity probe: after the next real publication advanced current sequence from 1 to 2, a previously captured cursor returned 100 records from sequence 1 with its original total 738. It did not switch generations or renew the original cursor lifetime.
+
+## Previous-build asset compatibility follow-up — 2026-09-21 UTC
+
+Status: implemented, local verified and immutable archives uploaded; preview/production code rollout pending.
+
+- A direct GET after the consumer preview deployment reproduced a compatibility gap: previous `/assets/ClusterDetailModalWrapper-C4e9y9Fj.js` returned HTTP200 HTML SPA fallback. The existing bridge only covered the August build. The consumer release remained usable for fresh tabs, but some previously opened tabs could fail a lazy import until reload.
+- Adds a small exact URL/checksum/size/MIME map for the complete verified producer asset graph, preserving 24 JS/CSS objects (7,859,600 bytes) under `static-assets/v1/<sha256>` in existing R2. No generated JavaScript bundles are committed. Both preview and production uploads were create-only and every stored byte was read back and SHA-256 checked. No D1, KV, HTML or private data was uploaded.
+- The bridge streams only explicitly mapped objects with verified size and metadata, correct MIME, immutable SHA ETags, GET/HEAD/304 handling and no arbitrary R2 key lookup. Missing/mismatched objects return a truthful no-store503. August KV compatibility remains. The strengthened smoke traverses every retained asset and fails on HTTP200 HTML.
+- Local full suite: **1,364 tests / 116 files passed**, four skips, followed by a new explicit old-asset-HTML smoke regression passing with all 13 smoke tests. Touched-file lint and diff checks passed. Final release tests include that additional regression.
+- This bounded bridge preserves this observed transition. General archival/retention automation remains package 5D work. Before another frontend release changes hashes, extend the retained graph and upload/check its predecessor before promotion; do not assume Cloudflare serves files absent from the new asset manifest. Do not delete the retained graph without an explicit retirement decision.
 
 ## Subrelease record template
 
