@@ -99,12 +99,66 @@ export async function readConfiguration(api, config) {
   return { settings, schedules, domains, subdomain, queues: queueResults.flat() };
 }
 
-export async function verifyIdentity(fetchImpl, origin, revision, versionId) {
-  const response = await fetchImpl(`${origin}/api/release-identity?revision=${revision}`, { method: 'GET', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(15_000) });
-  requireCheck(response.status === 200 && /application\/json/i.test(response.headers.get('content-type') || ''), 'Release identity must return HTTP 200 JSON.');
-  requireCheck(/\bno-store\b/i.test(response.headers.get('cache-control') || ''), 'Release identity must be no-store.');
-  const body = await response.json();
-  requireCheck(body.status === 'ok' && body.environment === 'production' && body.revision === revision && body.versionId === versionId, 'Serving release identity does not match the expected environment, revision and version.');
+class ReleaseCheckError extends Error {
+  constructor(code, attempts = 1, httpStatus) {
+    super(code);
+    this.diagnostic = { code, attempts, ...(Number.isInteger(httpStatus) ? { httpStatus } : {}) };
+  }
+}
+
+export async function verifyIdentity(fetchImpl, origin, revision, versionId, {
+  previousIdentity,
+  assertCurrentVersion,
+  maxWaitMs = 90_000,
+  retryDelayMs = 5_000,
+  maxAttempts = 19,
+  now = Date.now,
+  wait = milliseconds => new Promise(resolveWait => setTimeout(resolveWait, milliseconds)),
+} = {}) {
+  // Only the exact known previous release may receive initial rollout grace.
+  // Missing identity/bindings, auth failures and foreign releases are never retried.
+  const canRetryPrevious = previousIdentity && UUID.test(previousIdentity.versionId) &&
+    /^[0-9a-f]{40}$/.test(previousIdentity.revision || '') && typeof assertCurrentVersion === 'function';
+  const deadline = now() + maxWaitMs;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (now() >= deadline) throw new ReleaseCheckError('IDENTITY_PROPAGATION_TIMEOUT', attempt - 1);
+    const checkCurrentVersion = async () => {
+      try { if (assertCurrentVersion) await assertCurrentVersion(); }
+      catch (error) {
+        if (error instanceof ReleaseCheckError) error.diagnostic.attempts = attempt;
+        throw error;
+      }
+    };
+    await checkCurrentVersion();
+    if (now() >= deadline) throw new ReleaseCheckError('IDENTITY_PROPAGATION_TIMEOUT', attempt - 1);
+    let response;
+    try {
+      response = await fetchImpl(`${origin}/api/release-identity?revision=${revision}&attempt=${attempt}`, {
+        method: 'GET', redirect: 'error', cache: 'no-store',
+        headers: { 'User-Agent': 'Earthquake-Deployment-Smoke/1.0', Accept: 'application/json' },
+        signal: AbortSignal.timeout(Math.max(1, Math.min(15_000, deadline - now()))),
+      });
+    } catch { throw new ReleaseCheckError('IDENTITY_TRANSPORT_FAILURE', attempt); }
+    if (response.status !== 200) throw new ReleaseCheckError('IDENTITY_HTTP_STATUS', attempt, response.status);
+    if (!/application\/json/i.test(response.headers.get('content-type') || '')) throw new ReleaseCheckError('IDENTITY_CONTENT_TYPE', attempt, response.status);
+    if (!/\bno-store\b/i.test(response.headers.get('cache-control') || '')) throw new ReleaseCheckError('IDENTITY_CACHE_POLICY', attempt, response.status);
+    let body;
+    try { body = await response.json(); }
+    catch { throw new ReleaseCheckError('IDENTITY_INVALID_JSON', attempt, response.status); }
+    if (body?.status !== 'ok' || body?.environment !== 'production') throw new ReleaseCheckError('IDENTITY_INVALID_ENVIRONMENT_OR_STATUS', attempt, response.status);
+    if (body.revision === revision && body.versionId === versionId) {
+      await checkCurrentVersion();
+      if (now() >= deadline) throw new ReleaseCheckError('IDENTITY_PROPAGATION_TIMEOUT', attempt, response.status);
+      return { attempts: attempt };
+    }
+    if (!canRetryPrevious || body.versionId !== previousIdentity.versionId || body.revision !== previousIdentity.revision) {
+      throw new ReleaseCheckError('IDENTITY_UNEXPECTED_RELEASE', attempt, response.status);
+    }
+    await checkCurrentVersion();
+    if (attempt === maxAttempts || now() >= deadline) throw new ReleaseCheckError('IDENTITY_PROPAGATION_TIMEOUT', attempt, response.status);
+    await wait(Math.min(retryDelayMs, deadline - now()));
+  }
+  throw new ReleaseCheckError('IDENTITY_PROPAGATION_TIMEOUT', maxAttempts);
 }
 
 // Dependencies are injected so orchestration tests cannot upload or access real APIs.
@@ -113,10 +167,12 @@ export async function releaseProduction(options, deps) {
   let stage = 'preflight';
   const check = async (name, operation) => {
     stage = name;
-    await operation();
-    report.checks.push({ name, status: 'passed', at: deps.now() });
+    const result = await operation();
+    report.checks.push({ name, status: 'passed', at: deps.now(),
+      ...(Number.isInteger(result?.attempts) ? { attempts: result.attempts } : {}) });
   };
   const deploymentsPath = `/accounts/${ACCOUNT}/workers/scripts/${WORKER}/deployments`;
+  let previousIdentity;
   try {
     requireCheck(options.environment === 'production' && /^[0-9a-f]{40}$/.test(options.revision), 'Explicit production environment and full revision are required.');
     const config = await deps.readConfig();
@@ -124,6 +180,12 @@ export async function releaseProduction(options, deps) {
     await check('source', () => deps.verifySource(options.revision));
     await check('metadata-access-and-baseline', async () => {
       report.previousVersion = currentVersion(await deps.api(deploymentsPath));
+      const previous = await deps.api(`/accounts/${ACCOUNT}/workers/scripts/${WORKER}/versions/${report.previousVersion}`);
+      const previousRevision = previous.annotations?.['workers/tag'];
+      const previousBinding = previous.resources?.bindings?.find(binding => binding.name === 'RELEASE_REVISION');
+      if (previous.id === report.previousVersion && /^[0-9a-f]{40}$/.test(previousRevision || '') && previousBinding?.text === previousRevision) {
+        previousIdentity = { versionId: report.previousVersion, revision: previousRevision };
+      }
       verifyConfiguration(await readConfiguration(deps.api, config), config);
     });
     await check('tests', () => deps.run('npm', ['test'], { timeout: 15 * 60_000 }));
@@ -140,7 +202,9 @@ export async function releaseProduction(options, deps) {
       report.newVersion = await deps.deploy(options.revision);
       requireCheck(UUID.test(report.newVersion), 'Wrangler did not return an unambiguous deployed version ID.');
     });
-    const liveCheck = async () => requireCheck(currentVersion(await deps.api(deploymentsPath)) === report.newVersion, 'Concurrent deployment replaced this release; do not rollback over it.');
+    const liveCheck = async () => {
+      if (currentVersion(await deps.api(deploymentsPath)) !== report.newVersion) throw new ReleaseCheckError('CONCURRENT_DEPLOYMENT');
+    };
     await check('version-after-upload', liveCheck);
     await check('configuration', async () => {
       verifyConfiguration(await readConfiguration(deps.api, config), config, options.revision);
@@ -149,20 +213,21 @@ export async function releaseProduction(options, deps) {
       verifyBindings(version.resources?.bindings, config, options.revision);
     });
     for (const origin of ORIGINS) {
-      await check(`identity:${origin}`, () => deps.identity(origin, options.revision, report.newVersion));
+      await check(`identity:${origin}`, () => deps.identity(origin, options.revision, report.newVersion, { previousIdentity, assertCurrentVersion: liveCheck }));
       await check(`smoke:${origin}`, () => deps.run('node', ['scripts/smoke-deployment.mjs', origin], { timeout: 5 * 60_000 }));
-      await check(`identity-after-smoke:${origin}`, () => deps.identity(origin, options.revision, report.newVersion));
+      await check(`identity-after-smoke:${origin}`, () => deps.identity(origin, options.revision, report.newVersion, { assertCurrentVersion: liveCheck }));
       await check(`version-after-smoke:${origin}`, liveCheck);
     }
     report.status = 'passed';
   } catch (error) {
     // Do not serialize exception messages or API bodies: they can contain secrets.
     report.failedCheck = stage;
+    if (error instanceof ReleaseCheckError) report.failureDiagnostic = error.diagnostic;
     report.checks.push({ name: stage, status: 'failed', at: deps.now() });
     report.recovery = report.uploadAttempted
       ? 'Publication was attempted and may have succeeded. Read the current deployment/configuration, contain competing triggers, and select a compatible known-good version before an explicit rollback. The previous version is a candidate, not an automatic rollback target.'
       : 'No upload was attempted. Resolve the failed check and rerun for the same reviewed revision.';
-    deps.log(`Release failed during ${stage}. ${report.recovery}`);
+    deps.log(`Release failed during ${stage}.${report.failureDiagnostic ? ` Diagnostic: ${JSON.stringify(report.failureDiagnostic)}.` : ''} ${report.recovery}`);
   } finally {
     report.finishedAt = deps.now();
     await deps.writeReport(options.reportPath, report);
@@ -233,7 +298,7 @@ export async function main(args = process.argv.slice(2)) {
       requireCheck(await runCommand('git', ['status', '--porcelain', '--untracked-files=normal'], { capture: true }) === '', 'Release requires a clean checkout, including untracked source files.');
     },
     run: runCommand, api,
-    identity: (origin, revision, version) => verifyIdentity(fetch, origin, revision, version),
+    identity: (origin, revision, version, identityOptions) => verifyIdentity(fetch, origin, revision, version, identityOptions),
     deploy: async revision => {
       const directory = await mkdtemp(resolve(tmpdir(), 'earthquake-release-'));
       const output = resolve(directory, 'wrangler.jsonl');

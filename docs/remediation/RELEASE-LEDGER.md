@@ -56,7 +56,7 @@ Remaining gates/limits:
 
 ## Frontend correctness implementation — 2026-09-21 UTC
 
-Status: implementation locally verified; remote preview and promotion pending. Final frozen integration passed **1,111 tests / 106 files, four existing skips**. Build and explicit production packaging dry run passed. All touched JavaScript/test files have zero ESLint errors; one existing Fast Refresh export warning remains. Diff whitespace checks passed.
+Status: production published and manually post-verified; immediate automatic identity gate failed, with a release-control follow-up in progress. Final frozen integration passed **1,111 tests / 106 files, four existing skips**. Build and explicit production packaging dry run passed. All touched JavaScript/test files have zero ESLint errors; one existing Fast Refresh export warning remains. Diff whitespace checks passed.
 
 - Scope: F1–F6, F8–F9 and B6. F10 was already released in foundations. Three parallel agents own route/resolver/crawler behavior, refresh/revision lifecycle, and pagination/dialog/coverage behavior; coordinator owns layout and integration.
 - Shared earthquake builders now emit unambiguous `/quake/id/<event-id>` routes. Negative/null-magnitude descriptive links, plain IDs and encoded official detail URLs are read compatibly. Previously unrecorded descriptive strings with a hyphen inside their event ID remain inherently ambiguous; no invented historical alias is claimed.
@@ -72,6 +72,16 @@ Observed verification so far:
 - Browser checks at 390×844, 768×1024 and 1280×900 showed visible Overview/Feeds main content with no horizontal document overflow. Resizing across the desktop breakpoint retained content and swapped navigation. Keyboard event selection opened the intended canonical route; one Escape returned to Feeds and restored its title. Canonical and legacy cluster links and a negative-magnitude quake link resolved; the Learn article rendered.
 - Earlier development-only browser navigation hit stale lazy chunk URLs when a concurrent local rebuild replaced assets. Reloading the current build restored those pages; final remote preview checks use a frozen build. Already-open-client asset recovery remains a separately tracked delivery limitation.
 
+Rollout record:
+
+- Source: `8bbda2d7d9bf0f0bced8c28cbd35a174ac4cfe76`, fast-forwarded from `ea3e36b` to main after clean source and remote-head checks.
+- Remote preview: version `311e5064-3d86-44e6-acd3-1e545b7c2207`, exact revision/tag and dedicated bindings read back; **52 GET / 24 asset checks passed**. Frozen preview browser verified the globe, mobile Feeds without overflow, and keyboard Overview → cluster → quake → cluster → Overview.
+- Production [automatic build 71891346](https://dash.cloudflare.com/f7e27d63f4766d7fb6a0f5b4789e2cdb/workers/services/view/earthquake/production/builds/71891346-f253-4d99-a0d9-e92248196adc) used `npm run release:production`, passed 1,111 tests/build/source/configuration/version checks and published version `ba3533fe-fe0e-4b40-ada0-000ee17da354` at approximately **03:54:52 UTC**. It then failed the first public identity check at **03:54:53 UTC**. The job remains a failed job; the exact response/reason was not retained by the deliberately redacted failure report, so propagation is not a proven root cause.
+- Fresh readback showed that version at 100% with the intended bindings and tag. At approximately 03:55–03:57 UTC, both public hosts returned the exact expected identity with `no-store`; Node fetch with both default and explicit first-party User-Agent also passed. Separate full post-deployment smokes passed **52 GET / 24 asset checks on each host**. No rollback was performed because these checks established the correct live application.
+- Production browser verified desktop Overview content, no duplicate sidebar, real event `/quake/id/us7000tiur`, canonical metadata and one-Escape return to Overview. No production synthetic fixture or schema/data repair was applied. The [independent CI run](https://github.com/watkajtys/earthquake/actions/runs/35559024995) passed.
+- Previous compatible post-security version: `497067b8-2004-4d08-a5d4-195b0279b680`. Actual five-, ten- and thirty-minute invocations scheduled at **04:00:59 UTC** on frontend version `ba3533fe-fe0e-4b40-ada0-000ee17da354` all finished `outcome: ok` without exceptions. Backfill processed four events with zero errors; cluster processing handled 170 significant clusters with zero errors and cached 3,490 existing definitions. Counts do not establish repaired identity or completeness. Daily cron remains unobserved; tail collection was stopped after these results.
+- Follow-up release controls will add safe diagnostic codes and narrowly bounded grace only for the exactly captured previous revision/version while checking for control-plane races. Authentication failures, malformed responses and foreign identities must still fail immediately.
+
 Open boundaries:
 
 - F7 remains open: overview cards still reconstruct statistics from a weekly member subset. Authoritative compact cluster summaries and bounded rendering belong to the performance release.
@@ -80,6 +90,17 @@ Open boundaries:
 - Fake-clock lifecycle tests establish polling/cancellation/retry behavior; production receipt time alone is not evidence of source freshness or completeness. Existing event corrections update loaded views immediately; newly observed IDs still enter each resource through its own refresh cadence.
 - Next discrete containment: stop legacy cluster-version string growth without rewriting history and replace destructive `INSERT OR REPLACE` with canonical-identity-preserving collision handling. A local SQLite reproduction confirmed a stable-key race can currently replace an existing ID. Then reconcile schema/migration history and restore indexed selectors, with backup/restore gates before structural repair.
 - Smallest independent performance follow-up: consume stored cluster scalars directly, bound visible cards, and avoid static-route cluster polling. Payload/CPU reduction requires the later bounded published-page contract; projecting the existing whole KV blob would not establish it.
+
+## Release identity follow-up — 2026-09-21 UTC
+
+Status: implemented and locally verified; automatic run pending.
+
+- Changes only release script, its tests and operational documentation. Worker/browser sources and production data schema are identical to the verified frontend release.
+- Initial identity checks may retry only a valid no-store production response containing the exact captured previous revision/version. The old version's tag must agree with its revision binding. Grace is bounded by a 90-second deadline, 19 attempts and five-second waits; unknown baseline identity gets no grace.
+- Control-plane version is checked before/after attempts. Expected-new-version success cannot mask a concurrent deployment. After-smoke checks stay strict. HTTP403/503, malformed/cacheable responses and unrelated/mixed identities fail immediately.
+- First-party User-Agent matches deployment smoke. Reports/logs retain allowlisted failure code, numeric HTTP status and attempt counts without response bodies or arbitrary exception text. The original failed gate's cause remains unknown.
+- Validation: **47 release-control tests + 10 smoke tests passed**; syntax/help, targeted lint and diff checks passed. Covered delayed previous identity, deadline exhaustion, permanent/unknown mismatch,403/503, missing cache controls, malformed JSON, baseline tag/binding disagreement and control-plane replacement.
+- Production promotion will exercise the real automatic path; no new application preview is required because this patch does not change Worker or browser source.
 
 ## Subrelease record template
 

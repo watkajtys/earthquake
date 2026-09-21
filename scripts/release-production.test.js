@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { parseArgs, validateConfig, verifyBindings, verifyConfiguration, verifyIdentity, currentVersion, releaseProduction, readWranglerCredentials } from './release-production.mjs';
 
 const REVISION = 'a'.repeat(40);
+const OLD_REVISION = 'b'.repeat(40);
 const OLD = '11111111-1111-1111-1111-111111111111';
 const NEW = '22222222-2222-2222-2222-222222222222';
 const REPLACEMENT = '33333333-3333-3333-3333-333333333333';
@@ -43,6 +44,7 @@ function fixture() {
       if (path.includes('/workers/domains?')) return live.domains;
       if (path.endsWith('/subdomain')) return live.subdomain;
       if (path.includes('/queues?')) return live.queues;
+      if (path.endsWith(`/versions/${OLD}`)) return { id: OLD, annotations: { 'workers/tag': OLD_REVISION }, resources: { bindings: bindings().map(binding => binding.name === 'RELEASE_REVISION' ? { ...binding, text: OLD_REVISION } : binding) } };
       if (path.includes('/versions/')) return { id: NEW, annotations: { 'workers/tag': REVISION }, resources: { bindings: live.settings.bindings } };
       throw new Error('Unexpected API path');
     }),
@@ -141,7 +143,7 @@ describe('identity verification', () => {
   function fetcher(data, headers = { 'content-type': 'application/json', 'cache-control': 'no-store' }) { return vi.fn(async () => new Response(JSON.stringify(data), { headers })); }
   it('uses a bounded GET without redirects and checks no-store', async () => {
     const fetch = fetcher(identity); await verifyIdentity(fetch, 'https://earthquakeslive.com', REVISION, NEW);
-    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'GET', redirect: 'error', cache: 'no-store' }); expect(fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'GET', redirect: 'error', cache: 'no-store', headers: { 'User-Agent': 'Earthquake-Deployment-Smoke/1.0', Accept: 'application/json' } }); expect(fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
   });
   it.each([{}, [], { ...identity, revision: 'b'.repeat(40) }, { ...identity, versionId: OLD }, { ...identity, status: 'error' }, { ...identity, environment: 'preview' }])('rejects HTTP-200 incorrect identity %j', async body => {
     await expect(verifyIdentity(fetcher(body), 'https://earthquakeslive.com', REVISION, NEW)).rejects.toThrow();
@@ -163,4 +165,149 @@ describe('private Wrangler authentication', () => {
   it('never exposes invalid credential JSON in an error', async () => {
     await expect(readWranglerCredentials(async () => 'invalid secret token')).rejects.toThrow('Wrangler authentication unavailable');
   });
+});
+
+
+const currentIdentity = { status: 'ok', environment: 'production', revision: REVISION, versionId: NEW };
+const oldIdentity = { ...currentIdentity, revision: OLD_REVISION, versionId: OLD };
+function identityResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+}
+function propagationOptions(overrides = {}) {
+  let time = 0;
+  return {
+    previousIdentity: { versionId: OLD, revision: OLD_REVISION },
+    assertCurrentVersion: vi.fn(async () => {}),
+    now: () => time,
+    wait: vi.fn(async delay => { time += delay; }),
+    ...overrides,
+  };
+}
+
+describe('bounded identity rollout propagation', () => {
+  it('accepts only the exact preceding identity during initial propagation then verifies the new version', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(identityResponse(oldIdentity)).mockResolvedValueOnce(identityResponse(oldIdentity)).mockResolvedValueOnce(identityResponse(currentIdentity));
+    const options = propagationOptions();
+    await expect(verifyIdentity(fetch, 'https://earthquakeslive.com', REVISION, NEW, options)).resolves.toEqual({ attempts: 3 });
+    expect(options.wait.mock.calls).toEqual([[5000], [5000]]);
+    expect(options.assertCurrentVersion).toHaveBeenCalledTimes(6);
+    expect(fetch.mock.calls[2][0]).toContain('attempt=3');
+  });
+
+  it('fails at the wall-clock bound when the preceding identity never converges', async () => {
+    const fetch = vi.fn(async () => identityResponse(oldIdentity));
+    const options = propagationOptions({ maxWaitMs: 12000 });
+    await expect(verifyIdentity(fetch, 'https://earthquakeslive.com', REVISION, NEW, options)).rejects.toMatchObject({ diagnostic: { code: 'IDENTITY_PROPAGATION_TIMEOUT', attempts: 3 } });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(options.wait.mock.calls).toEqual([[5000], [5000], [2000]]);
+  });
+
+  it('also caps attempts when a stalled injected clock cannot advance the deadline', async () => {
+    const fetch = vi.fn(async () => identityResponse(oldIdentity));
+    const options = propagationOptions({ now: () => 0, wait: vi.fn(async () => {}), maxAttempts: 3 });
+    await expect(verifyIdentity(fetch, 'https://earthquakeslive.com', REVISION, NEW, options)).rejects.toMatchObject({ diagnostic: { code: 'IDENTITY_PROPAGATION_TIMEOUT', attempts: 3 } });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    [{ ...oldIdentity, revision: 'c'.repeat(40) }, 200, 'IDENTITY_UNEXPECTED_RELEASE'],
+    [{ ...currentIdentity, revision: OLD_REVISION }, 200, 'IDENTITY_UNEXPECTED_RELEASE'],
+    [{ ...oldIdentity, versionId: REPLACEMENT }, 200, 'IDENTITY_UNEXPECTED_RELEASE'],
+    [{ ...oldIdentity, environment: 'preview' }, 200, 'IDENTITY_INVALID_ENVIRONMENT_OR_STATUS'],
+    [{ status: 'error', secret: 'sensitive response body' }, 503, 'IDENTITY_HTTP_STATUS'],
+    [{ secret: 'sensitive response body' }, 403, 'IDENTITY_HTTP_STATUS'],
+  ])('never retries wrong identity, environment, binding failure or authorization failure %#', async (body, status, code) => {
+    const fetch = vi.fn(async () => identityResponse(body, status));
+    const options = propagationOptions();
+    await expect(verifyIdentity(fetch, 'https://earthquakeslive.com', REVISION, NEW, options)).rejects.toMatchObject({ diagnostic: { code, attempts: 1, httpStatus: status } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(options.wait).not.toHaveBeenCalled();
+  });
+
+  it('keeps post-smoke checks strict and does not grant previous-release grace without control-plane validation', async () => {
+    for (const options of [{}, { previousIdentity: { versionId: OLD, revision: OLD_REVISION } }]) {
+      const fetch = vi.fn(async () => identityResponse(oldIdentity));
+      await expect(verifyIdentity(fetch, 'https://earthquakeslive.com', REVISION, NEW, options)).rejects.toMatchObject({ diagnostic: { code: 'IDENTITY_UNEXPECTED_RELEASE' } });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('does not retry transport failures or serialize sensitive transport errors', async () => {
+    const fetch = vi.fn(async () => { throw new Error('private token and request data'); });
+    const options = propagationOptions();
+    await expect(verifyIdentity(fetch, 'https://earthquakeslive.com', REVISION, NEW, options)).rejects.toMatchObject({ diagnostic: { code: 'IDENTITY_TRANSPORT_FAILURE', attempts: 1 } });
+    expect(options.wait).not.toHaveBeenCalled();
+  });
+
+  it('stops when another deployment replaces this release during a propagation wait', async () => {
+    const { deps, options } = fixture();
+    const originalApi = deps.api.getMockImplementation();
+    let replaced = false;
+    deps.api.mockImplementation(path => path.endsWith('/deployments') && replaced ? { deployments: [{ versions: [{ version_id: REPLACEMENT, percentage: 100 }] }] } : originalApi(path));
+    const fetch = vi.fn(async () => identityResponse(oldIdentity));
+    deps.identity.mockImplementation((origin, revision, version, identityOptions) => verifyIdentity(fetch, origin, revision, version, {
+      ...identityOptions, wait: async () => { replaced = true; },
+    }));
+    const report = await releaseProduction(options, deps);
+    expect(report.status).toBe('failed');
+    expect(report.failedCheck).toBe('identity:https://earthquakeslive.com');
+    expect(report.failureDiagnostic.code).toBe('CONCURRENT_DEPLOYMENT');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(deps.run.mock.calls.some(([command]) => command === 'node')).toBe(false);
+  });
+
+  it('checks for concurrent replacement even when HTTP already serves the expected identity', async () => {
+    const { deps, options } = fixture();
+    const originalApi = deps.api.getMockImplementation();
+    let replaced = false;
+    deps.api.mockImplementation(path => path.endsWith('/deployments') && replaced ? { deployments: [{ versions: [{ version_id: REPLACEMENT, percentage: 100 }] }] } : originalApi(path));
+    deps.identity.mockImplementation((origin, revision, version, identityOptions) => verifyIdentity(async () => {
+      replaced = true; return identityResponse(currentIdentity);
+    }, origin, revision, version, identityOptions));
+    const report = await releaseProduction(options, deps);
+    expect(report.status).toBe('failed');
+    expect(report.failureDiagnostic.code).toBe('CONCURRENT_DEPLOYMENT');
+  });
+
+  it('reports numeric/enum diagnostics for a permanent403 without disclosing body or message', async () => {
+    const { deps, options } = fixture();
+    const fetch = vi.fn(async () => identityResponse({ secret: 'private body contents' }, 403));
+    deps.identity.mockImplementation((origin, revision, version, identityOptions) => verifyIdentity(fetch, origin, revision, version, identityOptions));
+    const report = await releaseProduction(options, deps);
+    expect(report.failureDiagnostic).toEqual({ code: 'IDENTITY_HTTP_STATUS', attempts: 1, httpStatus: 403 });
+    expect(JSON.stringify(report)).not.toContain('private body');
+    expect(JSON.stringify(deps.log.mock.calls)).not.toContain('private body');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('records successful attempt counts but does not grant grace after smoke', async () => {
+    const { deps, options } = fixture();
+    let first = true;
+    const fetch = vi.fn(async () => {
+      const body = first ? oldIdentity : currentIdentity; first = false; return identityResponse(body);
+    });
+    deps.identity.mockImplementation((origin, revision, version, identityOptions) => verifyIdentity(fetch, origin, revision, version, { ...identityOptions, wait: async () => {} }));
+    const report = await releaseProduction(options, deps);
+    expect(report.status).toBe('passed');
+    expect(report.checks.find(check => check.name === 'identity:https://earthquakeslive.com').attempts).toBe(2);
+    expect(deps.identity.mock.calls[1][3].previousIdentity).toBeUndefined();
+  });
+});
+
+
+it('does not accept an otherwise matching identity after the propagation deadline', async () => {
+  let time = 0;
+  const options = propagationOptions({ now: () => time, maxWaitMs: 10000, assertCurrentVersion: async () => { time += 6000; } });
+  await expect(verifyIdentity(async () => identityResponse(currentIdentity), 'https://earthquakeslive.com', REVISION, NEW, options)).rejects.toMatchObject({ diagnostic: { code: 'IDENTITY_PROPAGATION_TIMEOUT', attempts: 1 } });
+});
+
+it('does not grant rollout grace when baseline version tag and revision binding disagree', async () => {
+  const { deps, options } = fixture();
+  const api = deps.api.getMockImplementation();
+  deps.api.mockImplementation(path => path.endsWith(`/versions/${OLD}`) ? { id: OLD, annotations: { 'workers/tag': OLD_REVISION }, resources: { bindings: [{ name: 'RELEASE_REVISION', text: 'c'.repeat(40) }] } } : api(path));
+  const fetch = vi.fn(async () => identityResponse(oldIdentity));
+  deps.identity.mockImplementation((origin, revision, version, identityOptions) => verifyIdentity(fetch, origin, revision, version, identityOptions));
+  const report = await releaseProduction(options, deps);
+  expect(report.failureDiagnostic.code).toBe('IDENTITY_UNEXPECTED_RELEASE');
+  expect(fetch).toHaveBeenCalledTimes(1);
 });
