@@ -9,6 +9,7 @@ import { readArchivedEarthquakeDetail } from '../functions/utils/earthquakeDetai
 import { createScheduledTaskLogger } from './utils/scheduledTaskLogger.js';
 import { onRequestGet as onRequestGet2 } from '../functions/api/get-earthquakes.js';
 import { onRequestGet as onRequestGet3 } from '../functions/api/get-clusters.js';
+import { onRequestGet as getClusterSummaries } from '../functions/api/cluster-summaries.js';
 import { handleBatchUsgsFetch } from '../functions/api/batch-usgs-fetch.js';
 import { handleIndexSitemap } from '../functions/routes/sitemaps/index-sitemap.js';
 import { handleEarthquakesSitemap } from '../functions/routes/sitemaps/earthquakes-sitemap.js';
@@ -683,6 +684,10 @@ var worker_default = {
     }
     if (pathname === "/api/get-clusters" && request.method === "GET") {
       return onRequestGet3({ request, env, ctx });
+    }
+    if (pathname === "/api/cluster-summaries") {
+      if (!['GET', 'HEAD'].includes(request.method)) return policyError('Method Not Allowed', 405, { Allow: 'GET, HEAD' });
+      return getClusterSummaries({ request, env, ctx });
     }
     if (pathname === "/api/get-earthquakes" && request.method === "GET") {
       return onRequestGet2({ request, env, ctx });

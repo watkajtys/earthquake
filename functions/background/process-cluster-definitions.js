@@ -1,5 +1,6 @@
 import { findActiveClustersOptimized } from '../utils/spatialClusterUtils.js';
 import { storeClusterDefinition } from '../utils/d1ClusterUtils.js';
+import { publishClusterSummarySnapshot } from '../utils/clusterSummarySnapshot.js';
 import { CLUSTER_MIN_QUAKES, DEFINED_CLUSTER_MIN_MAGNITUDE } from '../../src/constants/appConstants.js';
 
 import { randomUUID } from "node:crypto";
@@ -263,6 +264,9 @@ var process_cluster_definitions_default = {
       if (readResult?.success !== true || !Array.isArray(readResult.results)) throw new Error("Recent-earthquake query failed");
       const { results } = readResult;
       if (results.length === 0) {
+        // This observes stored definitions, not upstream scientific completeness.
+        // A successful empty source read still lets the rolling stored view age out.
+        await publishClusterSummarySnapshot(env);
         console.log(
           "process-cluster-definitions: No recent earthquakes found. Exiting.",
         );
@@ -345,6 +349,8 @@ var process_cluster_definitions_default = {
           throw kvError;
         }
       }
+      const summaryPublication = await publishClusterSummarySnapshot(env);
+      console.log('process-cluster-definitions: Compact summary publication.', summaryPublication);
       console.log(
         "process-cluster-definitions: Cron job finished successfully.",
       );

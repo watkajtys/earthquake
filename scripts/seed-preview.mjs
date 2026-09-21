@@ -7,6 +7,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+import { publishClusterSummarySnapshot } from '../functions/utils/clusterSummarySnapshot.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const targetName = 'earthquake-reconcile-preview';
@@ -65,7 +67,7 @@ function upsert(table, row) {
 
 try {
   // Use Wrangler's own parser so environment inheritance matches the CLI.
-  const { unstable_readConfig: readConfig } = await import('wrangler');
+  const { unstable_readConfig: readConfig, getPlatformProxy } = await import('wrangler');
   const sourceConfig = join(root, 'wrangler.toml');
   const preview = readConfig({ config: sourceConfig, env: 'preview' }, { hideWarnings: true });
   const production = readConfig({ config: sourceConfig, env: 'production' }, { hideWarnings: true });
@@ -81,6 +83,9 @@ try {
   requireCondition(databases.length === 1 && database?.database_name === targetName, `DB must be the dedicated ${targetName} database.`);
   requireCondition(buckets.length === 1 && bucket?.bucket_name === targetName, `R2 must be the dedicated ${targetName} bucket.`);
   requireCondition(!bucket.preview_bucket_name || bucket.preview_bucket_name === targetName, 'R2 preview bucket name differs from the dedicated bucket.');
+  const productionBuckets = new Set((production.r2_buckets || [])
+    .flatMap(entry => [entry.bucket_name, entry.preview_bucket_name]).filter(Boolean));
+  requireCondition(!productionBuckets.has(targetName), 'preview R2 shares a production bucket.');
   const productionIds = new Set([
     ...(production.d1_databases || []).flatMap((entry) => [entry.database_id, entry.preview_database_id]),
     ...(production.kv_namespaces || []).flatMap((entry) => [entry.id, entry.preview_id]),
@@ -108,9 +113,9 @@ try {
     env: {
       preview: {
         name: targetName,
-        d1_databases: [{ binding: 'DB', database_name: targetName, database_id: database.database_id, migrations_dir: join(root, 'migrations') }],
+        d1_databases: [{ binding: 'DB', database_name: targetName, database_id: database.database_id, migrations_dir: join(root, 'migrations'), remote }],
         kv_namespaces: namespaces.map(({ binding, id }) => ({ binding, id })),
-        r2_buckets: [{ binding: 'GEOJSON_BUCKET', bucket_name: targetName }],
+        r2_buckets: [{ binding: 'GEOJSON_BUCKET', bucket_name: targetName, remote }],
       },
     },
   }, null, 2));
@@ -206,6 +211,34 @@ try {
     const objectPath = join(temporaryDirectory, key);
     await writeFile(objectPath, JSON.stringify(value));
     runWrangler(['r2', 'object', 'put', `${targetName}/${key}`, '--file', objectPath, '--content-type', 'application/json', '--cache-control', 'no-store', ...targetFlags], configPath);
+  }
+
+  // Use the actual publisher and binding semantics, after the target guards above.
+  // No public mutation endpoint is added to the application for fixture setup.
+  const platform = await getPlatformProxy({
+    configPath, environment: 'preview', remoteBindings: remote,
+    persist: remote ? false : { path: join(root, '.wrangler/state/v3') },
+  });
+  const probeKey = `cluster-summary-probes/${crypto.randomUUID()}.json`;
+  const r2 = platform.env.GEOJSON_BUCKET;
+  try {
+    const initial = await r2.put(probeKey, 'initial', { onlyIf: { etagDoesNotMatch: '*' } });
+    assert(initial, 'R2 initial conditional creation must succeed');
+    assert.equal(await r2.put(probeKey, 'competing-initial', { onlyIf: { etagDoesNotMatch: '*' } }), null,
+      'R2 competing initial creation must return null');
+    const captured = await r2.get(probeKey);
+    assert.equal(await captured.text(), 'initial');
+    const newer = await r2.put(probeKey, 'newer', { onlyIf: { etagMatches: captured.etag } });
+    assert(newer, 'R2 matching ETag update must succeed');
+    assert.equal(await r2.put(probeKey, 'delayed-old', { onlyIf: { etagMatches: captured.etag } }), null,
+      'R2 stale ETag update must return null');
+    assert.equal(await (await r2.get(probeKey)).text(), 'newer', 'Delayed writer must not replace newer data');
+    console.log(`Verified ${remote ? 'remote preview' : 'local workerd'} R2 conditional-create and stale-writer fencing.`);
+    const publication = await publishClusterSummarySnapshot(platform.env);
+    assert.equal(publication.published, true, 'Preview compact summary publication must complete');
+    console.log('Published compact preview summaries:', publication);
+  } finally {
+    try { await r2.delete(probeKey); } finally { await platform.dispose(); }
   }
 
   console.log(`Seeded 4 earthquakes, 1 cluster, and ${objects.length} R2 objects. Re-run to refresh fixture timestamps.`);

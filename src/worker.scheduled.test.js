@@ -6,6 +6,8 @@ import { handleGenerateLists } from '../functions/background/generate-lists.js';
 import { onRequestGet as backfill } from '../functions/api/backfill-earthquake-details.js';
 import { storeClusterDefinition } from '../functions/utils/d1ClusterUtils.js';
 import { clusterInput, clusterNow, createClusterSqliteFixture } from '../functions/utils/clusterSqliteFixture.test-support.js';
+import { createMemorySummaryBucket } from '../functions/utils/clusterSummarySnapshot.test-support.js';
+import { SUMMARY_POINTER_KEY } from '../shared/clusterSummaryContract.js';
 
 vi.mock('../functions/background/ingest-usgs-feed.js', () => ({ handleTrustedUsgsIngestion: vi.fn() }));
 vi.mock('../functions/background/generate-lists.js', () => ({ handleGenerateLists: vi.fn() }));
@@ -105,7 +107,7 @@ describe('exported Worker ten-minute cluster lifetime with migrated SQLite', () 
   beforeEach(() => {
     vi.useFakeTimers(); vi.setSystemTime(clusterNow);
     fixture = createClusterSqliteFixture();
-    clusterEnv = { DB: fixture.db, CLUSTER_KV: { put: vi.fn().mockResolvedValue(undefined) } };
+    clusterEnv = { DB: fixture.db, GEOJSON_BUCKET: createMemorySummaryBucket(), CLUSTER_KV: { put: vi.fn().mockResolvedValue(undefined) } };
   });
   afterEach(() => { fixture.database.close(); vi.useRealTimers(); });
 
@@ -132,6 +134,7 @@ describe('exported Worker ten-minute cluster lifetime with migrated SQLite', () 
       .toMatchObject({ id: 'canonical-winner', slug: 'canonical-slug', version });
     expect(handleTrustedUsgsIngestion).not.toHaveBeenCalled();
     expect(handleGenerateLists).not.toHaveBeenCalled();
+    expect(clusterEnv.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY).current.snapshotSequence).toBe(2);
   });
 
   it('rejects waitUntil on an unconfirmed write and makes no replacement KV write', async () => {
@@ -150,5 +153,14 @@ describe('exported Worker ten-minute cluster lifetime with migrated SQLite', () 
     const { results } = await runScheduled('*/10 * * * *', clusterEnv);
     expect(results).toEqual([{ status: 'rejected', reason: failure }]);
     expect(console.log).not.toHaveBeenCalledWith('process-cluster-definitions: Cron job finished successfully.');
+  });
+
+  it('propagates compact publication failure through waitUntil after successful legacy persistence', async () => {
+    clusterEnv.GEOJSON_BUCKET.hooks.beforePut = () => { throw new Error('Compact publication unavailable'); };
+    const { results } = await runScheduled('*/10 * * * *', clusterEnv);
+    expect(results[0].status).toBe('rejected');
+    expect(results[0].reason.message).toBe('Compact publication unavailable');
+    expect(clusterEnv.CLUSTER_KV.put).toHaveBeenCalledOnce();
+    expect(clusterEnv.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY)).toBeNull();
   });
 });

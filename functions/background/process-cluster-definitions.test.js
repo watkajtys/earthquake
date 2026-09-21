@@ -4,6 +4,8 @@ import { processAndStoreSignificantClusters } from './process-clusters.js';
 import * as spatial from '../utils/spatialClusterUtils.js';
 import { storeClusterDefinition } from '../utils/d1ClusterUtils.js';
 import { clusterInput, clusterNow, createClusterSqliteFixture } from '../utils/clusterSqliteFixture.test-support.js';
+import { createMemorySummaryBucket } from '../utils/clusterSummarySnapshot.test-support.js';
+import { SUMMARY_POINTER_KEY } from '../../shared/clusterSummaryContract.js';
 
 let fixture;
 let env;
@@ -18,7 +20,7 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   fixture = createClusterSqliteFixture();
   cache = new Map([['active_clusters', '[{"id":"last-good"}]']]);
-  env = { DB: fixture.db, CLUSTER_KV: { put: vi.fn(async (key, value) => { cache.set(key, value); }) } };
+  env = { DB: fixture.db, GEOJSON_BUCKET: createMemorySummaryBucket(), CLUSTER_KV: { put: vi.fn(async (key, value) => { cache.set(key, value); }) } };
 });
 afterEach(() => {
   fixture.database.close(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals();
@@ -38,6 +40,7 @@ describe('actual scheduled cluster persistence and publication', () => {
     expect(published()).toHaveLength(1);
     expect(published()[0]).toMatchObject({ id: row.id, slug: row.slug, version: '1' });
     expect(env.CLUSTER_KV.put).toHaveBeenCalledWith('active_clusters', expect.any(String), { expirationTtl: 3600 });
+    expect(env.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY).current).toMatchObject({ totalCount: 1, snapshotSequence: 1 });
   });
 
   it('retains historical bytes and identity across repeated cron cycles with both real triggers', async () => {
@@ -136,6 +139,25 @@ describe('scheduled publication failure boundaries', () => {
     await expect(worker.scheduled(null, env, {})).rejects.toBe(error);
     expect(published()).toEqual([{ id: 'last-good' }]);
     expect(console.log).not.toHaveBeenCalledWith('process-cluster-definitions: Cron job finished successfully.');
+    expect(env.GEOJSON_BUCKET.calls).toEqual([]);
+  });
+
+  it('preserves the last compact pointer when a later page upload fails, while legacy delivery remains available', async () => {
+    await worker.scheduled(null, env, {});
+    const previous = env.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY);
+    env.GEOJSON_BUCKET.hooks.beforePut = key => {
+      if (key.includes('/pages/')) throw new Error('R2 page unavailable');
+    };
+    await expect(worker.scheduled(null, env, {})).rejects.toThrow('R2 page unavailable');
+    expect(env.CLUSTER_KV.put).toHaveBeenCalledTimes(2);
+    expect(env.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY)).toEqual(previous);
+  });
+
+  it('publishes a real empty stored observation when the source query succeeds with no recent events', async () => {
+    fixture.database.exec('DELETE FROM EarthquakeEvents');
+    await worker.scheduled(null, env, {});
+    expect(env.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY).current.totalCount).toBe(0);
+    expect(env.CLUSTER_KV.put).not.toHaveBeenCalled();
   });
 });
 

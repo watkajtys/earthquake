@@ -134,6 +134,21 @@ Rollout evidence:
 
 Remaining boundaries: unchanged-write amplification through both timestamp triggers, mixed timestamp ordering, unstable semantic stable-key policy, scientific stale-writer fencing, historical identity/version repair, last-good cache expiry, complete/atomic publication and large legacy payloads. Index-only verification does not close the broader DB-01/schema-reconciliation package.
 
+## Compact stored-summary producer — 2026-09-21 UTC
+
+Status: implemented and targeted/local-runtime/remote-storage verified; production rollout pending. The detailed scope, two-release sequence and recovery procedure are in [COMPACT-SUMMARIES.md](COMPACT-SUMMARIES.md).
+
+- Committed the preceding block's verified release record first as `02f044a`, as requested.
+- Adds a scalar-only, threshold-filtered D1 observation publisher to the actual ten-minute Worker job, immutable bounded R2 pages/manifests, one-shot conditional pointer publication, signed generation-bound cursors and the additive `/api/cluster-summaries` route. Legacy array delivery remains unchanged for the producer release.
+- The observation contract explicitly identifies stored definitions, uses a null upstream watermark and labels old snapshots stale. Scalar hashes do not establish membership or scientific-generation consistency. This is a delivery improvement, not historical repair or scientific stale-writer fencing.
+- Independent review found no backend correctness blocker. Regressions cover competing publishers, initial creation races, partial/lost-acknowledgement failures, unconfirmed reads/writes, bounds, cursor integrity/expiry, missing objects, ordering and actual Worker/SQLite integration. Final frozen full-suite/build results are recorded with rollout below.
+- Read-only production scalar preflight: 738 eligible rows, zero validation errors, maximum serialized summary 490 bytes, 9,971 rows read by the single query. This is one observation, not a latency percentile.
+- Real local workerd and remote dedicated-preview R2 bindings both confirmed conditional creation succeeds, a competing creation returns null, a matching-ETag replacement succeeds, and a delayed old-ETag replacement returns null without changing the newer object. Temporary probe objects were removed by exact generated key; production storage was not used for these probes.
+- Actual local Worker ten-minute invocation advanced the compact publication from sequence 1 to 2. All 10 eligible definitions exactly matched the equivalent legacy records after that run. HEAD testing exposed an initial method mismatch; the route and regression now accept HEAD and strip its body. Non-read methods return 405.
+- Local fixture measurement: equivalent 10-record legacy array 10,805 decoded bytes versus compact array 4,436 (58.94% reduction); first envelope 4,733 bytes versus complete 28-record legacy response 29,379 (83.89% reduction). Small fixture memberships/versions explain why projection savings are below the proposed 80% target. Production measurements remain pending. Recompressed fixture Brotli quality 4: 2,643 versus 1,616 bytes; these are not observed network-transfer sizes.
+- Remote preview snapshot sequence 1 was published by the actual producer through guarded preview-only bindings. The seed validates production/preview D1, KV and R2 isolation and does not add any public mutation endpoint.
+- Evidence is ignored under `.reconciliation.local/compact-summaries/`. No D1 schema change, historical migration replay, deduplication, version rewrite or production synthetic data is part of this release. Expired/orphan R2 object cleanup is explicitly deferred; current/history readability is bounded while stored objects accumulate under the new owned prefix.
+
 ## Subrelease record template
 
 Copy this section for each focused release. Replace placeholders with observed facts or explicit `not run` / `not applicable`, never assumed success.

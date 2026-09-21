@@ -8,7 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [build]
 command = "npm run build"
-watch_dir = ["src", "functions", "public"]
+watch_dir = ["src", "functions", "shared", "public"]
 
 [assets]
 directory = "./dist"

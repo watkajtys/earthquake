@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import worker from './worker.js';
 import { onRequestGet as getEarthquakes } from '../functions/api/get-earthquakes.js';
 import { onRequestGet as getClusters } from '../functions/api/get-clusters.js';
+import { onRequestGet as getClusterSummaries } from '../functions/api/cluster-summaries.js';
 import { handleUsgsProxy } from '../functions/routes/api/usgs-proxy.js';
 import { handleIndexSitemap } from '../functions/routes/sitemaps/index-sitemap.js';
 
 vi.mock('../functions/api/get-earthquakes.js', () => ({ onRequestGet: vi.fn() }));
 vi.mock('../functions/api/get-clusters.js', () => ({ onRequestGet: vi.fn() }));
+vi.mock('../functions/api/cluster-summaries.js', () => ({ onRequestGet: vi.fn() }));
 vi.mock('../functions/routes/api/usgs-proxy.js', () => ({ handleUsgsProxy: vi.fn() }));
 vi.mock('../functions/routes/sitemaps/index-sitemap.js', () => ({ handleIndexSitemap: vi.fn() }));
 
@@ -130,6 +132,22 @@ describe('deployed Worker routing', () => {
     expect(env.ASSETS.fetch).not.toHaveBeenCalled();
   });
 
+  it('serves compact summary metadata for HEAD without a response body', async () => {
+    getClusterSummaries.mockResolvedValue(Response.json({ items: [] }, { headers: { 'Cache-Control': 'no-store' } }));
+    const response = await worker.fetch(makeRequest('/api/cluster-summaries', { method: 'HEAD' }), env, ctx);
+    expect(response.status).toBe(200);
+    expect(response.body).toBeNull();
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(getClusterSummaries).toHaveBeenCalledOnce();
+  });
+
+  it('rejects compact summary writes before calling the read handler', async () => {
+    const response = await worker.fetch(makeRequest('/api/cluster-summaries', { method: 'POST' }), env, ctx);
+    expect(response.status).toBe(405);
+    expect(response.headers.get('Allow')).toBe('GET, HEAD');
+    expect(getClusterSummaries).not.toHaveBeenCalled();
+  });
+
   it.each(['/api', '/api/', '/api/unknown', '/api/unknown.json'])('returns JSON 404 for %s before SPA fallback', async (path) => {
     const response = await worker.fetch(makeRequest(path), env, ctx);
 
@@ -142,6 +160,7 @@ describe('deployed Worker routing', () => {
   it.each([
     ['/api/get-earthquakes?timeframe=day', getEarthquakes],
     ['/api/get-clusters', getClusters],
+    ['/api/cluster-summaries', getClusterSummaries],
     ['/sitemap-index.xml', handleIndexSitemap],
   ])('preserves the handler for %s', async (path, handler) => {
     const request = makeRequest(path);
