@@ -62,13 +62,15 @@ describe('Sitemap Index and Static Pages Handlers', () => {
       const context = createMockContext(request);
 
       // Create a mock list of events. 85000 are significant, 5000 are not.
-      const significantEvents = Array.from({ length: 85000 }, (_, i) => ({
+      const significantEvents = Array.from({ length: 85000 }, () => ({
           magnitude: 5.0,
-          geojson_feature: '{}'
+          has_moment_tensor: 0,
+          has_focal_mechanism: 0,
       }));
-      const nonSignificantEvents = Array.from({ length: 5000 }, (_, i) => ({
+      const nonSignificantEvents = Array.from({ length: 5000 }, () => ({
           magnitude: 3.0,
-          geojson_feature: '{}'
+          has_moment_tensor: 0,
+          has_focal_mechanism: 0,
       }));
       const allEvents = [...significantEvents, ...nonSignificantEvents];
 
@@ -83,7 +85,7 @@ describe('Sitemap Index and Static Pages Handlers', () => {
       expect(text).toContain('<sitemapindex');
 
       // Check that the DB was queried correctly
-      expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/SELECT magnitude, geojson_feature FROM EarthquakeEvents/i));
+      expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringMatching(/SELECT magnitude, has_moment_tensor, has_focal_mechanism FROM EarthquakeEvents/i));
       expect(context.env.DB.bind).toHaveBeenCalledWith(2.5);
 
       // Check for static sitemaps

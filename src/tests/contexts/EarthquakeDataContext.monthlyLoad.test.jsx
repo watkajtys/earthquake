@@ -306,7 +306,7 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
         return !!result.current.monthlyError;
       });
 
-      expect(result.current.monthlyError).toContain("D1 Error (Monthly): Failed to fetch from D1: 500 D1 Monthly Error Text");
+      expect(result.current.monthlyError).toContain("API Error (Monthly): Failed to fetch earthquake data: 500 D1 Monthly Error Text");
       expect(result.current.monthlyError).toContain("USGS Error (Monthly): USGS Monthly Down");
       expect(result.current.monthlyDataSource).toBeNull();
     }, 10000);
@@ -414,7 +414,7 @@ describe('EarthquakeDataContext: loadMonthlyData with D1 Fallback', () => {
       // fetchUsgsData will turn the 503 into: { error: true, message: "HTTP error! status: 503 " } (statusText is not part of message)
       // The context will then display: "USGS Error (Monthly): HTTP error! status: 503 "
       // The full error message will also include the D1 error.
-      expect(result.current.monthlyError).toContain('D1 Error (Monthly): Failed to fetch from D1: 500 D1 generic monthly fallback error');
+      expect(result.current.monthlyError).toContain('API Error (Monthly): Failed to fetch earthquake data: 500 D1 generic monthly fallback error');
       expect(result.current.monthlyError.replace(/\s+$/, '')).toContain('USGS Error (Monthly): HTTP error! status: 503'); // Trim trailing space for robust match
       expect(result.current.monthlyDataSource).toBeNull();
     }, 10000);

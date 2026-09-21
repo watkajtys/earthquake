@@ -34,7 +34,7 @@ import {
     // calculateMagnitudeDistribution // Used by reducer
 } from './earthquakeDataContextUtils.js';
 import { EarthquakeDataContext } from './earthquakeDataContextUtils.js'; // Import the context
-import { isValidGeoJson, isValidFeatureArray } from '../utils/geoJsonUtils.js'; // Added isValidFeatureArray
+import { isValidGeoJson } from '../utils/geoJsonUtils.js';
 
 /**
  * @typedef {object} EarthquakeDataProviderProps
@@ -43,9 +43,9 @@ import { isValidGeoJson, isValidFeatureArray } from '../utils/geoJsonUtils.js'; 
 
 /**
  * Provides earthquake data to its child components through context.
- * It fetches, processes, and manages earthquake data, prioritizing a D1 database source
+ * It fetches, processes, and manages earthquake data, prioritizing cached R2 or D1 data
  * via the `/api/get-earthquakes` endpoint, and falling back to the USGS API (via `usgsApiService`)
- * if D1 is unavailable or fails.
+ * if the internal API is unavailable or fails.
  * The context value also includes `dailyDataSource`, `weeklyDataSource`, and `monthlyDataSource`
  * to indicate the origin of the respective data sets.
  *
@@ -58,25 +58,43 @@ export const EarthquakeDataProvider = ({ children }) => {
     const initialFetchPerformed = useRef(false);
 
     /**
-     * Helper function to fetch earthquake data from the D1 database via the internal API.
+     * Fetch flat earthquake records from the internal API, served by R2 or D1.
      * @async
      * @param {('day'|'week'|'month')} timeWindow - The time window for which to fetch data.
-     * @returns {Promise<{data: Array<object>|null, source: ('D1'|'D1_failed'), error: string|null}>}
+     * @returns {Promise<{data: Array<object>|null, source: ('R2'|'D1'|null), error: string|null}>}
      *          An object containing the fetched data (array of GeoJSON features), the source, and any error message.
      */
-    const fetchFromD1 = async (timeWindow) => {
+    const fetchFromApi = async (timeWindow) => {
         try {
             const response = await fetch(`/api/get-earthquakes?timeWindow=${timeWindow}`);
-            if (response.ok && response.headers.get('X-Data-Source') === 'D1') {
+            const dataSource = response.headers.get('X-Data-Source');
+            if (response.ok && (dataSource === 'R2' || dataSource === 'D1')) {
                 const flatData = await response.json(); // Expecting an array of flat earthquake objects
+                if (!Array.isArray(flatData)) {
+                    return { data: null, source: null, error: 'Earthquake API response is not a list.' };
+                }
+                // Older R2 lists contain only map fields. Keep the USGS fallback
+                // until every cached event preserves recent alert-related metadata.
+                const requiredMetadata = ['alert', 'tsunami', 'felt', 'sig'];
+                const now = Date.now();
+                const maximumSummaryAgeMs = 10 * 60 * 1000;
+                if (dataSource === 'R2' && !flatData.every(eq =>
+                    eq?.properties && requiredMetadata.every(key => Object.hasOwn(eq.properties, key)) &&
+                    typeof eq.summary_updated_at === 'number' &&
+                    eq.summary_updated_at >= now - maximumSummaryAgeMs && eq.summary_updated_at <= now
+                )) {
+                    return { data: null, source: null, error: 'Cached R2 records are missing current summary metadata.' };
+                }
                 // Reconstruct the GeoJSON structure
                 const reconstructedData = flatData.map(eq => ({
                     type: 'Feature',
                     properties: {
+                        ...eq.properties,
                         mag: eq.magnitude,
                         place: eq.place,
                         time: eq.event_time,
-                        // Add other properties that might be expected by the UI
+                        detail: eq.usgs_detail_url || `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${eq.id}.geojson`,
+                        url: `https://earthquake.usgs.gov/earthquakes/eventpage/${eq.id}`,
                     },
                     geometry: {
                         type: 'Point',
@@ -84,22 +102,20 @@ export const EarthquakeDataProvider = ({ children }) => {
                     },
                     id: eq.id
                 }));
-                return { data: reconstructedData, source: 'D1', error: null };
+                return { data: reconstructedData, source: dataSource, error: null };
             }
             const errorText = await response.text();
-            // console.warn(`Failed to fetch from D1 for ${timeWindow} or invalid response: ${response.status} ${errorText}`);
-            return { data: null, source: 'D1_failed', error: `Failed to fetch from D1: ${response.status} ${errorText}` };
+            return { data: null, source: null, error: `Failed to fetch earthquake data: ${response.status} ${errorText}` };
         } catch (error) {
-            // console.error(`Error fetching from D1 for ${timeWindow}:`, error);
-            return { data: null, source: 'D1_failed', error: error.message };
+            return { data: null, source: null, error: error.message };
         }
     };
 
     /**
      * Fetches and processes daily and weekly earthquake data.
-     * It first attempts to fetch data from the D1 database via the `/api/get-earthquakes` endpoint.
-     * If the D1 fetch is successful, `dailyDataSource` and `weeklyDataSource` are set to 'D1'.
-     * If the D1 fetch fails or returns an invalid response, it falls back to fetching data
+     * It first attempts to fetch data via the `/api/get-earthquakes` endpoint.
+     * On success, `dailyDataSource` and `weeklyDataSource` reflect the R2 or D1 source header.
+     * If the API fetch fails or returns an invalid response, it falls back to fetching data
      * from the USGS API via `fetchUsgsData`. In this case, `dailyDataSource` and `weeklyDataSource`
      * are set to 'USGS'.
      * Manages loading states and aggregates errors from both potential sources.
@@ -136,16 +152,14 @@ export const EarthquakeDataProvider = ({ children }) => {
             dailyDataSource = cachedEntry.data.dataSource;
             dailyDataSkippedDueToCache = true;
         } else {
-            const d1DailyResponse = await fetchFromD1('day');
-            if (d1DailyResponse.source === 'D1' && d1DailyResponse.data) {
-                // console.log("Successfully fetched daily data from D1");
-                const processedData = { features: d1DailyResponse.data, metadata: null, fetchTime: nowForFiltering, dataSource: 'D1' };
+            const apiDailyResponse = await fetchFromApi('day');
+            if (apiDailyResponse.data) {
+                const processedData = { features: apiDailyResponse.data, metadata: null, fetchTime: nowForFiltering, dataSource: apiDailyResponse.source };
                 dispatch({ type: actionTypes.DAILY_DATA_PROCESSED, payload: processedData });
                 dataCacheRef.current[CACHE_KEY_DAILY] = { data: processedData, timestamp: currentTimestamp };
-                dailyDataSource = 'D1';
+                dailyDataSource = apiDailyResponse.source;
             } else {
-                // console.warn("Failed to fetch daily data from D1, falling back to USGS.", d1DailyResponse.error);
-                dailyErrorMsg = `D1 Error (Daily): ${d1DailyResponse.error || 'Unknown D1 error'}. `;
+                dailyErrorMsg = `API Error (Daily): ${apiDailyResponse.error || 'Unknown API error'}. `;
                 try {
                     const usgsDailyRes = await fetchUsgsData(USGS_API_URL_DAY);
                     if (usgsDailyRes.error || !isValidGeoJson(usgsDailyRes)) {
@@ -175,16 +189,14 @@ export const EarthquakeDataProvider = ({ children }) => {
             weeklyDataSource = cachedEntry.data.dataSource;
             weeklyDataSkippedDueToCache = true;
         } else {
-            const d1WeeklyResponse = await fetchFromD1('week');
-            if (d1WeeklyResponse.source === 'D1' && d1WeeklyResponse.data) {
-                // console.log("Successfully fetched weekly data from D1");
-                const processedData = { features: d1WeeklyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' };
+            const apiWeeklyResponse = await fetchFromApi('week');
+            if (apiWeeklyResponse.data) {
+                const processedData = { features: apiWeeklyResponse.data, fetchTime: nowForFiltering, dataSource: apiWeeklyResponse.source };
                 dispatch({ type: actionTypes.WEEKLY_DATA_PROCESSED, payload: processedData });
                 dataCacheRef.current[CACHE_KEY_WEEKLY] = { data: processedData, timestamp: currentTimestamp };
-                weeklyDataSource = 'D1';
+                weeklyDataSource = apiWeeklyResponse.source;
             } else {
-                // console.warn("Failed to fetch weekly data from D1, falling back to USGS.", d1WeeklyResponse.error);
-                weeklyErrorMsg = `D1 Error (Weekly): ${d1WeeklyResponse.error || 'Unknown D1 error'}. `;
+                weeklyErrorMsg = `API Error (Weekly): ${apiWeeklyResponse.error || 'Unknown API error'}. `;
                 try {
                     const usgsWeeklyRes = await fetchUsgsData(USGS_API_URL_WEEK);
                     if (usgsWeeklyRes.error || !isValidGeoJson(usgsWeeklyRes)) {
@@ -261,19 +273,17 @@ export const EarthquakeDataProvider = ({ children }) => {
         let monthlyFetchError = null;
         let monthlyDataSource = null;
 
-        const d1MonthlyResponse = await fetchFromD1('month');
-        if (d1MonthlyResponse.source === 'D1' && d1MonthlyResponse.data) {
-            // console.log("Successfully fetched monthly data from D1");
-            const processedData = { features: d1MonthlyResponse.data, fetchTime: nowForFiltering, dataSource: 'D1' };
+        const apiMonthlyResponse = await fetchFromApi('month');
+        if (apiMonthlyResponse.data) {
+            const processedData = { features: apiMonthlyResponse.data, fetchTime: nowForFiltering, dataSource: apiMonthlyResponse.source };
             dispatch({
                 type: actionTypes.MONTHLY_DATA_PROCESSED,
                 payload: processedData
             });
             dataCacheRef.current[CACHE_KEY_MONTH] = { data: processedData, timestamp: Date.now() };
-            monthlyDataSource = 'D1';
+            monthlyDataSource = apiMonthlyResponse.source;
         } else {
-            // console.warn("Failed to fetch monthly data from D1, falling back to USGS.", d1MonthlyResponse.error);
-            monthlyFetchError = `D1 Error (Monthly): ${d1MonthlyResponse.error || 'Unknown D1 error'}. `;
+            monthlyFetchError = `API Error (Monthly): ${apiMonthlyResponse.error || 'Unknown API error'}. `;
             try {
                 const usgsMonthlyRes = await fetchUsgsData(USGS_API_URL_MONTH);
 
@@ -287,7 +297,7 @@ export const EarthquakeDataProvider = ({ children }) => {
                     });
                     dataCacheRef.current[CACHE_KEY_MONTH] = { data: processedData, timestamp: Date.now() };
                     monthlyDataSource = 'USGS';
-                    monthlyFetchError = null; // Clear D1 error if USGS succeeds
+                    monthlyFetchError = null; // Clear the API error if USGS succeeds
                 }
             } catch (e) {
                 monthlyFetchError += `USGS Fetch Error (Monthly): ${e.message || 'Error fetching monthly USGS data.'}`;

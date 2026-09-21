@@ -3,7 +3,9 @@
  * @description Test suite for cluster benchmarking utilities
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+afterEach(() => vi.restoreAllMocks());
 import { 
   EarthquakeDataGenerator, 
   PerformanceProfiler, 
@@ -225,29 +227,21 @@ describe('Integration Tests', () => {
     expect(result.result.clustersFound).toBe(0); // Should find no clusters with 1 earthquake
   });
 
-  it('should maintain consistent results across runs', async () => {
+  it('reports repeatable cluster results from a fixed dataset without invented profiler counts', async () => {
+    const earthquakes = [
+      { id: 'la1', properties: { mag: 5 }, geometry: { coordinates: [-118, 34, 10] } },
+      { id: 'la2', properties: { mag: 4 }, geometry: { coordinates: [-118.01, 34.01, 10] } },
+      { id: 'sf1', properties: { mag: 6 }, geometry: { coordinates: [-122.4, 37.7, 10] } },
+      { id: 'sf2', properties: { mag: 3 }, geometry: { coordinates: [-122.41, 37.71, 10] } },
+    ];
+    vi.spyOn(EarthquakeDataGenerator, 'generate').mockReturnValue(earthquakes);
     const suite = new ClusterBenchmarkSuite();
-    
-    // Run same test multiple times with more stable parameters
-    const results = [];
-    const numRuns = 5; // More runs for better statistical analysis
-    
-    for (let i = 0; i < numRuns; i++) {
-      // Use 'realistic' distribution instead of 'clustered' for more consistent results
-      // Use smaller dataset to reduce variance
-      const result = await suite.runSingleBenchmark(30, 'realistic', 100, 3, `consistency_test_${i}`);
-      results.push(result);
+    for (let i = 0; i < 3; i++) {
+      const result = await suite.runSingleBenchmark(4, 'realistic', 30, 2, `fixed_dataset_${i}`);
+      expect(result.result).toEqual({ clustersFound: 2, totalEarthquakes: 4, avgClusterSize: 2, largestCluster: 2 });
+      expect(result.executionTime).toBeGreaterThanOrEqual(0);
+      expect(result.distanceCalculations).toBeNull();
+      expect(result.performance.distanceCalcsPerQuake).toBeNull();
     }
-
-    // Calculate coefficient of variation (standard deviation / mean)
-    const times = results.map(r => r.executionTime);
-    const avgTime = times.reduce((a, b) => a + b) / times.length;
-    const variance = times.reduce((sum, time) => sum + Math.pow(time - avgTime, 2), 0) / times.length;
-    const stdDev = Math.sqrt(variance);
-    const coefficientOfVariation = stdDev / avgTime;
-    
-    // Performance tests can be variable due to system load, but should generally be under 70%
-    // This is more realistic for algorithm performance testing in CI environments
-    expect(coefficientOfVariation).toBeLessThan(0.7);
   });
 });

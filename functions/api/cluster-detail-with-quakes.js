@@ -92,24 +92,36 @@ async function onRequestGet(context) {
       clusterDefinition.earthquakeIds.length > 0
     ) {
       const uniqueEarthquakeIds = [...new Set(clusterDefinition.earthquakeIds)];
-      if (uniqueEarthquakeIds.length > 0) {
-        const placeholders = uniqueEarthquakeIds.map(() => "?").join(",");
-        const quakesQuery = `SELECT id, geojson_feature FROM EarthquakeEvents WHERE id IN (${placeholders})`;
+      // D1 allows at most 100 bound parameters per query. Large clusters
+      // need multiple reads, after deduplicating IDs across the whole cluster.
+      const queryBatchSize = 100;
+      for (let offset = 0; offset < uniqueEarthquakeIds.length; offset += queryBatchSize) {
+        const batchIds = uniqueEarthquakeIds.slice(offset, offset + queryBatchSize);
+        const placeholders = batchIds.map(() => "?").join(",");
+        // Full GeoJSON lives in R2 after migration 0014. Cluster views only
+        // need the summary fields that remain in D1.
+        const quakesQuery = `SELECT id, magnitude, place, event_time, longitude, latitude, depth, usgs_detail_url
+          FROM EarthquakeEvents WHERE id IN (${placeholders})`;
         const quakesStmt = env.DB.prepare(quakesQuery).bind(
-          ...uniqueEarthquakeIds,
+          ...batchIds,
         );
         const { results: quakeFeaturesData } = await quakesStmt.all();
         if (quakeFeaturesData) {
-          for (const row of quakeFeaturesData) {
-            try {
-              const geojsonFeature = JSON.parse(row.geojson_feature);
-              clusterDefinition.quakes.push(geojsonFeature);
-            } catch (e) {
-              console.error(
-                `Error parsing geojson_feature for earthquake ${row.id} in cluster ${clusterId}: ${e.message}`,
-              );
-            }
-          }
+          clusterDefinition.quakes.push(...quakeFeaturesData.map((row) => ({
+            type: "Feature",
+            id: row.id,
+            geometry: {
+              type: "Point",
+              coordinates: [row.longitude, row.latitude, row.depth],
+            },
+            properties: {
+              mag: row.magnitude,
+              place: row.place,
+              time: row.event_time,
+              detail: row.usgs_detail_url,
+              url: `https://earthquake.usgs.gov/earthquakes/eventpage/${row.id}`,
+            },
+          })));
         }
       }
     }

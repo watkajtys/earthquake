@@ -1,11 +1,11 @@
 /**
  * @file clusterBenchmark.js
  * @description Performance benchmarking suite for earthquake clustering algorithms
- * Tests current O(N²) algorithm and future optimizations
+ * Measures the spatial clustering algorithm used by the Worker
  */
 
-import { findActiveClusters } from '../api/calculate-clusters.POST.js';
-import { calculateDistance, setDistanceCalculationProfiler } from './mathUtils.js';
+import { findActiveClustersOptimized } from './spatialClusterUtils.js';
+import { calculateDistance } from './mathUtils.js';
 
 // Benchmark configuration
 const BENCHMARK_CONFIG = {
@@ -259,8 +259,6 @@ export class ClusterBenchmarkSuite {
   constructor() {
     this.profiler = new PerformanceProfiler();
     setGlobalProfiler(this.profiler);
-    // Set up distance calculation tracking
-    setDistanceCalculationProfiler(this.profiler);
   }
   
   /**
@@ -336,7 +334,7 @@ export class ClusterBenchmarkSuite {
     
     let clusters;
     try {
-      clusters = findActiveClusters(earthquakes, maxDistance, minQuakes);
+      clusters = findActiveClustersOptimized(earthquakes, maxDistance, minQuakes);
     } catch (error) {
       console.error(`❌ Benchmark failed for ${testName}:`, error);
       clusters = [];
@@ -346,6 +344,10 @@ export class ClusterBenchmarkSuite {
     
     return {
       ...result,
+      // The production algorithm does not expose a distance profiler. Report
+      // unavailable counts explicitly rather than treating unobserved work as zero.
+      distanceCalculations: null,
+      distanceCalculationTime: null,
       parameters: {
         earthquakeCount,
         distribution,
@@ -354,8 +356,8 @@ export class ClusterBenchmarkSuite {
       },
       performance: {
         timePerEarthquake: result.executionTime / earthquakeCount,
-        distanceCalcsPerQuake: result.distanceCalculations / earthquakeCount,
-        avgDistanceCalcTime: result.distanceCalculations > 0 ? result.distanceCalculationTime / result.distanceCalculations : null
+        distanceCalcsPerQuake: null,
+        avgDistanceCalcTime: null
       }
     };
   }

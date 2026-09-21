@@ -28,18 +28,17 @@ vi.mock('../components/ClusterSummaryItem', () => ({
   default: vi.fn((props) => {
     mockClusterSummaryItemData.push(props.clusterData);
     return (
-      <div
+      <button
+        type="button"
         data-testid={`mock-cluster-summary-item-${props.clusterData.id}`}
         onClick={() => {
           if (props.onClusterSelect) {
             props.onClusterSelect(props.clusterData);
           }
         }}
-        role="button"
-        tabIndex={0}
       >
         Mock ClusterSummaryItem for {props.clusterData.id}
-      </div>
+      </button>
     );
   }),
 }));
@@ -206,6 +205,37 @@ describe('HomePage Cluster Logic', () => {
         expect(cluster.maxMagnitude).toBeGreaterThanOrEqual(MAJOR_QUAKE_THRESHOLD);
       });
     });
+  });
+
+  it('shows a weekly cluster before monthly data is requested and uses fresh daily records', async () => {
+    const now = Date.now();
+    const weeklyQuakes = [
+      createMockQuakeInternal('weekly1', now - 60_000, 5.5, 'Weekly cluster'),
+      createMockQuakeInternal('weekly2', now - 2 * 3_600_000, 5.1, 'Weekly cluster'),
+      createMockQuakeInternal('weekly3', now - 28 * 3_600_000, 4.8, 'Weekly cluster'),
+    ];
+    const updatedDailyQuake = {
+      ...weeklyQuakes[0],
+      properties: { ...weeklyQuakes[0].properties, mag: 6.3 },
+    };
+    mockFetchActiveClusters.mockResolvedValue([{
+      earthquakeIds: JSON.stringify(weeklyQuakes.map(quake => quake.id)),
+    }]);
+    mockUseEarthquakeDataState.mockReturnValue({
+      ...defaultEarthquakeData,
+      allEarthquakes: [],
+      earthquakesLast7Days: weeklyQuakes,
+      earthquakesLast24Hours: [updatedDailyQuake, weeklyQuakes[1]],
+      hasAttemptedMonthlyLoad: false,
+    });
+
+    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
+
+    await screen.findByTestId('mock-cluster-summary-item-overview_cluster_weekly1_3');
+    const summary = mockClusterSummaryItemData.at(-1);
+    expect(summary).toMatchObject({ quakeCount: 3, maxMagnitude: 6.3, strongestQuakeId: 'weekly1' });
+    expect(summary.originalQuakes).toEqual([updatedDailyQuake, weeklyQuakes[1], weeklyQuakes[2]]);
+    expect(defaultEarthquakeData.loadMonthlyData).not.toHaveBeenCalled();
   });
 
   describe('handleClusterSummaryClick URL Generation', () => {

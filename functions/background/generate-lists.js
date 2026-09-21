@@ -45,6 +45,10 @@ var transformFeatureToListObject = (feature) => {
     latitude: feature.geometry.coordinates[1],
     longitude: feature.geometry.coordinates[0],
     depth: feature.geometry.coordinates[2],
+    // Keep the upstream summary contract for alerts, felt reports and rankings.
+    // Older cached/D1 rows stay sparse until refreshed by an upstream feature.
+    properties: { ...feature.properties },
+    summary_updated_at: Date.now(),
   };
 };
 async function handleGenerateLists({ env, newFeatures }) {

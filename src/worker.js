@@ -1,95 +1,5 @@
-// Restored from the live deployed worker bundle (2026-08).
-// STATIC_ASSET_MANIFEST + handleStaticAssetRequest were prepended to the bundle
-// at deploy time by tooling that is no longer in this repo; they are inlined here
-// so the worker source reflects the deployed code. The manifest is regenerated
-// per deploy (content-hashed asset names).
-const STATIC_ASSET_MANIFEST = {
-  "/assets/ClusterDetailModalWrapper-CMK5bsuw.js":
-    "assets/ClusterDetailModalWrapper-CMK5bsuw.a266bbb4fc.js",
-  "/assets/EarthquakeDetailModalComponent-fGA-UDVe.js":
-    "assets/EarthquakeDetailModalComponent-fGA-UDVe.5029d27153.js",
-  "/assets/EarthquakeTimelineSVGChart-DXh99iSR.js":
-    "assets/EarthquakeTimelineSVGChart-DXh99iSR.cf52652e6d.js",
-  "/assets/FeedsPageLayout-BeSCcFkO.js":
-    "assets/FeedsPageLayout-BeSCcFkO.555f6624dc.js",
-  "/assets/InteractiveGlobeView-DIAXMe5O.js":
-    "assets/InteractiveGlobeView-DIAXMe5O.4f49472ab9.js",
-  "/assets/LearnPage-BL31VrrB.js": "assets/LearnPage-BL31VrrB.dd86ed63cf.js",
-  "/assets/MagnitudeDepthScatterSVGChart-DHIROrnv.js":
-    "assets/MagnitudeDepthScatterSVGChart-DHIROrnv.8c89046a92.js",
-  "/assets/MagnitudeDistributionSVGChart-KBTVa4q7.js":
-    "assets/MagnitudeDistributionSVGChart-KBTVa4q7.1ecbdb0bca.js",
-  "/assets/MagnitudeVsIntensityPage-CZ2qL5s3.js":
-    "assets/MagnitudeVsIntensityPage-CZ2qL5s3.42a6e15739.js",
-  "/assets/MeasuringEarthquakesPage-s3OLqQly.js":
-    "assets/MeasuringEarthquakesPage-s3OLqQly.0d33942b90.js",
-  "/assets/OverviewPage-BGlbcMjr.js":
-    "assets/OverviewPage-BGlbcMjr.9c947de00e.js",
-  "/assets/PaginatedEarthquakeTable-DnVnQ4ds.js":
-    "assets/PaginatedEarthquakeTable-DnVnQ4ds.59d6e84a69.js",
-  "/assets/PlateTectonicsPage-DKnC-7xR.js":
-    "assets/PlateTectonicsPage-DKnC-7xR.24271f4e51.js",
-  "/assets/RegionalDistributionList-CZ-0HM0w.js":
-    "assets/RegionalDistributionList-CZ-0HM0w.1c3a98c239.js",
-  "/assets/TectonicPlateBoundaries-D_0ztLpA.js":
-    "assets/TectonicPlateBoundaries-D_0ztLpA.c43486b482.js",
-  "/assets/index-CPiVOLY-.css": "assets/index-CPiVOLY-.1e3382384a.css",
-  "/assets/index-i3oghYXo.js": "assets/index-i3oghYXo.73aa738cf2.js",
-  "/assets/ne_110m_coastline-BmLK7DdU.js":
-    "assets/ne_110m_coastline-BmLK7DdU.4a44b57eea.js",
-  "/index.html": "index.7e91f5210a.html",
-  "/robots.txt": "robots.e5cffde5ac.txt",
-  "/vite.svg": "vite.0de3998bc2.svg",
-};
-
-async function handleStaticAssetRequest(request, env) {
-  const url = new URL(request.url);
-  let pathname = url.pathname;
-  if (pathname === "/" || !pathname.includes(".")) {
-    pathname = "/index.html";
-  }
-  const kvKey = STATIC_ASSET_MANIFEST[pathname];
-  if (!kvKey) {
-    const indexKey = STATIC_ASSET_MANIFEST["/index.html"];
-    const indexContent = await env.STATIC_KV.get(indexKey);
-    if (indexContent) {
-      return new Response(indexContent, {
-        headers: {
-          "Content-Type": "text/html; charset=utf-8",
-          "Cache-Control": "public, max-age=300, stale-while-revalidate=86400",
-        },
-      });
-    }
-    return new Response("Not Found", { status: 404 });
-  }
-
-  const content = await env.STATIC_KV.get(kvKey);
-  if (content === null) {
-    return new Response("Not Found", { status: 404 });
-  }
-
-  let contentType = "application/octet-stream";
-  if (pathname.endsWith(".html")) contentType = "text/html; charset=utf-8";
-  else if (pathname.endsWith(".js"))
-    contentType = "application/javascript; charset=utf-8";
-  else if (pathname.endsWith(".css")) contentType = "text/css; charset=utf-8";
-  else if (pathname.endsWith(".svg")) contentType = "image/svg+xml";
-  else if (pathname.endsWith(".txt")) contentType = "text/plain; charset=utf-8";
-
-  const isHashedAsset = pathname.startsWith("/assets/");
-  const cacheControl = isHashedAsset
-    ? "public, max-age=31536000, immutable"
-    : "public, max-age=300, stale-while-revalidate=86400";
-
-  return new Response(content, {
-    headers: {
-      "Content-Type": contentType,
-      "Cache-Control": cacheControl,
-      ETag: `"${kvKey}"`,
-    },
-  });
-}
-
+// Backend restored from the live deployed Worker bundle (2026-08).
+// Frontend assets are built and deployed with this Worker through the ASSETS binding.
 import { onRequestGet } from '../functions/api/cluster-detail-with-quakes.js';
 import { handleUsgsProxy } from '../functions/routes/api/usgs-proxy.js';
 import { createScheduledTaskLogger } from './utils/scheduledTaskLogger.js';
@@ -108,6 +18,7 @@ import process_cluster_definitions_default from '../functions/background/process
 import reconcile_stats_default from '../functions/background/reconcile-stats.js';
 import { findActiveClustersOptimized } from '../functions/utils/spatialClusterUtils.js';
 import { CLUSTER_MIN_QUAKES } from './constants/appConstants.js';
+import { handleLegacyStaticAsset } from './legacyStaticAssets.js';
 
 var jsonErrorResponse = (message, status, sourceName, upstreamStatus = void 0) => {
     const errorBody = {
@@ -1186,7 +1097,11 @@ var worker_default = {
     ) {
       return handleCalculateClusters({ request, env, ctx });
     }
-    return handleStaticAssetRequest(request, env);
+    if (pathname === "/api" || pathname.startsWith("/api/")) {
+      return jsonErrorResponse("API endpoint not found", 404, "worker-router");
+    }
+    const legacyAsset = await handleLegacyStaticAsset(request, env);
+    return legacyAsset || env.ASSETS.fetch(request);
   },
   async scheduled(event, env, ctx) {
     const logger = createScheduledTaskLogger(
@@ -1492,4 +1407,13 @@ var worker_default = {
     }
   },
 };
-export { worker_default as default };
+export default {
+  ...worker_default,
+  async fetch(request, env, ctx) {
+    const response = await worker_default.fetch(request, env, ctx);
+    if (env.DEPLOYMENT_ENVIRONMENT !== 'preview') return response;
+    const previewResponse = new Response(response.body, response);
+    previewResponse.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return previewResponse;
+  },
+};

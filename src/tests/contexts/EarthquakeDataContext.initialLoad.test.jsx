@@ -363,8 +363,8 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
 
       expect(result.current.error).not.toBeNull();
       expect(result.current.error).toContain("Daily & Weekly Data Errors:");
-      expect(result.current.error).toContain("D1 Error (Daily): Failed to fetch from D1: 500 D1 Daily Error Body. USGS Error (Daily): USGS Daily Down");
-      expect(result.current.error).toContain("D1 Error (Weekly): Failed to fetch from D1: 500 D1 Weekly Error Body. USGS Error (Weekly): USGS Weekly Down");
+      expect(result.current.error).toContain("API Error (Daily): Failed to fetch earthquake data: 500 D1 Daily Error Body. USGS Error (Daily): USGS Daily Down");
+      expect(result.current.error).toContain("API Error (Weekly): Failed to fetch earthquake data: 500 D1 Weekly Error Body. USGS Error (Weekly): USGS Weekly Down");
       expect(result.current.dailyDataSource).toBeNull();
       expect(result.current.weeklyDataSource).toBeNull();
     }, 10000);
@@ -407,7 +407,7 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
 
         await vi.waitUntil(() => !result.current.isLoadingDaily && !result.current.isLoadingWeekly, { timeout: 7000 });
 
-        expect(result.current.error).toContain("Daily Data Error: D1 Error (Daily): Failed to fetch from D1: 500 D1 generic fallback error for day. USGS Error (Daily): Daily fetch failed");
+        expect(result.current.error).toContain("Daily Data Error: API Error (Daily): Failed to fetch earthquake data: 500 D1 generic fallback error for day. USGS Error (Daily): Daily fetch failed");
         expect(result.current.earthquakesLast7Days).toEqual(expect.arrayContaining([mUsgsFeatureWeek]));
         expect(result.current.weeklyDataSource).toBe('USGS');
         expect(result.current.dailyDataSource).toBeNull();
@@ -434,7 +434,7 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
 
         await vi.waitUntil(() => !result.current.isLoadingDaily && !result.current.isLoadingWeekly, { timeout: 7000 });
 
-        expect(result.current.error).toContain("Weekly Data Error: D1 Error (Weekly): Failed to fetch from D1: 500 D1 generic fallback error for week. USGS Error (Weekly): Weekly fetch failed");
+        expect(result.current.error).toContain("Weekly Data Error: API Error (Weekly): Failed to fetch earthquake data: 500 D1 generic fallback error for week. USGS Error (Weekly): Weekly fetch failed");
         expect(result.current.earthquakesLast24Hours).toEqual(expect.arrayContaining([mUsgsFeatureDay]));
         expect(result.current.dailyDataSource).toBe('USGS');
         expect(result.current.weeklyDataSource).toBeNull();
@@ -456,7 +456,7 @@ describe('EarthquakeDataProvider Initial Load with D1 Fallback', () => {
 
         await vi.waitUntil(() => !result.current.isLoadingDaily && !result.current.isLoadingWeekly, { timeout: 7000 });
 
-        const expectedError = "Daily & Weekly Data Errors: D1 Error (Daily): Failed to fetch from D1: 500 D1 generic fallback error for day. USGS Error (Daily): Daily failed D1 Error (Weekly): Failed to fetch from D1: 500 D1 generic fallback error for week. USGS Error (Weekly): Weekly failed";
+        const expectedError = "Daily & Weekly Data Errors: API Error (Daily): Failed to fetch earthquake data: 500 D1 generic fallback error for day. USGS Error (Daily): Daily failed API Error (Weekly): Failed to fetch earthquake data: 500 D1 generic fallback error for week. USGS Error (Weekly): Weekly failed";
         expect(result.current.error.trim()).toBe(expectedError.trim()); // Use trim for safety, and toBe for exact match.
         expect(result.current.dailyDataSource).toBeNull();
         expect(result.current.weeklyDataSource).toBeNull();

@@ -1,204 +1,98 @@
-# wrangler.toml
-name = "earthquake"
-compatibility_date = "2024-06-05" # Feel free to update to a more recent date
-compatibility_flags = ["nodejs_compat"]
+# Deploy with an explicit environment. Local development uses preview bindings
+# simulated locally; production resources are never used by `npm run dev`.
+name = "earthquake-local"
+account_id = "f7e27d63f4766d7fb6a0f5b4789e2cdb"
 main = "src/worker.js"
+compatibility_date = "2024-06-05"
+compatibility_flags = ["nodejs_compat"]
 
-# Workers Caching (enabled live via API on 2026-08-31; keep in config so
-# future `wrangler deploy`s don't turn it off). Requires wrangler >= 4.69.
+[build]
+command = "npm run build"
+watch_dir = ["src", "functions", "public"]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# API, sitemap and crawler responses must pass through the Worker first.
+run_worker_first = true
+
 [cache]
 enabled = true
+# Each release starts a fresh response cache; never serve a previous release's HTML.
+cross_version_cache = false
 
-# Top-level main and workers_dev removed, now in [env.production]
+[observability]
+enabled = true
 
-# Top-level bindings can define defaults or include preview IDs for 'wrangler dev'
-kv_namespaces = [
-  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" },
-  # KV store for the last successful USGS API response
-  # IMPORTANT: Create this KV namespace in your Cloudflare dashboard or via Wrangler CLI:
-  # `wrangler kv:namespace create USGS_LAST_RESPONSE_KV`
-  # `wrangler kv:namespace create USGS_LAST_RESPONSE_KV --preview`
-  # Then, replace the placeholder IDs below with the actual IDs provided.
-  { binding = "USGS_LAST_RESPONSE_KV", id = "8bebf55e19a14299b35d1d4f6a53d2b5", preview_id = "21d89ac9c07c4845b08dd6d0e0a2b5eb" },
-  # STATIC_KV: serves the built frontend via STATIC_ASSET_MANIFEST inlined in src/worker.js
-  # (this is how the LIVE deployment serves static assets; there is no [assets] binding live).
-  # The deploy tooling that generated the manifest and uploaded dist/ assets into this
-  # namespace is lost (see RECONSTITUTION.md). Replace the placeholder ID with the real
-  # namespace ID from the Cloudflare dashboard before deploying.
-  { binding = "STATIC_KV", id = "103d46c25b71471489abb0989cc2ecfa", preview_id = "103d46c25b71471489abb0989cc2ecfa" }
-]
+[observability.logs]
+enabled = true
+invocation_logs = true
 
-[[r2_buckets]]
-bucket_name = "geojson-bucket"
-binding = "GEOJSON_BUCKET"
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.01
 
-[[queues.producers]]
-queue = "geojson-queue"
-binding = "GEOJSON_QUEUE"
-
-[[queues.consumers]]
-queue = "geojson-queue"
-max_batch_size = 10
-max_wait_ms = 1000
-
-[[d1_databases]]
-binding = "DB" # Binding name used in your Worker code
-database_name = "PrimaryDB" # Name of the D1 database (used in wrangler d1 commands)
-database_id = "8a0a26e9-ba3c-4984-9023-c1803f611a05" # Production D1 ID
-preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" # Preview D1 ID for `wrangler dev`
-# Migrations are typically handled by convention (./migrations directory)
-# or by a top-level `migrations_dir` setting, not within [[d1_databases]].
-# The previously existing `migrations = [...]` array within d1_databases was causing an error.
-# Wrangler should automatically detect the ./migrations directory for "PrimaryDB".
-
-# NOTE (2026-08 reconstitution): the LIVE worker does NOT use the Workers Static Assets
-# binding. Static assets are served from the STATIC_KV namespace by handleStaticAssetRequest
-# in src/worker.js, using the STATIC_ASSET_MANIFEST map inlined there. The [assets] block
-# below is therefore disabled to match the live deployment; env.ASSETS is not referenced
-# by the restored worker code.
-# [assets]
-# directory = "./dist"
-# not_found_handling = "single-page-application"
-# binding = "ASSETS"
-# run_worker_first = true
-
-# Custom domain: the live site is served on earthquakeslive.com. It is attached out-of-band
-# (dashboard/zone-level), so it is intentionally NOT declared here. If you want deploys to
-# manage it, uncomment:
-# custom_domains = [{ domain = "earthquakeslive.com" }]
-
-# KV Namespace binding for cluster definitions
-# -----------------------------------------------------------------------------------------
-# IMPORTANT INSTRUCTIONS FOR THE USER:
-# 1. Create KV Namespaces:
-#    You need to create KV namespaces using the Wrangler CLI. It's recommended to have
-#    separate namespaces for production and preview/local development.
-#    Run these commands in your terminal:
-#      wrangler kv namespace create CLUSTER_KV
-#      wrangler kv namespace create CLUSTER_KV_PREVIEW
-#
-# 2. Update IDs Below:
-#    Wrangler will output an 'id' for each namespace created.
-#    Replace "REPLACE_WITH_PRODUCTION_KV_ID" with the ID for CLUSTER_KV.
-#    Replace "REPLACE_WITH_PREVIEW_KV_ID" with the ID for CLUSTER_KV_PREVIEW.
-#
-# 3. Dashboard Configuration (Crucial for Git-integrated Workers):
-#    For Cloudflare Workers projects using Git integration, bindings set in the
-#    Cloudflare Dashboard (Worker -> Settings -> Variables & Secrets -> KV Namespace Bindings)
-#    often take precedence for deployed environments (production and preview).
-#    Ensure you also configure the 'CLUSTER_KV' binding there, pointing it to the
-#    respective KV namespaces for your production and preview environments.
-#    This wrangler.toml configuration is especially useful for local development
-#    with `wrangler dev`.
-# -----------------------------------------------------------------------------------------
-
+# Dedicated preview resources. No automatic cron ingestion in preview.
 [env.preview]
-name = "earthquake-preview" # It's good practice to give preview a distinct name
-main = "src/worker.js"
-workers_dev = true # Assuming preview might also use a *.workers.dev subdomain initially
-
-# Use preview specific IDs for bindings
+name = "earthquake-reconcile-preview"
+workers_dev = true
 kv_namespaces = [
-  { binding = "CLUSTER_KV", preview_id = "25424bdebf90459ea61121e9b3dfc4ee" },
-  # For preview, ensure you have a preview version of USGS_LAST_RESPONSE_KV
-  # and have updated its preview_id in the top-level kv_namespaces definition.
-  { binding = "USGS_LAST_RESPONSE_KV", preview_id = "21d89ac9c07c4845b08dd6d0e0a2b5eb" } # This will use the preview_id from the top-level definition if available
+  { binding = "CLUSTER_KV", id = "ff6649da6e9c401d83d39531b3c9da9d" },
+  { binding = "USGS_LAST_RESPONSE_KV", id = "30fa803774a44c5c93022a4f25679ba9" }
 ]
 d1_databases = [
-  { binding = "DB", database_name = "PrimaryDB", preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" }
+  { binding = "DB", database_name = "earthquake-reconcile-preview", database_id = "b027cfcd-bee0-4d5e-adf5-9505c3a8626d", migrations_dir = "migrations" }
+]
+r2_buckets = [
+  { binding = "GEOJSON_BUCKET", bucket_name = "earthquake-reconcile-preview" }
 ]
 
-# Production environment configuration
-[env.production]
-name = "earthquake" # Explicitly set name for production environment
-main = "src/worker.js"
-workers_dev = true # Set to false if using custom domain for production and not workers.dev
+[env.preview.triggers]
+crons = []
 
+[env.preview.vars]
+DEPLOYMENT_ENVIRONMENT = "preview"
+
+[[env.preview.queues.producers]]
+binding = "GEOJSON_QUEUE"
+queue = "earthquake-reconcile-preview"
+
+[[env.preview.queues.consumers]]
+queue = "earthquake-reconcile-preview"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+
+[env.production]
+name = "earthquake"
+workers_dev = true
+# Domain ownership is explicit and matches the verified live custom domain.
+routes = [{ pattern = "earthquakeslive.com", custom_domain = true }]
 kv_namespaces = [
-  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" }, # Production KV
-  # For production, ensure you have a production version of USGS_LAST_RESPONSE_KV
-  # and have updated its id in the top-level kv_namespaces definition.
-  { binding = "USGS_LAST_RESPONSE_KV", id = "8bebf55e19a14299b35d1d4f6a53d2b5" }, # This will use the id from the top-level definition
-  # STATIC_KV serves the frontend assets live (see note at top-level kv_namespaces).
-  # NOTE: env-level arrays fully replace top-level ones in wrangler, so this binding
-  # must be repeated here. Real ID filled in from the deployed settings on 2026-08-31.
+  { binding = "CLUSTER_KV", id = "2e7c7b5faf2f47868a048bd8043edebc" },
+  { binding = "USGS_LAST_RESPONSE_KV", id = "8bebf55e19a14299b35d1d4f6a53d2b5" },
+  # Retained for previous releases and already-open clients' hashed chunks.
   { binding = "STATIC_KV", id = "103d46c25b71471489abb0989cc2ecfa" }
 ]
-
 d1_databases = [
-  { binding = "DB", database_name = "PrimaryDB", database_id = "8a0a26e9-ba3c-4984-9023-c1803f611a05" } # Production D1
+  { binding = "DB", database_name = "PrimaryDB", database_id = "8a0a26e9-ba3c-4984-9023-c1803f611a05", migrations_dir = "migrations" }
+]
+r2_buckets = [
+  { binding = "GEOJSON_BUCKET", bucket_name = "geojson-bucket" }
 ]
 
-[[env.production.r2_buckets]]
-binding = "GEOJSON_BUCKET"
-bucket_name = "geojson-bucket"
+[env.production.triggers]
+crons = ["*/5 * * * *", "*/30 * * * *", "0 0 * * *", "*/10 * * * *"]
 
 [[env.production.queues.producers]]
-queue = "geojson-queue"
 binding = "GEOJSON_QUEUE"
+queue = "geojson-queue"
 
-# Live runs a queue consumer on geojson-queue (geojson-archive.js); env-level queues
-# config replaces the top-level one, so the consumer must be repeated here.
+# Match the live consumer's actual 5-second timeout (old max_wait_ms was ignored).
 [[env.production.queues.consumers]]
 queue = "geojson-queue"
 max_batch_size = 10
-max_wait_ms = 1000
-
-# Example of other potential configurations (uncomment and adjust if needed):
-# [vars]
-# MY_VARIABLE = "production_value"
-#
-# [env.preview.vars]
-# MY_VARIABLE = "preview_value"
-#
-# [env.dev.vars] # For 'wrangler dev'
-# MY_VARIABLE = "dev_value"
-
-# This explicitly tells 'wrangler dev' to use the preview_id for CLUSTER_KV.
-[env.dev.kv_namespaces]
-CLUSTER_KV = { preview_id = "25424bdebf90459ea61121e9b3dfc4ee" }
-# For 'wrangler dev', also map USGS_LAST_RESPONSE_KV to its preview_id.
-# This ensures that 'wrangler dev' uses the preview KV namespace.
-USGS_LAST_RESPONSE_KV = { preview_id = "21d89ac9c07c4845b08dd6d0e0a2b5eb" }
-
-
-# D1 Database binding for primary data
-# -----------------------------------------------------------------------------------------
-# IMPORTANT INSTRUCTIONS FOR THE USER:
-# 1. Create D1 Database:
-#    You need to create a D1 database using the Wrangler CLI.
-#    Run this command in your terminal:
-#      wrangler d1 create PrimaryDB
-#
-# 2. Update IDs Below:
-#    Wrangler will output a 'database_id' for the created D1 database.
-#    Replace "REPLACE_WITH_PRODUCTION_D1_ID" with this ID for your production database.
-#    It is also recommended to create a separate D1 database for preview/local development
-#    and update "REPLACE_WITH_PREVIEW_D1_ID" accordingly. You can run:
-#      wrangler d1 create PrimaryDB-preview
-#    Then use its ID for 'preview_database_id'.
-#
-# 3. Dashboard Configuration (Crucial for Git-integrated Workers):
-#    For Cloudflare Workers projects using Git integration, D1 bindings configured in the
-#    Cloudflare Dashboard (Worker -> Settings -> Variables & Secrets -> D1 Database Bindings)
-#    often take precedence for deployed environments (production and preview).
-#    Ensure you also configure the 'DB' binding there, pointing it to the
-#    respective D1 databases for your production and preview environments.
-#    This wrangler.toml configuration is especially useful for local development
-#    with `wrangler dev`.
-# -----------------------------------------------------------------------------------------
-
-# This explicitly tells 'wrangler dev' (local development) to use the preview_database_id for DB.
-[env.dev.d1_databases]
-DB = { preview_database_id = "57ba069c-5763-41c3-965d-0df87b0ef26b" }
-
-
-[triggers]
-# Cron triggers for various background tasks.
-crons = ["*/5 * * * *", "*/30 * * * *", "0 0 * * *", "*/10 * * * *"]
-
-# If you have other bindings (like R2, Services), define them here too.
-# Refer to Cloudflare Wrangler documentation for more details.
-# wrangler.toml (wrangler v3.88.0^)
-[observability.logs]
-enabled = true
+max_batch_timeout = 5
+max_retries = 3
+retry_delay = 0

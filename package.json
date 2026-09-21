@@ -4,15 +4,21 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "wrangler dev --env preview --local",
     "build": "vite build",
     "lint": "npx eslint .",
-    "preview": "vite preview",
-    "test": "vitest",
+    "preview": "wrangler dev --env preview --local",
+    "test": "vitest run",
     "docs": "npx jsdoc -c jsdoc.json",
-    "deploy": "wrangler deploy --env production",
-    "deploy:staging": "wrangler deploy --env staging",
-    "deploy:production": "wrangler deploy --env production"
+    "deploy": "npm run deploy:production",
+    "deploy:staging": "npm run deploy:preview",
+    "deploy:production": "wrangler deploy --env production",
+    "dev:ui": "vite",
+    "test:watch": "vitest",
+    "deploy:preview": "wrangler deploy --env preview",
+    "check:deploy": "wrangler deploy --env production --dry-run",
+    "seed:preview": "node scripts/seed-preview.mjs",
+    "smoke": "node scripts/smoke-deployment.mjs"
   },
   "dependencies": {
     "d3-array": "^3.2.4",
@@ -61,6 +67,9 @@
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^3.2.4",
-    "wrangler": "^4.19.1"
+    "wrangler": "4.135.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

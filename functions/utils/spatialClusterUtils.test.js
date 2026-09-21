@@ -7,9 +7,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { 
   EarthquakeSpatialIndex, 
   buildEarthquakeSpatialIndex, 
-  findActiveClustersOptimized,
-  benchmarkClusteringComparison
+  findActiveClustersOptimized
 } from './spatialClusterUtils.js';
+import { findActiveClusters } from '../../src/utils/clusterUtils.js';
 
 // Test data generators
 const createMockEarthquake = (id, lat, lng, mag = 5.0) => ({
@@ -341,16 +341,19 @@ describe('findActiveClustersOptimized', () => {
   });
 });
 
-describe('Performance Comparison', () => {
-  it('should provide benchmark comparison data', async () => {
-    const earthquakes = createClusteredEarthquakes(34.0, -118.0, 100);
-    
-    const comparison = await benchmarkClusteringComparison(earthquakes, 50, 3);
-    
-    expect(comparison).toHaveProperty('optimized');
-    expect(comparison.optimized).toHaveProperty('clusters');
-    expect(comparison.optimized).toHaveProperty('clusterCount');
-    expect(comparison.optimized).toHaveProperty('totalEarthquakes');
+describe('Clustering compatibility', () => {
+  it('matches client cluster memberships for deterministic separated groups', () => {
+    const earthquakes = [
+      createMockEarthquake('la1', 34.0, -118.0, 5.0),
+      createMockEarthquake('la2', 34.01, -118.01, 4.0),
+      createMockEarthquake('sf1', 37.7, -122.4, 5.5),
+      createMockEarthquake('sf2', 37.71, -122.41, 3.0),
+      createMockEarthquake('isolated', 0, 0, 6.0),
+    ];
+    const memberships = clusters => clusters.map(cluster => cluster.map(quake => quake.id).sort()).sort();
+    const optimized = memberships(findActiveClustersOptimized(earthquakes, 30, 2));
+    expect(optimized).toEqual([['eq_la1', 'eq_la2'], ['eq_sf1', 'eq_sf2']]);
+    expect(optimized).toEqual(memberships(findActiveClusters(earthquakes, 30, 2)));
   });
 });
 

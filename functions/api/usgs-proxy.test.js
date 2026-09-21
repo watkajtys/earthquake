@@ -67,7 +67,7 @@ describe('handleUsgsProxy', () => {
       env: {
         WORKER_CACHE_DURATION_SECONDS: String(DEFAULT_CACHE_DURATION_SECONDS), // Ensure it's a string like env vars
         DB: createMockDbInstance(), // Use the full mock by default
-        USGS_LAST_RESPONSE_KV: { get: vi.fn(), put: vi.fn() }, // Mock KV namespace binding
+        USGS_LAST_RESPONSE_KV: { get: vi.fn(), getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }), put: vi.fn() }, // Mock KV namespace binding
       },
       executionContext: { // <<< Ensure executionContext and its waitUntil are provided
         waitUntil: vi.fn((promise) => { // Allow awaiting promises passed to waitUntil
@@ -365,7 +365,7 @@ describe('handleUsgsProxy KV Logic', () => {
       env: {
         WORKER_CACHE_DURATION_SECONDS: String(DEFAULT_CACHE_DURATION_SECONDS),
         DB: createMockDbInstance(), // Mock D1
-        USGS_LAST_RESPONSE_KV: { get: vi.fn(), put: vi.fn() }, // Mock KV namespace
+        USGS_LAST_RESPONSE_KV: { get: vi.fn(), getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }), put: vi.fn() }, // Mock KV namespace
       },
       executionContext: { // <<< Ensure executionContext and its waitUntil are provided
         waitUntil: vi.fn(promise => promise ? promise.catch(e => console.error("WaitUntil error:", e)) : Promise.resolve()),

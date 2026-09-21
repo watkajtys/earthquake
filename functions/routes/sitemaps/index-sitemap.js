@@ -10,7 +10,7 @@ async function handleIndexSitemap(context) {
   if (env.DB) {
     try {
       const allPotentiallySignificantEvents = await env.DB.prepare(
-        "SELECT magnitude, geojson_feature FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= ?",
+        "SELECT magnitude, has_moment_tensor, has_focal_mechanism FROM EarthquakeEvents WHERE id IS NOT NULL AND place IS NOT NULL AND magnitude >= ?",
       )
         .bind(2.5)
         .all();

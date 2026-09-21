@@ -1,5 +1,7 @@
 # RECONSTITUTION.md — repo restored from live deployment (2026-08)
 
+> **Historical record; current status (2026-09-21):** The sections below describe the August source recovery. The reconciled checkout now uses native Workers Static Assets, verified production bindings, and separate preview resources. The old frontend asset namespace is retained for compatibility and rollback. Follow [DEPLOYMENT.md](DEPLOYMENT.md) for current operations; the old placeholder/configuration notes below are not deployment instructions. Validation and deployment results are recorded separately.
+
 Branch: `live-recovery-2026-08`. Ground truth: the deployed worker bundle
 (`earthquake-live/worker-patched.js`, 29 module slices + `_preamble.js`,
 prettier-formatted with minified identifiers). Companion docs:
@@ -45,9 +47,9 @@ Notable pre-hotfix drift folded in by this restoration (live was ahead of repo):
   (`s-maxage` + `stale-while-revalidate`) on KV-hit responses.
 - `functions/background/generate-lists.js`: dead `createScheduledTaskLogger`
   import removed.
-- `src/worker.js`: static-asset fallthrough is KV-based
+- `src/worker.js` at recovery: static-asset fallthrough was KV-based
   (`handleStaticAssetRequest`, `env.STATIC_KV`), not `env.ASSETS.fetch` as the
-  old repo code assumed.
+  old repo code assumed. This describes the August baseline; new builds now use `ASSETS`.
 
 Repo-only exports that vanished from the live bundle are indistinguishable from
 esbuild tree-shaking; they were dropped with their files per "live is truth":
@@ -74,13 +76,12 @@ See `earthquake-live/PATCH-REPORT.md`. In short:
    `findActiveClustersOptimized`). These stop the frontend's retry storm caused
    by the API paths falling through to the HTML static handler.
 
-## wrangler.toml reconciliation
+## Historical wrangler.toml reconciliation
 
-Aligned with live: `name = "earthquake"`, `compatibility_date = "2024-06-05"`,
+At recovery, aligned with live: `name = "earthquake"`, `compatibility_date = "2024-06-05"`,
 `nodejs_compat`, crons `*/5 */30 */10 0 0` (already present). Changes made:
 
-- Added `STATIC_KV` KV binding (**placeholder IDs — real namespace ID unknown,
-  fill in from the dashboard before any deploy**), top-level and in
+- Added `STATIC_KV` KV binding (**IDs were initially placeholders**), top-level and in
   `[env.production]` (env arrays replace top-level ones in wrangler).
 - Disabled the `[assets]` (Workers Static Assets) section: the live worker does
   not use it; statics are served from `STATIC_KV` by code in `src/worker.js`.
@@ -89,7 +90,11 @@ Aligned with live: `name = "earthquake"`, `compatibility_date = "2024-06-05"`,
 - Custom domain `earthquakeslive.com`: attached out-of-band at zone level;
   left commented (`# custom_domains = [...]`) with a note, not active.
 
-## Build verification
+The September configuration supersedes these choices: the real `STATIC_KV` ID
+is recorded in production, `[assets]` is enabled, the custom domain is explicit,
+and the preview environment has separate storage and queue bindings with no crons.
+
+## Historical build verification
 
 Command (equivalent to wrangler's bundling; wrangler itself was not run per
 constraints):
@@ -117,16 +122,19 @@ after whitespace stripping:
   deployed worker source imported it (repo `main` did not). The rebuild
   tree-shakes it. Inert.
 
-Not reproducible byte-close without the lost deploy tooling (manifest
-regeneration + prepend step); the delta above is the full, precise list.
+The August bundle was not reproducible byte-close without the lost deploy
+tooling (manifest regeneration + prepend step); the delta above records the
+recovery comparison. This is not the build contract for the reconciled release.
 
-## Remaining uncertainties
+## Uncertainties recorded at recovery
 
-- **Frontend drift is real and unrecoverable** — see `LIVE-DRIFT.md`. Repo
-  frontend ≠ deployed frontend (extra pages, different hashes, older
-  cluster-registration semantics in repo).
-- `STATIC_KV` namespace ID unknown (placeholder in wrangler.toml).
-- The KV asset-upload/manifest tooling is lost; a frontend rebuild currently
-  cannot be deployed without recreating it.
-- Whether wrangler's exact esbuild flags match the verified command above was
-  not tested (no wrangler commands were run, per constraints).
+- The original frontend source had not been recovered — see `LIVE-DRIFT.md`.
+  The September release uses the checked-in source, including its additional
+  pages, with API compatibility fixes and separate preview validation.
+- `STATIC_KV` was initially unknown; its production namespace ID has since
+  been verified and recorded in `wrangler.toml`.
+- The original KV asset-upload/manifest tooling was lost. Native Workers
+  Static Assets now handles new frontend builds and uploads.
+- Wrangler's esbuild flags were not tested during the August recovery. The
+  current packaging check is `npm run check:deploy`; record its actual result
+  for each release rather than relying on the historical comparison above.

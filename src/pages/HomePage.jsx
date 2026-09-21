@@ -449,14 +449,17 @@ function App() {
 
     // Old handleLoadMonthlyData is removed. `loadMonthlyData` from the hook is used instead.
 
-    // --- ADDED: Memoized lookup map for all earthquakes by ID for efficient cluster reconstruction ---
+    // Reconstruct clusters from feeds already loaded. The monthly feed is optional;
+    // daily and weekly records must be usable on the first visit to the home page.
     const earthquakeMap = useMemo(() => {
-        if (!allEarthquakes || allEarthquakes.length === 0) {
-            return new Map();
-        }
-        // Creates a Map where the key is the earthquake ID and the value is the full earthquake object.
-        return new Map(allEarthquakes.map(quake => [quake.id, quake]));
-    }, [allEarthquakes]);
+        const availableEarthquakes = [
+            ...(allEarthquakes || []),
+            ...(earthquakesLast7Days || []),
+            ...(earthquakesLast24Hours || []),
+        ];
+        // The more recent feeds replace duplicate IDs from the monthly cache.
+        return new Map(availableEarthquakes.map(quake => [quake.id, quake]));
+    }, [allEarthquakes, earthquakesLast7Days, earthquakesLast24Hours]);
 
 
     // Effect to fetch active clusters from the API
