@@ -10,6 +10,8 @@ import { createScheduledTaskLogger } from './utils/scheduledTaskLogger.js';
 import { onRequestGet as onRequestGet2 } from '../functions/api/get-earthquakes.js';
 import { onRequestGet as onRequestGet3 } from '../functions/api/get-clusters.js';
 import { onRequestGet as getClusterSummaries } from '../functions/api/cluster-summaries.js';
+import { onRequestGet as getEarthquakeFeeds } from '../functions/api/earthquake-feeds.js';
+import { publishEarthquakeFeeds } from '../functions/background/publish-earthquake-feeds.js';
 import { handleBatchUsgsFetch } from '../functions/api/batch-usgs-fetch.js';
 import { handleIndexSitemap } from '../functions/routes/sitemaps/index-sitemap.js';
 import { handleEarthquakesSitemap } from '../functions/routes/sitemaps/earthquakes-sitemap.js';
@@ -645,6 +647,9 @@ var worker_default = {
     if (pathname === "/api/usgs-proxy") {
       return handleUsgsProxy({ request, env, executionContext: ctx });
     }
+    if (pathname === '/api/earthquake-feeds') {
+      return getEarthquakeFeeds({ request, env });
+    }
     if (pathname.startsWith("/api/earthquake/")) {
       const parts = pathname.split("/");
       if (parts.length === 4 && parts[3]) {
@@ -765,6 +770,7 @@ var worker_default = {
         );
         logger.logMilestone("High-frequency tasks started");
         ctx.waitUntil(
+          Promise.allSettled([
           this.fetchLatestUsgsData(event, env, ctx, logger)
             .then((proxyResponse) => {
               if (proxyResponse && proxyResponse.ok) {
@@ -794,6 +800,18 @@ var worker_default = {
               logger.logError("HIGH_FREQ_TASK_CHAIN_ERROR", err, {}, true);
               throw err;
             }),
+          publishEarthquakeFeeds(env).then(results => {
+            console.log('[period-feeds] Publication results.', results);
+          }).catch(error => {
+            console.error('[period-feeds] Publication failed.', error.results ?? { status: 'failed' });
+            throw error;
+          }),
+          ]).then(results => {
+            // Both independent jobs finish before the platform sees failure.
+            // A D1 failure cannot suppress complete USGS feed publication.
+            const failure = results.find(result => result.status === 'rejected');
+            if (failure) throw failure.reason;
+          }),
         );
         break;
       case "*/30 * * * *":

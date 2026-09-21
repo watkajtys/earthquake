@@ -42,7 +42,9 @@ export async function readSummaryJsonObject(bucket, key, maxBytes) {
   let offset = 0;
   chunks.forEach(chunk => { bytes.set(chunk, offset); offset += chunk.byteLength; });
   const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  return { value: JSON.parse(text), etag: object.etag, byteLength: length, text };
+  const uploaded = object.uploaded instanceof Date ? object.uploaded.getTime() : null;
+  const uploadedAtMs = Number.isSafeInteger(uploaded) && uploaded >= 0 ? uploaded : null;
+  return { value: JSON.parse(text), etag: object.etag, byteLength: length, text, uploadedAtMs };
 }
 export async function readSummaryPointer(bucket) {
   const object = await readSummaryJsonObject(bucket, SUMMARY_POINTER_KEY, MAX_SUMMARY_POINTER_BYTES);

@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { validateSummaryEnvelope } from '../shared/clusterSummaryContract.js';
+import { checkPeriodFeeds } from './check-period-feeds.mjs';
 import { PREVIOUS_RELEASE_ASSETS } from '../src/previousReleaseAssets.js';
 
 const CANONICAL_ORIGIN = 'https://earthquakeslive.com';
@@ -12,12 +13,13 @@ const decodeXml = value => value.replace(/&(amp|quot|apos|lt|gt);/g, (_, entity)
 export async function smokeDeployment(args = [], { fetchImpl = fetch, log = console.log } = {}) {
 
 if (args.includes('--help')) {
-  log('Usage: node scripts/smoke-deployment.mjs [http://localhost:8787] [--preview]\nOnly GET requests are used. Run against the reconciled deployment, not the previous KV-based release.');
+  log('Usage: node scripts/smoke-deployment.mjs [http://localhost:8787] [--preview] [--require-period-feeds]\nOnly GET requests are used. Run against the reconciled deployment, not the previous KV-based release.');
   return;
 }
 const preview = args.includes('--preview');
-const positional = args.filter((arg) => arg !== '--preview');
-assert(positional.length <= 1 && !positional.some((arg) => arg.startsWith('--')), 'Expected one base URL and optional --preview.');
+const requirePeriodFeeds = args.includes('--require-period-feeds');
+const positional = args.filter((arg) => !['--preview', '--require-period-feeds'].includes(arg));
+assert(positional.length <= 1 && !positional.some((arg) => arg.startsWith('--')), 'Expected one base URL and optional --preview / --require-period-feeds.');
 const base = new URL(positional[0] || 'http://localhost:8787');
 assert(['http:', 'https:'].includes(base.protocol) && !base.username && !base.password, 'Use an HTTP(S) URL without credentials.');
 assert(base.pathname === '/' && !base.search && !base.hash, 'Base URL must be the deployment origin.');
@@ -25,12 +27,12 @@ const assets = new Set();
 let checks = 0;
 let requests = 0;
 
-async function request(path, contentType, status = 200, userAgent = 'Earthquake-Deployment-Smoke/1.0') {
+async function request(path, contentType, status = 200, userAgent = 'Earthquake-Deployment-Smoke/1.0', signal = AbortSignal.timeout(30_000)) {
   const url = new URL(path, base);
   assert.equal(url.origin, base.origin, `Refusing external URL ${url}`);
   assert(++requests <= 260, 'Smoke request budget exceeded (260 GET requests).');
   const response = await fetchImpl(url, {
-    method: 'GET', redirect: 'error', signal: AbortSignal.timeout(30_000),
+    method: 'GET', redirect: 'error', signal,
     headers: { 'User-Agent': userAgent },
   });
   assert.equal(response.status, status, `${url.pathname}: unexpected HTTP status`);
@@ -109,6 +111,10 @@ async function readJson(path, status = 200) {
     }
     lists[period] = data;
   }
+  if (requirePeriodFeeds) await checkPeriodFeeds(base.origin, {
+    preview, log: () => {},
+    fetchImpl: (url, options) => request(url, /application\/json/i, 200, options.headers['User-Agent'], options.signal),
+  });
   const { data: clusters } = await readJson('/api/get-clusters');
   assert(Array.isArray(clusters), 'Expected a cluster array');
   // Consumer releases require a real published compact snapshot. Missing data

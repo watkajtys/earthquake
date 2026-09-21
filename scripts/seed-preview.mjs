@@ -9,6 +9,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { publishClusterSummarySnapshot } from '../functions/utils/clusterSummarySnapshot.js';
+import { publishEarthquakeFeeds } from '../functions/background/publish-earthquake-feeds.js';
+import { createPreviewFeedCollections } from './preview-feed-fixtures.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const targetName = 'earthquake-reconcile-preview';
@@ -150,7 +152,7 @@ try {
       mag: magnitude,
       place: `SYNTHETIC PREVIEW ${id === 'previewquake004' ? 'Pacific' : 'California'} event`,
       time: now - ageHours * hour, updated: now,
-      title: `M ${magnitude.toFixed(1)} - SYNTHETIC PREVIEW event`,
+      title: `M ${Number.isFinite(magnitude) ? magnitude.toFixed(1) : 'unknown'} - SYNTHETIC PREVIEW event`,
       detail: `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${id}.geojson`,
       url: `https://earthquake.usgs.gov/earthquakes/eventpage/${id}`,
       status: 'reviewed', type: 'earthquake', magType: 'mw', net: 'preview', code: id,
@@ -237,11 +239,16 @@ try {
     const publication = await publishClusterSummarySnapshot(platform.env);
     assert.equal(publication.published, true, 'Preview compact summary publication must complete');
     console.log('Published compact preview summaries:', publication);
+    const feeds = createPreviewFeedCollections(features, now, { includeEdgeCases: true });
+    const feedPublications = await publishEarthquakeFeeds(platform.env, { now, fetchFeed: async period => feeds[period] });
+    assert.equal(feedPublications.length, 3, 'Preview must validate all three complete periods');
+    assert(feedPublications.every(result => result.published || result.reason === 'unchanged'), 'Preview period publication must complete');
+    console.log('Published complete synthetic preview period feeds:', feedPublications);
   } finally {
     try { await r2.delete(probeKey); } finally { await platform.dispose(); }
   }
 
-  console.log(`Seeded 4 earthquakes, 1 cluster, and ${objects.length} R2 objects. Re-run to refresh fixture timestamps.`);
+  console.log(`Seeded ${features.length} earthquakes, 1 cluster, legacy R2 objects and three complete period snapshots. Re-run to refresh fixture timestamps.`);
   console.log('Preview paths: /quake/m6.3-synthetic-preview-california-previewquake001');
   console.log(`               /cluster/${cluster.slug}`);
 } catch (error) {

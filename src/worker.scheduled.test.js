@@ -3,6 +3,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './worker.js';
 import { handleTrustedUsgsIngestion } from '../functions/background/ingest-usgs-feed.js';
 import { handleGenerateLists } from '../functions/background/generate-lists.js';
+import { publishEarthquakeFeeds } from '../functions/background/publish-earthquake-feeds.js';
 import { onRequestGet as backfill } from '../functions/api/backfill-earthquake-details.js';
 import { storeClusterDefinition } from '../functions/utils/d1ClusterUtils.js';
 import { clusterInput, clusterNow, createClusterSqliteFixture } from '../functions/utils/clusterSqliteFixture.test-support.js';
@@ -11,6 +12,7 @@ import { SUMMARY_POINTER_KEY } from '../shared/clusterSummaryContract.js';
 
 vi.mock('../functions/background/ingest-usgs-feed.js', () => ({ handleTrustedUsgsIngestion: vi.fn() }));
 vi.mock('../functions/background/generate-lists.js', () => ({ handleGenerateLists: vi.fn() }));
+vi.mock('../functions/background/publish-earthquake-feeds.js', () => ({ publishEarthquakeFeeds: vi.fn() }));
 vi.mock('../functions/api/backfill-earthquake-details.js', () => ({ onRequestGet: vi.fn(), onRequestPost: vi.fn() }));
 
 const features = [{ type: 'Feature', id: 'us-test', properties: { time: 1, updated: 2, mag: 3, place: 'Fixture' }, geometry: { type: 'Point', coordinates: [0, 0, 1] } }];
@@ -33,6 +35,7 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   handleTrustedUsgsIngestion.mockResolvedValue(Response.json({ newOrUpdatedFeatures: features }));
   handleGenerateLists.mockResolvedValue(undefined);
+  publishEarthquakeFeeds.mockResolvedValue([]);
   backfill.mockResolvedValue(Response.json({ success: true, processed: 1, errors: 0 }));
 });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -44,6 +47,7 @@ describe('actual Worker scheduled failure propagation', () => {
     expect(handleTrustedUsgsIngestion).toHaveBeenCalledWith(expect.objectContaining({ env, executionContext: context, feedKey: 'hour' }));
     expect(handleTrustedUsgsIngestion.mock.calls[0][0]).not.toHaveProperty('request');
     expect(handleGenerateLists).toHaveBeenCalledWith({ env, newFeatures: features });
+    expect(publishEarthquakeFeeds).toHaveBeenCalledWith(env);
   });
 
   it.each([502, 503, 504])('rejects the scheduled lifetime when ingestion returns HTTP %s, without publishing lists', async status => {
@@ -52,6 +56,7 @@ describe('actual Worker scheduled failure propagation', () => {
     expect(results[0].status).toBe('rejected');
     expect(results[0].reason.message).toContain(`HTTP ${status}`);
     expect(handleGenerateLists).not.toHaveBeenCalled();
+    expect(publishEarthquakeFeeds).toHaveBeenCalledWith(env);
   });
 
   it('preserves a rejected checkpoint/ingestion error through waitUntil', async () => {
@@ -75,6 +80,14 @@ describe('actual Worker scheduled failure propagation', () => {
     handleGenerateLists.mockRejectedValue(failure);
     const { results } = await runScheduled('*/5 * * * *');
     expect(results[0]).toEqual({ status: 'rejected', reason: failure });
+  });
+
+  it('surfaces full-period publication failure after successful legacy ingestion/list work', async () => {
+    const failure = new Error('Full-period publication failed');
+    publishEarthquakeFeeds.mockRejectedValue(failure);
+    const { results } = await runScheduled('*/5 * * * *');
+    expect(results).toEqual([{ status: 'rejected', reason: failure }]);
+    expect(handleGenerateLists).toHaveBeenCalledWith({ env, newFeatures: features });
   });
 
   it('keeps the trusted scheduled backfill working without a public admin credential', async () => {

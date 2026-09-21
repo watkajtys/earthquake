@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { smokeDeployment } from './smoke-deployment.mjs';
+import { publishEarthquakeFeeds } from '../functions/background/publish-earthquake-feeds.js';
+import { onRequestGet } from '../functions/api/earthquake-feeds.js';
+import { createMemorySummaryBucket } from '../functions/utils/clusterSummarySnapshot.test-support.js';
+import { createPreviewFeedCollections } from './preview-feed-fixtures.mjs';
 import { PREVIOUS_RELEASE_ASSETS } from '../src/previousReleaseAssets.js';
 
 const ORIGIN = 'http://localhost:8787';
@@ -9,7 +13,7 @@ const EVENT_ID = 'previewquake001';
 const cluster = { id: 'cluster-uuid', slug: 'other-stored-slug', strongestQuakeId: EVENT_ID, title: 'SYNTHETIC PREVIEW cluster' };
 const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers } });
 
-function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = false, emptySitemap = false, badCrawlerAsset = false, badPreviousAsset = false, devEntry = false, noCrawlerCss = false, quakeNoindex = false, summaryUnavailable = false, summaryStale = false } = {}) {
+function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = false, emptySitemap = false, badCrawlerAsset = false, badPreviousAsset = false, devEntry = false, noCrawlerCss = false, quakeNoindex = false, summaryUnavailable = false, summaryStale = false, periodFeedsResponse } = {}) {
   const calls = [];
   const fetchImpl = vi.fn(async (input, options) => {
     const url = new URL(input);
@@ -19,6 +23,7 @@ function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = f
     expect(options.redirect).toBe('error');
     expect(options.signal).toBeInstanceOf(AbortSignal);
     const path = url.pathname;
+    if (path === '/api/earthquake-feeds' && periodFeedsResponse) return periodFeedsResponse(url, options);
     if (path === '/api/get-earthquakes') return json([{ id: EVENT_ID, place: 'SYNTHETIC PREVIEW event' }], 200, { 'X-Data-Source': 'R2' });
     if (path === '/api/get-clusters') return json([cluster]);
     if (path === '/api/cluster-summaries') return summaryUnavailable ? json({ code: 'SUMMARY_UNAVAILABLE' }, 503) : json({
@@ -71,7 +76,8 @@ describe('deployment smoke crawler contract', () => {
     expect(calls.some(({ url }) => url.pathname === '/assets/crawler.css')).toBe(true);
     expect(calls.some(({ url }) => url.pathname === `/quake/id/${EVENT_ID}`)).toBe(true);
     expect(calls.some(({ url }) => url.pathname === `/quake/m${Number.isFinite(magnitude) ? magnitude : 'unknown'}-release-check-${EVENT_ID}`)).toBe(true);
-    expect(calls.length).toBeLessThan(80);
+    expect(calls.length).toBeLessThan(60 + Object.keys(PREVIOUS_RELEASE_ASSETS).length);
+    expect(calls.some(({ url }) => url.pathname === '/api/earthquake-feeds')).toBe(false);
     for (const path of Object.keys(PREVIOUS_RELEASE_ASSETS)) expect(calls.some(call => call.url.pathname === path)).toBe(true);
   });
 
@@ -93,5 +99,23 @@ describe('deployment smoke crawler contract', () => {
   ])('rejects an invalid crawler deployment %#', async (options, message) => {
     const { fetchImpl } = fixture(options);
     await expect(smokeDeployment([ORIGIN, '--preview'], { fetchImpl, log: vi.fn() })).rejects.toThrow(message);
+  });
+});
+
+
+describe('opt-in period-feed release gate', () => {
+  it('validates three actual published snapshots while preserving the default producer gate', async () => {
+    const now = Date.now();
+    const sources = createPreviewFeedCollections([], now, { includeEdgeCases: true });
+    const env = { GEOJSON_BUCKET: createMemorySummaryBucket() };
+    await publishEarthquakeFeeds(env, { now, fetchFeed: async period => sources[period] });
+    const { fetchImpl, calls } = fixture({ periodFeedsResponse: (url, options) => onRequestGet({ request: new Request(url, options), env }) });
+    await smokeDeployment([ORIGIN, '--preview', '--require-period-feeds'], { fetchImpl, log: vi.fn() });
+    expect(calls.filter(({ url }) => url.pathname === '/api/earthquake-feeds').map(({ url }) => url.searchParams.get('period'))).toEqual(['day', 'week', 'month']);
+  });
+
+  it('fails a required but absent publication', async () => {
+    const { fetchImpl } = fixture({ periodFeedsResponse: () => json({}, 503) });
+    await expect(smokeDeployment([ORIGIN, '--require-period-feeds'], { fetchImpl, log: vi.fn() })).rejects.toThrow(/unexpected HTTP status/);
   });
 });

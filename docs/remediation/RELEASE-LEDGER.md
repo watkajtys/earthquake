@@ -205,6 +205,17 @@ Completion decision:
 - PERF-1 is fixed for the current browser; legacy `/api/get-clusters` remains available and still has its large compatible payload. F7 is contained by stored scalar cards. Scientific identity/duplicates, historical versions/timestamps and atomic scientific generations remain package 3 work. Full source freshness/completeness (5B), remaining rendering/sitemap/asset work and narrowly scoped R2 cleanup remain open. No schema migration, historical repair or production synthetic write occurred in this block.
 - Production tail collection and local servers were stopped; temporary browser tabs were closed and viewport overrides reset. Evidence is retained under the ignored `.reconciliation.local/compact-summaries/` directory. Final documentation is committed on `codex/cluster-integrity-summaries`; the deployed application source remains `2b80dda`.
 
+## Complete period feeds — 2026-09-21 UTC
+
+Status: producer/API implemented and locally verified; frozen full-suite/runtime, preview and production rollout pending. Scope and staged sequence: [PERIOD-FEEDS.md](PERIOD-FEEDS.md).
+
+- Adds independent complete day/week/month USGS publications on the existing five-minute schedule, with per-period immutable R2 objects and conditional pointer commits. Legacy hourly ingestion, D1 persistence and list arrays remain compatible. Failed periods preserve last-good objects while healthy periods still publish; scheduled failures remain visible.
+- Strict shared validation preserves old events and negative/null magnitudes, requires all alert metadata and real source generation/counts, bounds sizes and distinguishes complete empty data from unavailability. GET serves checksum-verified immutable bytes; HEAD/304 verify existence and metadata, retaining the original source/coverage clocks. Requests use neither D1 nor upstream fetches.
+- Normal successful publication retires only the exact superseded previous object after R2's actual pointer-upload timestamp proves a one-minute reader grace. Review caught and fixed the slow-staging race caused by using pre-upload generation time. Current/previous last-good objects survive failures; abandoned stages and deferred cleanup remain a separate follow-up.
+- Local targeted evidence: 70 root shared/actual-Worker/scheduled tests; 40 publisher tests plus 85 existing cluster publisher/API tests; 63 operations/asset-bridge tests passed. Changed backend/operations files passed lint and diff checks. Actual isolated local R2 seeding passed native conditional/checksum writes using the real publisher. This seed runs the publisher through native bindings, not the full scheduled Worker runtime.
+- Read-only USGS measurement observed 223 day / 1,894 week / 10,676 month records, about 9.10 MB total decoded source JSON. Three explicit feeds preserve independent source clocks/availability; deriving all from month saved 16.58% of this sample but is deferred. No on-wire or latency-percentile claim is made.
+- The exact immediately preceding frontend graph is merged with the retained graph: 44 paths / 10,304,659 bytes verified locally, preserving all previous entries. Uploads and release gates remain pending. Consumer changes are intentionally released after a real production publication.
+
 ## Subrelease record template
 
 Copy this section for each focused release. Replace placeholders with observed facts or explicit `not run` / `not applicable`, never assumed success.
