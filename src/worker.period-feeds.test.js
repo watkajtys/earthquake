@@ -115,6 +115,17 @@ describe('actual Worker complete period read route', () => {
     await vi.advanceTimersByTimeAsync(10_001);
     expect((await response).status).toBe(503);
   });
+  it('cancels R2 bodies that arrive after the read deadline', async () => {
+    let resolveRead;
+    let cancelled = false;
+    env.GEOJSON_BUCKET = { get: () => new Promise(resolve => { resolveRead = resolve; }) };
+    const response = fetchFeed();
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect((await response).status).toBe(503);
+    resolveRead({ body: new ReadableStream({ cancel() { cancelled = true; } }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(cancelled).toBe(true);
+  });
 });
 
 describe('actual five-minute Worker publication with real publisher', () => {

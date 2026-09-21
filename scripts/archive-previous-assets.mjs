@@ -41,10 +41,15 @@ try {
   platform = await getPlatformProxy({ configPath, persist: false, remoteBindings: true });
   const bucket = platform.env.GEOJSON_BUCKET;
   for (const { url, descriptor, bytes } of files) {
-    await bucket.put(descriptor.key, bytes, {
-      onlyIf: { etagDoesNotMatch: '*' }, customMetadata: { sha256: descriptor.sha256 },
-      httpMetadata: { contentType: descriptor.contentType, cacheControl: 'public, max-age=31536000, immutable' },
-    });
+    // An idempotent retry need not retransmit multi-megabyte archived chunks.
+    // Existing objects still undergo the full metadata/checksum readback below.
+    if (await bucket.head(descriptor.key) === null) {
+      console.log(JSON.stringify({ archiving: url, bytes: bytes.byteLength }));
+      await bucket.put(descriptor.key, bytes, {
+        onlyIf: { etagDoesNotMatch: '*' }, customMetadata: { sha256: descriptor.sha256 },
+        httpMetadata: { contentType: descriptor.contentType, cacheControl: 'public, max-age=31536000, immutable' },
+      });
+    }
     // A conditional conflict is safe only if the entire stored object matches.
     const object = await bucket.get(descriptor.key);
     assert(object && object.size === descriptor.byteLength && object.customMetadata?.sha256 === descriptor.sha256 &&

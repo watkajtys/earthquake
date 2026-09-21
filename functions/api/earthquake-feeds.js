@@ -27,7 +27,10 @@ function matchesEtag(value, etag) {
     part.trim() === '*' || part.trim().replace(/^W\//u, '') === etag);
 }
 async function readVerifiedBytes(object, descriptor, signal) {
-  if (!objectMatches(object, descriptor) || !object.body?.getReader) throw new Error('Invalid feed object');
+  if (!objectMatches(object, descriptor) || !object.body?.getReader) {
+    void object?.body?.cancel().catch(() => {});
+    throw new Error('Invalid feed object');
+  }
   const bytes = new Uint8Array(descriptor.byteLength);
   const reader = object.body.getReader();
   const abort = () => { void reader.cancel().catch(() => {}); };
@@ -71,6 +74,7 @@ export async function onRequestGet({ request, env }) {
     return await Promise.race([deadline, (async () => {
       const bucket = env.GEOJSON_BUCKET;
       const pointerObject = await bucket.get(feedPointerKey(period));
+      if (controller.signal.aborted) void pointerObject?.body?.cancel().catch(() => {});
       controller.signal.throwIfAborted();
       if (!pointerObject?.body || !Number.isSafeInteger(pointerObject.size) || pointerObject.size < 1 || pointerObject.size > MAX_FEED_POINTER_BYTES) {
         void pointerObject?.body?.cancel().catch(() => {});
@@ -90,6 +94,7 @@ export async function onRequestGet({ request, env }) {
         return new Response(null, { headers });
       }
       const object = await bucket.get(descriptor.objectKey);
+      if (controller.signal.aborted) void object?.body?.cancel().catch(() => {});
       controller.signal.throwIfAborted();
       const bytes = await readVerifiedBytes(object, descriptor, controller.signal);
       headers.set('Content-Length', String(bytes.byteLength));
