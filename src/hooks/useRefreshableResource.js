@@ -54,6 +54,12 @@ export function useRefreshableResource(load, { intervalMs, enabled = true, timeo
   useEffect(() => {
     active.current = true;
     if (enabled) void refresh({ force: false });
+    else if (stateRef.current.loading || stateRef.current.refreshing) {
+      // Cleanup aborts the old request before its finally can commit. Clear
+      // only its busy flags so a fresh cached value stays usable on re-entry.
+      stateRef.current = { ...stateRef.current, loading: false, refreshing: false };
+      setState(stateRef.current);
+    }
     // The interval itself establishes cadence. Comparing receipt time here
     // would skip every other tick whenever a request took nonzero time.
     const timer = enabled && intervalMs ? setInterval(() => { void refresh(); }, intervalMs) : null;

@@ -89,12 +89,13 @@ describe('Cluster Definition API (/api/cluster-definition)', () => {
       const context = createMockContext(request);
 
       // Mock the behavior of the imported storeClusterDefinition utility
-      storeClusterDefinition.mockResolvedValueOnce({ success: true, id: validClusterData.id });
+      storeClusterDefinition.mockResolvedValueOnce({ success: true, id: validClusterData.id, slug: validClusterData.slug });
 
       const response = await onRequest(context);
       expect(response.status).toBe(201);
       const responseText = await response.text();
       expect(responseText).toBe(`Cluster definition for ${validClusterData.id} registered/updated successfully.`);
+      expect(response.headers.get('Location')).toBe(`/cluster/${validClusterData.slug}`);
 
       // Verify that storeClusterDefinition was called correctly
       // The actual validClusterData passed to storeClusterDefinition will have 'updatedAt' added by the utility itself,
@@ -103,6 +104,18 @@ describe('Cluster Definition API (/api/cluster-definition)', () => {
       // `storeClusterDefinition` adds `updatedAt` internally.
       // So, we expect the endpoint to call `storeClusterDefinition` with the payload as it received it (after its own validation).
       expect(storeClusterDefinition).toHaveBeenCalledWith(context.env.DB, validClusterData);
+    });
+
+    it('reports the canonical stored identity when another writer owns the stable key', async () => {
+      storeClusterDefinition.mockResolvedValueOnce({ success: true, id: 'canonical-id', slug: 'canonical-slug' });
+      const request = new Request('http://localhost/api/cluster-definition', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validClusterData),
+      });
+      const response = await onRequest(createMockContext(request));
+      expect(response.status).toBe(201);
+      expect(await response.text()).toBe('Cluster definition for canonical-id registered/updated successfully.');
+      expect(response.headers.get('Location')).toBe('/cluster/canonical-slug');
     });
 
     it('should return 400 for invalid JSON payload', async () => {

@@ -12,7 +12,8 @@ import InfoSnippet from '../components/InfoSnippet';
 // import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import GlobalLastMajorQuakeTimer from "../components/GlobalLastMajorQuakeTimer.jsx";
 import BottomNav from "../components/BottomNav.jsx";
-import ClusterSummaryItem from '../components/ClusterSummaryItem';
+import ClusterSummaryList from '../components/ClusterSummaryList.jsx';
+import { buildClusterSummaries } from '../utils/clusterSummary.js';
 import ClusterDetailModal from '../components/ClusterDetailModal'; // This is for the cluster map point, not the route component
 // import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx'; // Removed static import, will use lazy loaded
 import { getMagnitudeColor, getMagnitudeColorStyle } from '../utils/utils.js';
@@ -52,6 +53,9 @@ import {
     LOADING_MESSAGE_INTERVAL_MS,
     INITIAL_LOADING_MESSAGES
 } from '../constants/appConstants';
+
+// The globe cluster overlay is disabled; no member reconstruction is needed.
+const EMPTY_CLUSTER_OVERLAY = [];
 
 // Lazy load route components
 const FeedsPageLayoutComponent = lazy(() => import('../components/FeedsPageLayout'));
@@ -195,6 +199,7 @@ function App() {
     const location = useLocation();
     const isDetailRoute = /^\/(?:quake|cluster)\//.test(location.pathname);
     const hasFullWidthContent = /^\/(?:overview|feeds)\/*$/.test(location.pathname);
+    const showClusterSummaries = location.pathname === '/' || /^\/overview\/*$/.test(location.pathname) || isDetailRoute;
     const {
         activeSidebarView, setActiveSidebarView,
         // activeFeedPeriod, // Unused variable removed
@@ -321,7 +326,7 @@ function App() {
     // --- State Hooks ---
     const [appCurrentTime, setAppCurrentTime] = useState(Date.now()); // Kept local
     // activeSidebarView, globeFocusLng, focusedNotableQuake are from useUIState()
-    const { clusters: calculatedClusters, loading: clustersLoading, error: clustersError, refresh: refreshClusters } = useActiveClusters();
+    const { clusters: calculatedClusters, loading: clustersLoading, error: clustersError, refresh: refreshClusters } = useActiveClusters({ enabled: showClusterSummaries });
     // const [areClustersLoading, setAreClustersLoading] = useState(false); // Ensured this is removed
     const geoJsonAssetsLoaded = useRef(false);
 
@@ -455,63 +460,6 @@ function App() {
     // }, [activeFeedPeriod, earthquakesPriorHour, prev24HourData, prev7DayData, prev14DayData]);
 
     // Old handleLoadMonthlyData is removed. `loadMonthlyData` from the hook is used instead.
-
-    // Reconstruct clusters from feeds already loaded. The monthly feed is optional;
-    // daily and weekly records must be usable on the first visit to the home page.
-    const earthquakeMap = useMemo(() => {
-        const availableEarthquakes = [
-            ...(allEarthquakes || []),
-            ...(earthquakesLast7Days || []),
-            ...(earthquakesLast24Hours || []),
-        ];
-        // The more recent feeds replace duplicate IDs from the monthly cache.
-        return new Map(availableEarthquakes.map(quake => [quake.id, quake]));
-    }, [allEarthquakes, earthquakesLast7Days, earthquakesLast24Hours]);
-
-
-    // Use calculatedClusters for the activeClusters memo
-    const resolvedClusterRecords = useMemo(() => {
-        // This check is a safeguard. If the API returns an empty array, or if calculatedClusters is not yet populated,
-        // return an empty array to prevent downstream errors.
-        if (!calculatedClusters || calculatedClusters.length === 0) {
-            return [];
-        }
-
-        // The API now returns an array of cluster summary objects.
-        // We need to reconstruct the array of earthquake arrays that the rest of the component expects.
-        // The check `earthquakeMap.size > 0` ensures we don't try to process clusters before the main earthquake data is ready.
-        if (earthquakeMap.size === 0) {
-            return []; // Return empty if the lookup map isn't ready
-        }
-
-        const reconstructedClusters = calculatedClusters.map(clusterSummary => {
-            // The `earthquakeIds` property is a JSON string of an array of IDs, e.g., "[\"id1\",\"id2\"]"
-            // We need to parse it to get the actual array of IDs.
-            let ids = [];
-            try {
-                ids = Array.isArray(clusterSummary.earthquakeIds) ? clusterSummary.earthquakeIds : JSON.parse(clusterSummary.earthquakeIds);
-            } catch (e) {
-                console.error("Failed to parse earthquakeIds from cluster summary:", clusterSummary, e);
-                return null; // Skip this cluster if the IDs are malformed
-            }
-
-            // For each ID, look up the full earthquake object in our memoized map.
-            const clusterQuakes = ids
-                .map(id => earthquakeMap.get(id))
-                .filter(Boolean); // Filter out any 'undefined' results if a quake ID wasn't found in the map
-
-            // Only return a cluster if it has a valid array of quakes. It's possible some quakes might
-            // not be in the `allEarthquakes` list if data is slightly out of sync.
-            if (clusterQuakes.length > 0) {
-                return { quakes: clusterQuakes, definition: clusterSummary };
-            }
-            return null;
-        }).filter(Boolean); // Filter out any nulls that resulted from parsing errors or empty clusters.
-
-        return reconstructedClusters;
-
-    }, [calculatedClusters, earthquakeMap]); // Dependency on both the raw cluster data and the earthquake lookup map.
-    const activeClusters = useMemo(() => resolvedClusterRecords.map(record => record.quakes), [resolvedClusterRecords]);
 
     // Effect to load GeoJSON assets
     useEffect(() => {
@@ -741,121 +689,9 @@ function App() {
         return sortedRegions.slice(0,2);
     }, [earthquakesLast24Hours, REGIONS, getRegionForEarthquake]);
 
-    const overviewClusters = useMemo(() => {
-        if (resolvedClusterRecords.length === 0) {
-            return [];
-        }
-
-        const processed = resolvedClusterRecords.map(({ quakes: cluster, definition }) => {
-            if (!cluster || cluster.length === 0) {
-                return null;
-            }
-
-            let maxMag = -Infinity;
-            let earliestTime = Infinity;
-            let latestTime = -Infinity;
-            let strongestQuakeInCluster = null;
-
-            cluster.forEach(quake => {
-                if (quake.properties.mag > maxMag) {
-                    maxMag = quake.properties.mag;
-                    strongestQuakeInCluster = quake;
-                }
-                if (quake.properties.time < earliestTime) {
-                    earliestTime = quake.properties.time;
-                }
-                if (quake.properties.time > latestTime) {
-                    latestTime = quake.properties.time;
-                }
-            });
-
-            if (!strongestQuakeInCluster) strongestQuakeInCluster = cluster[0]; // Fallback if all mags are null/equal
-
-            const locationName = strongestQuakeInCluster.properties.place || 'Unknown Location';
-
-            // Determine time range object
-            let timeRange = { prefix: "", value: "Time N/A", suffix: "" };
-            const now = Date.now();
-            const durationMillis = now - earliestTime; // Duration since the earliest quake in cluster started
-
-            if (earliestTime !== Infinity) {
-                // If the cluster's quakes are all very recent (e.g., within last 24 hours from now)
-                if (now - latestTime < 24 * 60 * 60 * 1000 && cluster.length > 1) {
-                    const clusterDurationMillis = latestTime - earliestTime;
-                    if (clusterDurationMillis < 60 * 1000) { // less than a minute
-                        timeRange = { prefix: "Active ", value: "just now", suffix: "" };
-                    } else if (clusterDurationMillis < 60 * 60 * 1000) { // less than an hour
-                        timeRange = { prefix: "Active over ", value: `${Math.round(clusterDurationMillis / (60 * 1000))}m`, suffix: "" };
-                    } else {
-                        timeRange = { prefix: "Active over ", value: formatTimeDuration(clusterDurationMillis), suffix: "" };
-                    }
-                } else { // Older clusters or single quake "clusters" (if minQuakes was 1)
-                    timeRange = { prefix: "Started ", value: formatTimeAgo(durationMillis), suffix: "" };
-                }
-            }
-            // A simpler alternative for timeRange (if chosen):
-            // if (earliestTime !== Infinity && latestTime !== Infinity) {
-            //    timeRange = { prefix: "Active: ", value: `${formatDate(earliestTime)} - ${formatDate(latestTime)}`, suffix: "" };
-            // }
-
-            return {
-                id: definition.id,
-                slug: definition.slug, // Keep the stored identity while card aggregation is migrated separately.
-                locationName,
-                quakeCount: cluster.length,
-                maxMagnitude: maxMag,
-                timeRange: timeRange, // Assign the object here
-                // For sorting and potential future use:
-                _maxMagInternal: maxMag,
-                _quakeCountInternal: cluster.length,
-                _earliestTimeInternal: earliestTime,
-                _latestTimeInternal: latestTime, // **** ADDED _latestTimeInternal ****
-                originalQuakes: cluster,
-                strongestQuakeId: strongestQuakeInCluster.id,
-            };
-        }).filter(Boolean); // Remove any nulls if a cluster was empty
-
-        // Sort clusters:
-        processed.sort((a, b) => {
-            // Primary sort: by latest time in cluster (descending - most recent first)
-            if (b._latestTimeInternal !== a._latestTimeInternal) {
-                return b._latestTimeInternal - a._latestTimeInternal;
-            }
-            // Secondary sort: by max magnitude (descending - strongest first)
-            if (b._maxMagInternal !== a._maxMagInternal) {
-                return b._maxMagInternal - a._maxMagInternal;
-            }
-            // Tertiary sort: by quake count (descending) for further tie-breaking
-            return b._quakeCountInternal - a._quakeCountInternal;
-        });
-
-        // Filter clusters to include only those with a max magnitude >= MAJOR_QUAKE_THRESHOLD
-        const significantClusters = processed.filter(cluster => cluster._maxMagInternal >= MAJOR_QUAKE_THRESHOLD);
-
-        // Temporary debug logs - REMOVE AFTER DEBUGGING
-        // console.log("----------- DEBUG: Processed Clusters (before sort) -----------");
-        // activeClusters.map(clusterRaw => { // Renamed to avoid conflict
-        //     // Simplified reconstruction for logging - this is NOT the full component logic
-        //     if (!clusterRaw || clusterRaw.length === 0) return null;
-        //     let maxMag = -Infinity, earliestTime = Infinity, latestTime = -Infinity, strongestQuakeInCluster = null;
-        //     clusterRaw.forEach(quake => {
-        //         if (quake.properties.mag > maxMag) maxMag = quake.properties.mag;
-        //         if (quake.properties.time < earliestTime) earliestTime = quake.properties.time;
-        //         if (quake.properties.time > latestTime) latestTime = quake.properties.time;
-        //     });
-        //     strongestQuakeInCluster = clusterRaw.sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0))[0] || clusterRaw[0];
-        //     return { id: `overview_cluster_${strongestQuakeInCluster?.id}_${clusterRaw.length}`, _latestTimeInternal: latestTime, _maxMagInternal: maxMag, _quakeCountInternal: clusterRaw.length };
-        // }).filter(Boolean)
-        //   .forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
-        // console.log("----------- DEBUG: Processed Clusters (after sort) -----------");
-        // processed.forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
-        // console.log("----------- DEBUG: Significant Clusters (after filter) -----------");
-        // significantClusters.forEach(p => console.log(p.id, p._latestTimeInternal, p._maxMagInternal, p._quakeCountInternal));
-
-
-        return significantClusters;
-
-    }, [resolvedClusterRecords, formatTimeAgo, formatTimeDuration]);
+    const overviewClusters = useMemo(() => buildClusterSummaries(calculatedClusters, {
+        minimumMagnitude: MAJOR_QUAKE_THRESHOLD, formatTimeAgo, formatTimeDuration,
+    }), [calculatedClusters, formatTimeAgo, formatTimeDuration]);
 
     // Removed useEffect hook for registering cluster definitions
 
@@ -1044,7 +880,7 @@ function App() {
                                       coastlineData={coastlineData}
                                       tectonicPlatesData={tectonicPlatesData}
                                       areGeoJsonAssetsLoading={areGeoJsonAssetsLoading}
-                                      activeClusters={activeClusters} // This now uses calculatedClusters
+                                      activeClusters={EMPTY_CLUSTER_OVERLAY}
                                       lastMajorQuake={lastMajorQuake}
                                       formatTimeDuration={formatTimeDuration}
                                       handleNotableQuakeSelect={handleNotableQuakeSelect}
@@ -1218,14 +1054,14 @@ function App() {
                             </div>
 
                                 {/* Active Earthquake Clusters Section - Desktop Sidebar */}
-                                <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
+                                {showClusterSummaries && <div className="bg-slate-700 p-3 rounded-lg border border-slate-600 shadow-md mt-3">
                                 <h3 className="text-md font-semibold mb-2 text-indigo-300"> Active Earthquake Clusters </h3>
                                 {clustersError && <div role="alert" className="text-sm text-amber-200">Cluster refresh failed. <button type="button" onClick={refreshClusters} className="rounded bg-slate-700 px-3 py-1">Retry clusters</button></div>}
                                 {clustersLoading && !calculatedClusters.length && <p role="status">Loading clusters...</p>}
                                 {overviewClusters && overviewClusters.length > 0 ? (
-                                    <ul className="space-y-2"> {overviewClusters.map(cluster => ( <ClusterSummaryItem clusterData={cluster} key={cluster.id} onClusterSelect={handleClusterSummaryClick} /> ))} </ul>
+                                    <ClusterSummaryList clusters={overviewClusters} onClusterSelect={handleClusterSummaryClick} />
                                 ) : (!clustersLoading && !clustersError && <p className="text-xs text-slate-400 text-center py-2"> No significant active clusters detected. </p> )}
-                                </div>
+                                </div>}
 
                             {recentSignificantQuakesForOverview.length > 0 && (
                                 <Suspense fallback={<ChartLoadingFallback message="Loading significant quakes table..." />}>

@@ -4,6 +4,8 @@ import worker from './worker.js';
 import { handleTrustedUsgsIngestion } from '../functions/background/ingest-usgs-feed.js';
 import { handleGenerateLists } from '../functions/background/generate-lists.js';
 import { onRequestGet as backfill } from '../functions/api/backfill-earthquake-details.js';
+import { storeClusterDefinition } from '../functions/utils/d1ClusterUtils.js';
+import { clusterInput, clusterNow, createClusterSqliteFixture } from '../functions/utils/clusterSqliteFixture.test-support.js';
 
 vi.mock('../functions/background/ingest-usgs-feed.js', () => ({ handleTrustedUsgsIngestion: vi.fn() }));
 vi.mock('../functions/background/generate-lists.js', () => ({ handleGenerateLists: vi.fn() }));
@@ -94,5 +96,59 @@ describe('actual Worker scheduled failure propagation', () => {
     backfill.mockRejectedValue(failure);
     const { results } = await runScheduled('*/30 * * * *');
     expect(results[0]).toEqual({ status: 'rejected', reason: failure });
+  });
+});
+
+describe('exported Worker ten-minute cluster lifetime with migrated SQLite', () => {
+  let fixture;
+  let clusterEnv;
+  beforeEach(() => {
+    vi.useFakeTimers(); vi.setSystemTime(clusterNow);
+    fixture = createClusterSqliteFixture();
+    clusterEnv = { DB: fixture.db, CLUSTER_KV: { put: vi.fn().mockResolvedValue(undefined) } };
+  });
+  afterEach(() => { fixture.database.close(); vi.useRealTimers(); });
+
+  it('publishes the winning canonical identity and keeps version bytes over repeated invocations', async () => {
+    fixture.hooks.beforeExecute = async ({ sql, values }) => {
+      if (!sql.includes('INSERT INTO ClusterDefinitions')) return;
+      delete fixture.hooks.beforeExecute;
+      await storeClusterDefinition(fixture.db, clusterInput({
+        id: 'canonical-winner', slug: 'canonical-slug', stableKey: values[1],
+      }));
+    };
+    const first = await runScheduled('*/10 * * * *', clusterEnv);
+    expect(first.results).toEqual([{ status: 'fulfilled', value: undefined }]);
+    expect(JSON.parse(clusterEnv.CLUSTER_KV.put.mock.calls[0][1])[0])
+      .toMatchObject({ id: 'canonical-winner', slug: 'canonical-slug' });
+    const version = `1.0${'1'.repeat(20_000)}`;
+    fixture.database.prepare('UPDATE ClusterDefinitions SET version = ?').run(version);
+    vi.setSystemTime(clusterNow + 600_000);
+    const second = await runScheduled('*/10 * * * *', clusterEnv);
+    expect(second.results).toEqual([{ status: 'fulfilled', value: undefined }]);
+    const rows = fixture.database.prepare('SELECT id, slug, version, createdAt FROM ClusterDefinitions').all();
+    expect(rows).toEqual([{ id: 'canonical-winner', slug: 'canonical-slug', version, createdAt: clusterNow }]);
+    expect(JSON.parse(clusterEnv.CLUSTER_KV.put.mock.calls[1][1])[0])
+      .toMatchObject({ id: 'canonical-winner', slug: 'canonical-slug', version });
+    expect(handleTrustedUsgsIngestion).not.toHaveBeenCalled();
+    expect(handleGenerateLists).not.toHaveBeenCalled();
+  });
+
+  it('rejects waitUntil on an unconfirmed write and makes no replacement KV write', async () => {
+    fixture.hooks.afterExecute = ({ sql, result }) => sql.includes('INSERT INTO ClusterDefinitions')
+      ? { success: false } : result;
+    const { results } = await runScheduled('*/10 * * * *', clusterEnv);
+    expect(results[0].status).toBe('rejected');
+    expect(results[0].reason.message).toContain('Cluster persistence failed');
+    expect(clusterEnv.CLUSTER_KV.put).not.toHaveBeenCalled();
+    expect(console.log).not.toHaveBeenCalledWith('process-cluster-definitions: Cron job finished successfully.');
+  });
+
+  it('passes KV publication rejection through the registered lifetime', async () => {
+    const failure = new Error('KV publication failed');
+    clusterEnv.CLUSTER_KV.put.mockRejectedValue(failure);
+    const { results } = await runScheduled('*/10 * * * *', clusterEnv);
+    expect(results).toEqual([{ status: 'rejected', reason: failure }]);
+    expect(console.log).not.toHaveBeenCalledWith('process-cluster-definitions: Cron job finished successfully.');
   });
 });

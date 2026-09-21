@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react'; // Added waitFor
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, describe, it, vi, beforeEach } from 'vitest';
 import { axe } from 'jest-axe';
@@ -24,6 +24,9 @@ vi.mock('../components/SummaryStatisticsCard', () => ({ default: () => <div data
 vi.mock('../components/AlertDisplay', () => ({ default: () => <div data-testid="mock-alert-display"></div> }));
 vi.mock('../components/ClusterSummaryItem', () => ({ default: (props) => <div data-testid={`mock-cluster-summary-item-${props.clusterData.id}`}>Mock ClusterSummaryItem</div> }));
 vi.mock('../components/ClusterDetailModalWrapper', () => ({ default: () => <div data-testid="mock-cluster-detail-wrapper">Mock ClusterDetailModalWrapper</div> }));
+vi.mock('./LearnPage', () => ({ default: () => <p>Static learning page</p> }));
+vi.mock('./learn/PlateTectonicsPage', () => ({ default: () => <p>Static tectonics article</p> }));
+vi.mock('./MonitoringPage', () => ({ default: () => <p>Monitoring page</p> }));
 
 
 import App from './HomePage'; // Retain App import
@@ -162,8 +165,33 @@ describe('HomePage Rendering and Basic UI', () => {
     expect(screen.queryByText('Seismic Data Visualization')).not.toBeInTheDocument();
   });
 
+  it.each(['/learn', '/learn/plate-tectonics', '/monitoring', '/feeds'])('does not request or render cluster cards on %s', async path => {
+    render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
+    await screen.findByRole('main');
+    await act(async () => { await Promise.resolve(); });
+    expect(mockFetchActiveClusters).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: 'Active Earthquake Clusters' })).not.toBeInTheDocument();
+  });
+
+  it('cancels an in-flight cluster request on navigation to Learn and resumes on returning to Globe', async () => {
+    let finishOld;
+    mockFetchActiveClusters.mockReturnValueOnce(new Promise(resolve => { finishOld = resolve; })).mockResolvedValue([]);
+    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
+    await waitFor(() => expect(mockFetchActiveClusters).toHaveBeenCalledOnce());
+    const signal = mockFetchActiveClusters.mock.calls[0][0].signal;
+    fireEvent.click(screen.getByRole('link', { name: 'Learn', exact: true }));
+    expect(await screen.findByText('Static learning page')).toBeInTheDocument();
+    expect(signal.aborted).toBe(true);
+    await act(async () => { finishOld([{ id: 'obsolete', quakeCount: 20, maxMagnitude: 9 }]); });
+    expect(screen.queryByRole('heading', { name: 'Active Earthquake Clusters' })).not.toBeInTheDocument();
+    expect(mockFetchActiveClusters).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('link', { name: 'Globe', exact: true }));
+    await waitFor(() => expect(mockFetchActiveClusters).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId('mock-cluster-summary-item-obsolete')).not.toBeInTheDocument();
+  });
+
   describe('Cluster Loading State Management', () => {
-    it('passes reconstructed clusters to the globe after fetching', async () => {
+    it('does not reconstruct members for the disabled globe cluster overlay', async () => {
       // 1. Define the mock earthquake that will be in a cluster.
       const mockQuake = {
         id: 'c1',
@@ -172,7 +200,7 @@ describe('HomePage Rendering and Basic UI', () => {
       };
 
       // 2. Mock the data context to provide this earthquake in `allEarthquakes`.
-      // This is crucial for the reconstruction logic.
+      // The disabled overlay does not consume these members.
       mockUseEarthquakeDataState.mockReturnValue({
         ...defaultEarthquakeData,
         allEarthquakes: [mockQuake],
@@ -180,7 +208,7 @@ describe('HomePage Rendering and Basic UI', () => {
 
       // 3. Mock the API call to return the new cluster summary format.
       const mockClusterSummary = [{
-        id: 'summary1',
+        id: 'summary1', maxMagnitude: 5, quakeCount: 50, startTime: 1, endTime: 2,
         earthquakeIds: JSON.stringify([mockQuake.id]),
         // ... other summary properties can be added if needed by the component
       }];
@@ -202,10 +230,10 @@ describe('HomePage Rendering and Basic UI', () => {
       // 4. Resolve the fetch with the cluster summary.
       resolveFetch(mockClusterSummary);
 
-      // 5. Assert that the component correctly reconstructed the cluster data.
-      // The expected result is an array containing an array with the full mockQuake object.
+      // 5. The card loads independently, while the disabled overlay stays empty.
+      await screen.findByTestId('mock-cluster-summary-item-summary1');
       await waitFor(() => {
-        expect(JSON.parse(clustersProp.textContent)).toEqual([[mockQuake]]);
+        expect(JSON.parse(clustersProp.textContent)).toEqual([]);
       });
     });
   });

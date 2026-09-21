@@ -63,11 +63,10 @@ async function storeClusterDefinition(db, clusterData) {
       success: false,
       error: "Invalid type for quakeCount: must be a number.",
     };
-  clusterData.updatedAt = Date.now();
-  console.log(
-    "[storeClusterDefinition] Received clusterData:",
-    JSON.stringify(clusterData, null, 2),
-  );
+  if (clusterData.stableKey != null &&
+      (typeof clusterData.stableKey !== "string" || clusterData.stableKey.length === 0)) {
+    return { success: false, error: "Invalid stableKey: must be a non-empty string when provided." };
+  }
   try {
     const {
       id,
@@ -90,24 +89,49 @@ async function storeClusterDefinition(db, clusterData) {
       durationHours,
       quakeCount,
       significanceScore,
-      version,
-      createdAt,
-      updatedAt,
     } = clusterData;
+    const now = Date.now();
+    // The legacy version column is TEXT and may contain years of concatenated
+    // digits. Leave it completely untouched on updates; a numeric revision and
+    // historical repair require the separately planned schema migration.
+    // Resolve stable-key races in this statement, not with a read-before-write.
     const sqlQuery = `
-      INSERT OR REPLACE INTO ClusterDefinitions
+      INSERT INTO ClusterDefinitions
        (id, stableKey, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
         maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
         radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore, version,
         createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(stableKey) DO UPDATE SET
+         strongestQuakeId = excluded.strongestQuakeId,
+         earthquakeIds = excluded.earthquakeIds,
+         title = excluded.title,
+         description = excluded.description,
+         locationName = excluded.locationName,
+         maxMagnitude = excluded.maxMagnitude,
+         meanMagnitude = excluded.meanMagnitude,
+         minMagnitude = excluded.minMagnitude,
+         depthRange = excluded.depthRange,
+         centroidLat = excluded.centroidLat,
+         centroidLon = excluded.centroidLon,
+         radiusKm = excluded.radiusKm,
+         startTime = excluded.startTime,
+         endTime = excluded.endTime,
+         durationHours = excluded.durationHours,
+         quakeCount = excluded.quakeCount,
+         significanceScore = excluded.significanceScore,
+         updatedAt = excluded.updatedAt
+       WHERE NOT EXISTS (
+         SELECT 1 FROM ClusterDefinitions AS other
+         WHERE (other.id = excluded.id OR other.slug = excluded.slug)
+           AND other.id != ClusterDefinitions.id
+       )
+       RETURNING id, stableKey, slug, createdAt
     `;
-    console.log("[storeClusterDefinition] Preparing SQL Query:", sqlQuery);
     const stmt = db.prepare(sqlQuery);
     const params = [
       id,
       stableKey === void 0 ? null : stableKey,
-      // Add stableKey to params
       slug,
       strongestQuakeId,
       JSON.stringify(earthquakeIds || []),
@@ -126,17 +150,24 @@ async function storeClusterDefinition(db, clusterData) {
       durationHours === void 0 ? null : durationHours,
       quakeCount,
       significanceScore === void 0 ? null : significanceScore,
-      version === void 0 ? null : version,
-      createdAt === void 0 ? null : createdAt,
-      updatedAt,
+      "1",
+      now,
+      now,
     ];
-    console.log(
-      "[storeClusterDefinition] Binding parameters:",
-      JSON.stringify(params, null, 2),
-    );
-    const result = await stmt.bind(...params).run();
+    // RETURNING is deliberately limited to immutable identity fields. The
+    // historical AFTER UPDATE triggers can still change updatedAt after it.
+    const result = await stmt.bind(...params).all();
     if (result?.success !== true) throw new Error("D1 did not confirm cluster persistence");
-    return { success: true, id };
+    if (!Array.isArray(result.results) || result.results.length !== 1) {
+      throw new Error("Cluster persistence did not return one canonical identity; possible id or slug conflict");
+    }
+    const canonical = result.results[0];
+    if (typeof canonical.id !== "string" || !canonical.id ||
+        typeof canonical.slug !== "string" || !canonical.slug ||
+        canonical.stableKey !== (stableKey ?? null)) {
+      throw new Error("D1 returned an invalid canonical cluster identity");
+    }
+    return { success: true, ...canonical };
   } catch (e) {
     console.error("Error storing cluster definition in D1:", e);
     return {

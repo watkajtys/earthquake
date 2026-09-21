@@ -52,7 +52,7 @@ function ClusterSummaryItem({ clusterData, onClusterSelect }) {
                     {locationName || 'Unknown Cluster Location'}
                 </h4>
                 <p className="text-xs mt-0.5">
-                    Quakes: <span className="font-medium">{quakeCount}</span> |
+                    Quakes: <span className="font-medium">{quakeCount ?? 'Unknown'}</span> |
                     Max Mag: <span className="font-medium">M {maxMagnitude?.toFixed(1) || 'N/A'}</span>
                 </p>
                 <p className="text-xs mt-0.5">

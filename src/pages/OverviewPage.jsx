@@ -10,7 +10,7 @@ import TimeSinceLastMajorQuakeBanner from '../components/TimeSinceLastMajorQuake
 import SummaryStatisticsCard from '../components/SummaryStatisticsCard';
 import RegionalDistributionList from '../components/RegionalDistributionList';
 // InfoSnippet is now imported in QuickFact.jsx
-import ClusterSummaryItem from '../components/ClusterSummaryItem'; // Assuming this is used here
+import ClusterSummaryList from '../components/ClusterSummaryList.jsx';
 // Import any other components specific to the previous inline overview content if needed
 import { getMagnitudeColorStyle } from '../utils/utils.js'; // Added import
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext.jsx'; // Import the context hook
@@ -165,15 +165,7 @@ const OverviewPage = ({
                     {clustersError && <div role="alert" className="text-sm text-amber-200">Cluster refresh failed. <button type="button" onClick={refreshClusters} className="rounded bg-slate-600 px-3 py-1">Retry clusters</button></div>}
                     {clustersLoading && !overviewClusters?.length && <p role="status">Loading clusters...</p>}
                     {overviewClusters && overviewClusters.length > 0 ? (
-                        <ul className="space-y-2">
-                            {overviewClusters.map(cluster => (
-                                <ClusterSummaryItem
-                                    clusterData={cluster}
-                                    key={cluster.id}
-                                    onClusterSelect={handleClusterSummaryClick}
-                                />
-                            ))}
-                        </ul>
+                        <ClusterSummaryList clusters={overviewClusters} onClusterSelect={handleClusterSummaryClick} />
                     ) : (!clustersLoading && !clustersError &&
                         <p className="text-xs text-slate-300 text-center py-2"> {/* Changed from text-slate-400 */}
                             No significant active clusters detected currently.

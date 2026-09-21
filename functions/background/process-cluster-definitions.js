@@ -200,96 +200,36 @@ async function storeClusterDefinitions(db, clusters) {
       const newSignificanceScore =
         quakeCount > 0 ? maxMagnitude * Math.log10(quakeCount) : 0;
       try {
-        const existingStmt = db
-          .prepare(
-            "SELECT id, slug, version FROM ClusterDefinitions WHERE stableKey = ?",
-          )
-          .bind(stableKey);
-        const existingDefinition = await existingStmt.first();
-        if (existingDefinition) {
-          const updatedVersion = (existingDefinition.version || 1) + 1;
-          const updateSql = `
-            UPDATE ClusterDefinitions
-            SET earthquakeIds = ?, quakeCount = ?, strongestQuakeId = ?, maxMagnitude = ?,
-                minMagnitude = ?, meanMagnitude = ?, endTime = ?, durationHours = ?,
-                locationName = ?, centroidLat = ?, centroidLon = ?, depthRange = ?,
-                title = ?, description = ?, significanceScore = ?, version = ?,
-                updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`;
-          const updateResult = await db
-            .prepare(updateSql)
-            .bind(
-              JSON.stringify(newEarthquakeIds),
-              quakeCount,
-              newStrongestQuakeId,
-              maxMagnitude,
-              newMinMagnitude,
-              newMeanMagnitude,
-              endTime,
-              durationHours,
-              locationName,
-              newCentroidLat,
-              newCentroidLon,
-              newDepthRange,
-              newTitle,
-              newDescription,
-              newSignificanceScore,
-              updatedVersion,
-              existingDefinition.id,
-            )
-            .run();
-          if (updateResult?.success !== true) throw new Error("Cluster update was not confirmed");
-          console.log(
-            `storeClusterDefinitions: Successfully updated definition for cluster with stableKey ${stableKey}`,
-          );
-          processedCount++;
-        } else {
-          const newClusterId = randomUUID();
-          const newSlug = generateSlug(
-            quakeCount,
-            locationName,
-            maxMagnitude,
-            stableKey,
-          );
-          const clusterDataForStoreUtil = {
-            id: newClusterId,
-            stableKey,
-            earthquakeIds: newEarthquakeIds,
-            quakeCount,
-            strongestQuakeId: newStrongestQuakeId,
-            maxMagnitude,
-            minMagnitude: newMinMagnitude,
-            meanMagnitude: newMeanMagnitude,
-            startTime,
-            endTime,
-            durationHours,
-            locationName,
-            centroidLat: newCentroidLat,
-            centroidLon: newCentroidLon,
-            radiusKm: 0,
-            depthRange: newDepthRange,
-            slug: newSlug,
-            title: newTitle,
-            description: newDescription,
-            significanceScore: newSignificanceScore,
-            version: 1,
-          };
-          const result = await storeClusterDefinition(
-            db,
-            clusterDataForStoreUtil,
-          );
-          if (result?.success === true) {
-            console.log(
-              `storeClusterDefinitions: Successfully stored new definition for cluster ${newClusterId}`,
-            );
-            processedCount++;
-          } else {
-            console.error(
-              `storeClusterDefinitions: Failed to store new definition for cluster ${newClusterId}: ${result.error}`,
-            );
-            errorCount++;
-          }
+        const proposedId = randomUUID();
+        const result = await storeClusterDefinition(db, {
+          id: proposedId,
+          stableKey,
+          earthquakeIds: newEarthquakeIds,
+          quakeCount,
+          strongestQuakeId: newStrongestQuakeId,
+          maxMagnitude,
+          minMagnitude: newMinMagnitude,
+          meanMagnitude: newMeanMagnitude,
+          startTime,
+          endTime,
+          durationHours,
+          locationName,
+          centroidLat: newCentroidLat,
+          centroidLon: newCentroidLon,
+          radiusKm: 0,
+          depthRange: newDepthRange,
+          slug: generateSlug(quakeCount, locationName, maxMagnitude, stableKey),
+          title: newTitle,
+          description: newDescription,
+          significanceScore: newSignificanceScore,
+        });
+        if (result?.success !== true) {
+          throw new Error(result?.error || "Cluster persistence was not confirmed");
         }
+        // Another invocation may already own this stableKey. Only the identity
+        // returned by the atomic write is canonical, never our proposed UUID.
+        console.log(`storeClusterDefinitions: Stored definition ${result.id} (${result.slug}).`);
+        processedCount++;
       } catch (e) {
         console.error(
           `storeClusterDefinitions: Exception while processing cluster with stableKey ${stableKey}: ${e.message}`,

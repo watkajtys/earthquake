@@ -177,7 +177,7 @@ export async function processAndStoreSignificantClusters(env) {
       const stableKey = generateStableClusterKey(calculatedCluster, strongestQuakeInCalcCluster);
       
       try {
-        const existingStmt = DB.prepare("SELECT id, slug, version FROM ClusterDefinitions WHERE stableKey = ?").bind(stableKey);
+        const existingStmt = DB.prepare("SELECT id, slug FROM ClusterDefinitions WHERE stableKey = ?").bind(stableKey);
         const existingDefinition = await existingStmt.first();
 
         const quakeCount = calculatedCluster.length;
@@ -199,23 +199,24 @@ export async function processAndStoreSignificantClusters(env) {
 
         if (existingDefinition) {
           // Update existing definition
-          const updatedVersion = (existingDefinition.version || 1) + 1;
+          // Preserve legacy version bytes until the backed-up revision migration.
           const updateSql = `
             UPDATE ClusterDefinitions
             SET earthquakeIds = ?, quakeCount = ?, strongestQuakeId = ?, maxMagnitude = ?,
                 minMagnitude = ?, meanMagnitude = ?, endTime = ?, durationHours = ?,
                 locationName = ?, centroidLat = ?, centroidLon = ?, depthRange = ?,
-                title = ?, description = ?, significanceScore = ?, version = ?,
+                title = ?, description = ?, significanceScore = ?,
                 updatedAt = CURRENT_TIMESTAMP
             WHERE id = ?`;
           
-          await DB.prepare(updateSql).bind(
+          const updateResult = await DB.prepare(updateSql).bind(
             JSON.stringify(newEarthquakeIds), quakeCount, newStrongestQuakeId, maxMagnitude,
             newMinMagnitude, newMeanMagnitude, endTime, durationHours,
             locationName, newCentroidLat, newCentroidLon, newDepthRange,
-            newTitle, newDescription, newSignificanceScore, updatedVersion,
+            newTitle, newDescription, newSignificanceScore,
             existingDefinition.id
           ).run();
+          if (updateResult?.success !== true) throw new Error("Cluster update was not confirmed");
           processedCount++;
         } else {
           // Create new definition
@@ -248,7 +249,8 @@ export async function processAndStoreSignificantClusters(env) {
 
           const result = await storeClusterDefinition(DB, clusterDataForStoreUtil);
 
-          if (result.success) {
+          if (result?.success === true) {
+            console.log(`BACKGROUND_PROCESS: Stored definition ${result.id} (${result.slug}).`);
             processedCount++;
           } else {
             console.error(`BACKGROUND_PROCESS: Failed to store new definition for cluster ${newClusterId}: ${result.error}`);
@@ -263,4 +265,5 @@ export async function processAndStoreSignificantClusters(env) {
   }
 
   console.log(`BACKGROUND_PROCESS: Finished. Found ${significantClusterCount} significant clusters. Processed (stored/updated): ${processedCount}, Errors: ${errorCount}.`);
+  if (errorCount) throw new Error(`Cluster persistence failed for ${errorCount} definitions`);
 }

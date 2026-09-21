@@ -103,7 +103,10 @@ export async function onRequest(context) {
       const storeResult = await storeClusterDefinition(env.DB, payload);
 
       if (storeResult.success) {
-        return new Response(`Cluster definition for ${payload.id} registered/updated successfully.`, { status: 201 });
+        return new Response(`Cluster definition for ${storeResult.id} registered/updated successfully.`, {
+          status: 201,
+          headers: { Location: `/cluster/${encodeURIComponent(storeResult.slug)}` },
+        });
       } else {
         // storeClusterDefinition should ideally return specific error messages for data issues
         // if they were not caught by the initial validation.

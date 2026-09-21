@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, act, screen, waitFor } from '@testing-library/react';
+import { render, act, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, describe, it, vi, beforeEach } from 'vitest';
 
@@ -167,11 +167,11 @@ describe('HomePage Cluster Logic', () => {
     ];
 
     const mockClusterSummaries = [
-      { id: "stored-a", earthquakeIds: JSON.stringify(clusterA_Quakes.map(q => q.id)) },
-      { id: "stored-b", earthquakeIds: JSON.stringify(clusterB_Quakes.map(q => q.id)) },
-      { id: "stored-c", earthquakeIds: JSON.stringify(clusterC_Quakes.map(q => q.id)) },
-      { id: "stored-d", earthquakeIds: JSON.stringify(clusterD_Quakes.map(q => q.id)) },
-      { id: "stored-e", earthquakeIds: JSON.stringify(clusterE_Filtered_Quakes.map(q => q.id)) },
+      { id: "stored-a", maxMagnitude: MAG_HIGH, endTime: T_3_HOURS_AGO, startTime: T_3_HOURS_AGO, quakeCount: 1, earthquakeIds: JSON.stringify(clusterA_Quakes.map(q => q.id)) },
+      { id: "stored-b", maxMagnitude: MAG_MEDIUM, endTime: T_1_HOUR_AGO, startTime: T_3_HOURS_AGO, quakeCount: 2, earthquakeIds: JSON.stringify(clusterB_Quakes.map(q => q.id)) },
+      { id: "stored-c", maxMagnitude: MAG_HIGH, endTime: T_1_HOUR_AGO, startTime: T_3_HOURS_AGO, quakeCount: 2, earthquakeIds: JSON.stringify(clusterC_Quakes.map(q => q.id)) },
+      { id: "stored-d", maxMagnitude: MAG_HIGH, endTime: T_1_HOUR_AGO, startTime: T_3_HOURS_AGO, quakeCount: 3, earthquakeIds: JSON.stringify(clusterD_Quakes.map(q => q.id)) },
+      { id: "stored-e", maxMagnitude: MAG_BELOW_THRESHOLD, endTime: T_NOW, startTime: T_3_HOURS_AGO, quakeCount: 1, earthquakeIds: JSON.stringify(clusterE_Filtered_Quakes.map(q => q.id)) },
     ];
 
 
@@ -179,7 +179,7 @@ describe('HomePage Cluster Logic', () => {
       mockFetchActiveClusters.mockResolvedValue(mockClusterSummaries);
       mockUseEarthquakeDataState.mockReturnValue({
         ...defaultEarthquakeData,
-        allEarthquakes: allQuakesForTest, // Provide all quakes for reconstruction
+        allEarthquakes: allQuakesForTest, // Unrelated feed data must not determine stored summaries
         isLoadingInitialData: false, isInitialAppLoad: false,
       });
 
@@ -207,36 +207,43 @@ describe('HomePage Cluster Logic', () => {
     });
   });
 
-  it('shows a weekly cluster before monthly data is requested and uses fresh daily records', async () => {
+  it('preserves the full stored summary through empty, weekly and monthly feeds without the strongest event', async () => {
     const now = Date.now();
-    const weeklyQuakes = [
-      createMockQuakeInternal('weekly1', now - 60_000, 5.5, 'Weekly cluster'),
-      createMockQuakeInternal('weekly2', now - 2 * 3_600_000, 5.1, 'Weekly cluster'),
-      createMockQuakeInternal('weekly3', now - 28 * 3_600_000, 4.8, 'Weekly cluster'),
-    ];
-    const updatedDailyQuake = {
-      ...weeklyQuakes[0],
-      properties: { ...weeklyQuakes[0].properties, mag: 6.3 },
-    };
-    mockFetchActiveClusters.mockResolvedValue([{
-      id: "weekly-stored-id",
-      earthquakeIds: JSON.stringify(weeklyQuakes.map(quake => quake.id)),
-    }]);
-    mockUseEarthquakeDataState.mockReturnValue({
-      ...defaultEarthquakeData,
-      allEarthquakes: [],
-      earthquakesLast7Days: weeklyQuakes,
-      earthquakesLast24Hours: [updatedDailyQuake, weeklyQuakes[1]],
-      hasAttemptedMonthlyLoad: false,
-    });
-
-    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
-
-    await screen.findByTestId('mock-cluster-summary-item-weekly-stored-id');
-    const summary = mockClusterSummaryItemData.at(-1);
-    expect(summary).toMatchObject({ quakeCount: 3, maxMagnitude: 6.3, strongestQuakeId: 'weekly1' });
-    expect(summary.originalQuakes).toEqual([updatedDailyQuake, weeklyQuakes[1], weeklyQuakes[2]]);
+    const definition = { id: 'stored-id', slug: 'stored-slug', locationName: 'Stored location', quakeCount: 53,
+      maxMagnitude: 6.3, startTime: now - 25 * 86400000, endTime: now - 7200000, strongestQuakeId: 'absent-anchor',
+      earthquakeIds: 'deliberately invalid membership: summaries must not read it' };
+    mockFetchActiveClusters.mockResolvedValue([definition]);
+    const ui = <MemoryRouter initialEntries={['/']}><App /></MemoryRouter>;
+    const { rerender } = render(ui);
+    await screen.findByTestId('mock-cluster-summary-item-stored-id');
+    const first = mockClusterSummaryItemData.at(-1);
+    expect(first).toMatchObject({ id: definition.id, slug: definition.slug, locationName: definition.locationName,
+      quakeCount: 53, maxMagnitude: 6.3, startTime: definition.startTime, endTime: definition.endTime, strongestQuakeId: 'absent-anchor' });
+    expect(first).not.toHaveProperty('originalQuakes');
+    const weekly = [createMockQuakeInternal('weekly1', now, 9, 'Different feed location')];
+    mockUseEarthquakeDataState.mockReturnValue({ ...defaultEarthquakeData, earthquakesLast7Days: weekly });
+    rerender(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
+    expect(mockClusterSummaryItemData.at(-1)).toBe(first);
+    mockUseEarthquakeDataState.mockReturnValue({ ...defaultEarthquakeData, earthquakesLast7Days: weekly,
+      allEarthquakes: [...weekly, createMockQuakeInternal('monthly1', now - 20 * 86400000, 8)], monthlyHasLoaded: true, hasAttemptedMonthlyLoad: true });
+    rerender(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
+    expect(mockClusterSummaryItemData.at(-1)).toBe(first);
     expect(defaultEarthquakeData.loadMonthlyData).not.toHaveBeenCalled();
+  });
+
+  it('renders only twenty cards at once and exposes the final page without fetching members', async () => {
+    mockFetchActiveClusters.mockResolvedValue(Array.from({ length: 45 }, (_, index) => ({
+      id: `stored-${String(index).padStart(2, '0')}`, maxMagnitude: 6, quakeCount: 100, startTime: 1, endTime: 2,
+    })));
+    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
+    await screen.findByText('Showing 1–20 of 45 clusters');
+    expect(screen.getAllByTestId(/mock-cluster-summary-item-/)).toHaveLength(20);
+    fireEvent.click(screen.getByRole('button', { name: 'Next clusters' }));
+    expect(screen.getByText('Showing 21–40 of 45 clusters')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next clusters' }));
+    expect(screen.getAllByTestId(/mock-cluster-summary-item-/)).toHaveLength(5);
+    expect(screen.getByText('Showing 41–45 of 45 clusters')).toBeInTheDocument();
+    expect(mockFetchActiveClusters).toHaveBeenCalledTimes(1);
   });
 
   describe('handleClusterSummaryClick URL Generation', () => {
@@ -266,7 +273,7 @@ describe('HomePage Cluster Logic', () => {
         }
 
         const mockClusterSummary = {
-            id: clusterDataInput.id, slug: clusterDataInput.slug,
+            ...clusterDataInput,
             earthquakeIds: JSON.stringify(mockRawQuakesForCluster.map(q => q.id)),
         };
 
