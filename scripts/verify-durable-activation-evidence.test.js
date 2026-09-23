@@ -124,7 +124,8 @@ async function fixture() {
       },
     })) });
   await write(`${BASE}/post-0022-paused-identity.json`, identityBytes);
-  const receiptDigests = { backupManifest: sha(backupManifestBytes),
+  const receiptDigests = { pausedObservation: sha(observationBytes),
+    backupManifest: sha(backupManifestBytes),
     immediateBookmark: sha(immediateBytes), liveD1: sha(liveBytes),
     pausedIdentity: sha(identityBytes) };
   const source = { revision: REVISION };
@@ -203,6 +204,18 @@ describe('durable activation evidence gate', () => {
     evidence.paused.drainConfirmedAt = '2026-09-23T19:10:00Z';
     await write(evidencePath, evidence);
     await expect(verify()).rejects.toThrow(/15 minutes/);
+  });
+  it('rejects a changed paused Cron trace even if evidence updates its hash', async () => {
+    const { evidence, evidencePath, write, verify } = await fixture();
+    const changed = JSON.stringify({ cron: '*/5 * * * *', revision: PAUSED_REVISION,
+      versionId: PAUSED_VERSION, milestone: 'List publication paused during writer transition',
+      loggedAtUtc: '2026-09-23T19:00:27.404Z',
+      lastPossibleOldDispatchUpperBoundUtc: '2026-09-23T19:00:13Z',
+      drainNotBeforeUtc: '2026-09-23T19:16:00Z', traceId: 'different-trace' });
+    await write(evidence.paused.observationPath, changed);
+    evidence.paused.observationSha256 = sha(changed);
+    await write(evidencePath, evidence);
+    await expect(verify()).rejects.toThrow(/reviewed trace receipt/);
   });
   it('rejects migration before isolated rehearsal', async () => {
     const { evidence, evidencePath, write, verify } = await fixture();

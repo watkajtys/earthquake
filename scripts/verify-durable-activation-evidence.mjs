@@ -22,6 +22,7 @@ const REVISION = /^[0-9a-f]{40}$/;
 const BOOKMARK = /^[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{32}$/;
 const LISTS = ['list-day.json', 'list-week.json', 'list-month.json'];
 const RECEIPT_SHA256 = Object.freeze({
+  pausedObservation: 'e58a7483741def2995c69ecbdcae8b6d4f74c09a146db77eb71e9614cadf9e40',
   backupManifest: 'b50562c279126a1cd297f1d45eb451edac5b36f78206df3f56ff99d1af580898',
   liveD1: '0146530a514cf69c2ded80a01245d7dcccb5eaa6a3b8752f49e740fa30d88bc0',
   pausedIdentity: 'e4eb425bc1e8998d19f12e8feb0c65c598708b2722687aea4a3094456b535473',
@@ -112,6 +113,8 @@ export async function verifyDurableActivationEvidence(evidencePath, expectedRevi
     'Old scheduled writer has not drained for 15 minutes');
   assert(drainedAt <= now, 'Drain confirmation is in the future');
   const observationFile = await privatePath(root, paused.observationPath);
+  assert.equal(paused.observationSha256, receiptDigests.pausedObservation,
+    'Paused Cron observation differs from the reviewed trace receipt');
   await checkedFile(observationFile, paused.observationSha256);
   const observation = await json(observationFile);
   assert.equal(observation.revision, PAUSED_REVISION);
