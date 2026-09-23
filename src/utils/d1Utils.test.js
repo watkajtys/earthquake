@@ -105,6 +105,24 @@ describe('earthquake persistence against the migrated D1 schema', () => {
     expect(rows()[0]).toEqual(original);
   });
 
+  it('invalidates a committed archive and product flags when the source revision advances', async () => {
+    const feature = makeFeature();
+    await upsertEarthquakeFeaturesToD1(db, [feature]);
+    database.prepare(`UPDATE EarthquakeEvents SET detail_fetched = 1,
+      has_moment_tensor = 1, has_enhanced_data = 1, products_json = '["moment-tensor"]',
+      detail_archive_key = 'details/v1/quake1/old/hash.json',
+      detail_archive_revision_ms = ?, detail_metadata_revision_ms = ? WHERE id = ?`)
+      .run(now, now, 'quake1');
+    feature.properties.updated += 1000;
+    feature.properties.place = 'Revised place';
+    vi.setSystemTime(now + 1000);
+    expect((await upsertEarthquakeFeaturesToD1(db, [feature])).persistedIds).toEqual(['quake1']);
+    expect(rows()[0]).toMatchObject({ source_updated_at_ms: now + 1000,
+      detail_fetched: 0, has_moment_tensor: 0, has_enhanced_data: 0,
+      products_json: null, detail_archive_key: null, detail_archive_revision_ms: null,
+      detail_metadata_revision_ms: null, next_detail_fetch_attempt: now + 1000 + 45 * 60 * 1000 });
+  });
+
   it.each([
     ['event_time', feature => { feature.properties.time += 1; }, now - 60 * 60 * 1000 + 1],
     ['longitude', feature => { feature.geometry.coordinates[0] = -117.8; }, -117.8],
@@ -125,7 +143,7 @@ describe('earthquake persistence against the migrated D1 schema', () => {
     }));
     expect(rows()[0][column]).toBe(expected);
     expect(rows()[0].retrieved_at).toBe(now + 1000);
-    expect(rows()[0].next_detail_fetch_attempt).toBe(now + 45 * 60 * 1000);
+    expect(rows()[0].next_detail_fetch_attempt).toBe(now + 1000 + 45 * 60 * 1000);
   });
 
   it('applies null transitions and then recognizes unchanged nulls', async () => {

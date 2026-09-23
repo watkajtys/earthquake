@@ -234,7 +234,7 @@ async function handlePrerenderEarthquake(request, env) {
   const route = parseEarthquakePath(new URL(request.url).pathname);
   if (!route.ok) return crawlerError('Invalid earthquake URL', 404);
   try {
-    const archived = await readArchivedEarthquakeDetail(env.GEOJSON_BUCKET, route.eventId);
+    const archived = await readArchivedEarthquakeDetail(env.GEOJSON_BUCKET, route.eventId, { db: env.DB });
     let quake = archived?.data;
     if (!quake) {
       // Sitemap URLs come from EarthquakeEvents. An archive miss must not turn
@@ -312,14 +312,30 @@ async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
   const sourceName = "earthquake-detail-handler";
   if (!isValidUsgsEventId(event_id)) return policyError('Invalid event ID.', 400);
   try {
-    const archived = await readArchivedEarthquakeDetail(env.GEOJSON_BUCKET, event_id);
+    const archived = await readArchivedEarthquakeDetail(env.GEOJSON_BUCKET, event_id, { db: env.DB });
     if (archived) return new Response(archived.body, { headers: archived.headers });
     const usgsUrl = usgsDetailUrl(event_id);
     console.log(
       `[${sourceName}] Fetching event ${event_id} from USGS: ${usgsUrl}`,
     );
     const geojsonFeature = await fetchValidatedDetail(event_id);
-    if (env.DB && (env.GEOJSON_QUEUE || env.GEOJSON_BUCKET)) {
+    if (env.DB) {
+      const current = await env.DB.prepare(`SELECT source_updated_at_ms, event_time, latitude,
+        longitude, depth, magnitude, place FROM EarthquakeEvents WHERE id = ?`)
+        .bind(event_id).first();
+      const coordinates = geojsonFeature.geometry.coordinates;
+      const sameScience = current?.event_time === geojsonFeature.properties.time &&
+        current.latitude === coordinates[1] && current.longitude === coordinates[0] &&
+        current.depth === coordinates[2] && current.magnitude === geojsonFeature.properties.mag &&
+        current.place === geojsonFeature.properties.place;
+      if (current?.source_updated_at_ms != null &&
+          (!Number.isSafeInteger(current.source_updated_at_ms) ||
+            current.source_updated_at_ms > geojsonFeature.properties.updated ||
+            (current.source_updated_at_ms === geojsonFeature.properties.updated && !sameScience))) {
+        return jsonErrorResponse('Earthquake detail revision is not current.', 503, sourceName);
+      }
+    }
+    if (env.DB && env.GEOJSON_BUCKET) {
       ctx.waitUntil(persistEarthquakeDetail({ env, detailData: geojsonFeature, requestedId: event_id })
         .catch((error) => console.error(`[${sourceName}] Detail persistence failed for ${event_id}: ${error.message}`)));
     }

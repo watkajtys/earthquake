@@ -93,7 +93,18 @@ async function upsertEarthquakeFeaturesToD1(db, features) {
         place = excluded.place,
         usgs_detail_url = excluded.usgs_detail_url,
         source_updated_at_ms = excluded.source_updated_at_ms,
-        retrieved_at = excluded.retrieved_at
+        retrieved_at = excluded.retrieved_at,
+        -- A new source revision invalidates the previous detail products and
+        -- committed archive pointer. The detail job can republish them only
+        -- after its immutable object is stored and the revision still wins.
+        has_shakemap = 0, has_moment_tensor = 0, has_focal_mechanism = 0,
+        has_dyfi = 0, has_losspager = 0, has_finite_fault = 0,
+        has_enhanced_data = 0, products_json = NULL,
+        detail_fetched = 0, detail_fetch_time = NULL,
+        detail_fetch_attempts = 0, last_detail_fetch_attempt = NULL,
+        next_detail_fetch_attempt = excluded.next_detail_fetch_attempt,
+        detail_archive_key = NULL, detail_archive_revision_ms = NULL,
+        detail_metadata_revision_ms = NULL
     WHERE EarthquakeEvents.source_updated_at_ms IS NULL
        OR excluded.source_updated_at_ms > EarthquakeEvents.source_updated_at_ms;
   `;

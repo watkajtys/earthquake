@@ -1,28 +1,39 @@
+import { extractProductFlags, persistEarthquakeDetail } from '../utils/earthquakeDetailPersistence.js';
+import { isValidUsgsEventId, validateUsgsDetail } from '../utils/usgs-transport.js';
+
+// Existing Queue deliveries still contain { id, geojson }. New persistence
+// writes R2 directly after recording a durable job and sends no body message.
+// Keep this adapter until the old Queue backlog is demonstrably drained.
 var geojson_archive_default = {
   async queue(batch, env) {
-    const promises = [];
-    for (const message of batch.messages) {
-      const { id, geojson } = message.body;
-      if (!id || !geojson) {
-        console.error("Invalid message body:", message.body);
-        message.retry({ reason: "Invalid message body" });
-        continue;
+    await Promise.all(batch.messages.map(async message => {
+      const { id, geojson } = message.body || {};
+      try {
+        if (!isValidUsgsEventId(id)) throw new Error('Invalid legacy detail event ID');
+        // In particular, a missing/invalid properties.updated cannot become
+        // a guessed revision or overwrite an existing archive.
+        validateUsgsDetail(geojson, id);
+        extractProductFlags(geojson);
+      } catch (error) {
+        console.error('[geojson-archive] Invalid legacy message:', error.message);
+        message.ack();
+        return;
       }
-      const promise = env.GEOJSON_BUCKET.put(
-        id + ".json",
-        JSON.stringify(geojson),
-      )
-        .then(() => {
-          console.log(`Successfully archived GeoJSON for earthquake ${id}`);
+      try {
+        await persistEarthquakeDetail({ env, detailData: geojson, requestedId: id });
+        message.ack();
+      } catch (error) {
+        if (['STALE_DETAIL_REVISION', 'CONFLICTING_DETAIL_REVISION'].includes(error.code)) {
+          // A newer D1 source revision has already won. Retrying an old body
+          // or a same-revision conflict cannot improve it.
+          console.error(`[geojson-archive] Rejected legacy revision for ${id}:`, error.message);
           message.ack();
-        })
-        .catch((err) => {
-          console.error(`Failed to archive GeoJSON for earthquake ${id}:`, err);
-          message.retry({ reason: "R2 put failed" });
-        });
-      promises.push(promise);
-    }
-    await Promise.all(promises);
+        } else {
+          console.error(`[geojson-archive] Could not archive ${id}:`, error);
+          message.retry({ delaySeconds: 60 });
+        }
+      }
+    }));
   },
 };
 

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { onRequestGet, onRequestPost } from './backfill-earthquake-details.js';
 import { persistEarthquakeDetail, MAX_DETAIL_QUEUE_BYTES } from '../utils/earthquakeDetailPersistence.js';
 import { fetchValidatedDetail, UsgsTransportError, USGS_LIMITS } from '../utils/usgs-transport.js';
+import { createMemorySummaryBucket } from '../utils/clusterSummarySnapshot.test-support.js';
 
 vi.mock('../utils/usgs-transport.js', async importOriginal => ({
   ...await importOriginal(), fetchValidatedDetail: vi.fn(),
@@ -50,50 +51,105 @@ describe('backfill and shared detail persistence against the migrated schema', (
     fetchValidatedDetail.mockImplementation(async id => feature(id));
     database = new DatabaseSync(':memory:');
     migrations.forEach(sql => database.exec(sql));
+    const prepare = vi.fn(sql => ({ all: async () => ({ success: true, results: database.prepare(sql).all() }),
+      bind: (...values) => ({
+      all: async () => ({ success: true, results: database.prepare(sql).all(...values) }),
+      first: async () => database.prepare(sql).get(...values),
+      run: async () => ({ success: true, meta: database.prepare(sql).run(...values) }),
+    }) }));
+    const db = { prepare, batch: vi.fn(async statements => {
+      database.exec('BEGIN');
+      try {
+        const results = [];
+        for (const [index, statement] of statements.entries()) {
+          results.push(index === statements.length - 1 ? await statement.all() : await statement.run());
+        }
+        database.exec('COMMIT');
+        return results;
+      } catch (error) { database.exec('ROLLBACK'); throw error; }
+    }) };
+    const bucket = createMemorySummaryBucket();
+    vi.spyOn(bucket, 'put');
     env = {
-      DB: { prepare: vi.fn(sql => ({ bind: (...values) => ({
-        all: async () => ({ success: true, results: database.prepare(sql).all(...values) }),
-        first: async () => database.prepare(sql).get(...values),
-        run: async () => ({ success: true, meta: database.prepare(sql).run(...values) }),
-      }) })) },
+      DB: db,
       GEOJSON_QUEUE: { send: vi.fn().mockResolvedValue(undefined) },
-      GEOJSON_BUCKET: { put: vi.fn().mockResolvedValue({ etag: 'test' }) },
+      GEOJSON_BUCKET: bucket,
     };
     context = { env, ctx: { waitUntil: vi.fn() } };
   });
   afterEach(() => { database.close(); vi.useRealTimers(); vi.restoreAllMocks(); vi.clearAllMocks(); });
 
-  it('queues before completion and stores all product and completion metadata together', async () => {
+  it('records a job before R2 and commits the pointer and flags only after the object exists', async () => {
     seed();
-    env.GEOJSON_QUEUE.send.mockImplementation(async () => {
+    env.GEOJSON_BUCKET.hooks.beforePut = async () => {
       expect(row().detail_fetched).toBe(0);
       expect(row().detail_fetch_time).toBeNull();
-    });
+      expect(database.prepare('SELECT status FROM EarthquakeDetailJobs WHERE event_id = ?').get('quake1').status).toBe('leased');
+    };
     const response = await get();
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: true, processed: 1, errors: 0 });
     expect(fetchValidatedDetail).toHaveBeenCalledExactlyOnceWith('quake1');
     expect(row()).toMatchObject({ detail_fetched: 1, detail_fetch_time: now, detail_fetch_attempts: 1,
       has_shakemap: 1, has_dyfi: 0, has_enhanced_data: 1, products_json: '["shakemap","dyfi"]',
-      next_detail_fetch_attempt: null, last_detail_fetch_attempt: now, latitude: 34, longitude: -118 });
+      next_detail_fetch_attempt: null, last_detail_fetch_attempt: now, latitude: 34, longitude: -118,
+      detail_archive_revision_ms: now, detail_metadata_revision_ms: now });
+    expect(row().detail_archive_key).toMatch(/^details\/v1\/quake1\/\d+\/[a-f0-9]{64}\.json$/);
+    expect(env.GEOJSON_BUCKET.readJson(row().detail_archive_key)).toEqual(feature());
+    expect(database.prepare('SELECT status FROM EarthquakeDetailJobs WHERE event_id = ?').get('quake1').status).toBe('completed');
+    expect(env.GEOJSON_QUEUE.send).not.toHaveBeenCalled();
   });
 
   it('keeps an archive failure pending even on the last upstream attempt and retries successfully', async () => {
     seed('quake1', { detail_fetch_attempts: 2, next_detail_fetch_attempt: now - 1 });
-    env.GEOJSON_QUEUE.send.mockRejectedValueOnce(new Error('Queue outage'));
+    env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));
     expect(await (await get()).json()).toMatchObject({ success: false, processed: 0, errors: 1 });
     expect(row()).toMatchObject({ detail_fetched: 0, detail_fetch_time: null, detail_fetch_attempts: 2,
       next_detail_fetch_attempt: now + hour });
-    expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+    expect(database.prepare('SELECT status FROM EarthquakeDetailJobs WHERE event_id = ?').get('quake1').status).toBe('pending');
     expect(await (await get()).json()).toMatchObject({ processed: 0, errors: 0 });
     vi.setSystemTime(now + hour);
-    expect(await (await get()).json()).toMatchObject({ success: true, processed: 1 });
+    expect(await (await get()).json()).toMatchObject({ success: true, processed: 0, recovered_jobs: { completed: 1 } });
     expect(row().detail_fetched).toBe(1);
+  });
+
+  it('supersedes a pending old job when recovery fetches a newer upstream revision', async () => {
+    seed();
+    env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));
+    expect(await (await get()).json()).toMatchObject({ success: false, processed: 0, errors: 1 });
+    expect(database.prepare('SELECT status FROM EarthquakeDetailJobs WHERE target_revision_ms = ?').get(now).status).toBe('pending');
+    const newer = feature();
+    newer.properties.updated = now + 1000;
+    newer.properties.place = 'Newer correction';
+    fetchValidatedDetail.mockResolvedValue(newer);
+    vi.setSystemTime(now + hour);
+    expect(await (await get()).json()).toMatchObject({ recovered_jobs: { completed: 1, failed: 0 } });
+    expect(row()).toMatchObject({ source_updated_at_ms: now + 1000,
+      detail_archive_revision_ms: now + 1000, place: 'Newer correction' });
+    expect(database.prepare('SELECT status FROM EarthquakeDetailJobs WHERE target_revision_ms = ?').get(now).status).toBe('superseded');
+  });
+
+  it('claims a due job before fetching so overlapping recoveries make one upstream call', async () => {
+    seed();
+    env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));
+    await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('R2 outage');
+    vi.setSystemTime(now + hour);
+    let releaseFetch;
+    fetchValidatedDetail.mockImplementation(() => new Promise(resolve => { releaseFetch = resolve; }));
+    const first = get();
+    for (let i = 0; i < 20 && !releaseFetch; i++) await Promise.resolve();
+    expect(fetchValidatedDetail).toHaveBeenCalledExactlyOnceWith('quake1');
+    expect(database.prepare('SELECT status FROM EarthquakeDetailJobs WHERE target_revision_ms = ?').get(now).status).toBe('leased');
+    const second = await (await get()).json();
+    expect(second).toMatchObject({ processed: 0, recovered_jobs: { selected: 0 } });
+    expect(fetchValidatedDetail).toHaveBeenCalledTimes(1);
+    releaseFetch(feature());
+    expect(await (await first).json()).toMatchObject({ recovered_jobs: { completed: 1 } });
   });
 
   it('respects infrastructure retry time with zero upstream attempts', async () => {
     seed();
-    env.GEOJSON_QUEUE.send.mockRejectedValueOnce(new Error('Queue outage'));
+    env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));
     await get();
     expect(row().detail_fetch_attempts).toBe(0);
     expect(await (await get()).json()).toMatchObject({ processed: 0 });
@@ -141,12 +197,41 @@ describe('backfill and shared detail persistence against the migrated schema', (
     env.USGS_LAST_RESPONSE_KV = { put: vi.fn(), get: vi.fn() };
     const result = await (await post({ operation: 'status' })).json();
     expect(result).toEqual({ success: true, operation: 'status', eligible_count: 2,
+      detail_jobs: { pending: 0, leased: 0, parked: 0 },
       criteria: { batchSize: 10, minMagnitude: 3, maxAgeDays: 365 } });
-    expect(env.DB.prepare).toHaveBeenCalledTimes(1);
+    expect(env.DB.prepare).toHaveBeenCalledTimes(2);
     expect(env.DB.prepare.mock.calls[0][0]).toMatch(/^SELECT COUNT/);
     expect(env.USGS_LAST_RESPONSE_KV.put).not.toHaveBeenCalled();
     expect(env.GEOJSON_QUEUE.send).not.toHaveBeenCalled();
     expect(fetchValidatedDetail).not.toHaveBeenCalled();
+  });
+
+  it('exposes parked detail jobs without silently retrying them', async () => {
+    seed();
+    database.prepare(`INSERT INTO EarthquakeDetailJobs
+      (event_id, target_revision_ms, archive_key, status, next_attempt_at_ms, created_at_ms, updated_at_ms)
+      VALUES (?, ?, ?, 'parked', ?, ?, ?)`).run('quake1', now, 'details/v1/quake1/parked/hash.json', now, now, now);
+    expect(await (await post({ operation: 'status' })).json()).toMatchObject({
+      eligible_count: 0, detail_jobs: { pending: 0, leased: 0, parked: 1 },
+    });
+    expect(await (await get()).json()).toMatchObject({ processed: 0, recovered_jobs: { selected: 0 } });
+    expect(fetchValidatedDetail).not.toHaveBeenCalled();
+  });
+
+  it('does not let an old parked job block a corrected source revision', async () => {
+    seed('quake1', { source_updated_at_ms: now, detail_fetched: 1, place: 'Old place',
+      latitude: 34, longitude: -118, depth: 10 });
+    database.prepare(`INSERT INTO EarthquakeDetailJobs
+      (event_id, target_revision_ms, archive_key, status, next_attempt_at_ms, created_at_ms, updated_at_ms)
+      VALUES (?, ?, ?, 'parked', ?, ?, ?)`).run('quake1', now, 'details/v1/quake1/old/hash.json', now, now, now);
+    database.prepare(`UPDATE EarthquakeEvents SET source_updated_at_ms = ?, place = ?,
+      detail_fetched = 0, next_detail_fetch_attempt = ? WHERE id = ?`)
+      .run(now + 1000, 'Corrected place', now + 45 * 60 * 1000, 'quake1');
+    expect(database.prepare('SELECT status FROM EarthquakeDetailJobs WHERE event_id = ?').get('quake1').status).toBe('superseded');
+    vi.setSystemTime(now + 46 * 60 * 1000);
+    expect(await (await post({ operation: 'status' })).json()).toMatchObject({
+      eligible_count: 1, detail_jobs: { pending: 0, leased: 0, parked: 0 },
+    });
   });
 
   it('POST run_batch executes the internal validated operation and ignores URL query overrides', async () => {
@@ -186,7 +271,7 @@ describe('backfill and shared detail persistence against the migrated schema', (
     detail.properties.mag = null;
     detail.properties.place = null;
     const result = await persistEarthquakeDetail({ env, detailData: detail });
-    expect(result.archiveDisposition).toBe('queued');
+    expect(result.archiveDisposition).toBe('stored');
     expect(row()).toMatchObject({ detail_fetched: 1, detail_fetch_time: now, products_json: '[]',
       has_shakemap: 0, has_moment_tensor: 0, has_focal_mechanism: 0, has_dyfi: 0,
       has_losspager: 0, has_finite_fault: 0, has_enhanced_data: 0, magnitude: null, place: null,
@@ -230,15 +315,15 @@ describe('backfill and shared detail persistence against the migrated schema', (
 
   it('keeps the summary fence when a newer summary arrives after the archive preflight', async () => {
     seed('quake1', { source_updated_at_ms: now - 1000 });
-    env.GEOJSON_QUEUE.send.mockImplementationOnce(async () => {
+    env.GEOJSON_BUCKET.hooks.beforePut = async () => {
       database.prepare('UPDATE EarthquakeEvents SET source_updated_at_ms = ?, place = ? WHERE id = ?')
         .run(now + 1000, 'Concurrent correction', 'quake1');
-    });
+    };
 
     await expect(persistEarthquakeDetail({ env, detailData: feature() }))
       .rejects.toMatchObject({ code: 'STALE_DETAIL_REVISION' });
     expect(row()).toMatchObject({ source_updated_at_ms: now + 1000, place: 'Concurrent correction', detail_fetched: 0 });
-    expect(env.GEOJSON_QUEUE.send).toHaveBeenCalledTimes(1);
+    expect(database.prepare('SELECT status FROM EarthquakeDetailJobs WHERE event_id = ?').get('quake1').status).toBe('superseded');
   });
 
   it('stores an accepted USGS alias under the requested event ID', async () => {
@@ -248,21 +333,22 @@ describe('backfill and shared detail persistence against the migrated schema', (
     await persistEarthquakeDetail({ env, detailData: detail, requestedId: 'old_id' });
     expect(row('old_id').detail_fetched).toBe(1);
     expect(row('new_id')).toBeUndefined();
-    expect(env.GEOJSON_QUEUE.send).toHaveBeenCalledWith({ id: 'old_id', geojson: detail });
+    expect(row('old_id').detail_archive_key).toMatch(/^details\/v1\/old_id\//);
+    expect(env.GEOJSON_BUCKET.readJson(row('old_id').detail_archive_key)).toEqual(detail);
+    expect(env.GEOJSON_QUEUE.send).not.toHaveBeenCalled();
   });
 
-  it('stores a Queue-oversize detail directly in R2 before completion, measuring UTF-8 bytes', async () => {
+  it('stores a former Queue-oversize detail under an immutable key', async () => {
     seed();
     const detail = feature();
     detail.properties.products.shakemap[0].padding = '🌎'.repeat(MAX_DETAIL_QUEUE_BYTES / 3);
-    env.GEOJSON_BUCKET.put.mockImplementation(async () => {
+    env.GEOJSON_BUCKET.hooks.beforePut = async () => {
       expect(row().detail_fetched).toBe(0);
-      return { etag: 'test' };
-    });
+    };
     expect((await persistEarthquakeDetail({ env, detailData: detail })).archiveDisposition).toBe('stored');
     expect(env.GEOJSON_QUEUE.send).not.toHaveBeenCalled();
-    expect(env.GEOJSON_BUCKET.put).toHaveBeenCalledExactlyOnceWith('quake1.json', JSON.stringify(detail),
-      { httpMetadata: { contentType: 'application/json' } });
+    expect(env.GEOJSON_BUCKET.put).toHaveBeenCalledExactlyOnceWith(row().detail_archive_key, JSON.stringify(detail),
+      { httpMetadata: { contentType: 'application/json' }, onlyIf: { etagDoesNotMatch: '*' } });
     expect(row().detail_fetched).toBe(1);
   });
 
@@ -272,8 +358,8 @@ describe('backfill and shared detail persistence against the migrated schema', (
     env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));
     await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('R2 outage');
     expect(row().detail_fetched).toBe(0);
-    expect(env.DB.prepare).toHaveBeenCalledTimes(1);
-    expect(env.DB.prepare.mock.calls[0][0]).toMatch(/^SELECT/);
+    expect(row().detail_archive_key).toBeNull();
+    expect(database.prepare('SELECT status FROM EarthquakeDetailJobs WHERE event_id = ?').get('quake1').status).toBe('pending');
   });
 
   it('rejects details above the transport storage cap before any archive or D1 mutation', async () => {
@@ -286,10 +372,12 @@ describe('backfill and shared detail persistence against the migrated schema', (
   });
 
   it('does not report complete when D1 rejects metadata after archive acceptance', async () => {
-    env.DB.prepare.mockImplementationOnce(() => ({ bind: () => ({ first: async () => null }) }));
-    env.DB.prepare.mockImplementationOnce(() => ({ bind: () => ({ run: async () => ({ success: false }) }) }));
-    await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('Failed to persist');
-    expect(env.GEOJSON_QUEUE.send).toHaveBeenCalledTimes(1);
-    expect(row()).toBeUndefined();
+    seed();
+    env.DB.batch.mockRejectedValueOnce(new Error('D1 commit outage'));
+    await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('D1 commit outage');
+    expect(row()).toMatchObject({ detail_fetched: 0, detail_archive_key: null });
+    const job = database.prepare('SELECT * FROM EarthquakeDetailJobs WHERE event_id = ?').get('quake1');
+    expect(job.status).toBe('pending');
+    expect(env.GEOJSON_BUCKET.objects.has(job.archive_key)).toBe(true);
   });
 });

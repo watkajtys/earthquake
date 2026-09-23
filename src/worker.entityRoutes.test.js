@@ -8,12 +8,13 @@ const slug = '3-quakes-near-local-test-m6.3-12345-40d0--100d0';
 let env;
 let queries;
 let earthquakeRow;
+const earthquakeRowBase = id => ({
+  id, event_time: 1750000000000, latitude: 2, longitude: 1,
+  depth: 3, magnitude: -0.5, place: 'Test place',
+});
 beforeEach(() => {
   queries = [];
-  earthquakeRow = id => ({
-    id, event_time: 1750000000000, latitude: 2, longitude: 1,
-    depth: 3, magnitude: -0.5, place: 'Test place',
-  });
+  earthquakeRow = earthquakeRowBase;
   env = {
     ASSETS: { fetch: vi.fn(async () => new Response('<html><head><script type="module" crossorigin src="/assets/index-built.js"></script><link rel="stylesheet" href="/assets/index-built.css"></head></html>')) },
     DB: { prepare: vi.fn((sql) => ({ bind(value) { queries.push({ sql, value }); return { first: async () => sql.includes('FROM EarthquakeEvents') ? earthquakeRow(value)
@@ -87,10 +88,45 @@ describe('exported Worker entity routes', () => {
     expect(await json.text()).toBe(JSON.stringify(data, null, 2));
     expect(env.GEOJSON_BUCKET.get).toHaveBeenNthCalledWith(1, 'previewquake001.json');
     expect(fetch).not.toHaveBeenCalled();
-    expect(env.DB.prepare).not.toHaveBeenCalled();
+    expect(env.DB.prepare).toHaveBeenCalledTimes(2);
     expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
     expect(env.GEOJSON_QUEUE.send).not.toHaveBeenCalled();
     expect(waitUntil).not.toHaveBeenCalled();
+  });
+  it('resolves a committed immutable pointer for crawler and JSON detail reads', async () => {
+    const key = 'details/v1/us123/1750000003000/test-hash.json';
+    const data = usgsFeature('us123', { place: 'Committed detail', updated: 1750000003000 });
+    earthquakeRow = id => ({ ...earthquakeRowBase(id), source_updated_at_ms: 1750000003000,
+      detail_archive_revision_ms: 1750000003000, detail_archive_key: key });
+    env.GEOJSON_BUCKET = { get: vi.fn(async requested => requested === key ? archivedObject(data) : null) };
+    const html = await (await crawler('/quake/id/us123')).text();
+    const json = await worker.fetch(new Request('https://example.test/api/earthquake/us123', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    }), env, { waitUntil: vi.fn() });
+    expect(html).toContain('Committed detail');
+    expect(json.status).toBe(200);
+    expect(json.headers.get('X-Data-Source')).toBe('R2-Storage');
+    expect((await json.json()).properties.place).toBe('Committed detail');
+    expect(env.GEOJSON_BUCKET.get).toHaveBeenCalledTimes(2);
+    expect(env.GEOJSON_BUCKET.get).toHaveBeenCalledWith(key);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('rejects stale legacy R2 science and keeps crawler on D1 without upstream work', async () => {
+    earthquakeRow = id => ({ ...earthquakeRowBase(id), place: 'Current D1 place',
+      source_updated_at_ms: 1750000003000 });
+    env.GEOJSON_BUCKET = { get: vi.fn(async () => archivedObject(usgsFeature('us123', {
+      place: 'Stale archive place', updated: 1750000001000,
+    }))), put: vi.fn() };
+    const html = await (await crawler('/quake/id/us123')).text();
+    expect(html).toContain('Current D1 place');
+    expect(html).not.toContain('Stale archive place');
+    expect(fetch).not.toHaveBeenCalled();
+    const json = await worker.fetch(new Request('https://example.test/api/earthquake/us123', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    }), env, { waitUntil: vi.fn() });
+    expect(json.status).toBe(503);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
   });
   it('accepts a stored official alias and uses its canonical earthquake ID', async () => {
     env.GEOJSON_BUCKET = { get: vi.fn(async () => archivedObject(usgsFeature('canonical123', { ids: ',canonical123,alias123,' }))) };
@@ -125,7 +161,7 @@ describe('exported Worker entity routes', () => {
     const response = await crawler('/quake/id/us123');
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('M -0.5 Earthquake');
-    expect(queries).toHaveLength(1);
+    expect(queries).toHaveLength(2);
     expect(fetch).not.toHaveBeenCalled();
     expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
   });

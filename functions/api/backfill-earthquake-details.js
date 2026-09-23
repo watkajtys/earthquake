@@ -1,6 +1,6 @@
 import { updateStatsInKV } from '../utils/kv-stats-updater.js';
 import { fetchValidatedDetail } from '../utils/usgs-transport.js';
-import { persistEarthquakeDetail } from '../utils/earthquakeDetailPersistence.js';
+import { persistEarthquakeDetail, recoverDueDetailJobs } from '../utils/earthquakeDetailPersistence.js';
 import { readBoundedJson, RequestPolicyError, policyError } from '../../src/utils/workerRequestPolicy.js';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -31,6 +31,10 @@ function parameters(input, fromQuery = false) {
 function pendingSelection(criteria, now) {
   return {
     where: `detail_fetched = FALSE
+      AND NOT EXISTS (SELECT 1 FROM EarthquakeDetailJobs AS job
+        WHERE job.event_id = EarthquakeEvents.id AND job.status IN ('pending', 'leased', 'parked')
+          AND (EarthquakeEvents.source_updated_at_ms IS NULL
+            OR job.target_revision_ms >= EarthquakeEvents.source_updated_at_ms))
       AND COALESCE(detail_fetch_attempts, 0) < 3
       AND ((COALESCE(detail_fetch_attempts, 0) = 0 AND event_time <= ? AND
               (next_detail_fetch_attempt IS NULL OR next_detail_fetch_attempt <= ?))
@@ -55,6 +59,7 @@ async function onRequestGet(context) {
     const criteria = parameters(url.searchParams, true);
     if (!env.DB) return policyError('Database not configured.', 500);
     const startTime = Date.now();
+    const recovery = await recoverDueDetailJobs(env, { limit: 3 });
     const selection = pendingSelection(criteria, startTime);
     const result = await env.DB.prepare(`
       SELECT id, magnitude, detail_fetch_attempts FROM EarthquakeEvents
@@ -118,6 +123,7 @@ async function onRequestGet(context) {
     nextUrl.searchParams.set('max_age_days', String(criteria.maxAgeDays));
     return jsonResponse({
       success: errors.length === 0, processed: processed.length, errors: errors.length,
+      recovered_jobs: recovery,
       elapsed_seconds: (Date.now() - startTime) / 1000,
       last_processed_id: processed.at(-1)?.id || null,
       // Advisory internal URL only. Each invocation selects the next eligible
@@ -148,7 +154,15 @@ async function onRequestPost(context) {
     const result = await context.env.DB.prepare(`SELECT COUNT(*) AS total FROM EarthquakeEvents WHERE ${selection.where}`)
       .bind(...selection.values).first();
     if (!Number.isSafeInteger(result?.total) || result.total < 0) throw new Error('Failed to count pending earthquake details');
-    return jsonResponse({ success: true, operation: 'status', eligible_count: result.total, criteria });
+    const jobs = await context.env.DB.prepare(`SELECT status, COUNT(*) AS total FROM EarthquakeDetailJobs
+      WHERE status IN ('pending', 'leased', 'parked') GROUP BY status`).all();
+    if (jobs?.success !== true || !Array.isArray(jobs.results) ||
+        jobs.results.some(job => !['pending', 'leased', 'parked'].includes(job.status) ||
+          !Number.isSafeInteger(job.total) || job.total < 0)) throw new Error('Failed to count detail jobs');
+    const detailJobs = { pending: 0, leased: 0, parked: 0 };
+    for (const job of jobs.results) detailJobs[job.status] = job.total;
+    return jsonResponse({ success: true, operation: 'status', eligible_count: result.total,
+      detail_jobs: detailJobs, criteria });
   } catch (error) {
     return safeFailure(error);
   }
