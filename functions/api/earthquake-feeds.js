@@ -26,7 +26,7 @@ function matchesEtag(value, etag) {
   return typeof value === 'string' && value.length <= 2048 && value.split(',').some(part =>
     part.trim() === '*' || part.trim().replace(/^W\//u, '') === etag);
 }
-async function readVerifiedBytes(object, descriptor, signal) {
+async function readVerifiedBytes(object, descriptor, signal, onHash) {
   if (!objectMatches(object, descriptor) || !object.body?.getReader) {
     void object?.body?.cancel().catch(() => {});
     throw new Error('Invalid feed object');
@@ -45,7 +45,9 @@ async function readVerifiedBytes(object, descriptor, signal) {
       if (offset + value.byteLength > bytes.byteLength) throw new Error('Feed byte limit');
       bytes.set(value, offset); offset += value.byteLength;
     }
-    if (offset !== bytes.byteLength || await sha256Hex(bytes) !== descriptor.sha256) throw new Error('Feed checksum mismatch');
+    if (offset !== bytes.byteLength) throw new Error('Feed checksum mismatch');
+    onHash();
+    if (await sha256Hex(bytes) !== descriptor.sha256) throw new Error('Feed checksum mismatch');
     return bytes;
   } catch (error) {
     void reader.cancel().catch(() => {});
@@ -65,6 +67,10 @@ export async function onRequestGet({ request, env }) {
   if (!FEED_PERIODS.includes(period) || [...params.keys()].some(key => key !== 'period') || params.getAll('period').length > 1) {
     return Response.json({ error: { code: 'INVALID_PARAMETERS' } }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
   }
+  const startedAt = Date.now();
+  let stage = 'pointer-get';
+  let stageStartedAt = startedAt;
+  const beginStage = name => { stage = name; stageStartedAt = Date.now(); };
   const controller = new AbortController();
   let timer;
   const deadline = new Promise((_, reject) => {
@@ -80,12 +86,16 @@ export async function onRequestGet({ request, env }) {
         void pointerObject?.body?.cancel().catch(() => {});
         throw new Error('Feed pointer unavailable');
       }
-      const pointer = validateFeedPointer(await readBoundedFeedJson(new Response(pointerObject.body), controller.signal, MAX_FEED_POINTER_BYTES), { period });
+      beginStage('pointer-read');
+      const pointerValue = await readBoundedFeedJson(new Response(pointerObject.body), controller.signal, MAX_FEED_POINTER_BYTES);
+      beginStage('pointer-validate');
+      const pointer = validateFeedPointer(pointerValue, { period });
       const descriptor = pointer.current;
       const headers = feedHeaders(descriptor, Date.now());
       // Conditional requests verify the immutable object's existence/metadata,
       // without rereading a multi-megabyte body. Publisher supplies its checksum.
       if (request.method === 'HEAD' || matchesEtag(request.headers.get('If-None-Match'), headers.get('ETag'))) {
+        beginStage('object-head');
         const object = await bucket.head(descriptor.objectKey);
         controller.signal.throwIfAborted();
         if (!objectMatches(object, descriptor)) throw new Error('Feed object unavailable');
@@ -93,14 +103,22 @@ export async function onRequestGet({ request, env }) {
         headers.set('Content-Length', String(descriptor.byteLength));
         return new Response(null, { headers });
       }
+      beginStage('object-get');
       const object = await bucket.get(descriptor.objectKey);
       if (controller.signal.aborted) void object?.body?.cancel().catch(() => {});
       controller.signal.throwIfAborted();
-      const bytes = await readVerifiedBytes(object, descriptor, controller.signal);
+      beginStage('object-read');
+      const bytes = await readVerifiedBytes(object, descriptor, controller.signal, () => beginStage('object-hash'));
       headers.set('Content-Length', String(bytes.byteLength));
       return new Response(bytes, { headers });
     })()]);
-  } catch {
+  } catch (error) {
+    const endedAt = Date.now();
+    console.error(JSON.stringify({
+      event: 'earthquake-feed-read-failed', period, method: request.method, stage,
+      reason: error === controller.signal.reason ? 'deadline' : 'read-failed',
+      elapsedMs: Math.max(0, endedAt - startedAt), stageElapsedMs: Math.max(0, endedAt - stageStartedAt),
+    }));
     return unavailable();
   } finally { clearTimeout(timer); }
 }

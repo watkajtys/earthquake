@@ -114,6 +114,35 @@ describe('actual Worker complete period read route', () => {
     const response = fetchFeed();
     await vi.advanceTimersByTimeAsync(10_001);
     expect((await response).status).toBe(503);
+    expect(JSON.parse(console.error.mock.calls.at(-1)[0])).toMatchObject({
+      event: 'earthquake-feed-read-failed', period: 'day', method: 'GET', stage: 'pointer-get',
+      reason: 'deadline', elapsedMs: 10_000, stageElapsedMs: 10_000,
+    });
+  });
+  it('identifies a stalled immutable object read without logging its key or feed payload', async () => {
+    await publish('week');
+    const descriptor = bucket.readJson(feedPointerKey('week')).current;
+    bucket.hooks.beforeGet = key => key === descriptor.objectKey ? new Promise(() => {}) : undefined;
+    const response = fetchFeed('?period=week');
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect((await response).status).toBe(503);
+    const log = console.error.mock.calls.at(-1)[0];
+    expect(JSON.parse(log)).toMatchObject({
+      event: 'earthquake-feed-read-failed', period: 'week', method: 'GET', stage: 'object-get', reason: 'deadline',
+    });
+    expect(log).not.toContain(descriptor.objectKey);
+    expect(log).not.toContain('us-week');
+  });
+  it('identifies a failed metadata check on conditional requests', async () => {
+    await publish();
+    const etag = (await fetchFeed()).headers.get('ETag');
+    bucket.hooks.beforeHead = () => { throw new Error('private R2 key and account details'); };
+    expect((await fetchFeed('', { headers: { 'If-None-Match': etag } })).status).toBe(503);
+    const log = console.error.mock.calls.at(-1)[0];
+    expect(JSON.parse(log)).toMatchObject({
+      event: 'earthquake-feed-read-failed', period: 'day', method: 'GET', stage: 'object-head', reason: 'read-failed',
+    });
+    expect(log).not.toContain('private R2 key and account details');
   });
   it('cancels R2 bodies that arrive after the read deadline', async () => {
     let resolveRead;
