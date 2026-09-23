@@ -26,12 +26,16 @@ describe('backfill and shared detail persistence against the migrated schema', (
   const row = (id = 'quake1') => database.prepare('SELECT * FROM EarthquakeEvents WHERE id = ?').get(id);
   const seed = (id = 'quake1', overrides = {}) => {
     const values = { magnitude: 4.5, event_time: now - 2 * hour, detail_fetch_attempts: 0,
-      next_detail_fetch_attempt: null, detail_fetched: 0, source_updated_at_ms: null, ...overrides };
+      next_detail_fetch_attempt: null, detail_fetched: 0, source_updated_at_ms: null,
+      place: null, latitude: null, longitude: null, depth: null,
+      usgs_detail_url: 'https://attacker.invalid/not-used', ...overrides };
     database.prepare(`INSERT INTO EarthquakeEvents
-      (id, magnitude, event_time, detail_fetch_attempts, next_detail_fetch_attempt, detail_fetched, usgs_detail_url, source_updated_at_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      (id, magnitude, event_time, detail_fetch_attempts, next_detail_fetch_attempt, detail_fetched,
+        place, latitude, longitude, depth, usgs_detail_url, source_updated_at_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, values.magnitude, values.event_time, values.detail_fetch_attempts, values.next_detail_fetch_attempt,
-        values.detail_fetched, 'https://attacker.invalid/not-used', values.source_updated_at_ms);
+        values.detail_fetched, values.place, values.latitude, values.longitude, values.depth,
+        values.usgs_detail_url, values.source_updated_at_ms);
   };
   const get = (query = 'batch_size=1') => onRequestGet({ ...context, request: new Request(`https://example.com/api/backfill-earthquake-details?${query}`) });
   const post = (body, headers = { 'Content-Type': 'application/json' }) => onRequestPost({
@@ -190,8 +194,7 @@ describe('backfill and shared detail persistence against the migrated schema', (
   });
 
   it('keeps a newer summary intact and schedules a retry when backfill receives stale detail', async () => {
-    seed('quake1', { source_updated_at_ms: now + 1000 });
-    database.prepare('UPDATE EarthquakeEvents SET place = ? WHERE id = ?').run('Current location', 'quake1');
+    seed('quake1', { source_updated_at_ms: now + 1000, place: 'Current location' });
 
     const response = await get();
     expect(response.status).toBe(200);
@@ -203,8 +206,7 @@ describe('backfill and shared detail persistence against the migrated schema', (
   });
 
   it('rejects an equal-revision scientific conflict before archiving', async () => {
-    seed('quake1', { source_updated_at_ms: now });
-    database.prepare('UPDATE EarthquakeEvents SET place = ? WHERE id = ?').run('Corrected location', 'quake1');
+    seed('quake1', { source_updated_at_ms: now, place: 'Corrected location' });
 
     await expect(persistEarthquakeDetail({ env, detailData: feature() }))
       .rejects.toMatchObject({ code: 'CONFLICTING_DETAIL_REVISION' });
@@ -213,10 +215,9 @@ describe('backfill and shared detail persistence against the migrated schema', (
   });
 
   it('enriches a matching revision and advances the source revision for a newer detail', async () => {
-    seed('quake1', { source_updated_at_ms: now });
-    database.prepare(`UPDATE EarthquakeEvents SET latitude = 34, longitude = -118, depth = 10,
-      place = 'Test location', usgs_detail_url = ? WHERE id = ?`)
-      .run('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/quake1.geojson', 'quake1');
+    seed('quake1', { source_updated_at_ms: now, latitude: 34, longitude: -118, depth: 10,
+      place: 'Test location',
+      usgs_detail_url: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/quake1.geojson' });
     await persistEarthquakeDetail({ env, detailData: feature() });
     expect(row()).toMatchObject({ source_updated_at_ms: now, detail_fetched: 1, has_shakemap: 1 });
 

@@ -183,7 +183,8 @@ try {
   };
   const sql = [
     ...rows.map((row, index) => upsert('EarthquakeEvents', {
-      ...row, usgs_detail_url: features[index].properties.detail, retrieved_at: now,
+      ...row, usgs_detail_url: features[index].properties.detail,
+      source_updated_at_ms: features[index].properties.updated, retrieved_at: now,
       products_json: '{}', detail_fetched: 1, detail_fetch_time: now,
       has_enhanced_data: 0, detail_fetch_attempts: 0,
     })),

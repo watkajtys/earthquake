@@ -199,9 +199,65 @@ describe('earthquake persistence against the migrated D1 schema', () => {
 
   it('seeds only a freshly observed source revision for an existing legacy row', async () => {
     const feature = makeFeature();
-    await upsertEarthquakeFeaturesToD1(db, [feature]);
-    database.prepare('UPDATE EarthquakeEvents SET source_updated_at_ms = NULL WHERE id = ?').run(feature.id);
+    database.prepare(`INSERT INTO EarthquakeEvents
+      (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      feature.id, feature.properties.time, feature.geometry.coordinates[1],
+      feature.geometry.coordinates[0], feature.geometry.coordinates[2],
+      feature.properties.mag, feature.properties.place, feature.properties.detail,
+    );
+    expect(rows()[0].source_updated_at_ms).toBeNull();
     expect((await upsertEarthquakeFeaturesToD1(db, [feature])).persistedIds).toEqual(['quake1']);
+    expect(rows()[0].source_updated_at_ms).toBe(now);
+  });
+
+  it('allows the previous Worker to update a legacy row before it receives a source revision', () => {
+    database.prepare('INSERT INTO EarthquakeEvents (id, place) VALUES (?, ?)').run('quake1', 'Legacy location');
+    database.prepare(`INSERT INTO EarthquakeEvents (id, place) VALUES (?, ?)
+      ON CONFLICT(id) DO UPDATE SET place = excluded.place`).run('quake1', 'Later legacy location');
+    expect(rows()[0]).toMatchObject({ place: 'Later legacy location', source_updated_at_ms: null });
+  });
+
+  it.each([
+    ['event_time', now], ['latitude', 35], ['longitude', -119], ['depth', 11],
+    ['magnitude', 6], ['place', 'Old location'],
+    ['usgs_detail_url', 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/old.geojson'],
+  ])('blocks an old Worker from changing fenced %s without a newer revision', async (column, staleValue) => {
+    await upsertEarthquakeFeaturesToD1(db, [makeFeature()]);
+    const saved = rows()[0];
+    expect(() => database.prepare(`UPDATE EarthquakeEvents SET ${column} = ? WHERE id = ?`)
+      .run(staleValue, 'quake1')).toThrow('EARTHQUAKE_SOURCE_REVISION_NOT_ADVANCED');
+    expect(rows()[0]).toEqual(saved);
+  });
+
+  it('blocks the previous summary and detail UPSERT paths after a row is fenced', async () => {
+    await upsertEarthquakeFeaturesToD1(db, [makeFeature()]);
+    const saved = rows()[0];
+    expect(() => database.prepare(`INSERT INTO EarthquakeEvents (id, place, retrieved_at)
+      VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+        place = excluded.place, retrieved_at = excluded.retrieved_at`)
+      .run('quake1', 'Older summary', now + 1000))
+      .toThrow('EARTHQUAKE_SOURCE_REVISION_NOT_ADVANCED');
+    expect(() => database.prepare(`INSERT INTO EarthquakeEvents (id, magnitude, detail_fetched)
+      VALUES (?, ?, 1) ON CONFLICT(id) DO UPDATE SET
+        magnitude = excluded.magnitude, detail_fetched = excluded.detail_fetched`)
+      .run('quake1', 4.2))
+      .toThrow('EARTHQUAKE_SOURCE_REVISION_NOT_ADVANCED');
+    expect(rows()[0]).toEqual(saved);
+  });
+
+  it('allows matching-revision detail flags and retry metadata, but rejects revision rollback', async () => {
+    await upsertEarthquakeFeaturesToD1(db, [makeFeature()]);
+    database.prepare(`UPDATE EarthquakeEvents SET place = ?, source_updated_at_ms = ?,
+      has_shakemap = 1 WHERE id = ?`).run('Test location', now, 'quake1');
+    database.prepare(`UPDATE EarthquakeEvents SET detail_fetch_attempts = 2,
+      next_detail_fetch_attempt = ? WHERE id = ?`).run(now + 60_000, 'quake1');
+    expect(rows()[0]).toMatchObject({ place: 'Test location', source_updated_at_ms: now,
+      has_shakemap: 1, detail_fetch_attempts: 2, next_detail_fetch_attempt: now + 60_000 });
+    for (const invalidRevision of [null, now - 1, 'invalid', 8640000000000001]) {
+      expect(() => database.prepare('UPDATE EarthquakeEvents SET source_updated_at_ms = ? WHERE id = ?')
+        .run(invalidRevision, 'quake1')).toThrow('EARTHQUAKE_SOURCE_REVISION_NOT_ADVANCED');
+    }
     expect(rows()[0].source_updated_at_ms).toBe(now);
   });
 
