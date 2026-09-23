@@ -1,0 +1,19 @@
+# SEO and clustering triage — 2026-09-23 UTC
+
+## Priority and observed evidence
+
+1. **Ship the sitemap/canonical correction and remove the cluster sitemap's upstream fan-out.** Search Console shows 1,892 indexed pages and no manual action or security issue, so the site is not delisted. Its September 17 Page Indexing report lists 445 excluded URLs, including 393 “Crawled — currently not indexed”; a sampled URL in that group is now indexed in URL Inspection, so the aggregate report is not a current per-URL verdict. Search Console has no submitted sitemap. Submit the corrected `/sitemap-index.xml` after the production release.
+2. **Fence new database writes by USGS source revision.** The production `EarthquakeEvents` table still lacks `source_updated_at_ms`; migration `0018_add_cluster_anchor_lookup_index.sql` is its latest recorded migration. The pending additive `0019` and writer guard are local only. Reconcile history, freeze the migration, rehearse on isolated preview, and establish recovery evidence before production schema/code rollout. Historical rows remain unresolved.
+3. **Reduce repeated cluster publication and large-route work.** The ten-minute scheduled cluster path still needs a bounded no-change guard and observation. The previous cluster sitemap could perform one USGS detail request per selected row, up to 500 per sitemap request. The preview fix emits stored canonical slugs with no upstream detail fetch. Cloudflare's last-24-hour aggregate showed about 35,190 Worker invocations, zero Worker errors, and about 2,000 USGS subrequests across all routes; it does not attribute those calls to the sitemap, so a production storm has not been measured.
+4. **Continue operational cleanup** after the integrity and delivery work: deferred R2 objects, predecessor-asset retention, dependency/test debt, and the unobserved daily scheduled job.
+
+## Code and preview status
+
+- Branch: `codex/seo-cluster-triage`; code commits `9400123` and `cb440ff`. The sitemap index and quake pages share one eligibility rule; quake entries use canonical `/quake/id/<id>` URLs. Static sitemap entries cover all Learn pages. Feed query pages declare their selected canonical. Unverified sitemap modification dates are omitted. Cluster sitemap entries use stored slugs, make no USGS detail calls, and return an uncached error on D1 failure.
+- Dedicated preview Worker `earthquake-reconcile-preview`: version `919042b3-4cd5-4cc2-adc2-881f3ef17917` from the isolated code-only checkout. Preview D1/KV/R2 fixtures were refreshed with four clearly labeled synthetic earthquakes and one cluster. No production resource was seeded or migrated.
+- The isolated code-only checkout passed 1,535 tests across 125 files, with three skips, and built successfully. Focused tests for the follow-up cluster timestamp correction passed. The initial preview version passed 117 GET checks, including 85 current or archived assets. The final preview version passed read-only checks of all four sitemap responses: canonical quake and cluster URLs, 13 static URLs, and no `<lastmod>` values. The full 117-GET smoke was not rerun after the sitemap-only follow-up.
+- Production remains at source `65abd594a15fbc896b0a8e625ce01531a997908b`, Worker version `36303d5a-624f-4b4a-a997-dd8c2f165fa2`; these fixes are **not yet live**. Do not submit the current production sitemap to Search Console as the corrected one.
+
+## Read-only production database baseline
+
+At this check, D1 held 190,102 earthquake rows, 10,906 with event time in the last 30 days, and 45,377 cluster rows. The database size reported by D1 was approximately 782 MB. These are a current planning baseline, not a repair manifest. No production data mutation, schema migration, historical deduplication, backup, or restore rehearsal occurred in this triage.
