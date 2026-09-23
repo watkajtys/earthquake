@@ -458,7 +458,7 @@ describe('EarthquakeSequenceChart', () => {
                 const dayLabels = Array.from(svg.querySelectorAll('[data-testid="sequence-day-label"]'));
                 expect(dayLabels.map(label => label.textContent)).toEqual(['Jan 01', 'Jan 02']);
                 const timeLabels = Array.from(svg.querySelectorAll('[data-testid="sequence-axis-tick"]'));
-                expect(timeLabels.some(label => label.textContent === '12AM')).toBe(true);
+                expect(timeLabels.some(label => /^12(?::00)?AM$/.test(label.textContent))).toBe(true);
             });
 
             test('bounds the time label count and spacing for a ~70 hour duration', () => {
@@ -567,6 +567,62 @@ describe('EarthquakeSequenceChart', () => {
             act(() => notifyResize());
             expect(svg).toHaveAttribute('viewBox', '0 0 360 350');
             assertSpacedDates();
+            unmount();
+        } finally {
+            Element.prototype.getBoundingClientRect.mockImplementation(originalMeasure);
+            globalThis.ResizeObserver = originalResizeObserver;
+        }
+    });
+
+    test.each([
+        { duration: '40 minutes', start: '2026-09-23T12:10:00Z', end: '2026-09-23T12:50:00Z', precision: 'minute', gap: 80 },
+        { duration: '2 hours', start: '2026-09-23T12:00:00Z', end: '2026-09-23T14:00:00Z', precision: 'minute', gap: 80 },
+        { duration: '40 seconds', start: '2026-09-23T12:10:10Z', end: '2026-09-23T12:10:50Z', precision: 'second', gap: 96 },
+        { duration: '40 milliseconds', start: '2026-09-23T12:10:10.010Z', end: '2026-09-23T12:10:10.050Z', precision: 'millisecond', gap: 116 },
+    ])('keeps distinct $precision labels for $duration at desktop and narrow widths', ({ start, end, precision, gap }) => {
+        const firstTime = Date.parse(start);
+        const lastTime = Date.parse(end);
+        const cluster = {
+            originalQuakes: [
+                mockQuake('short-start', firstTime, 2.2),
+                mockQuake('short-middle', (firstTime + lastTime) / 2, 3.1),
+                mockQuake('short-end', lastTime, 2.7),
+            ],
+        };
+        let measuredWidth = 800;
+        let notifyResize;
+        const originalResizeObserver = globalThis.ResizeObserver;
+        const originalMeasure = Element.prototype.getBoundingClientRect.getMockImplementation();
+        Element.prototype.getBoundingClientRect.mockImplementation(function () {
+            const rect = originalMeasure.call(this);
+            return this.tagName?.toLowerCase() === 'svg' ? { ...rect, width: measuredWidth } : rect;
+        });
+        globalThis.ResizeObserver = class {
+            constructor(callback) { notifyResize = callback; }
+            observe() {}
+            disconnect() {}
+        };
+
+        try {
+            const { container, unmount } = render(<EarthquakeSequenceChart cluster={cluster} />);
+            const svg = container.querySelector('svg');
+            const assertDistinctLabels = () => {
+                const ticks = Array.from(svg.querySelectorAll('[data-testid="sequence-axis-tick"]'));
+                const labels = ticks.map(tick => tick.textContent);
+                const offsets = ticks.map(tick => Number(tick.getAttribute('x')));
+                expect(ticks.length).toBeGreaterThanOrEqual(2);
+                const format = precision === 'millisecond' ? /^\d{1,2}:\d{2}:\d{2}\.\d{3}(AM|PM)$/
+                    : precision === 'second' ? /^\d{1,2}:\d{2}:\d{2}(AM|PM)$/ : /^\d{1,2}:\d{2}(AM|PM)$/;
+                expect(labels.every(label => format.test(label))).toBe(true);
+                expect(new Set(labels).size).toBe(labels.length);
+                offsets.slice(1).forEach((offset, index) => expect(offset - offsets[index]).toBeGreaterThanOrEqual(gap));
+                expect(svg.querySelectorAll('circle')).toHaveLength(3);
+            };
+
+            assertDistinctLabels();
+            measuredWidth = 360;
+            act(() => notifyResize());
+            assertDistinctLabels();
             unmount();
         } finally {
             Element.prototype.getBoundingClientRect.mockImplementation(originalMeasure);

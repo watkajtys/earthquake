@@ -13,6 +13,9 @@ const gridLineColor = "stroke-slate-600"; // Similar to border color in Earthqua
 const mainshockStrokeWidth = 2;
 const longRangeThresholdMs = 72 * 60 * 60 * 1000;
 const minTimeLabelGap = 66;
+const minMinuteLabelGap = 80;
+const minSecondLabelGap = 96;
+const minMillisecondLabelGap = 116;
 const minDateLabelGap = 90;
 // const mainshockRadius = 8; // Unused
 // const eventRadius = 5; // Unused
@@ -170,10 +173,19 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false, onPlot
   const isLongRange = timeDomain[1] - timeDomain[0] >= longRangeThresholdMs;
   const timeAxisTicks = useMemo(() => {
     if (width <= 0 || !timeDomain[0] || !timeDomain[1]) return [];
-    const minimumGap = isLongRange ? minDateLabelGap : minTimeLabelGap;
+    // D3 may choose minute or second ticks even for an hour-scale domain.
+    // Match the label precision to that actual interval so adjacent ticks differ.
+    const candidateTicks = xScale.ticks(Math.max(2, Math.floor(width / minTimeLabelGap)));
+    const tickIntervalMs = candidateTicks.length > 1 ? candidateTicks[1] - candidateTicks[0] : Infinity;
+    const showMilliseconds = !isLongRange && tickIntervalMs < 1_000;
+    const showSeconds = !isLongRange && tickIntervalMs < 60_000;
+    const showMinutes = !isLongRange && tickIntervalMs < 3_600_000;
+    const minimumGap = isLongRange ? minDateLabelGap : showMilliseconds ? minMillisecondLabelGap
+      : showSeconds ? minSecondLabelGap : showMinutes ? minMinuteLabelGap : minTimeLabelGap;
     const tickCount = Math.max(2, Math.floor(width / minimumGap));
     const crossesYear = timeDomain[0].getUTCFullYear() !== timeDomain[1].getUTCFullYear();
-    const formatTick = utcFormat(isLongRange ? (crossesYear ? "%b %-d '%y" : "%b %-d") : "%-I%p");
+    const formatTick = utcFormat(isLongRange ? (crossesYear ? "%b %-d '%y" : "%b %-d")
+      : showMilliseconds ? "%-I:%M:%S.%L%p" : showSeconds ? "%-I:%M:%S%p" : showMinutes ? "%-I:%M%p" : "%-I%p");
     const seenDates = new Set();
     let lastOffset = -Infinity;
 
