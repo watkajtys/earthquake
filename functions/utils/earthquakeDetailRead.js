@@ -17,7 +17,8 @@ export async function readArchivedEarthquakeDetail(bucket, eventId, { db, timeou
         let row = null;
         if (db) {
           try {
-            row = await db.prepare(`SELECT source_updated_at_ms, detail_archive_key,
+            row = await db.prepare(`SELECT id, place, magnitude, has_moment_tensor,
+              has_focal_mechanism, source_updated_at_ms, detail_archive_key,
               detail_archive_revision_ms FROM EarthquakeEvents WHERE id = ?`).bind(eventId).first();
           } catch {
             throw new UsgsTransportError('Stored earthquake archive pointer is unavailable', {
@@ -59,7 +60,7 @@ export async function readArchivedEarthquakeDetail(bucket, eventId, { db, timeou
         if (object.httpEtag) headers.set('ETag', object.httpEtag);
         headers.set('Content-Type', 'application/json');
         headers.set('X-Data-Source', 'R2-Storage');
-        return { data, body, headers };
+        return { data, body, headers, storedSummary: row };
       })(),
       deadline,
     ]);

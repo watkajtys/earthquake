@@ -42,6 +42,15 @@ export default function ClusterDetailModalWrapper({ formatDate, getMagnitudeColo
   const routeValue = parsed.ok ? parsed.route : null;
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState({ route: null, status: 'loading', data: null });
+  const [serverVerifiedRoute, setServerVerifiedRoute] = useState(() =>
+    document.getElementById('root')?.getAttribute('data-verified-cluster-route') || null);
+  const hasServerVerifiedDetail = parsed.ok && serverVerifiedRoute === location.pathname;
+  useEffect(() => {
+    document.getElementById('root')?.removeAttribute('data-verified-cluster-route');
+  }, []);
+  useEffect(() => {
+    if (serverVerifiedRoute && serverVerifiedRoute !== location.pathname) setServerVerifiedRoute(null);
+  }, [serverVerifiedRoute, location.pathname]);
   const onClose = useCallback(() => {
     const target = modalReturnTarget(location.state);
     navigate(target.path, { replace: true, state: target.state });
@@ -71,8 +80,7 @@ export default function ClusterDetailModalWrapper({ formatDate, getMagnitudeColo
   const status = !parsed.ok ? 'notFound' : result.route === routeValue ? result.status : 'loading';
   const data = status === 'success' ? result.data : null;
   const cluster = useMemo(() => data ? toDisplayCluster(data, formatTimeAgo, formatTimeDuration) : null, [data, formatTimeAgo, formatTimeDuration]);
-  const canonicalPath = cluster?.canonicalPath || (routeValue ? buildClusterPath({ slug: routeValue }) : '/');
-  const canonicalUrl = `https://earthquakeslive.com${canonicalPath}`;
+  const canonicalUrl = cluster ? `https://earthquakeslive.com${cluster.canonicalPath}` : undefined;
   const title = cluster ? (cluster.title || `Earthquake Cluster near ${cluster.locationName}`) :
     status === 'loading' ? 'Loading Cluster Details' : status === 'notFound' ? 'Cluster Not Found' : 'Cluster Unavailable';
   const magnitude = Number.isFinite(cluster?.maxMagnitude) ? cluster.maxMagnitude.toFixed(1) : 'unknown';
@@ -80,8 +88,9 @@ export default function ClusterDetailModalWrapper({ formatDate, getMagnitudeColo
     status === 'loading' ? 'Fetching the stored cluster definition.' : result.message || parsed.message || 'The requested cluster could not be found.';
   return (
     <>
-      <SeoMetadata title={`${title} | Earthquakes Live`} description={description} canonicalUrl={canonicalUrl} pageUrl={canonicalUrl}
+      {(!hasServerVerifiedDetail || cluster) && <SeoMetadata title={`${title} | Earthquakes Live`} description={description} canonicalUrl={canonicalUrl} pageUrl={canonicalUrl}
         noIndex={!cluster} type="website" eventJsonLd={cluster ? { '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, description, url: canonicalUrl, identifier: cluster.id } : null} />
+      }
       {cluster ? <ClusterDetailModal cluster={cluster} onClose={onClose} formatDate={formatDate}
         getMagnitudeColorStyle={getMagnitudeColorStyle} onIndividualQuakeSelect={onIndividualQuakeSelect} /> :
         <RouteDetailStatus title={title} message={description} loading={status === 'loading'} onClose={onClose}

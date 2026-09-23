@@ -133,11 +133,11 @@ describe('EarthquakeDetailModalComponent Data and URL Handling', () => {
 
       expect(EarthquakeDetailView).not.toHaveBeenCalled();
 
-      // Check SeoMetadata for default/initial URLs when detailUrlParam is missing
-      // This check is secondary for this test file, but good for completeness if it's simple
+      // A malformed route is excluded without assigning the home canonical.
       const lastSeoCall = SeoMetadata.mock.calls[SeoMetadata.mock.calls.length - 1][0];
-      expect(lastSeoCall.pageUrl).toBe("https://earthquakeslive.com");
-      expect(lastSeoCall.canonicalUrl).toBe("https://earthquakeslive.com");
+      expect(lastSeoCall.pageUrl).toBeUndefined();
+      expect(lastSeoCall.canonicalUrl).toBeUndefined();
+      expect(lastSeoCall.noIndex).toBe(true);
     });
 
     test('renders EarthquakeDetailView when detailUrlParam is present', () => {

@@ -29,6 +29,11 @@ describe('isEventSignificant', () => {
     expect(isEventSignificant(event)).toBe(true);
   });
 
+  it('excludes earthquakes below the sitemap magnitude floor even with faulting products', () => {
+    expect(isEventSignificant({ magnitude: 2.4, has_moment_tensor: true })).toBe(false);
+    expect(isEventSignificant({ magnitude: 2.5, has_moment_tensor: true })).toBe(true);
+  });
+
   it('returns true if magnitude is low but has_focal_mechanism is true', () => {
       const event = {
         magnitude: 3.0,

@@ -58,6 +58,7 @@ import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfo
  * @param {function} [props.onDataLoadedForSeo] - Optional callback function. It's called with the fully loaded GeoJSON data
  *   (specifically an object containing `id`, `properties`, `geometry`, and `shakemapIntensityImageUrl`) of the earthquake
  *   once it's successfully fetched. This allows parent components to update SEO metadata.
+ * @param {function} [props.onDetailNotFoundForSeo] - Called when the application detail API confirms HTTP 404.
  * @param {Array<Object>} props.broaderEarthquakeData - An array of earthquake objects (USGS GeoJSON feature structure)
  *   representing a broader dataset (e.g., last 7 or 30 days) for contextual information, primarily used by the regional seismicity panel.
  * @param {number} props.dataSourceTimespanDays - The timespan (e.g., 7 or 30) corresponding to `broaderEarthquakeData`,
@@ -71,7 +72,7 @@ import EarthquakeFurtherInfoPanel from './earthquakeDetail/EarthquakeFurtherInfo
  * @param {number} [props.dataSourceGeneratedAtMs] - Source generation time anchoring the selected feed coverage.
  * @returns {JSX.Element} The EarthquakeDetailView component, typically rendered within a modal structure.
  */
-function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly, monthlyHasLoaded, monthlyError, dataSourceGeneratedAtMs }) {
+function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, onDetailNotFoundForSeo, broaderEarthquakeData, dataSourceTimespanDays, handleLoadMonthlyData, hasAttemptedMonthlyLoad, isLoadingMonthly, monthlyHasLoaded, monthlyError, dataSourceGeneratedAtMs }) {
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(!!detailUrl);
     const [error, setError] = useState(null);
@@ -133,6 +134,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
                 // Use the new API endpoint
                 const response = await fetch(`/api/earthquake/${event_id}`);
                 if (!response.ok) {
+                    if (response.status === 404 && isMounted) onDetailNotFoundForSeo?.();
                     // Try to parse error response from API, otherwise use statusText
                     let errorData;
                     try {
@@ -171,7 +173,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, broaderE
         return () => {
             isMounted = false;
         };
-    }, [detailUrl, onDataLoadedForSeo]);
+    }, [detailUrl, onDataLoadedForSeo, onDetailNotFoundForSeo]);
 
     // New useEffect for investigating phase-data
     useEffect(() => {

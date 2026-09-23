@@ -15,6 +15,7 @@ import { publishEarthquakeFeeds } from '../functions/background/publish-earthqua
 import { handleBatchUsgsFetch } from '../functions/api/batch-usgs-fetch.js';
 import { handleIndexSitemap } from '../functions/routes/sitemaps/index-sitemap.js';
 import { handleEarthquakesSitemap } from '../functions/routes/sitemaps/earthquakes-sitemap.js';
+import { isEarthquakeSitemapEligible } from '../functions/routes/sitemaps/earthquake-sitemap-eligibility.js';
 import { onRequestGet as onRequestGet4, onRequestDelete } from '../functions/api/cache-stats.js';
 import { onRequestGet as onRequestGet5 } from '../functions/api/system-health.js';
 import { onRequestGet as onRequestGet6 } from '../functions/api/task-metrics.js';
@@ -222,27 +223,34 @@ function crawlerError(message, status) {
     status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
   });
 }
-async function crawlerDocument(request, env, { title, description, canonicalPath, body, structuredData }) {
+async function crawlerDocument(request, env, { title, description, canonicalPath, body, structuredData, prerenderedEarthquakeRoute, verifiedClusterRoute, noIndex = false }) {
   const canonicalUrl = `https://earthquakeslive.com${canonicalPath}`;
   const assets = await crawlerAssetTags(request, env);
   const jsonLd = JSON.stringify({ ...structuredData, url: canonicalUrl }).replace(/</g, '\\u003c');
-  return new Response(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeXml2(title)} | Earthquakes Live</title><meta name="description" content="${escapeXml2(description)}"><link rel="canonical" href="${escapeXml2(canonicalUrl)}"><meta property="og:title" content="${escapeXml2(title)}"><meta property="og:description" content="${escapeXml2(description)}"><meta property="og:url" content="${escapeXml2(canonicalUrl)}"><meta property="og:type" content="website"><meta property="og:image" content="https://earthquakeslive.com/social-default-earthquake.png"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${jsonLd}</script>${assets}</head><body><div id="root"><main><h1>${escapeXml2(title)}</h1>${body}<p><a href="/">Explore Earthquakes Live</a></p></main></div></body></html>`, {
+  const verifiedRouteAttribute = prerenderedEarthquakeRoute
+    ? ` data-prerendered-earthquake-route="${escapeXml2(prerenderedEarthquakeRoute)}" data-prerendered-earthquake-indexable="${!noIndex}"`
+    : verifiedClusterRoute ? ` data-verified-cluster-route="${escapeXml2(verifiedClusterRoute)}"` : '';
+  return new Response(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">${noIndex ? '<meta name="robots" content="noindex">' : ''}<title>${escapeXml2(title)} | Earthquakes Live</title><meta name="description" content="${escapeXml2(description)}"><link rel="canonical" href="${escapeXml2(canonicalUrl)}"><meta property="og:title" content="${escapeXml2(title)}"><meta property="og:description" content="${escapeXml2(description)}"><meta property="og:url" content="${escapeXml2(canonicalUrl)}"><meta property="og:type" content="website"><meta property="og:image" content="https://earthquakeslive.com/social-default-earthquake.png"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${jsonLd}</script>${assets}</head><body><div id="root"${verifiedRouteAttribute}><main><h1>${escapeXml2(title)}</h1>${body}<p><a href="/">Explore Earthquakes Live</a></p></main></div></body></html>`, {
     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
   });
 }
 async function handlePrerenderEarthquake(request, env) {
   const route = parseEarthquakePath(new URL(request.url).pathname);
   if (!route.ok) return crawlerError('Invalid earthquake URL', 404);
+  // Indexability is based on the stored row used by the sitemap, even when
+  // the detail body is archived. A missing DB binding cannot verify it.
+  if (!env.DB) return crawlerError('Earthquake details unavailable', 503);
   try {
     const archived = await readArchivedEarthquakeDetail(env.GEOJSON_BUCKET, route.eventId, { db: env.DB });
     let quake = archived?.data;
+    let storedSummary = archived?.storedSummary ?? null;
     if (!quake) {
       // Sitemap URLs come from EarthquakeEvents. An archive miss must not turn
       // every crawler request into an uncached upstream detail fetch.
-      if (!env.DB) return crawlerError('Earthquake details unavailable', 503);
       let row;
       try {
-        row = await env.DB.prepare(`SELECT id, event_time, latitude, longitude, depth, magnitude, place
+        row = await env.DB.prepare(`SELECT id, event_time, latitude, longitude, depth, magnitude, place,
+          has_moment_tensor, has_focal_mechanism
           FROM EarthquakeEvents WHERE id = ? LIMIT 1`).bind(route.eventId).first();
       } catch (error) {
         console.error('[prerender-earthquake] Stored summary query failed:', error.message);
@@ -259,6 +267,7 @@ async function handlePrerenderEarthquake(request, env) {
           !Number.isFinite(new Date(row.event_time).getTime())) {
         return crawlerError('Earthquake details unavailable', 503);
       }
+      storedSummary = row;
       quake = {
         id: row.id,
         properties: { mag: row.magnitude, place: row.place, time: row.event_time },
@@ -266,6 +275,9 @@ async function handlePrerenderEarthquake(request, env) {
       };
     }
     const { mag, place, time } = quake.properties;
+    // Use the same stored fields as the sitemap, including for archived detail.
+    // The archive reader already fetched this row while resolving its pointer.
+    const indexable = isEarthquakeSitemapEligible(storedSummary);
     const magnitude = Number.isFinite(mag) ? mag.toFixed(1) : 'unknown';
     const location = place || 'Unknown location';
     const isoTime = new Date(time).toISOString();
@@ -274,6 +286,10 @@ async function handlePrerenderEarthquake(request, env) {
     const [longitude, latitude, depth] = quake.geometry.coordinates;
     return crawlerDocument(request, env, {
       title, description, canonicalPath: buildEarthquakePath(quake.id),
+      // A 200 response backed by stored detail or D1 summary is stronger
+      // evidence of page existence than a later, fallible browser JSON read.
+      prerenderedEarthquakeRoute: new URL(request.url).pathname,
+      noIndex: !indexable,
       body: `<p>${escapeXml2(description)}</p><p>Depth: ${depth} km. Coordinates: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}.</p>`,
       structuredData: { '@context': 'https://schema.org', '@type': 'Event', name: title, description, identifier: quake.id,
         startDate: isoTime, endDate: isoTime, eventStatus: 'https://schema.org/EventHappened',
@@ -299,6 +315,7 @@ async function handlePrerenderCluster(request, env) {
     const modified = updated !== null && Number.isFinite(new Date(updated).getTime()) ? new Date(updated).toISOString() : null;
     return crawlerDocument(request, env, {
       title, description, canonicalPath: cluster.canonicalPath,
+      verifiedClusterRoute: new URL(request.url).pathname,
       body: `<p>${escapeXml2(description)}</p><p>Events: ${escapeXml2(String(cluster.quakeCount ?? 'Unknown'))}. Maximum magnitude: ${escapeXml2(magnitude)}.</p>${modified ? `<p>Updated: ${escapeXml2(modified)}.</p>` : ''}`,
       structuredData: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, description,
         identifier: cluster.id, ...(modified && { dateModified: modified }) },

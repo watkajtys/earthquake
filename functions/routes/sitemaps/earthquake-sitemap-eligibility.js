@@ -1,8 +1,8 @@
 import { isValidUsgsEventId } from '../../utils/usgs-transport.js';
-import { MIN_SIGNIFICANT_MAGNITUDE } from '../../../src/utils/significanceUtils.js';
+import { MIN_INDEXABLE_MAGNITUDE, MIN_SIGNIFICANT_MAGNITUDE } from '../../../src/utils/significanceUtils.js';
 
 export const EARTHQUAKE_SITEMAP_PAGE_SIZE = 40_000;
-export const EARTHQUAKE_SITEMAP_MIN_MAGNITUDE = 2.5;
+export const EARTHQUAKE_SITEMAP_MIN_MAGNITUDE = MIN_INDEXABLE_MAGNITUDE;
 export const EARTHQUAKE_SITEMAP_BINDINGS = Object.freeze([
   EARTHQUAKE_SITEMAP_MIN_MAGNITUDE,
   MIN_SIGNIFICANT_MAGNITUDE,

@@ -18,16 +18,18 @@ vi.mock('../components/NotableQuakeFeature', () => ({ default: () => <div data-t
 vi.mock('../components/PreviousNotableQuakeFeature', () => ({ default: () => <div data-testid="mock-prev-notable-quake-feature"></div> }));
 vi.mock('../components/GlobalLastMajorQuakeTimer', () => ({ default: () => <div data-testid="mock-timer"></div> }));
 vi.mock('../components/BottomNav', () => ({ default: () => <div data-testid="mock-bottom-nav"></div> }));
-vi.mock('../components/SeoMetadata', () => ({ default: () => null }));
+vi.mock('../components/SeoMetadata', () => ({ default: vi.fn(() => null) }));
 vi.mock('../components/ErrorBoundary', () => ({ default: ({children}) => <>{children}</>}));
 vi.mock('../components/TimeSinceLastMajorQuakeBanner', () => ({ default: () => <div data-testid="mock-time-since-banner"></div> }));
 vi.mock('../components/SummaryStatisticsCard', () => ({ default: () => <div data-testid="mock-summary-stats"></div> }));
 vi.mock('../components/AlertDisplay', () => ({ default: () => <div data-testid="mock-alert-display"></div> }));
 vi.mock('../components/ClusterSummaryItem', () => ({ default: (props) => <div data-testid={`mock-cluster-summary-item-${props.clusterData.id}`}>Mock ClusterSummaryItem</div> }));
 vi.mock('../components/ClusterDetailModalWrapper', () => ({ default: () => <div data-testid="mock-cluster-detail-wrapper">Mock ClusterDetailModalWrapper</div> }));
+vi.mock('../components/EarthquakeDetailModalComponent', () => ({ default: () => <div data-testid="mock-quake-detail-wrapper">Mock EarthquakeDetailModalComponent</div> }));
 
 
 import App from './HomePage'; // Retain App import
+import SeoMetadata from '../components/SeoMetadata';
 
 // Hoisted Mocks
 const { mockUseEarthquakeDataState } = vi.hoisted(() => ({ mockUseEarthquakeDataState: vi.fn() }));
@@ -163,6 +165,22 @@ describe('HomePage Rendering and Basic UI', () => {
     render(<MemoryRouter initialEntries={['/cluster/stored-slug']}><App /></MemoryRouter>);
     expect(await screen.findByTestId('mock-cluster-detail-wrapper')).toBeInTheDocument();
     expect(screen.queryByText('Seismic Data Visualization')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['/quake/id/us123', 'mock-quake-detail-wrapper'],
+    ['/cluster/stored-slug', 'mock-cluster-detail-wrapper'],
+  ])('does not overwrite a direct detail route with home SEO metadata: %s', async (path, testId) => {
+    render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
+    expect(await screen.findByTestId(testId)).toBeInTheDocument();
+    expect(SeoMetadata).not.toHaveBeenCalled();
+  });
+
+  it('retains home SEO metadata on the actual home route', async () => {
+    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
+    expect(await screen.findByTestId('mock-globe-view')).toBeInTheDocument();
+    expect(SeoMetadata.mock.calls.some(([props]) =>
+      props.canonicalUrl === 'https://earthquakeslive.com/')).toBe(true);
   });
 
   it.each([

@@ -1,14 +1,16 @@
 /**
- * @file Utility functions for determining the significance of an earthquake event.
- * This is used by both the sitemap generation and the frontend components to ensure
- * consistent application of significance rules.
+ * @file Magnitude thresholds shared with sitemap eligibility, plus a legacy
+ * significance helper for event features. Use isEarthquakeSitemapEligible when
+ * deciding whether a detail URL is indexable.
  */
 
 // Minimum magnitude for an earthquake to be considered "significant" for sitemap inclusion and indexing.
 export const MIN_SIGNIFICANT_MAGNITUDE = 4.5;
+export const MIN_INDEXABLE_MAGNITUDE = 2.5;
 
 /**
- * Determines if an earthquake event is significant enough for sitemap inclusion and indexing.
+ * Determines whether an earthquake event meets the magnitude/science portion
+ * of the indexing rule. The sitemap predicate also validates ID and place.
  * An event is significant if it meets EITHER of the following criteria:
  *  A) It has a magnitude of MIN_SIGNIFICANT_MAGNITUDE or greater.
  *  B) It has rich scientific data (i.e., a "moment-tensor" or "focal-mechanism" product).
@@ -17,7 +19,7 @@ export const MIN_SIGNIFICANT_MAGNITUDE = 4.5;
  * @returns {boolean} - True if the event is significant, false otherwise.
  */
 export const isEventSignificant = (event) => {
-  if (!event) return false;
+  if (!Number.isFinite(event?.magnitude) || event.magnitude < MIN_INDEXABLE_MAGNITUDE) return false;
 
   // Criterion A: Significant Magnitude
   if (event.magnitude >= MIN_SIGNIFICANT_MAGNITUDE) {

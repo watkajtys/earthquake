@@ -216,6 +216,28 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
     consoleErrorSpy.mockRestore();
   });
 
+  it('reports only a confirmed API 404 as a missing detail for SEO', async () => {
+    const onDetailNotFoundForSeo = vi.fn();
+    server.use(http.get(`/api/earthquake/${MOCK_EVENT_ID_BASE}`, () =>
+      HttpResponse.json({ message: 'Not found' }, { status: 404 })));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl}
+      onDetailNotFoundForSeo={onDetailNotFoundForSeo} />);
+    await waitFor(() => expect(onDetailNotFoundForSeo).toHaveBeenCalledOnce());
+    expect(mockDefaultPropsGlobal.onDataLoadedForSeo).not.toHaveBeenCalled();
+  });
+
+  it('does not report a transient API error as a missing detail for SEO', async () => {
+    const onDetailNotFoundForSeo = vi.fn();
+    server.use(http.get(`/api/earthquake/${MOCK_EVENT_ID_BASE}`, () =>
+      HttpResponse.json({ message: 'Unavailable' }, { status: 503 })));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrl}
+      onDetailNotFoundForSeo={onDetailNotFoundForSeo} />);
+    await screen.findByText(/Status: 503/);
+    expect(onDetailNotFoundForSeo).not.toHaveBeenCalled();
+  });
+
   it('calls onDataLoadedForSeo with correct data when details are fetched', async () => {
     const mockOnDataLoadedForSeo = vi.fn();
     const currentMockData = deepClone(baseMockDetailData); // Uses MOCK_EVENT_ID_BASE

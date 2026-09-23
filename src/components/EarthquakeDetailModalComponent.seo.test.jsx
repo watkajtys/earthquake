@@ -19,11 +19,13 @@ vi.mock('../contexts/EarthquakeDataContext', async () => {
 });
 
 let mockOnDataLoadedForSeoCallback;
+let mockOnDetailNotFoundForSeoCallback;
 // let mockOnCloseCallback; // Not directly used in SEO tests
 
 vi.mock('./EarthquakeDetailView', () => ({
-  default: vi.fn(({ onDataLoadedForSeo }) => {
+  default: vi.fn(({ onDataLoadedForSeo, onDetailNotFoundForSeo }) => {
     mockOnDataLoadedForSeoCallback = onDataLoadedForSeo;
+    mockOnDetailNotFoundForSeoCallback = onDetailNotFoundForSeo;
     // mockOnCloseCallback = onClose; // Keep if renderComponent needs it
     return <div data-testid="mock-detail-view">Mock Detail View</div>;
   })
@@ -98,21 +100,120 @@ describe('EarthquakeDetailModalComponent SEO', () => {
     if (EarthquakeDetailView.mockClear) EarthquakeDetailView.mockClear();
     if (SeoMetadata.mockClear) SeoMetadata.mockClear();
     mockOnDataLoadedForSeoCallback = undefined;
+    mockOnDetailNotFoundForSeoCallback = undefined;
     if (useEarthquakeDataState && useEarthquakeDataState.mockClear) {
         useEarthquakeDataState.mockClear();
     }
     useEarthquakeDataState.mockReturnValue(defaultEarthquakeContextValue);
   });
 
-  const renderComponent = (props = {}) => {
+  afterEach(() => {
+    document.getElementById('root')?.remove();
+    document.head.querySelector('link[rel="canonical"]')?.remove();
+    document.head.querySelector('meta[name="robots"]')?.remove();
+  });
+
+  const renderComponent = (props = {}, path = '/quake/test-detail-url', options = {}) => {
     return render(
-      <MemoryRouter initialEntries={['/quake/test-detail-url']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/quake/*" element={<EarthquakeDetailModalComponent {...props} />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>, options
     );
   };
+
+  test('preserves verified crawler metadata through loading and a later API 404', () => {
+    const root = document.createElement('div');
+    root.id = 'root';
+    root.setAttribute('data-prerendered-earthquake-route', '/quake/test-detail-url');
+    root.setAttribute('data-prerendered-earthquake-indexable', 'true');
+    document.body.appendChild(root);
+    const canonical = document.createElement('link');
+    canonical.rel = 'canonical';
+    canonical.href = 'https://earthquakeslive.com/quake/id/test-detail-url';
+    document.head.appendChild(canonical);
+    document.title = 'Verified earthquake | Earthquakes Live';
+
+    renderComponent({}, '/quake/test-detail-url', { container: root });
+    expect(root.hasAttribute('data-prerendered-earthquake-route')).toBe(false);
+    expect(root.hasAttribute('data-prerendered-earthquake-indexable')).toBe(false);
+    expect(SeoMetadata).not.toHaveBeenCalled();
+    act(() => mockOnDetailNotFoundForSeoCallback());
+    expect(SeoMetadata).not.toHaveBeenCalled();
+    expect(document.title).toBe('Verified earthquake | Earthquakes Live');
+    expect(document.head.querySelector('link[rel="canonical"]')?.href).toBe(canonical.href);
+    expect(document.head.querySelector('meta[name="robots"]')).toBeNull();
+
+    act(() => mockOnDataLoadedForSeoCallback({
+      ...mockDetailViewPayloadFull,
+      properties: { ...mockDetailViewPayloadFull.properties, mag: 3, products: {} },
+    }));
+    // Stored D1 science flags may qualify a sitemap URL even when its archive
+    // omits products; the verified server decision remains authoritative.
+    expect(SeoMetadata.mock.lastCall[0].noIndex).toBe(false);
+  });
+
+  test('keeps an unverified SPA route noindex and clears inherited canonical until detail loads', () => {
+    renderComponent();
+    expect(SeoMetadata.mock.lastCall[0]).toMatchObject({ noIndex: true });
+    expect(SeoMetadata.mock.lastCall[0].canonicalUrl).toBeUndefined();
+
+    act(() => mockOnDetailNotFoundForSeoCallback());
+    expect(SeoMetadata.mock.lastCall[0]).toMatchObject({
+      title: 'Earthquake not found | Earthquakes Live', noIndex: true,
+    });
+    expect(SeoMetadata.mock.lastCall[0].canonicalUrl).toBeUndefined();
+
+    act(() => mockOnDataLoadedForSeoCallback(mockDetailViewPayloadFull));
+    expect(SeoMetadata.mock.lastCall[0]).toMatchObject({
+      canonicalUrl: 'https://earthquakeslive.com/quake/id/testquake123', noIndex: false,
+    });
+  });
+
+  test('keeps a stored page excluded when richer archive detail disagrees with D1 eligibility', () => {
+    const root = document.createElement('div');
+    root.id = 'root';
+    root.setAttribute('data-prerendered-earthquake-route', '/quake/test-detail-url');
+    root.setAttribute('data-prerendered-earthquake-indexable', 'false');
+    document.body.appendChild(root);
+    const robots = document.createElement('meta');
+    robots.name = 'robots';
+    robots.content = 'noindex';
+    document.head.appendChild(robots);
+
+    renderComponent({}, '/quake/test-detail-url', { container: root });
+    expect(SeoMetadata).not.toHaveBeenCalled();
+    expect(robots.content).toBe('noindex');
+    act(() => mockOnDataLoadedForSeoCallback(mockDetailViewPayloadFull));
+    expect(SeoMetadata.mock.lastCall[0].noIndex).toBe(true);
+  });
+
+  test('does not reuse a verified server marker for a different SPA route', () => {
+    const root = document.createElement('div');
+    root.id = 'root';
+    root.setAttribute('data-prerendered-earthquake-route', '/quake/id/previous');
+    root.setAttribute('data-prerendered-earthquake-indexable', 'true');
+    document.body.appendChild(root);
+
+    renderComponent({}, '/quake/id/next');
+
+    expect(SeoMetadata.mock.lastCall[0]).toMatchObject({ noIndex: true });
+    expect(SeoMetadata.mock.lastCall[0].canonicalUrl).toBeUndefined();
+    expect(root.hasAttribute('data-prerendered-earthquake-route')).toBe(false);
+  });
+
+  test.each([
+    { description: 'missing place', properties: { mag: 6.5, place: null } },
+    { description: 'empty scientific product', properties: { mag: 3, place: 'Test place', products: { 'moment-tensor': [] } } },
+  ])('keeps an unverified $description detail noindex after loading', ({ properties }) => {
+    renderComponent();
+    act(() => mockOnDataLoadedForSeoCallback({
+      ...mockDetailViewPayloadFull,
+      properties: { ...mockDetailViewPayloadFull.properties, ...properties },
+    }));
+    expect(SeoMetadata.mock.lastCall[0].noIndex).toBe(true);
+  });
 
   test('SeoMetadata initially receives undefined eventJsonLd', () => {
     renderComponent();

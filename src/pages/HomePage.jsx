@@ -857,7 +857,7 @@ function App() {
                                 path="/"
                                 element={
                                   <>
-                                    <SeoMetadata
+                                    {location.pathname === '/' && <SeoMetadata
                                       title="Global Seismic Activity Monitor | Real-time Earthquake Data & Maps"
                                       description="Track live earthquakes worldwide with our interactive globe and detailed maps. Get real-time USGS data, view significant quake details, and explore seismic activity trends and statistics."
                                       keywords="earthquakes, seismic activity, live earthquakes, earthquake map, global earthquakes, real-time data, seismology, USGS, earthquake statistics, seismic monitor"
@@ -865,7 +865,7 @@ function App() {
                                       canonicalUrl="https://earthquakeslive.com/"
                                       locale="en_US"
                                       type="website"
-                                    />
+                                    />}
                                     <GlobeLayout
                                       globeFocusLng={globeFocusLng}
                                       handleQuakeClick={handleQuakeClick}

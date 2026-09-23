@@ -64,6 +64,8 @@ describe('exported Worker entity routes', () => {
     expect(queries).toHaveLength(1);
     expect(fetch).not.toHaveBeenCalled();
     expect(html).toContain(`https://earthquakeslive.com/cluster/${slug}`);
+    expect(html).toContain(`data-verified-cluster-route="/cluster/${slug}"`);
+    expect(html).not.toContain('<meta name="robots" content="noindex">');
     expect(html).toContain('Maximum magnitude: unknown');
     expect(html).toContain('/assets/index-built.css');
   });
@@ -76,7 +78,8 @@ describe('exported Worker entity routes', () => {
     const html = await response.text();
     expect(response.status).toBe(200);
     expect(html).toContain('SYNTHETIC PREVIEW California');
-    expect(html).toContain('<body><div id="root"><main>');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    expect(html).toContain('<body><div id="root" data-prerendered-earthquake-route="/quake/id/previewquake001" data-prerendered-earthquake-indexable="false"><main>');
     expect(html).toContain('</main></div></body>');
     expect(html).not.toContain('</main><div id="root">');
     expect(response.headers.get('Cache-Control')).toBe('no-store');
@@ -110,6 +113,36 @@ describe('exported Worker entity routes', () => {
     expect(env.GEOJSON_BUCKET.get).toHaveBeenCalledTimes(2);
     expect(env.GEOJSON_BUCKET.get).toHaveBeenCalledWith(key);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('marks an archived significant earthquake as verified and indexable', async () => {
+    earthquakeRow = id => ({ ...earthquakeRowBase(id), magnitude: 6.2 });
+    env.GEOJSON_BUCKET = { get: vi.fn(async () => archivedObject(usgsFeature('us123', { mag: 6.2 }))) };
+    const response = await crawler('/quake/id/us123');
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('data-prerendered-earthquake-route="/quake/id/us123" data-prerendered-earthquake-indexable="true"');
+    expect(html).not.toContain('<meta name="robots" content="noindex">');
+  });
+
+  it('keeps an archived M3 page indexable when its D1 science flag qualifies for the sitemap', async () => {
+    earthquakeRow = id => ({ ...earthquakeRowBase(id), magnitude: 3, has_moment_tensor: 1 });
+    env.GEOJSON_BUCKET = { get: vi.fn(async () => archivedObject(usgsFeature('us123', { mag: 3, products: {} }))) };
+    const response = await crawler('/quake/id/us123');
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('data-prerendered-earthquake-route="/quake/id/us123" data-prerendered-earthquake-indexable="true"');
+    expect(html).not.toContain('<meta name="robots" content="noindex">');
+  });
+
+  it('does not treat an empty archived science product as sitemap eligibility', async () => {
+    earthquakeRow = id => ({ ...earthquakeRowBase(id), magnitude: 3, has_moment_tensor: 0 });
+    env.GEOJSON_BUCKET = { get: vi.fn(async () => archivedObject(usgsFeature('us123', { mag: 3, products: { 'moment-tensor': [] } }))) };
+    const response = await crawler('/quake/id/us123');
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    expect(html).toContain('data-prerendered-earthquake-indexable="false"');
   });
   it.each([
     `details/v1/other123/1750000003000/${'a'.repeat(64)}.json`,
@@ -175,10 +208,24 @@ describe('exported Worker entity routes', () => {
     env.GEOJSON_BUCKET = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
     const response = await crawler('/quake/id/us123');
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('M -0.5 Earthquake');
+    const html = await response.text();
+    expect(html).toContain('M -0.5 Earthquake');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    expect(html).toContain('data-prerendered-earthquake-indexable="false"');
     expect(queries).toHaveLength(2);
     expect(fetch).not.toHaveBeenCalled();
     expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+  });
+
+  it('marks a significant D1 fallback as verified, including its stored science flags', async () => {
+    env.GEOJSON_BUCKET = { get: vi.fn().mockResolvedValue(null) };
+    earthquakeRow = id => ({ ...earthquakeRowBase(id), magnitude: 3,
+      has_moment_tensor: 1, has_focal_mechanism: 0 });
+    const response = await crawler('/quake/id/us123');
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('data-prerendered-earthquake-route="/quake/id/us123" data-prerendered-earthquake-indexable="true"');
+    expect(html).not.toContain('<meta name="robots" content="noindex">');
   });
   it('keeps the JSON detail route upstream fallback for an archive miss', async () => {
     env.GEOJSON_BUCKET = { get: vi.fn().mockResolvedValue(null) };
@@ -196,6 +243,7 @@ describe('exported Worker entity routes', () => {
     const response = await crawler('/quake/id/us123');
     expect(response.status).toBe(404);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(await response.text()).not.toContain('data-prerendered-earthquake-route');
     expect(fetch).not.toHaveBeenCalled();
   });
   it('returns a retryable error when the D1 summary is unavailable or invalid', async () => {
@@ -208,8 +256,20 @@ describe('exported Worker entity routes', () => {
     expect((await crawler('/quake/id/us123')).status).toBe(503);
     expect(fetch).not.toHaveBeenCalled();
   });
+  it('does not emit an archived detail page when D1 cannot verify its sitemap eligibility', async () => {
+    env.GEOJSON_BUCKET = { get: vi.fn(async () => archivedObject(usgsFeature('us123', { mag: 6.2 }))) };
+    delete env.DB;
+    const response = await crawler('/quake/id/us123');
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(await response.text()).not.toContain('data-prerendered-earthquake-route');
+    expect(env.GEOJSON_BUCKET.get).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it('returns a terminal404 for an unmatched legacy cluster', async () => {
-    expect((await crawler('/cluster/overview_cluster_missing_3')).status).toBe(404);
+    const response = await crawler('/cluster/overview_cluster_missing_3');
+    expect(response.status).toBe(404);
+    expect(await response.text()).not.toContain('data-verified-cluster-route');
     expect(queries.map(({ value }) => value)).toEqual(['overview_cluster_missing_3','overview_cluster_missing_3','missing']);
   });
   it('routes explicit JSON selectors through the deployed Worker and returns canonical metadata', async () => {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'; // Added useMemo and useCallback, removed useEffect
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useEarthquakeDataState } from '../contexts/EarthquakeDataContext'; // Import context
 import { useLocation, useNavigate } from 'react-router-dom';
 import { buildEarthquakePath, modalReturnTarget, parseEarthquakePath } from '../utils/entityRoutes.js';
@@ -6,7 +6,7 @@ import RouteDetailStatus from './RouteDetailStatus.jsx';
 import EarthquakeDetailView from './EarthquakeDetailView'; // Path relative to src/components/
 import SeoMetadata from './SeoMetadata'; // Import SeoMetadata
 import defaultEarthquakeLogo from '../assets/default-earthquake-logo.svg'; // Import the new SVG
-import { isEventSignificant } from '../utils/significanceUtils.js';
+import { isEarthquakeSitemapEligible } from '../../functions/routes/sitemaps/earthquake-sitemap-eligibility.js';
 
 /**
  * A wrapper component that displays detailed information about a specific earthquake in a modal-like view.
@@ -47,7 +47,26 @@ const EarthquakeDetailModalComponent = () => {
     const route = parseEarthquakePath(location.pathname);
     const detailUrl = route.ok ? route.detailUrl : null;
     const [seoState, setSeoState] = useState(null);
+    const [notFoundRoute, setNotFoundRoute] = useState(null);
+    const [serverPrerender, setServerPrerender] = useState(() => {
+        const root = document.getElementById('root');
+        const path = root?.getAttribute('data-prerendered-earthquake-route');
+        const indexable = root?.getAttribute('data-prerendered-earthquake-indexable');
+        return path && (indexable === 'true' || indexable === 'false')
+            ? { path, indexable: indexable === 'true' } : null;
+    });
     const seoProps = seoState?.routeKey === location.pathname ? seoState.props : null;
+    const hasServerPrerender = route.ok && serverPrerender?.path === location.pathname;
+    useEffect(() => {
+        // The marker applies only to this initial, successfully prerendered URL.
+        // Remove it so a later SPA navigation cannot reuse it after a remount.
+        const root = document.getElementById('root');
+        root?.removeAttribute('data-prerendered-earthquake-route');
+        root?.removeAttribute('data-prerendered-earthquake-indexable');
+    }, []);
+    useEffect(() => {
+        if (serverPrerender && serverPrerender.path !== location.pathname) setServerPrerender(null);
+    }, [serverPrerender, location.pathname]);
     const handleClose = useCallback(() => {
         const target = modalReturnTarget(location.state);
         navigate(target.path, { replace: true, state: target.state });
@@ -70,9 +89,14 @@ const EarthquakeDetailModalComponent = () => {
         // It should contain loadedData.id (USGS event ID) and loadedData.properties.detail (USGS event page URL)
         // and loadedData.geometry.coordinates for lat, lon, depth.
 
-        const isSignificant = isEventSignificant({
+        const products = loadedData.properties?.products;
+        const hasProduct = (name) => Array.isArray(products?.[name]) && products[name].length > 0;
+        const isSignificant = isEarthquakeSitemapEligible({
+            id: loadedData.id,
+            place: loadedData.properties?.place,
             magnitude: loadedData.properties?.mag,
-            geojson_feature: loadedData,
+            has_moment_tensor: hasProduct('moment-tensor'),
+            has_focal_mechanism: hasProduct('focal-mechanism'),
         });
 
         const props = loadedData.properties;
@@ -135,6 +159,7 @@ const EarthquakeDetailModalComponent = () => {
             // However, canonicalUrl serves a similar purpose for the event's own page.
         };
 
+        setNotFoundRoute(null);
         setSeoState({ routeKey: location.pathname, props: {
             title: pageTitle, // Use the more descriptive pageTitle for the HTML title tag
             description: pageDescription,
@@ -149,30 +174,33 @@ const EarthquakeDetailModalComponent = () => {
             noIndex: !isSignificant,
         } });
     }, [location.pathname]);
+    const onDetailNotFoundForSeo = useCallback(() => {
+        setNotFoundRoute(location.pathname);
+    }, [location.pathname]);
 
     // Default/loading SEO values
     const initialPageTitle = "Loading Earthquake Details... | Earthquakes Live";
     const initialPageDescription = "Fetching detailed information for the selected seismic event.";
     const initialKeywords = "earthquake details, seismic event, seismology, earthquakes live";
-    const initialCanonicalUrl = route.ok ? `https://earthquakeslive.com${route.canonicalPath}` : "https://earthquakeslive.com";
+    const isMissing = !route.ok || notFoundRoute === location.pathname;
 
 
     return (
         <>
-            <SeoMetadata
-                title={seoProps?.title || initialPageTitle}
-                description={seoProps?.description || initialPageDescription}
+            {(!hasServerPrerender || seoProps) && <SeoMetadata
+                title={seoProps?.title || (isMissing ? 'Earthquake not found | Earthquakes Live' : initialPageTitle)}
+                description={seoProps?.description || (isMissing ? 'This earthquake detail page is unavailable.' : initialPageDescription)}
                 keywords={seoProps?.keywords || initialKeywords}
-                pageUrl={seoProps?.pageUrl || initialCanonicalUrl}
-                canonicalUrl={seoProps?.canonicalUrl || initialCanonicalUrl}
+                pageUrl={seoProps?.pageUrl}
+                canonicalUrl={seoProps?.canonicalUrl}
                 locale="en_US"
                 type={seoProps?.type || 'article'}
                 publishedTime={seoProps?.publishedTime}
                 modifiedTime={seoProps?.modifiedTime}
                 imageUrl={seoProps?.imageUrl}
                 eventJsonLd={seoProps?.eventJsonLd}
-                noIndex={seoProps?.noIndex ?? true}
-            />
+                noIndex={hasServerPrerender ? !serverPrerender.indexable : (seoProps?.noIndex ?? true)}
+            />}
             {!route.ok && <RouteDetailStatus title="Earthquake not found" message={route.message} onClose={handleClose} />}
             {detailUrl && (
                 <EarthquakeDetailView
@@ -182,6 +210,7 @@ const EarthquakeDetailModalComponent = () => {
                     // Note: onDataLoadedForSeo now receives the full GeoJSON feature data
                     // from EarthquakeDetailView, as per the modification in the previous step.
                     onDataLoadedForSeo={onDataLoadedForSeo}
+                    onDetailNotFoundForSeo={onDetailNotFoundForSeo}
                     broaderEarthquakeData={internalBroaderEarthquakeData}
                     dataSourceTimespanDays={currentDataSourceTimespan}
                     handleLoadMonthlyData={loadMonthlyData}

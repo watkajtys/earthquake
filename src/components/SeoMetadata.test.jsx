@@ -46,6 +46,18 @@ describe('SeoMetadata Component', () => {
     expect(keywordsTag.getAttribute('content')).toBe(defaultProps.keywords);
   });
 
+  test('removes a previous route canonical when the new route is not verified', () => {
+    const previous = document.createElement('link');
+    previous.rel = 'canonical';
+    previous.href = 'https://earthquakeslive.com/quake/id/previous';
+    document.head.appendChild(previous);
+
+    render(<SeoMetadata {...defaultProps} noIndex />);
+
+    expect(document.head.querySelector('link[rel="canonical"]')).toBeNull();
+    expect(document.head.querySelector('meta[name="robots"]')?.content).toBe('noindex');
+  });
+
   describe('Website JSON-LD Handling', () => {
     test('creates website JSON-LD script and not event script when eventJsonLd is not provided', () => {
       render(<SeoMetadata {...defaultProps} />);
