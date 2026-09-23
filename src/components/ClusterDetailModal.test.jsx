@@ -40,8 +40,22 @@ const mockProps = {
 
 // Mock ClusterMiniMap as it's a child component that might have its own complexities
 vi.mock('./ClusterMiniMap', () => ({
-  default: () => <div data-testid="mock-cluster-mini-map">Mock Cluster Mini Map</div>,
+  default: ({ cluster }) => <div data-testid="mock-cluster-mini-map" data-members={cluster.originalQuakes.length}>Mock Cluster Mini Map</div>,
 }));
+vi.mock('./EarthquakeSequenceChart', () => ({
+  default: ({ cluster }) => <div data-testid="mock-sequence-chart" data-members={cluster.originalQuakes.length}>Mock Sequence Chart</div>,
+}));
+
+const clusterWithMembers = (count, id = 'many-members') => ({
+  ...mockCluster,
+  id,
+  quakeCount: count,
+  originalQuakes: Array.from({ length: count }, (_, index) => ({
+    id: `member-${index}`,
+    properties: { mag: index === 0 ? 6.1 : 2.5, place: `Place ${index}`, time: 1_800_000_000_000 - index * 1_000 },
+    geometry: { coordinates: [10, 20, index] },
+  })),
+});
 
 describe('ClusterDetailModal Accessibility', () => {
   beforeEach(() => {
@@ -151,6 +165,47 @@ describe('ClusterDetailModal Quake Item Rendering', () => {
 
       expect(mockProps.getMagnitudeColorStyle).toHaveBeenCalledWith(quake.properties.mag);
     });
+  });
+});
+
+describe('ClusterDetailModal bounded event list', () => {
+  it.each([0, 1, 50, 51, 1217])('renders at most 50 of %i members while map and chart receive the full cluster', count => {
+    const cluster = clusterWithMembers(count);
+    const { container } = render(<ClusterDetailModal {...mockProps} cluster={cluster} />);
+    expect(container.querySelectorAll('button[title^="Click to view details"]')).toHaveLength(Math.min(count, 50));
+    expect(screen.getByText('Total Earthquakes:').parentElement).toHaveTextContent(String(count));
+    expect(screen.getByTestId('mock-cluster-mini-map')).toHaveAttribute('data-members', String(count));
+    expect(screen.getByTestId('mock-sequence-chart')).toHaveAttribute('data-members', String(count));
+    expect(Boolean(screen.queryByRole('navigation', { name: 'Cluster earthquake pages' }))).toBe(count > 50);
+  });
+
+  it('pages a 1,217-member cluster and selects a member on a later page', async () => {
+    const user = userEvent.setup();
+    const onIndividualQuakeSelect = vi.fn();
+    const cluster = clusterWithMembers(1217);
+    const { container } = render(<ClusterDetailModal {...mockProps} cluster={cluster} onIndividualQuakeSelect={onIndividualQuakeSelect} />);
+    expect(screen.getByRole('status')).toHaveTextContent('1–50 of 1217');
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByRole('status')).toHaveTextContent('51–100 of 1217');
+    expect(container.querySelectorAll('button[title^="Click to view details"]')).toHaveLength(50);
+    expect(screen.queryByTitle('Click to view details for M 2.5 - Place 49')).not.toBeInTheDocument();
+    await user.click(screen.getByTitle('Click to view details for M 2.5 - Place 50'));
+    expect(onIndividualQuakeSelect).toHaveBeenCalledWith(cluster.originalQuakes[50]);
+  });
+
+  it('clamps a shortened list and resets when a different cluster opens', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ClusterDetailModal {...mockProps} cluster={clusterWithMembers(51, 'first')} />);
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByRole('status')).toHaveTextContent('51–51 of 51');
+    rerender(<ClusterDetailModal {...mockProps} cluster={clusterWithMembers(1, 'first')} />);
+    expect(screen.getByTitle('Click to view details for M 6.1 - Place 0')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Cluster earthquake pages' })).not.toBeInTheDocument();
+    rerender(<ClusterDetailModal {...mockProps} cluster={clusterWithMembers(51, 'first')} />);
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    rerender(<ClusterDetailModal {...mockProps} cluster={clusterWithMembers(51, 'second')} />);
+    expect(screen.getByRole('status')).toHaveTextContent('1–50 of 51');
   });
 });
 

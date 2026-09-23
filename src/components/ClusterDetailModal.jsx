@@ -5,6 +5,8 @@ import ClusterMiniMap from './ClusterMiniMap'; // Added import for the mini-map
 import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the new chart
 // import { getMagnitudeColor } from '../utils/utils.js'; // Corrected import for getMagnitudeColor - Unused
 
+const EARTHQUAKES_PER_PAGE = 50;
+
 /**
  * A modal component to display detailed information about an earthquake cluster.
  * It includes a mini-map, summary statistics, and a list of individual earthquakes within the cluster.
@@ -29,6 +31,26 @@ import EarthquakeSequenceChart from './EarthquakeSequenceChart'; // Import the n
 function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
     const modalContentRef = React.useRef(null);
     const closeButtonRef = React.useRef(null);
+    const clusterIdentity = cluster?.id ?? cluster?.clusterId ?? cluster?.slug ?? cluster;
+    const [pagination, setPagination] = React.useState({ identity: clusterIdentity, page: 1 });
+
+    const sortedQuakes = React.useMemo(() => [...(cluster?.originalQuakes || [])].sort((a, b) => {
+        const timeA = a.properties?.time || 0;
+        const timeB = b.properties?.time || 0;
+        return timeB - timeA;
+    }), [cluster?.originalQuakes]);
+    const totalPages = Math.ceil(sortedQuakes.length / EARTHQUAKES_PER_PAGE);
+    const currentPage = pagination.identity === clusterIdentity
+        ? Math.min(pagination.page, Math.max(1, totalPages)) : 1;
+    const firstVisibleIndex = (currentPage - 1) * EARTHQUAKES_PER_PAGE;
+    const visibleQuakes = sortedQuakes.slice(firstVisibleIndex, firstVisibleIndex + EARTHQUAKES_PER_PAGE);
+
+    // Keep a refreshed cluster on its current page, but immediately clamp a
+    // shortened list and reset when a different canonical cluster opens.
+    React.useEffect(() => {
+        setPagination(previous => previous.identity === clusterIdentity && previous.page === currentPage
+            ? previous : { identity: clusterIdentity, page: currentPage });
+    }, [clusterIdentity, currentPage]);
 
     useDialogKeyboard({ dialogRef: modalContentRef, initialFocusRef: closeButtonRef, onClose, active: Boolean(cluster) });
 
@@ -42,13 +64,6 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
         maxMagnitude,
         originalQuakes = [] // Default to empty array if not provided
     } = cluster;
-
-    // Sort quakes by time (most recent first)
-    const sortedQuakes = [...originalQuakes].sort((a, b) => {
-        const timeA = a.properties?.time || 0;
-        const timeB = b.properties?.time || 0;
-        return timeB - timeA; // Descending order
-    });
 
     // Calculate Depth Range (Optional, as designed)
     let minDepth = Infinity;
@@ -124,7 +139,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                 </h2>
                 <div className="flex-grow space-y-2 pr-1">
                     {sortedQuakes.length > 0 ? (
-                        sortedQuakes.map(quake => {
+                        visibleQuakes.map(quake => {
                             const quakeTitle = `Click to view details for M ${quake.properties?.mag?.toFixed(1) || 'N/A'} - ${quake.properties?.place || 'Unknown Place'}`;
 
                             const baseClasses = "w-full text-left p-2.5 rounded-md border hover:border-slate-500 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400";
@@ -168,6 +183,21 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                         <p className="text-slate-400 text-sm text-center py-4">No individual earthquake data available for this cluster.</p>
                     )}
                 </div>
+                {totalPages > 1 && (
+                    <nav aria-label="Cluster earthquake pages" className="mt-4 flex flex-col items-stretch gap-2 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                        <button type="button" onClick={() => setPagination({ identity: clusterIdentity, page: currentPage - 1 })}
+                            disabled={currentPage === 1} className="rounded bg-slate-700 px-3 py-2 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                            Previous page
+                        </button>
+                        <span role="status" aria-live="polite" className="text-center">
+                            {firstVisibleIndex + 1}–{firstVisibleIndex + visibleQuakes.length} of {sortedQuakes.length}
+                        </span>
+                        <button type="button" onClick={() => setPagination({ identity: clusterIdentity, page: currentPage + 1 })}
+                            disabled={currentPage === totalPages} className="rounded bg-slate-700 px-3 py-2 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                            Next page
+                        </button>
+                    </nav>
+                )}
             </div>
         </div>
     );
