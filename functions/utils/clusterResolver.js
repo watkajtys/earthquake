@@ -5,6 +5,21 @@ export const CLUSTER_COLUMNS = `id, slug, strongestQuakeId, earthquakeIds, title
   radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore,
   version, createdAt, updatedAt`;
 
+// Legacy rows mix epoch-millisecond integers with UTC timestamp text. SQLite
+// orders text above integers, regardless of the instant they represent.
+// Current text rows use YYYY-MM-DD HH:MM:SS.sss; the fallback handles other
+// SQLite-parsable timestamps without changing the stored historical values.
+export const CLUSTER_UPDATED_AT_MS_SQL = `CASE
+  WHEN typeof(updatedAt) = 'integer' THEN updatedAt
+  WHEN typeof(updatedAt) = 'text' THEN
+    CAST(strftime('%s', updatedAt) AS INTEGER) * 1000 +
+    CASE WHEN length(updatedAt) = 23 AND substr(updatedAt, 20, 1) = '.'
+      THEN CAST(substr(updatedAt, 21, 3) AS INTEGER)
+      ELSE CAST(substr(strftime('%f', updatedAt), 4, 3) AS INTEGER)
+    END
+  ELSE NULL
+END`;
+
 export class ClusterSelectorError extends Error {
   constructor(message) { super(message); this.status = 400; }
 }
@@ -26,7 +41,7 @@ export function parseClusterSelector(searchParams) {
 
 export async function resolveClusterDefinition(db, { kind, value }) {
   if (!db) throw new Error('Database service not available.');
-  const lookup = (column, selector) => db.prepare(`SELECT ${CLUSTER_COLUMNS} FROM ClusterDefinitions WHERE ${column} = ?${column === 'strongestQuakeId' ? ' ORDER BY updatedAt DESC, id ASC LIMIT 1' : ''}`).bind(selector).first();
+  const lookup = (column, selector) => db.prepare(`SELECT ${CLUSTER_COLUMNS} FROM ClusterDefinitions WHERE ${column} = ?${column === 'strongestQuakeId' ? ` ORDER BY ${CLUSTER_UPDATED_AT_MS_SQL} DESC, id ASC LIMIT 1` : ''}`).bind(selector).first();
   let row;
   if (kind === 'clusterId') row = await lookup('id', value);
   else if (kind === 'slug') row = await lookup('slug', value);

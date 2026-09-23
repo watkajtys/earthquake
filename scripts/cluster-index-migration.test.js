@@ -82,7 +82,12 @@ describe.each([false, true])('0018 additive cluster lookup index (production clu
       sql.exec(migration);
 
       for (const value of ['anchor-1', 'nonexistent-anchor']) {
-        expect(plan(value)).toEqual([`SEARCH ClusterDefinitions USING INDEX ${indexName} (strongestQuakeId=?)`]);
+        const details = plan(value);
+        expect(details.some(detail => detail.includes('SEARCH ClusterDefinitions USING INDEX') && detail.includes('(strongestQuakeId=?)'))).toBe(true);
+        // Normalizing mixed timestamp types still sorts this bounded anchor
+        // group; the anchor predicate remains indexed, including on a miss.
+        expect(details).toContain('USE TEMP B-TREE FOR ORDER BY');
+        if (productionClusterDrift) expect(details.some(detail => detail.includes(indexName))).toBe(true);
       }
       expect(await Promise.all(selectors.map(selector => resolveClusterDefinition(db, selector)))).toEqual(before);
       expect(snapshot(sql)).toEqual(original);
@@ -98,15 +103,15 @@ describe.each([false, true])('0018 additive cluster lookup index (production clu
     } finally { sql.close(); }
   });
 
-  it('preserves legacy mixed-type timestamp ordering rather than claiming to normalize it', async () => {
+  it('orders mixed timestamp types by instant before and after adding the index', async () => {
     const { sql, db } = fixture(productionClusterDrift);
     try {
-      // Text sorts above numeric under the legacy selector, even when older.
+      // The numeric millisecond timestamp is newer than the UTC text timestamp.
       sql.prepare('INSERT INTO ClusterDefinitions(id,slug,strongestQuakeId,updatedAt) VALUES(?,?,?,?)').run('older-text', 'older-text', 'mixed', '2020-01-01 00:00:00');
       sql.prepare('INSERT INTO ClusterDefinitions(id,slug,strongestQuakeId,updatedAt) VALUES(?,?,?,?)').run('newer-number', 'newer-number', 'mixed', 1789960000000);
-      expect((await resolveClusterDefinition(db, { kind: 'id', value: 'mixed' })).id).toBe('older-text');
+      expect((await resolveClusterDefinition(db, { kind: 'id', value: 'mixed' })).id).toBe('newer-number');
       sql.exec(migration);
-      expect((await resolveClusterDefinition(db, { kind: 'id', value: 'mixed' })).id).toBe('older-text');
+      expect((await resolveClusterDefinition(db, { kind: 'id', value: 'mixed' })).id).toBe('newer-number');
     } finally { sql.close(); }
   });
 });

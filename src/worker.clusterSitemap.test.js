@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DatabaseSync } from 'node:sqlite';
 import worker from './worker.js';
 
 const request = () => new Request('https://earthquakeslive.com/sitemap-clusters.xml', {
@@ -47,6 +48,28 @@ describe('deployed Worker cluster sitemap', () => {
     expect(response.status).toBe(200);
     expect(xml).toContain('<loc>https://earthquakeslive.com/cluster/historic-cluster</loc>');
     expect(xml).not.toContain('<lastmod>');
+  });
+
+  it('includes a newer millisecond row ahead of 500 older text rows', async () => {
+    const sqlite = new DatabaseSync(':memory:');
+    try {
+      sqlite.exec('CREATE TABLE ClusterDefinitions (id TEXT PRIMARY KEY, slug TEXT, updatedAt DATETIME)');
+      const insert = sqlite.prepare('INSERT INTO ClusterDefinitions (id, slug, updatedAt) VALUES (?, ?, ?)');
+      for (let index = 0; index < 501; index++) {
+        const id = `older-${String(index).padStart(3, '0')}`;
+        insert.run(id, id, '2026-09-20 00:00:00.000');
+      }
+      insert.run('newest-numeric', 'newest-numeric', Date.parse('2026-09-21T00:00:00.000Z'));
+      const DB = { prepare: sql => ({ all: async () => ({ success: true, results: sqlite.prepare(sql).all() }) }) };
+
+      const response = await worker.fetch(request(), { DB }, context);
+      const xml = await response.text();
+      expect(response.status).toBe(200);
+      expect(xml).toContain('<loc>https://earthquakeslive.com/cluster/newest-numeric</loc>');
+      expect((xml.match(/<url><loc>/gu) || [])).toHaveLength(500);
+    } finally {
+      sqlite.close();
+    }
   });
 
   it('returns an uncached error rather than an empty sitemap when D1 is unavailable', async () => {

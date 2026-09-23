@@ -29,7 +29,7 @@ import { handleLegacyStaticAsset } from './legacyStaticAssets.js';
 import { enforceRoutePolicy, finalizeResponse, policyError, readBoundedJson, RequestPolicyError, validateCalculation } from './utils/workerRequestPolicy.js';
 import { releaseIdentity } from './utils/releaseIdentity.js';
 import { buildClusterPath, buildEarthquakePath, isValidClusterRouteValue, parseEarthquakePath, parseClusterPath, timestampMilliseconds } from './utils/entityRoutes.js';
-import { resolveClusterDefinition } from '../functions/utils/clusterResolver.js';
+import { CLUSTER_UPDATED_AT_MS_SQL, resolveClusterDefinition } from '../functions/utils/clusterResolver.js';
 
 var jsonErrorResponse = (message, status, sourceName, upstreamStatus = void 0) => {
     const errorBody = {
@@ -156,7 +156,7 @@ async function handleClustersSitemapRequest(request, env) {
   }
   try {
     const stmt = DB.prepare(
-      "SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> '' ORDER BY updatedAt DESC LIMIT 500",
+      `SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> '' ORDER BY ${CLUSTER_UPDATED_AT_MS_SQL} DESC, id ASC LIMIT 500`,
     );
     const readResult = await stmt.all();
     if (readResult?.success !== true || !Array.isArray(readResult.results)) throw new Error('Cluster sitemap query failed');

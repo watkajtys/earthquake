@@ -148,6 +148,23 @@ describe('cluster details against the migrated D1 schema', () => {
     expect((await legacy.json()).id).toBe('cluster1');
   });
 
+  it('selects the newest cluster by instant across text and millisecond timestamps', async () => {
+    database.prepare(`INSERT INTO EarthquakeEvents (id, magnitude, place, event_time, longitude, latitude, depth)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`).run('mixed-anchor', 2, 'Test', 0, 0, 0, 0);
+    const insert = database.prepare(`INSERT INTO ClusterDefinitions
+      (id, slug, strongestQuakeId, earthquakeIds, updatedAt) VALUES (?, ?, ?, '[]', ?)`);
+    insert.run('older-text', 'older-text', 'mixed-anchor', '2026-09-20 00:00:00.000');
+    insert.run('newer-integer', 'newer-integer', 'mixed-anchor', Date.parse('2026-09-21T00:00:00.000Z'));
+
+    const response = await onRequestGet({ request: requestFor('mixed-anchor'), env });
+    expect(response.status).toBe(200);
+    expect((await response.json()).id).toBe('newer-integer');
+
+    insert.run('newest-text', 'newest-text', 'mixed-anchor', '2026-09-22 00:00:00.250');
+    const later = await onRequestGet({ request: requestFor('mixed-anchor'), env });
+    expect((await later.json()).id).toBe('newest-text');
+  });
+
   it.each(['overview_cluster_eq1_99', '99-quakes-near-previous-place-up-to-m-0.5-eq1'])('resolves documented legacy route %s after exact lookups miss', async (route) => {
     const response = await onRequestGet({ request: new Request(`https://example.com/api/cluster-detail-with-quakes?route=${route}`), env });
     expect((await response.json()).id).toBe('cluster1');
