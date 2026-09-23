@@ -7,9 +7,9 @@ import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PREVIOUS_RELEASE_ASSETS } from '../src/previousReleaseAssets.js';
 
-// Bounds the verified 231-path retained graph plus the 26-file axis build,
-// with a small margin and an explicit future review gate.
-export const MAX_ASSETS = 280;
+// Bounds the verified 272-path retained graph plus the 26-file paused build
+// (293 distinct paths), with a 27-path margin and explicit future review gate.
+export const MAX_ASSETS = 320;
 const MAX_ASSET_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
 const ASSET_NAME = /^[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.(?:js|css)$/;
