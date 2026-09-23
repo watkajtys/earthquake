@@ -1,6 +1,7 @@
 import { upsertEarthquakeFeaturesToD1 } from '../../src/utils/d1Utils.js';
 import { updateStatsInKV } from '../utils/kv-stats-updater.js';
 import { fetchUsgsSummary, USGS_SUMMARY_URLS, UsgsTransportError, usgsDetailUrl, validateUsgsSummary } from '../utils/usgs-transport.js';
+import { handleDurableUsgsIngestion } from './durable-usgs-ingestion.js';
 
 const HOURLY_CHECKPOINT = 'usgs_last_response_features';
 
@@ -20,6 +21,11 @@ function samePersistedSummary(left, right) {
 export async function handleTrustedUsgsIngestion({ env, executionContext, logger, feedKey = 'hour' }) {
   if (!Object.hasOwn(USGS_SUMMARY_URLS, feedKey)) return jsonResponse({ message: 'Unsupported trusted feed' }, 400);
   if (!env.DB) return jsonResponse({ message: 'Earthquake database is unavailable' }, 503);
+  // Release gate: the additive 0022 schema and R2 source prefix must exist
+  // before this path is activated. The default remains the deployed writer.
+  if (env.DURABLE_INGESTION_ENABLED === 'true') {
+    return handleDurableUsgsIngestion({ env, feedKey, logger });
+  }
   try {
     const fullGeoJson = await fetchUsgsSummary(feedKey);
     const kv = env.USGS_LAST_RESPONSE_KV;
