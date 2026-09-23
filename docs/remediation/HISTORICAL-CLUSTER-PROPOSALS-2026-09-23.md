@@ -1,0 +1,9 @@
+# Active cluster identity review proposals — 2026-09-23 UTC
+
+The read-only generator `scripts/generate-active-cluster-proposals.py` examined the isolated restore of the production D1 export taken at 05:56:04 UTC. The SQL export is 751,769,407 bytes with SHA-256 `cecb1969fe99cf04f5b4fc04c7ca71587d9e248c0bbc31b304ee126f6cfa4325`; its restore passed `integrity_check` and `foreign_key_check`. The generator opens SQLite with `mode=ro&immutable=1` and `PRAGMA query_only`.
+
+At that reference time, 3,410 cluster definitions had an `endTime` within the preceding 30 days. Seventeen pairs (34 rows) had exactly the same normalized member-ID sets; none had invalid/empty membership. All 17 pairs had different `stableKey` values, 13 had different time extents, and one had different strongest-event anchors. Equal membership alone does not establish which historical identity, URL, or scientific window should prevail.
+
+The private proposal artifact is `.reconciliation.local/production-0021-2026-09-23/active-cluster-proposals.json` (mode 0600, ignored by Git), SHA-256 `487027b54d9b1d93e67dd97657bf0a93cd7acc68235d2e7b97c434d035223675`. It includes the export hash, reference cutoff, per-row source fields, normalized membership/version/before-image hashes, ambiguity flags, and explicit `manual_review` decisions with no selected canonical ID or mutation SQL. A second run produced byte-identical JSON.
+
+The remaining decision is to review each candidate against the historical algorithm/window lineage and public URL use, then prepare a separately rehearsed alias or repair manifest with exact before-image guards. This proposal did not write production D1, R2, or public routes. It excludes high-overlap groups with nonidentical membership and clusters outside the 30-day active window; those require separate analysis.
