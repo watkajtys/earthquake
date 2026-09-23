@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { publishClusterSummarySnapshot, readSummaryPointer, readSummaryJsonObject } from './clusterSummarySnapshot.js';
 import { createMemorySummaryBucket } from './clusterSummarySnapshot.test-support.js';
 import { createClusterSqliteFixture, clusterNow } from './clusterSqliteFixture.test-support.js';
-import { SUMMARY_POINTER_KEY, SUMMARY_PAGE_SIZE, SUMMARY_MAX_AGE_MS, MAX_SUMMARY_ITEMS,
+import { SUMMARY_POINTER_KEY, SUMMARY_PAGE_SIZE, SUMMARY_MAX_AGE_MS, SUMMARY_STALE_AFTER_MS, MAX_SUMMARY_ITEMS,
   generationManifestKey, generationPageKey, sha256Hex, validateSummaryManifest, validateSummaryPage } from '../../shared/clusterSummaryContract.js';
 
 const ids = Array.from({ length: 20 }, (_, i) => `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
@@ -63,6 +63,49 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
     expect(validateSummaryManifest(manifest)).toBe(manifest);
   });
 
+  it('keeps an unchanged fresh projection without staging R2 objects', async () => {
+    seed();
+    await publish();
+    const before = bucket.objects.get(SUMMARY_POINTER_KEY);
+    const writes = bucket.calls.filter(call => call.method === 'put').length;
+    expect(await publish({ now: clusterNow + 10 * 60_000 })).toEqual({
+      published: false, reason: 'unchanged', generationId: ids[0], snapshotSequence: 1,
+      totalCount: 1, pageCount: 1,
+    });
+    expect(bucket.objects.get(SUMMARY_POINTER_KEY)).toBe(before);
+    expect(bucket.calls.filter(call => call.method === 'put')).toHaveLength(writes);
+    expect(fixture.queries).toHaveLength(2);
+    expect(nextId).toBe(1);
+  });
+
+  it('refreshes an unchanged projection at the freshness boundary', async () => {
+    seed(); await publish();
+    expect(await publish({ now: clusterNow + SUMMARY_STALE_AFTER_MS })).toMatchObject({
+      published: true, generationId: ids[1], snapshotSequence: 2, totalCount: 1,
+    });
+    expect(bucket.readJson(SUMMARY_POINTER_KEY).current.generatedAtMs).toBe(clusterNow + SUMMARY_STALE_AFTER_MS);
+  });
+
+  it('publishes changed projected scalars before the freshness boundary', async () => {
+    seed(); await publish();
+    fixture.database.prepare('UPDATE ClusterDefinitions SET title = ?').run('Updated title');
+    expect(await publish({ now: clusterNow + 10 * 60_000 })).toMatchObject({
+      published: true, generationId: ids[1], snapshotSequence: 2,
+    });
+    const { pages } = await currentObjects();
+    expect(pages[0].items[0].title).toBe('Updated title');
+  });
+
+  it.each([undefined, {}, { summaryGenerationId: ids[0], summaryProjectionSha256: 'untrusted' },
+    { summaryGenerationId: ids[1], summaryProjectionSha256: 'a'.repeat(64) }])('republishes when pointer fingerprint metadata is missing or untrusted: %j', async customMetadata => {
+    seed(); await publish();
+    const previous = bucket.objects.get(SUMMARY_POINTER_KEY);
+    bucket.seed(SUMMARY_POINTER_KEY, previous.bytes, { customMetadata });
+    expect(await publish({ now: clusterNow + 10 * 60_000 })).toMatchObject({
+      published: true, generationId: ids[1], snapshotSequence: 2,
+    });
+  });
+
   it('stores immutable 200-item pages and correctly accounts for the remainder', async () => {
     for (let i = 0; i < 401; i++) seed(`cluster-${String(i).padStart(4, '0')}`);
     expect(await publish()).toMatchObject({ totalCount: 401, pageCount: 3 });
@@ -75,7 +118,10 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
 
   it('retains at most twelve committed generations and expires older history', async () => {
     seed();
-    for (let i = 0; i < 14; i++) await publish({ now: clusterNow + i * 1000 });
+    for (let i = 0; i < 14; i++) {
+      fixture.database.prepare('UPDATE ClusterDefinitions SET title = ?').run(`Revision ${i}`);
+      await publish({ now: clusterNow + i * 1000 });
+    }
     const pointer = bucket.readJson(SUMMARY_POINTER_KEY);
     expect(pointer.current.snapshotSequence).toBe(14);
     expect(pointer.history).toHaveLength(11);
@@ -117,7 +163,7 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
       if ((stage === 'page' && key.includes('/pages/')) || (stage === 'manifest' && key.endsWith('/manifest.json')) ||
           (stage === 'pointer' && key === SUMMARY_POINTER_KEY)) throw new Error('write failed');
     };
-    await expect(publish()).rejects.toThrow('write failed');
+    await expect(publish({ now: clusterNow + SUMMARY_STALE_AFTER_MS })).rejects.toThrow('write failed');
     expect(bucket.objects.get(SUMMARY_POINTER_KEY)).toBe(before);
   });
 
@@ -138,7 +184,7 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
 
   it('rejects an immutable generation collision without overwriting its pages', async () => {
     seed(); await publish(); const before = bucket.objects.get(generationPageKey(ids[0], 0));
-    await expect(publish({ randomUUID: () => ids[0] })).rejects.toThrow('did not confirm');
+    await expect(publish({ now: clusterNow + SUMMARY_STALE_AFTER_MS, randomUUID: () => ids[0] })).rejects.toThrow('did not confirm');
     expect(bucket.objects.get(generationPageKey(ids[0], 0))).toBe(before);
     expect(bucket.readJson(SUMMARY_POINTER_KEY).current.snapshotSequence).toBe(1);
   });
@@ -146,7 +192,7 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
   it.each([undefined, {}, { etag: '' }])('rejects an unconfirmed R2 page result: %j', async acknowledgement => {
     seed(); await publish(); const before = bucket.objects.get(SUMMARY_POINTER_KEY);
     bucket.hooks.afterPut = (key, result) => key.includes('/pages/') ? acknowledgement : result;
-    await expect(publish()).rejects.toThrow('did not confirm');
+    await expect(publish({ now: clusterNow + SUMMARY_STALE_AFTER_MS })).rejects.toThrow('did not confirm');
     expect(bucket.objects.get(SUMMARY_POINTER_KEY)).toBe(before);
   });
 
@@ -172,6 +218,7 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
 describe('publication compare-and-swap races', () => {
   it.each([false, true])('discards delayed stale observations without rebase (existing pointer=%s)', async existing => {
     seed(); if (existing) await publish();
+    if (existing) fixture.database.prepare('UPDATE ClusterDefinitions SET title = ?').run('Delayed observation');
     const oldGeneration = ids[nextId];
     const held = deferred(); const release = deferred();
     bucket.hooks.beforePut = async key => {
@@ -202,7 +249,7 @@ describe('bounded metadata reads', () => {
     await expect(readSummaryJsonObject(bucket, 'object', 4)).rejects.toThrow();
   });
   it('distinguishes a missing pointer from invalid contents', async () => {
-    expect(await readSummaryPointer(bucket)).toEqual({ pointer: null, etag: null });
+    expect(await readSummaryPointer(bucket)).toEqual({ pointer: null, etag: null, projectionHash: null });
     bucket.seed(SUMMARY_POINTER_KEY, '{}');
     await expect(readSummaryPointer(bucket)).rejects.toThrow();
   });

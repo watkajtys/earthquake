@@ -182,7 +182,9 @@ async function storeClusterDefinitions(db, clusters) {
       const locationName =
         strongestQuakeInCalcCluster.properties.place || "Unknown Location";
       const maxMagnitude = clusterMaxMag;
-      const newEarthquakeIds = calculatedCluster.map((q) => q.id);
+      // Membership is a set. D1 may return the same source rows in a different
+      // order, which must not create a false scientific update on every run.
+      const newEarthquakeIds = calculatedCluster.map((q) => q.id).sort();
       const newStrongestQuakeId = strongestQuakeInCalcCluster.id;
       const newMinMagnitude = getMinMagnitude(calculatedCluster);
       const newMeanMagnitude = getMeanMagnitude(calculatedCluster);
