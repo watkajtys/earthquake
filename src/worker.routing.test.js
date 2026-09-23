@@ -216,17 +216,17 @@ describe('deployed Worker routing', () => {
       <link rel="stylesheet" crossorigin href="/assets/index-current.css">
       <script type="module" src="/src/main.jsx"></script>
     </head><body><div id="root"></div></body></html>`, { headers: { 'Content-Type': 'text/html' } }));
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      type: 'Feature',
-      id: 'us123',
-      properties: { mag: 5.1, place: 'Test location', time: Date.UTC(2026, 8, 20), updated: Date.UTC(2026, 8, 20) },
-      geometry: { type: 'Point', coordinates: [-120, 35, 10] },
-    }), { headers: { 'Content-Type': 'application/json' } }));
+    const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
+    env.DB = { prepare: vi.fn(() => ({ bind: id => ({ first: async () => ({
+      id, event_time: Date.UTC(2026, 8, 20), magnitude: 5.1,
+      place: 'Test location', longitude: -120, latitude: 35, depth: 10,
+    }) }) })) };
 
     const response = await worker.fetch(makeRequest('/quake/m5-test-location-us123', { headers: { 'User-Agent': 'Googlebot' } }), env, ctx);
 
-    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson', expect.objectContaining({ redirect: 'manual', signal: expect.any(AbortSignal) }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(env.DB.prepare).toHaveBeenCalledOnce();
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toContain('text/html');
     expect(response.headers.get('Cache-Control')).toBe('no-store');

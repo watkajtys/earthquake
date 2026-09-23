@@ -235,7 +235,36 @@ async function handlePrerenderEarthquake(request, env) {
   if (!route.ok) return crawlerError('Invalid earthquake URL', 404);
   try {
     const archived = await readArchivedEarthquakeDetail(env.GEOJSON_BUCKET, route.eventId);
-    const quake = archived?.data ?? await fetchValidatedDetail(route.eventId);
+    let quake = archived?.data;
+    if (!quake) {
+      // Sitemap URLs come from EarthquakeEvents. An archive miss must not turn
+      // every crawler request into an uncached upstream detail fetch.
+      if (!env.DB) return crawlerError('Earthquake details unavailable', 503);
+      let row;
+      try {
+        row = await env.DB.prepare(`SELECT id, event_time, latitude, longitude, depth, magnitude, place
+          FROM EarthquakeEvents WHERE id = ? LIMIT 1`).bind(route.eventId).first();
+      } catch (error) {
+        console.error('[prerender-earthquake] Stored summary query failed:', error.message);
+        return crawlerError('Earthquake details unavailable', 503);
+      }
+      if (row === null) return crawlerError('Earthquake not found', 404);
+      if (!row || row.id !== route.eventId || !Number.isSafeInteger(row.event_time) ||
+          !Number.isFinite(row.latitude) || !Number.isFinite(row.longitude) ||
+          row.latitude < -90 || row.latitude > 90 ||
+          row.longitude < -180 || row.longitude > 180 ||
+          !Number.isFinite(row.depth) ||
+          !(row.magnitude === null || Number.isFinite(row.magnitude)) ||
+          !(row.place === null || typeof row.place === 'string') ||
+          !Number.isFinite(new Date(row.event_time).getTime())) {
+        return crawlerError('Earthquake details unavailable', 503);
+      }
+      quake = {
+        id: row.id,
+        properties: { mag: row.magnitude, place: row.place, time: row.event_time },
+        geometry: { coordinates: [row.longitude, row.latitude, row.depth] },
+      };
+    }
     const { mag, place, time } = quake.properties;
     const magnitude = Number.isFinite(mag) ? mag.toFixed(1) : 'unknown';
     const location = place || 'Unknown location';

@@ -7,11 +7,17 @@ import { USGS_LIMITS } from '../functions/utils/usgs-transport.js';
 const slug = '3-quakes-near-local-test-m6.3-12345-40d0--100d0';
 let env;
 let queries;
+let earthquakeRow;
 beforeEach(() => {
   queries = [];
+  earthquakeRow = id => ({
+    id, event_time: 1750000000000, latitude: 2, longitude: 1,
+    depth: 3, magnitude: -0.5, place: 'Test place',
+  });
   env = {
     ASSETS: { fetch: vi.fn(async () => new Response('<html><head><script type="module" crossorigin src="/assets/index-built.js"></script><link rel="stylesheet" href="/assets/index-built.css"></head></html>')) },
-    DB: { prepare: vi.fn((sql) => ({ bind(value) { queries.push({ sql, value }); return { first: async () => sql.includes('WHERE slug = ?') && value === slug ? {
+    DB: { prepare: vi.fn((sql) => ({ bind(value) { queries.push({ sql, value }); return { first: async () => sql.includes('FROM EarthquakeEvents') ? earthquakeRow(value)
+      : sql.includes('WHERE slug = ?') && value === slug ? {
       id: 'canonical-cluster', slug, strongestQuakeId: 'us123', quakeCount: 3, maxMagnitude: null, locationName: 'Test', updatedAt: '1750000000000', earthquakeIds: '["us123"]',
     } : null, all: async () => ({ results: [{ id: 'us123', magnitude: null, place: 'Test', event_time: 1750000000000, longitude: 1, latitude: 2, depth: 3 }] }) }; } })) },
   };
@@ -41,7 +47,9 @@ describe('exported Worker entity routes', () => {
     expect(html).toContain(`https://earthquakeslive.com/quake/id/${id}`);
     expect(html).toContain('/assets/index-built.js');
     expect(html).not.toContain('/src/main.jsx');
-    expect(fetch).toHaveBeenCalledWith(`https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${id}.geojson`, expect.any(Object));
+    expect(queries).toHaveLength(1);
+    expect(queries[0].value).toBe(id);
+    expect(fetch).not.toHaveBeenCalled();
   });
   it.each(['/quake/%E0%A4%A', '/quake/%252F', `/quake/${encodeURIComponent('https://attacker.example/quake.geojson')}`])('rejects malformed/foreign quake path %s before upstream work', async (path) => {
     expect((await crawler(path)).status).toBe(404);
@@ -112,11 +120,42 @@ describe('exported Worker entity routes', () => {
     expect((await pending).status).toBe(504);
     expect(fetch).not.toHaveBeenCalled();
   });
-  it('falls back to validated upstream detail on an archive miss', async () => {
+  it('renders stored D1 summary on an archive miss without upstream work or writes', async () => {
     env.GEOJSON_BUCKET = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
-    expect((await crawler('/quake/id/us123')).status).toBe(200);
-    expect(fetch).toHaveBeenCalledOnce();
+    const response = await crawler('/quake/id/us123');
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('M -0.5 Earthquake');
+    expect(queries).toHaveLength(1);
+    expect(fetch).not.toHaveBeenCalled();
     expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+  });
+  it('keeps the JSON detail route upstream fallback for an archive miss', async () => {
+    env.GEOJSON_BUCKET = { get: vi.fn().mockResolvedValue(null) };
+    delete env.DB;
+    const response = await worker.fetch(new Request('https://example.test/api/earthquake/us123', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    }), env, { waitUntil: vi.fn() });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Data-Source')).toBe('USGS-API');
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it('returns 404 for a missing archived and stored earthquake without an upstream request', async () => {
+    env.GEOJSON_BUCKET = { get: vi.fn().mockResolvedValue(null) };
+    earthquakeRow = () => null;
+    const response = await crawler('/quake/id/us123');
+    expect(response.status).toBe(404);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('returns a retryable error when the D1 summary is unavailable or invalid', async () => {
+    env.GEOJSON_BUCKET = { get: vi.fn().mockResolvedValue(null) };
+    delete env.DB;
+    expect((await crawler('/quake/id/us123')).status).toBe(503);
+    env.DB = { prepare: vi.fn(() => { throw new Error('D1 unavailable'); }) };
+    expect((await crawler('/quake/id/us123')).status).toBe(503);
+    env.DB = { prepare: vi.fn(() => ({ bind: () => ({ first: async () => ({ ...earthquakeRow('us123'), latitude: null }) }) })) };
+    expect((await crawler('/quake/id/us123')).status).toBe(503);
+    expect(fetch).not.toHaveBeenCalled();
   });
   it('returns a terminal404 for an unmatched legacy cluster', async () => {
     expect((await crawler('/cluster/overview_cluster_missing_3')).status).toBe(404);
@@ -134,10 +173,12 @@ describe('exported Worker entity routes', () => {
     expect(queries).toHaveLength(0);
   });
   it('escapes markup in JSON-LD and regular HTML', async () => {
-    fetch.mockResolvedValue(Response.json(usgsFeature('us123', { place: '</script><script>bad()</script>' })));
+    earthquakeRow = id => ({ id, event_time: 1750000000000, latitude: 2, longitude: 1,
+      depth: 3, magnitude: 2, place: '</script><script>bad()</script>' });
     const html = await (await crawler('/quake/id/us123')).text();
     expect(html).not.toContain('<script>bad()');
     expect(html).toContain('\\u003c/script>');
+    expect(fetch).not.toHaveBeenCalled();
   });
   it('keeps normal browser routes on the built asset shell and suppresses HEAD bodies', async () => {
     const response = await worker.fetch(new Request(`https://example.test/cluster/${slug}`, { headers: { 'User-Agent': 'Mozilla/5.0' } }), env, { waitUntil: vi.fn() });
