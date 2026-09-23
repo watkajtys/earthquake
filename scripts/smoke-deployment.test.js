@@ -13,7 +13,7 @@ const EVENT_ID = 'previewquake001';
 const cluster = { id: 'cluster-uuid', slug: 'other-stored-slug', strongestQuakeId: EVENT_ID, title: 'SYNTHETIC PREVIEW cluster' };
 const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers } });
 
-function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = false, emptySitemap = false, badCrawlerAsset = false, badPreviousAsset = false, devEntry = false, noCrawlerCss = false, quakeNoindex = false, summaryUnavailable = false, summaryStale = false, periodFeedsResponse } = {}) {
+function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = false, emptySitemap = false, badCrawlerAsset = false, badPreviousAsset = false, devEntry = false, noCrawlerCss = false, quakeNoindex = false, summaryUnavailable = false, summaryStale = false, extraCurrentAssetCount = 0, periodFeedsResponse } = {}) {
   const calls = [];
   let publishedFeeds;
   async function feedResponse(url, options) {
@@ -62,7 +62,9 @@ function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = f
     }
     if (path.startsWith('/assets/')) {
       if (badPreviousAsset && Object.hasOwn(PREVIOUS_RELEASE_ASSETS, path)) return new Response('<html>SPA fallback</html>', { headers: { 'Content-Type': 'text/html' } });
-      return new Response(path.endsWith('.css') ? 'body{color:black}' : 'export default 1;', { headers: {
+      const imports = path === '/assets/browser.js'
+        ? Array.from({ length: extraCurrentAssetCount }, (_, index) => `import './current-${index}.js';`).join('\n') : '';
+      return new Response(path.endsWith('.css') ? 'body{color:black}' : `export default 1;\n${imports}`, { headers: {
         'Content-Type': badCrawlerAsset && path === '/assets/crawler.js' ? 'text/html' : path.endsWith('.css') ? 'text/css' : 'application/javascript',
       } });
     }
@@ -76,6 +78,12 @@ function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = f
 }
 
 describe('deployment smoke crawler contract', () => {
+  it('checks the combined retained and current asset graph beyond the old 200-path limit', async () => {
+    const { fetchImpl } = fixture({ extraCurrentAssetCount: 17 });
+    await expect(smokeDeployment([ORIGIN, '--preview'], { fetchImpl, log: vi.fn() }))
+      .resolves.toMatchObject({ assets: 211 });
+  });
+
   it.each([4, -0.2, null])('checks the emitted sitemap route, normal/crawler variants and built assets with magnitude %s', async magnitude => {
     const { fetchImpl, calls } = fixture({ magnitude });
     const result = await smokeDeployment([ORIGIN, '--preview'], { fetchImpl, log: vi.fn() });

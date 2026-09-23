@@ -5,9 +5,13 @@ import { pathToFileURL } from 'node:url';
 import { validateSummaryEnvelope } from '../shared/clusterSummaryContract.js';
 import { checkPeriodFeeds } from './check-period-feeds.mjs';
 import { PREVIOUS_RELEASE_ASSETS } from '../src/previousReleaseAssets.js';
+import { MAX_ASSETS } from './stage-previous-assets.mjs';
 
 const CANONICAL_ORIGIN = 'https://earthquakeslive.com';
 const CRAWLER_USER_AGENT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+// The retained graph and this release's assets are both requested. Keep a
+// bounded margin for the current build's 26 files beyond the 200-path archive.
+const MAX_SMOKE_ASSETS = MAX_ASSETS + 32;
 const decodeXml = value => value.replace(/&(amp|quot|apos|lt|gt);/g, (_, entity) => ({ amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' })[entity]);
 
 export async function smokeDeployment(args = [], { fetchImpl = fetch, log = console.log } = {}) {
@@ -29,7 +33,7 @@ let requests = 0;
 async function request(path, contentType, status = 200, userAgent = 'Earthquake-Deployment-Smoke/1.0', signal = AbortSignal.timeout(30_000)) {
   const url = new URL(path, base);
   assert.equal(url.origin, base.origin, `Refusing external URL ${url}`);
-  assert(++requests <= 260, 'Smoke request budget exceeded (260 GET requests).');
+  assert(++requests <= 280, 'Smoke request budget exceeded (280 GET requests).');
   const response = await fetchImpl(url, {
     method: 'GET', redirect: 'error', signal,
     headers: { 'User-Agent': userAgent },
@@ -77,7 +81,7 @@ async function checkAssets() {
   for (const path of Object.keys(PREVIOUS_RELEASE_ASSETS)) assets.add(new URL(path, base).href);
   // Set iteration includes subsequently discovered entries, so lazy chunks are checked too.
   for (const href of assets) {
-    assert(assets.size <= 200, 'Unexpectedly large asset graph; stopping after 200 assets.');
+    assert(assets.size <= MAX_SMOKE_ASSETS, `Unexpectedly large asset graph; stopping after ${MAX_SMOKE_ASSETS} assets.`);
     const url = new URL(href);
     const isJs = url.pathname.endsWith('.js');
     const response = await request(href, isJs ? /(?:javascript|ecmascript)/i : /text\/css/i);
