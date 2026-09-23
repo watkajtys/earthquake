@@ -7,8 +7,7 @@ CREATE TABLE UsgsIngestionState (
   lease_until_ms INTEGER,
   active_run_id TEXT,
   completed_run_id TEXT,
-  completed_source_generated_at_ms INTEGER,
-  kv_published_run_id TEXT
+  completed_source_generated_at_ms INTEGER
 );
 
 CREATE TABLE UsgsIngestionRuns (

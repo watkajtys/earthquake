@@ -310,41 +310,36 @@ async function classifyOutcome(db, descriptor, source, persistedIds) {
   return outcome;
 }
 
-async function legacyListFeatures(env, feedKey, source) {
-  const kv = env.USGS_LAST_RESPONSE_KV;
-  if (!kv) return source.features;
-  const key = feedKey === 'hour' ? 'usgs_last_response_features' : `usgs_last_response_features:${feedKey}`;
-  let previous;
-  try { previous = await kv.get(key); } catch { return source.features; }
-  let oldFeatures;
-  try { oldFeatures = typeof previous === 'string' ? JSON.parse(previous) : previous; } catch { oldFeatures = null; }
-  const oldById = new Map(Array.isArray(oldFeatures) ? oldFeatures.filter(feature => feature?.id).map(feature => [feature.id, feature]) : []);
-  const listFeatures = source.features.map(feature => {
-    const old = oldById.get(feature.id);
-    if (Number.isSafeInteger(old?.properties?.updated) && old.properties.updated > feature.properties.updated) {
-      try { validateUsgsSummary({ type: 'FeatureCollection', features: [old] }, 1); return old; } catch { /* Bad cache is never authoritative. */ }
-    }
-    return feature;
-  });
-  return listFeatures;
-}
-
-async function publishLegacyCheckpoint(env, feedKey, lease, descriptor, source) {
-  const kv = env.USGS_LAST_RESPONSE_KV;
-  if (!kv) return source.features;
-  const key = feedKey === 'hour' ? 'usgs_last_response_features' : `usgs_last_response_features:${feedKey}`;
-  const listFeatures = await legacyListFeatures(env, feedKey, source);
-  await kv.put(key, JSON.stringify(listFeatures));
-  const now = Date.now();
-  const acknowledged = await run(env.DB, `UPDATE UsgsIngestionState SET kv_published_run_id = ?
-    WHERE feed_key = ? AND fence = ? AND lease_owner = ? AND lease_until_ms > ?
-      AND completed_run_id = ?`, descriptor.run_id, feedKey, lease.fence, lease.owner, now, descriptor.run_id);
-  if (acknowledged !== 1) throw new Error('Legacy checkpoint acknowledgement was fenced');
-  return listFeatures;
+async function completedResponse(env, feedKey, preferredRunId = null, persistedIds = []) {
+  // Resolve through D1 each time. A source snapshot is immutable, but an
+  // overlapping completion may change which snapshot is current while R2 is
+  // being read. Recheck the D1 pointer before returning the list input.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const [state] = await rows(env.DB,
+      'SELECT completed_run_id FROM UsgsIngestionState WHERE feed_key = ?', feedKey);
+    if (!state?.completed_run_id) throw new Error('No completed ingestion source is available');
+    const [descriptor] = await rows(env.DB,
+      'SELECT * FROM UsgsIngestionRuns WHERE run_id = ?', state.completed_run_id);
+    if (!descriptor || descriptor.status !== 'completed') throw new Error('Completed ingestion source is unavailable');
+    const source = await readSnapshot(env.GEOJSON_BUCKET, descriptor);
+    const [after] = await rows(env.DB,
+      'SELECT completed_run_id FROM UsgsIngestionState WHERE feed_key = ?', feedKey);
+    if (after?.completed_run_id !== descriptor.run_id) continue;
+    const outcome = await classifyOutcome(env.DB, descriptor, source,
+      descriptor.run_id === preferredRunId ? persistedIds : []);
+    const [classified] = await rows(env.DB,
+      'SELECT completed_run_id FROM UsgsIngestionState WHERE feed_key = ?', feedKey);
+    if (classified?.completed_run_id !== descriptor.run_id) continue;
+    if (!outcome.complete) throw new Error('Completed ingestion source no longer matches D1');
+    return response({ newOrUpdatedFeatures: source.features, fullGeoJson: source,
+      ingestion: { ...outcome, runId: descriptor.run_id } });
+  }
+  throw new Error('Completed ingestion source changed during resolution');
 }
 
 // Invoked only by the trusted scheduled path while the rollout gate is enabled.
-// D1 is the progress authority; KV remains a derived compatibility cache.
+// D1 and its immutable R2 source are the progress and list-input authority.
+// The mutable legacy KV checkpoint is untouched by this gated path.
 export async function handleDurableUsgsIngestion({ env, feedKey = 'hour', logger }) {
   if (!Object.hasOwn(USGS_SUMMARY_URLS, feedKey)) return response({ message: 'Unsupported trusted feed' }, 400);
   if (!env.DB || !env.GEOJSON_BUCKET) return response({ message: 'Durable ingestion bindings are unavailable' }, 503);
@@ -361,20 +356,8 @@ export async function handleDurableUsgsIngestion({ env, feedKey = 'hour', logger
       if (recovered.incomplete) return response({ message: 'Durable USGS ingestion is continuing',
         ingestion: { complete: false, cursor: recovered.advancedCursor } }, 503);
       if (recovered.completion.rejectedCount) throw new Error('Recovered source contains quarantined conflicts');
-      await publishLegacyCheckpoint(env, feedKey, lease, pending, recovered.source);
       state = (await rows(env.DB, 'SELECT * FROM UsgsIngestionState WHERE feed_key = ?', feedKey))[0];
-      if (remainingBatches === 0) {
-        const outcome = await classifyOutcome(env.DB, pending, recovered.source, recovered.persistedIds);
-        return response({ newOrUpdatedFeatures: await legacyListFeatures(env, feedKey, recovered.source),
-          fullGeoJson: recovered.source, ingestion: { ...outcome, runId: pending.run_id } });
-      }
-    } else if (state.completed_run_id && state.kv_published_run_id !== state.completed_run_id) {
-      const completed = (await rows(env.DB, 'SELECT * FROM UsgsIngestionRuns WHERE run_id = ?', state.completed_run_id))[0];
-      if (!completed) throw new Error('Completed ingestion run reference is missing');
-      if (completed.status === 'completed') {
-        await publishLegacyCheckpoint(env, feedKey, lease, completed,
-          await readSnapshot(env.GEOJSON_BUCKET, completed));
-      }
+      if (remainingBatches === 0) return await completedResponse(env, feedKey, pending.run_id, recovered.persistedIds);
     }
 
     const fetched = await fetchUsgsSummary(feedKey);
@@ -384,21 +367,12 @@ export async function handleDurableUsgsIngestion({ env, feedKey = 'hour', logger
     if (Number.isSafeInteger(state.completed_source_generated_at_ms) &&
         sourceTime < state.completed_source_generated_at_ms) {
       if (!latest) throw new Error('Completed ingestion source reference is missing');
-      if (latest.status !== 'completed') return response({ message: 'USGS source has quarantined conflicts',
-        ingestion: { complete: false } }, 503);
-      const source = await readSnapshot(env.GEOJSON_BUCKET, latest);
-      const outcome = await classifyOutcome(env.DB, latest, source, []);
-      return response({ newOrUpdatedFeatures: await legacyListFeatures(env, feedKey, source),
-        fullGeoJson: source, ingestion: outcome });
+      return await completedResponse(env, feedKey);
     }
     const sourceBytes = textEncoder.encode(JSON.stringify(fetched));
     if (latest && sourceBytes.byteLength === latest.snapshot_bytes &&
         await sha256(sourceBytes) === latest.snapshot_sha256) {
-      if (latest.status !== 'completed') return response({ message: 'USGS source has quarantined conflicts',
-        ingestion: { complete: false } }, 503);
-      const outcome = await classifyOutcome(env.DB, latest, fetched, []);
-      return response({ newOrUpdatedFeatures: await legacyListFeatures(env, feedKey, fetched),
-        fullGeoJson: fetched, ingestion: outcome });
+      return await completedResponse(env, feedKey);
     }
     const snapshot = await stageSnapshot(env.GEOJSON_BUCKET, feedKey, fetched);
     const descriptor = await createRun(env.DB, feedKey, lease, fetched, snapshot);
@@ -412,9 +386,7 @@ export async function handleDurableUsgsIngestion({ env, feedKey = 'hour', logger
     }
     const outcome = await classifyOutcome(env.DB, descriptor, fetched, result.persistedIds);
     if (!outcome.complete) return response({ message: 'USGS persistence outcome was incomplete', ingestion: outcome }, 503);
-    const listFeatures = await publishLegacyCheckpoint(env, feedKey, lease, descriptor, fetched);
-    return response({ newOrUpdatedFeatures: listFeatures, fullGeoJson: fetched,
-      ingestion: { ...outcome, runId: descriptor.run_id } });
+    return await completedResponse(env, feedKey, descriptor.run_id, result.persistedIds);
   } catch (error) {
     logger?.logError?.('DURABLE_USGS_INGESTION_FAILED', 'Durable USGS ingestion failed',
       { code: error.code || 'DURABLE_INGESTION_FAILED' }, true);

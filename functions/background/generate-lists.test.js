@@ -15,6 +15,37 @@ const feature = (id, ageDays = 0, properties = {}) => ({
     ...properties,
   },
 });
+const listObject = (rows, etag = 'fixture-etag') => ({ etag, json: async () => rows });
+
+function casBucket(initial = {}) {
+  const stored = new Map(Object.entries(initial).map(([key, rows]) => [key, { etag: 'initial', rows }]));
+  let sequence = 0;
+  const bucket = {
+    stored,
+    casLosses: 0,
+    beforePut: null,
+    get: vi.fn(async key => {
+      const current = stored.get(key);
+      return current ? listObject(structuredClone(current.rows), current.etag) : null;
+    }),
+    put: vi.fn(async (key, body, options) => {
+      if (bucket.beforePut) await bucket.beforePut(key, options);
+      const current = stored.get(key);
+      if (options?.onlyIf?.etagMatches !== undefined && current?.etag !== options.onlyIf.etagMatches) {
+        bucket.casLosses++;
+        return null;
+      }
+      if (options?.onlyIf?.etagDoesNotMatch === '*' && current) {
+        bucket.casLosses++;
+        return null;
+      }
+      const next = { etag: `version-${++sequence}`, rows: JSON.parse(body) };
+      stored.set(key, next);
+      return { etag: next.etag };
+    }),
+  };
+  return bucket;
+}
 
 describe('cached earthquake list summary metadata', () => {
   let env;
@@ -26,8 +57,8 @@ describe('cached earthquake list summary metadata', () => {
     written = new Map();
     env = {
       GEOJSON_BUCKET: {
-        get: vi.fn().mockResolvedValue({ json: async () => [] }),
-        put: vi.fn(async (key, value) => { written.set(key, JSON.parse(value)); }),
+        get: vi.fn().mockResolvedValue(listObject([])),
+        put: vi.fn(async (key, value) => { written.set(key, JSON.parse(value)); return { etag: 'committed-etag' }; }),
       },
     };
   });
@@ -60,7 +91,7 @@ describe('cached earthquake list summary metadata', () => {
 
   it('upgrades refreshed sparse rows without dropping explicit nulls and zero values', async () => {
     const oldRow = { id: 'updated', magnitude: 6.2, event_time: now - 1000 };
-    env.GEOJSON_BUCKET.get.mockResolvedValue({ json: async () => [oldRow] });
+    env.GEOJSON_BUCKET.get.mockResolvedValue(listObject([oldRow]));
     const refreshed = feature('updated', 0, { alert: null, tsunami: 0, felt: null, sig: 0 });
 
     await handleGenerateLists({ env, newFeatures: [refreshed] });
@@ -80,9 +111,9 @@ describe('cached earthquake list summary metadata', () => {
       latitude: 35, longitude: -118, depth: 8,
       properties: feature(id).properties, summary_updated_at: originalTimestamp,
     }));
-    env.GEOJSON_BUCKET.get.mockResolvedValue({ json: async () => existing });
+    env.GEOJSON_BUCKET.get.mockResolvedValue(listObject(existing));
 
-    await handleGenerateLists({ env, newFeatures: [feature('refreshed')] });
+    await handleGenerateLists({ env, newFeatures: [feature('refreshed', 0, { updated: now + 1000 })] });
 
     for (const rows of written.values()) {
       expect(rows.find(row => row.id === 'untouched')).toEqual(existing[0]);
@@ -127,7 +158,7 @@ describe('cached earthquake list summary metadata', () => {
   it('does not replace day/week when the later month bootstrap fails', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     env.GEOJSON_BUCKET.get.mockImplementation(async key => key === 'list-month.json'
-      ? null : { json: async () => [{ id: 'existing', event_time: now - 1000 }] });
+      ? null : listObject([{ id: 'existing', event_time: now - 1000 }]));
     const all = vi.fn().mockRejectedValue(new Error('D1 unavailable'));
     env.DB = { prepare: vi.fn().mockReturnValue({ bind: () => ({ all }) }) };
 
@@ -173,7 +204,7 @@ describe('cached earthquake list summary metadata', () => {
 
   it('preserves existing lists on malformed R2 JSON instead of bootstrapping over it', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    env.GEOJSON_BUCKET.get.mockResolvedValue({ json: async () => { throw new SyntaxError('Invalid JSON'); } });
+    env.GEOJSON_BUCKET.get.mockResolvedValue({ etag: 'fixture-etag', json: async () => { throw new SyntaxError('Invalid JSON'); } });
     env.DB = { prepare: vi.fn() };
 
     await expect(handleGenerateLists({ env, newFeatures: [feature('fresh')] }))
@@ -186,10 +217,147 @@ describe('cached earthquake list summary metadata', () => {
     ['non-array', { events: [] }],
     ['invalid row', [{ id: 'bad', event_time: null }]],
   ])('does not publish over a %s snapshot', async (_label, snapshot) => {
-    env.GEOJSON_BUCKET.get.mockResolvedValue({ json: async () => snapshot });
+    env.GEOJSON_BUCKET.get.mockResolvedValue(listObject(snapshot));
 
     await expect(handleGenerateLists({ env, newFeatures: [feature('fresh')] }))
       .rejects.toThrow('Invalid cached earthquake list');
     expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+  });
+
+  it('keeps the newer scientific revision when an older writer loses a conditional publish', async () => {
+    const bucket = casBucket(Object.fromEntries(['day', 'week', 'month'].map(window => [`list-${window}.json`, []])));
+    env.GEOJSON_BUCKET = bucket;
+    const older = feature('same', 0.1, { updated: now - 5000, place: 'Older location' });
+    const newer = feature('same', 0.1, { updated: now - 1000, place: 'Corrected location' });
+    let releaseOld;
+    const waitOnOld = new Promise(resolve => { releaseOld = resolve; });
+    let oldReached;
+    const oldAtPut = new Promise(resolve => { oldReached = resolve; });
+    let held = false;
+    bucket.beforePut = async key => {
+      if (key === 'list-day.json' && !held) {
+        held = true;
+        oldReached();
+        await waitOnOld;
+      }
+    };
+
+    const oldTask = handleGenerateLists({ env, newFeatures: [older] });
+    await oldAtPut;
+    await handleGenerateLists({ env, newFeatures: [newer] });
+    releaseOld();
+    await oldTask;
+
+    for (const window of ['day', 'week', 'month']) {
+      const [row] = bucket.stored.get(`list-${window}.json`).rows;
+      expect(row).toMatchObject({ id: 'same', place: 'Corrected location',
+        properties: { updated: now - 1000 } });
+    }
+    expect(bucket.casLosses).toBeGreaterThan(0);
+    expect(bucket.get.mock.calls.length).toBeGreaterThan(6);
+  });
+
+  it('re-reads a concurrently created object after a missing-key bootstrap race', async () => {
+    const bucket = casBucket();
+    env.GEOJSON_BUCKET = bucket;
+    env.DB = { prepare: () => ({ bind: () => ({ all: async () => ({ success: true, results: [] }) }) }) };
+    const older = feature('same', 0.1, { updated: now - 5000, place: 'Older location' });
+    const newer = feature('same', 0.1, { updated: now - 1000, place: 'Corrected location' });
+    let releaseOld;
+    const waitOnOld = new Promise(resolve => { releaseOld = resolve; });
+    let oldReached;
+    const oldAtPut = new Promise(resolve => { oldReached = resolve; });
+    let held = false;
+    bucket.beforePut = async key => {
+      if (key === 'list-day.json' && !held) {
+        held = true;
+        oldReached();
+        await waitOnOld;
+      }
+    };
+    const oldTask = handleGenerateLists({ env, newFeatures: [older] });
+    await oldAtPut;
+    await handleGenerateLists({ env, newFeatures: [newer] });
+    releaseOld();
+    await oldTask;
+    for (const window of ['day', 'week', 'month']) {
+      expect(bucket.stored.get(`list-${window}.json`).rows[0].place).toBe('Corrected location');
+    }
+  });
+
+  it('uses the current window boundary on retry after a lost conditional write', async () => {
+    const expiresDuringRace = feature('expired', 1 - 1 / 86400, { updated: now - 5000 });
+    const bucket = casBucket(Object.fromEntries(['day', 'week', 'month'].map(window => [`list-${window}.json`, []])));
+    env.GEOJSON_BUCKET = bucket;
+    let releaseOld;
+    const waitOnOld = new Promise(resolve => { releaseOld = resolve; });
+    let oldReached;
+    const oldAtPut = new Promise(resolve => { oldReached = resolve; });
+    let held = false;
+    bucket.beforePut = async key => {
+      if (key === 'list-day.json' && !held) {
+        held = true;
+        oldReached();
+        await waitOnOld;
+      }
+    };
+    const oldTask = handleGenerateLists({ env, newFeatures: [expiresDuringRace] });
+    await oldAtPut;
+    vi.setSystemTime(now + 2000);
+    await handleGenerateLists({ env, newFeatures: [feature('fresh', 0, { updated: now + 2000 })] });
+    releaseOld();
+    await oldTask;
+    expect(bucket.stored.get('list-day.json').rows.map(row => row.id)).toEqual(['fresh']);
+  });
+
+  it('fails closed after three conditional publication losses', async () => {
+    const bucket = casBucket(Object.fromEntries(['day', 'week', 'month'].map(window => [`list-${window}.json`, []])));
+    bucket.put.mockImplementation(async () => null);
+    env.GEOJSON_BUCKET = bucket;
+
+    await expect(handleGenerateLists({ env, newFeatures: [feature('fresh')] }))
+      .rejects.toThrow('conditional publication lost 3 races');
+    expect(bucket.put).toHaveBeenCalledTimes(3);
+    expect(bucket.stored.get('list-day.json').rows).toEqual([]);
+  });
+
+  it('retains an equal source revision and refuses incoming features without a revision', async () => {
+    const saved = { id: 'same', magnitude: 5, place: 'Stored location', event_time: now - 1000,
+      latitude: 35, longitude: -118, depth: 8,
+      properties: feature('same', 0, { updated: now - 1000 }).properties,
+      summary_updated_at: now - 10_000 };
+    env.GEOJSON_BUCKET.get.mockResolvedValue(listObject([saved]));
+    await handleGenerateLists({ env, newFeatures: [feature('same', 0, { updated: now - 1000, place: 'Conflicting location' })] });
+    for (const rows of written.values()) expect(rows).toEqual([saved]);
+
+    env.GEOJSON_BUCKET.put.mockClear();
+    const missing = feature('same');
+    delete missing.properties.updated;
+    await expect(handleGenerateLists({ env, newFeatures: [missing] })).rejects.toThrow('trusted source revisions');
+    expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+  });
+
+  it('retains a newer D1 bootstrap revision and enriches an equal sparse revision', async () => {
+    const current = feature('same', 0.1, { updated: now + 1000, place: 'Current location' });
+    const sparse = {
+      id: current.id, magnitude: current.properties.mag, place: current.properties.place,
+      event_time: current.properties.time, latitude: current.geometry.coordinates[1],
+      longitude: current.geometry.coordinates[0], depth: current.geometry.coordinates[2],
+      source_updated_at_ms: now + 1000,
+    };
+    const all = vi.fn(async () => ({ success: true, results: [sparse] }));
+    env.DB = { prepare: () => ({ bind: () => ({ all }) }) };
+    env.GEOJSON_BUCKET.get.mockResolvedValue(null);
+    const older = feature('same', 0.1, { updated: now - 1000, place: 'Older location' });
+
+    await handleGenerateLists({ env, newFeatures: [older] });
+    for (const rows of written.values()) expect(rows).toEqual([sparse]);
+
+    written.clear();
+    await handleGenerateLists({ env, newFeatures: [current] });
+    for (const rows of written.values()) {
+      expect(rows[0]).toMatchObject({ place: 'Current location', properties: { updated: now + 1000 } });
+      expect(rows[0]).not.toHaveProperty('source_updated_at_ms');
+    }
   });
 });

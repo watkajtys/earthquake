@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleTrustedUsgsIngestion } from './ingest-usgs-feed.js';
+import { handleGenerateLists } from './generate-lists.js';
 import { usgsCollection, usgsFeature } from '../test-fixtures/usgs.js';
 
 const migrationFiles = readdirSync(resolve('migrations')).filter(name => name.endsWith('.sql')).sort();
@@ -57,17 +58,25 @@ function makeD1(database) {
 
 function makeR2() {
   const objects = new Map();
+  let sequence = 0;
   return {
     objects,
     put: vi.fn(async (key, value, options) => {
-      if (options?.onlyIf?.etagDoesNotMatch !== '*' || objects.has(key)) return null;
-      const bytes = new Uint8Array(value);
-      objects.set(key, bytes);
-      return { etag: String(objects.size) };
+      const current = objects.get(key);
+      if (options?.onlyIf?.etagDoesNotMatch === '*' && current) return null;
+      if (options?.onlyIf?.etagMatches !== undefined && current?.etag !== options.onlyIf.etagMatches) return null;
+      const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value);
+      const stored = { bytes, etag: `etag-${++sequence}` };
+      objects.set(key, stored);
+      return { etag: stored.etag };
     }),
     get: vi.fn(async key => {
-      const bytes = objects.get(key);
-      return bytes ? { size: bytes.byteLength, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) } : null;
+      const stored = objects.get(key);
+      if (!stored) return null;
+      const { bytes, etag } = stored;
+      return { etag, size: bytes.byteLength,
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        json: async () => JSON.parse(new TextDecoder().decode(bytes)) };
     }),
   };
 }
@@ -114,7 +123,7 @@ describe('durable trusted USGS ingestion through the actual handler', () => {
 
     const failed = await handleTrustedUsgsIngestion(context);
     expect(failed.status).toBe(503);
-    expect(state()).toMatchObject({ completed_run_id: null, kv_published_run_id: null });
+    expect(state()).toMatchObject({ completed_run_id: null });
     expect(runs()).toHaveLength(1);
     expect(runs()[0]).toMatchObject({ cursor: 90, status: 'retry', feature_count: 91 });
     expect(database.prepare('SELECT COUNT(*) AS count FROM EarthquakeEvents').get().count).toBe(90);
@@ -130,8 +139,10 @@ describe('durable trusted USGS ingestion through the actual handler', () => {
     expect(database.prepare('SELECT id FROM EarthquakeEvents WHERE id = ?').get('test-090')).toBeTruthy();
     expect(database.prepare('SELECT id FROM EarthquakeEvents WHERE id = ?').get('test-091')).toBeTruthy();
     expect(state().completed_run_id).toBe(runs().find(run => run.source_generated_at_ms === second.metadata.generated).run_id);
-    expect(state().kv_published_run_id).toBe(state().completed_run_id);
-    expect(JSON.parse(stored.get('usgs_last_response_features')).map(feature => feature.id)).toEqual(secondIds);
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+    expect((await r2.get(runs().find(run => run.source_generated_at_ms === second.metadata.generated).snapshot_key)).size)
+      .toBeGreaterThan(0);
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(r2.get).toHaveBeenCalledWith(runs()[0].snapshot_key);
   });
@@ -143,63 +154,121 @@ describe('durable trusted USGS ingestion through the actual handler', () => {
       .mockResolvedValueOnce(Response.json(first))
       .mockResolvedValueOnce(Response.json(second)));
     let releaseFirst;
-    const firstPut = new Promise(resolve => { releaseFirst = resolve; });
-    let firstPutStarted;
-    const firstPutReached = new Promise(resolve => { firstPutStarted = resolve; });
-    kv.put.mockImplementationOnce(async (key, value) => {
-      firstPutStarted();
-      await firstPut;
-      stored.set(key, value);
+    const firstRead = new Promise(resolve => { releaseFirst = resolve; });
+    let firstReadStarted;
+    const firstReadReached = new Promise(resolve => { firstReadStarted = resolve; });
+    const originalGet = r2.get.getMockImplementation();
+    r2.get.mockImplementationOnce(async key => {
+      firstReadStarted();
+      await firstRead;
+      return originalGet(key);
     });
 
     const older = handleTrustedUsgsIngestion(context);
-    await firstPutReached;
+    await firstReadReached;
     const newer = handleTrustedUsgsIngestion(context);
     await vi.advanceTimersByTimeAsync(200);
     expect(fetch).toHaveBeenCalledTimes(1);
     releaseFirst();
-    await vi.advanceTimersByTimeAsync(200);
+    await vi.advanceTimersByTimeAsync(2000);
     expect((await older).status).toBe(200);
     expect((await newer).status).toBe(200);
     expect(fetch).toHaveBeenCalledTimes(2);
     const latest = runs().find(run => run.source_generated_at_ms === second.metadata.generated);
-    expect(state()).toMatchObject({ completed_run_id: latest.run_id, kv_published_run_id: latest.run_id,
+    expect(state()).toMatchObject({ completed_run_id: latest.run_id,
       active_run_id: null, lease_owner: null });
-    expect(JSON.parse(stored.get('usgs_last_response_features')).map(feature => feature.id)).toEqual(['test-new']);
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
     expect(database.prepare('SELECT id FROM EarthquakeEvents ORDER BY id').all().map(row => row.id))
       .toEqual(['test-new', 'test-old']);
   });
 
-  it('characterizes a KV rollback when an old write finishes after lease expiry', async () => {
-    const first = feed(['delayed-old'], clock - 10_000);
-    const second = feed(['finished-new'], clock + 120_000);
+  it('resolves list input from D1/R2 after a legacy KV write arrives late', async () => {
+    const first = feed(['same'], clock - 10_000);
+    const second = feed(['same'], clock - 5_000);
+    first.features[0].properties.time = clock - 1000;
+    second.features[0].properties.time = clock - 1000;
+    first.features[0].properties.place = 'Older location';
+    second.features[0].properties.place = 'Current location';
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce(Response.json(first))
+      .mockResolvedValueOnce(Response.json(second))
       .mockResolvedValueOnce(Response.json(second)));
-    let releaseFirst;
-    const stalled = new Promise(resolve => { releaseFirst = resolve; });
-    let firstPutStarted;
-    const reached = new Promise(resolve => { firstPutStarted = resolve; });
-    kv.put.mockImplementationOnce(async (key, value) => {
-      firstPutStarted();
-      await stalled;
-      stored.set(key, value);
-    });
-
-    const oldInvocation = handleTrustedUsgsIngestion(context);
-    await reached;
-    vi.setSystemTime(clock + 121_000);
-    expect((await handleTrustedUsgsIngestion(context)).status).toBe(200);
+    for (const period of ['day', 'week', 'month']) {
+      await r2.put(`list-${period}.json`, '[]', { onlyIf: { etagDoesNotMatch: '*' } });
+    }
+    const firstResponse = await handleTrustedUsgsIngestion(context);
+    expect(firstResponse.status).toBe(200);
+    await handleGenerateLists({ env: context.env,
+      newFeatures: (await firstResponse.json()).newOrUpdatedFeatures });
+    const secondResponse = await handleTrustedUsgsIngestion(context);
+    expect(secondResponse.status).toBe(200);
+    await handleGenerateLists({ env: context.env,
+      newFeatures: (await secondResponse.json()).newOrUpdatedFeatures });
     const latest = runs().find(run => run.source_generated_at_ms === second.metadata.generated);
     expect(state().completed_run_id).toBe(latest.run_id);
-    expect(JSON.parse(stored.get('usgs_last_response_features'))[0].id).toBe('finished-new');
+    // Simulate an older binary finishing its mutable KV put after the new
+    // gated run. The gated handler must never consult this legacy value.
+    stored.set('usgs_last_response_features', JSON.stringify(first.features));
+    const repeat = await handleTrustedUsgsIngestion(context);
+    expect(repeat.status).toBe(200);
+    const repeatedInput = (await repeat.json()).newOrUpdatedFeatures;
+    expect(repeatedInput[0].properties.place).toBe('Current location');
+    await handleGenerateLists({ env: context.env, newFeatures: repeatedInput });
+    for (const period of ['day', 'week', 'month']) {
+      await expect((await r2.get(`list-${period}.json`)).json()).resolves.toMatchObject([
+        { place: 'Current location', properties: { updated: second.features[0].properties.updated } },
+      ]);
+    }
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
 
-    releaseFirst();
-    expect((await oldInvocation).status).toBe(503);
+  it('rechecks the D1 pointer when a newer completion arrives during classification', async () => {
+    const first = feed(['same'], clock - 10_000);
+    const second = feed(['same'], clock - 5_000);
+    first.features[0].properties.place = 'Older location';
+    second.features[0].properties.place = 'Current location';
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(Response.json(first))
+      .mockResolvedValueOnce(Response.json(second))
+      .mockResolvedValueOnce(Response.json(first)));
+    expect((await handleTrustedUsgsIngestion(context)).status).toBe(200);
+    expect((await handleTrustedUsgsIngestion(context)).status).toBe(200);
+    const earlier = runs().find(run => run.source_generated_at_ms === first.metadata.generated);
+    const latest = runs().find(run => run.source_generated_at_ms === second.metadata.generated);
+    // Start from the earlier completed pointer. The event row already carries
+    // the newer revision; move the pointer while classification reads it.
+    database.prepare(`UPDATE UsgsIngestionState SET completed_run_id = ?,
+      completed_source_generated_at_ms = ? WHERE feed_key = ?`)
+      .run(earlier.run_id, earlier.source_generated_at_ms, 'hour');
+    const originalPrepare = db.prepare.getMockImplementation();
+    let pointerMoved = false;
+    db.prepare.mockImplementation(sql => {
+      const prepared = originalPrepare(sql);
+      if (!sql.includes('SELECT id, source_updated_at_ms FROM EarthquakeEvents WHERE id IN')) return prepared;
+      return { bind(...values) {
+        const bound = prepared.bind(...values);
+        return { ...bound, async all() {
+          const result = await bound.all();
+          if (!pointerMoved) {
+            pointerMoved = true;
+            database.prepare(`UPDATE UsgsIngestionState SET completed_run_id = ?,
+              completed_source_generated_at_ms = ? WHERE feed_key = ?`)
+              .run(latest.run_id, latest.source_generated_at_ms, 'hour');
+          }
+          return result;
+        } };
+      } };
+    });
+
+    const response = await handleTrustedUsgsIngestion(context);
+    expect(response.status).toBe(200);
+    expect(pointerMoved).toBe(true);
+    expect((await response.json()).newOrUpdatedFeatures[0].properties.place).toBe('Current location');
     expect(state().completed_run_id).toBe(latest.run_id);
-    // This is the known release blocker: the old KV put has no CAS, even
-    // though D1 rejected the old acknowledgement and retained its progress.
-    expect(JSON.parse(stored.get('usgs_last_response_features'))[0].id).toBe('delayed-old');
+    expect(r2.get).toHaveBeenCalledWith(earlier.snapshot_key);
+    expect(r2.get).toHaveBeenCalledWith(latest.snapshot_key);
   });
 
   it('resumes a large immutable source over two invocations without publishing a partial checkpoint', async () => {
@@ -218,7 +287,7 @@ describe('durable trusted USGS ingestion through the actual handler', () => {
     expect(runs()).toHaveLength(1);
     expect(runs()[0]).toMatchObject({ cursor: 271, status: 'completed' });
     expect(database.prepare('SELECT COUNT(*) AS count FROM EarthquakeEvents').get().count).toBe(271);
-    expect(state().kv_published_run_id).toBe(state().completed_run_id);
+    expect(kv.put).not.toHaveBeenCalled();
     expect(r2.objects.size).toBe(1);
   });
 
@@ -236,11 +305,11 @@ describe('durable trusted USGS ingestion through the actual handler', () => {
     expect(recovered.status).toBe(200);
     expect((await recovered.json()).newOrUpdatedFeatures.map(feature => feature.id)).toEqual(ids);
     expect(runs()[0]).toMatchObject({ cursor: 270, status: 'completed' });
-    expect(state().kv_published_run_id).toBe(state().completed_run_id);
+    expect(kv.put).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('quarantines equal-revision conflicts and never publishes that run as a clean KV checkpoint', async () => {
+  it('quarantines equal-revision conflicts and never publishes that run as a clean list source', async () => {
     const source = feed(['conflict'], clock - 5_000);
     const original = source.features[0];
     database.prepare(`INSERT INTO EarthquakeEvents
@@ -256,7 +325,6 @@ describe('durable trusted USGS ingestion through the actual handler', () => {
     expect(runs()[0]).toMatchObject({ cursor: 1, status: 'completed_with_rejections' });
     expect(database.prepare('SELECT event_id, reason FROM UsgsIngestionIssues').all())
       .toEqual([{ event_id: 'conflict', reason: 'equal_revision_conflict' }]);
-    expect(state().kv_published_run_id).toBeNull();
     expect(kv.put).not.toHaveBeenCalled();
     expect((await handleTrustedUsgsIngestion(context)).status).toBe(503);
     expect(kv.put).not.toHaveBeenCalled();
