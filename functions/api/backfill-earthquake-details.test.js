@@ -113,6 +113,22 @@ describe('backfill and shared detail persistence against the migrated schema', (
     expect(row().detail_fetched).toBe(1);
   });
 
+  it('reports a failed durable job recovery to the scheduled caller even with no selected rows', async () => {
+    seed();
+    env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));
+    await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('R2 outage');
+    vi.setSystemTime(now + hour);
+    fetchValidatedDetail.mockRejectedValueOnce(new Error('USGS outage'));
+    const response = await get();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: false, processed: 0, errors: 0,
+      recovered_jobs: { selected: 1, completed: 0, failed: 1 },
+      error: '1 durable detail job recovery attempt(s) failed; retry scheduled.' });
+    expect(database.prepare('SELECT status, next_attempt_at_ms FROM EarthquakeDetailJobs WHERE event_id = ?')
+      .get('quake1')).toMatchObject({ status: 'pending', next_attempt_at_ms: now + 2 * hour });
+    expect(fetchValidatedDetail).toHaveBeenCalledExactlyOnceWith('quake1');
+  });
+
   it('supersedes a pending old job when recovery fetches a newer upstream revision', async () => {
     seed();
     env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));

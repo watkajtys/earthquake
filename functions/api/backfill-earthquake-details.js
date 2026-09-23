@@ -122,7 +122,9 @@ async function onRequestGet(context) {
     nextUrl.searchParams.set('min_magnitude', String(criteria.minMagnitude));
     nextUrl.searchParams.set('max_age_days', String(criteria.maxAgeDays));
     return jsonResponse({
-      success: errors.length === 0, processed: processed.length, errors: errors.length,
+      success: errors.length === 0 && recovery.failed === 0,
+      ...(recovery.failed ? { error: `${recovery.failed} durable detail job recovery attempt(s) failed; retry scheduled.` } : {}),
+      processed: processed.length, errors: errors.length,
       recovered_jobs: recovery,
       elapsed_seconds: (Date.now() - startTime) / 1000,
       last_processed_id: processed.at(-1)?.id || null,
