@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, memo, useState, useMemo } from 'react'; // Added useState and useMemo
 // PropTypes import removed
-import { MapContainer, TileLayer, Marker, CircleMarker, Popup, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, CircleMarker, Popup, GeoJSON, useMap } from 'react-leaflet';
 import { Link, useLocation } from 'react-router-dom';
 import { buildEarthquakePath, buildModalNavigationState, eventIdFromDetailUrl, parseEarthquakePath } from '../utils/entityRoutes.js';
 import 'leaflet/dist/leaflet.css';
@@ -77,6 +77,32 @@ const isRenderableNearbyQuake = quake => {
     Number.isFinite(coordinates[0]) && Number.isFinite(coordinates[1]) &&
     coordinates[1] >= -90 && coordinates[1] <= 90 &&
     Number.isFinite(quake?.properties?.mag) && Number.isFinite(quake?.properties?.time);
+};
+
+// MapContainer creates its Leaflet instance after the parent first renders.
+// A ref-only effect can run while that instance is still null and never fit
+// the cluster bounds. This child mounts with the map context available.
+const MapViewport = ({ center, highlight, quakes, fitBounds, defaultZoom }) => {
+  const map = useMap();
+  useEffect(() => {
+    const points = [];
+    if (fitBounds && highlight) points.push(highlight);
+    if (fitBounds) {
+      quakes.forEach(quake => {
+        const coordinates = quake?.geometry?.coordinates;
+        const latitude = Number.parseFloat(coordinates?.[1]);
+        const longitude = Number.parseFloat(coordinates?.[0]);
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) points.push([latitude, longitude]);
+      });
+    }
+    if (fitBounds && points.length > 1) {
+      map.fitBounds(L.latLngBounds(points.map(([latitude, longitude]) => L.latLng(latitude, longitude))), { padding: [50, 50] });
+    } else {
+      const target = fitBounds && points.length === 1 ? points[0] : center;
+      map.setView(L.latLng(target[0], target[1]), defaultZoom);
+    }
+  }, [map, center, highlight, quakes, fitBounds, defaultZoom]);
+  return null;
 };
 
 /**
@@ -210,49 +236,6 @@ const EarthquakeMap = ({
   };
 
   useEffect(() => {
-    const mapInstance = mapRef.current;
-    if (!mapInstance) {
-      return;
-    }
-
-    if (fitMapToBounds) {
-      const allPoints = [];
-      if (highlightedQuakePosition) {
-        allPoints.push(highlightedQuakePosition);
-      }
-      nearbyQuakes.forEach(quake => {
-        if (quake.geometry && quake.geometry.coordinates) {
-          const lat = parseFloat(quake.geometry.coordinates[1]);
-          const lon = parseFloat(quake.geometry.coordinates[0]);
-          if (!isNaN(lat) && !isNaN(lon)) {
-            allPoints.push([lat, lon]);
-          }
-        }
-      });
-
-      if (allPoints.length > 1) {
-        const bounds = L.latLngBounds(allPoints.map(point => L.latLng(point[0], point[1])));
-        mapInstance.fitBounds(bounds, { padding: [50, 50] });
-      } else if (allPoints.length === 1) {
-        mapInstance.setView(L.latLng(allPoints[0][0], allPoints[0][1]), defaultZoom);
-      } else {
-        mapInstance.setView(L.latLng(initialMapCenter[0], initialMapCenter[1]), defaultZoom);
-      }
-    } else {
-      mapInstance.setView(L.latLng(initialMapCenter[0], initialMapCenter[1]), defaultZoom);
-    }
-  }, [
-    mapCenterLatitude, mapCenterLongitude,
-    highlightQuakeLatitude, highlightQuakeLongitude,
-    nearbyQuakes,
-    fitMapToBounds,
-    defaultZoom,
-    mapRef,
-    initialMapCenter,
-    highlightedQuakePosition
-  ]);
-
-  useEffect(() => {
     let isMounted = true;
     const loadTectonicPlates = async () => {
       setIsTectonicPlatesLoading(true);
@@ -360,6 +343,8 @@ const EarthquakeMap = ({
       style={mapStyle}
       ref={mapRef}
     >
+      <MapViewport center={initialMapCenter} highlight={highlightedQuakePosition}
+        quakes={nearbyQuakes} fitBounds={fitMapToBounds} defaultZoom={defaultZoom} />
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'

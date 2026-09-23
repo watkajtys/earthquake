@@ -16,18 +16,21 @@ vi.mock('../assets/TectonicPlateBoundaries.json', () => ({
 let mockFitBounds = vi.fn();
 let mockSetView = vi.fn();
 let mockInvalidateSize = vi.fn();
+let mockRefUnavailable = false;
+const mockMap = {
+  fitBounds: (...args) => mockFitBounds(...args),
+  setView: (...args) => mockSetView(...args),
+  invalidateSize: (...args) => mockInvalidateSize(...args),
+  latLngToContainerPoint: ([latitude, longitude]) => L.point(longitude * 100, latitude * 100),
+};
 
 vi.mock('react-leaflet', async () => {
   const actual = await vi.importActual('react-leaflet');
   return {
     ...actual,
+    useMap: () => mockMap,
     MapContainer: React.forwardRef(({ children, center, zoom, style }, ref) => {
-      React.useImperativeHandle(ref, () => ({
-            fitBounds: mockFitBounds,
-            setView: mockSetView,
-            invalidateSize: mockInvalidateSize,
-            latLngToContainerPoint: ([latitude, longitude]) => L.point(longitude * 100, latitude * 100),
-      }), []);
+      React.useImperativeHandle(ref, () => mockRefUnavailable ? null : mockMap, []);
       return <div data-testid="map-container" data-center={center ? JSON.stringify(center) : undefined} data-zoom={zoom} style={style}>{children}</div>;
     }),
     TileLayer: ({ url, attribution }) => <div data-testid="tile-layer" data-url={url} data-attribution={attribution}></div>,
@@ -70,6 +73,7 @@ const nearbyQuakesData = [
 
 describe('EarthquakeMap Component - Core Rendering', () => {
   beforeEach(() => {
+    mockRefUnavailable = false;
     mockFitBounds.mockClear();
     mockSetView.mockClear();
     mockInvalidateSize.mockClear();
@@ -176,6 +180,15 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     const fitted = mockFitBounds.mock.calls[0][0];
     expect(fitted.contains(L.latLng(40, -110))).toBe(true);
     expect(fitted.contains(L.latLng(34, -118))).toBe(true);
+  });
+
+  it('fits cluster bounds after map creation even when the parent ref was unavailable', async () => {
+    mockRefUnavailable = true;
+    render(<MemoryRouter><EarthquakeMap {...baseProps}
+      nearbyQuakes={nearbyQuakesData} fitMapToBounds={true} individualNearbyQuakes={true}
+    /></MemoryRouter>);
+    await waitFor(() => expect(mockFitBounds).toHaveBeenCalledTimes(1));
+    expect(mockSetView).not.toHaveBeenCalled();
   });
 
   it('keeps every individual cluster point even for dense locations', async () => {
