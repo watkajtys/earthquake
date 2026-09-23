@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { getPlatformProxy, unstable_readConfig } from 'wrangler';
 import { PREVIOUS_RELEASE_ASSETS } from '../src/previousReleaseAssets.js';
+import { MAX_ASSETS } from './stage-previous-assets.mjs';
 
 const [environment, directory] = process.argv.slice(2);
 assert(process.argv.length === 4 && ['preview', 'production'].includes(environment) && directory,
@@ -29,7 +30,7 @@ for (const [url, descriptor] of Object.entries(PREVIOUS_RELEASE_ASSETS)) {
   assert.equal(createHash('sha256').update(bytes).digest('hex'), descriptor.sha256, `${url}: source checksum differs`);
   files.push({ url, descriptor, bytes });
 }
-assert(files.length > 0 && files.length <= 100);
+assert(files.length > 0 && files.length <= MAX_ASSETS);
 const temporary = await mkdtemp(join(tmpdir(), 'earthquake-asset-archive-'));
 let platform;
 try {

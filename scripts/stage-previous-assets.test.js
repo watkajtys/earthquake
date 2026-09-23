@@ -21,6 +21,11 @@ async function setup() {
     retainedAssets: { '/assets/old-12345678.js': descriptor } };
 }
 
+async function addPredecessorFiles(directory, count) {
+  await Promise.all(Array.from({ length: count }, (_, index) =>
+    writeFile(join(directory, `extra-${String(index).padStart(8, '0')}.js`), `export default ${index};`)));
+}
+
 describe('bounded retained asset union staging', () => {
   it('preserves all old descriptors and copies verified new files into a standalone union', async () => {
     const options = await setup();
@@ -36,6 +41,17 @@ describe('bounded retained asset union staging', () => {
     const options = await setup();
     await writeFile(join(options.predecessorDirectory, 'old-12345678.js'), 'export default "old";');
     expect(await stagePreviousAssets(options)).toMatchObject({ predecessorCount: 2, unionCount: 2 });
+  });
+
+  it('accepts the reviewed 105-path graph and still rejects a graph beyond 128 paths', async () => {
+    const accepted = await setup();
+    await addPredecessorFiles(accepted.predecessorDirectory, 103);
+    expect(await stagePreviousAssets(accepted)).toMatchObject({ unionCount: 105, newPaths: 104 });
+
+    const rejected = await setup();
+    await addPredecessorFiles(rejected.predecessorDirectory, 127);
+    await expect(stagePreviousAssets(rejected)).rejects.toThrow('Asset graph exceeds reviewed file budget');
+    await expect(access(rejected.outputDirectory)).rejects.toThrow();
   });
 
   it.each(['different-content', 'retained-digest', 'symlink', 'invalid-name'])('rejects %s before staging any output', async kind => {
