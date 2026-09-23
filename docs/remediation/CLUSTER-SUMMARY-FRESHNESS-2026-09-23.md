@@ -11,12 +11,12 @@ Small scheduling differences therefore let the next generation slip to about
 minutes. This also failed the production release smoke at 09:00 UTC before
 sequence 301 refreshed.
 
-This candidate starts at plotting code commit
-`9864b597d01c38d6e9800c8419e03f8488797fdc`, which was pending production
-promotion when this branch was prepared. The summary fix was cherry-picked
-from `025e54760cf7e9da60350be196afdfd834a34359` without conflicts. This
-branch has no database migration, remote R2 writes, preview deployment, or
-production deployment.
+This release starts at plotting code commit
+`9864b597d01c38d6e9800c8419e03f8488797fdc`. The summary fix was
+cherry-picked from `025e54760cf7e9da60350be196afdfd834a34359` without
+conflicts. Code `5f51d0bad7913639573747ac131b417e6fead501` was deployed
+after isolated preview and create-only predecessor archival. There was no
+database migration.
 
 ## Local change
 
@@ -73,5 +73,6 @@ manifest is embedded in `src/previousReleaseAssets.js`. The reviewed file
 limit was raised from 200 to 240. Before any summary promotion, archive the
 21 new files to production R2 with create-only writes and byte-verify all 211
 retained paths. The current summary build adds 20 further unique paths, making
-231 paths to check during deployment smoke. No archive or deployment is part
-of this local candidate.
+231 paths checked during deployment smoke. The production archive verified
+all 211 retained paths and the guarded production gate passed. The exact
+build, Worker version, and verification limits are in `RELEASE-LEDGER.md`.
