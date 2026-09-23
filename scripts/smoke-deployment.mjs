@@ -10,7 +10,7 @@ import { MAX_ASSETS } from './stage-previous-assets.mjs';
 const CANONICAL_ORIGIN = 'https://earthquakeslive.com';
 const CRAWLER_USER_AGENT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 // The retained graph and this release's assets are both requested. Keep a
-// bounded margin for the current build's 26 files beyond the 200-path archive.
+// bounded margin for the current build's 26 files beyond the reviewed archive.
 const MAX_SMOKE_ASSETS = MAX_ASSETS + 32;
 const decodeXml = value => value.replace(/&(amp|quot|apos|lt|gt);/g, (_, entity) => ({ amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' })[entity]);
 
