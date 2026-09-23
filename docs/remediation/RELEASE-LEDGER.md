@@ -379,10 +379,18 @@ application revision is `c1c81c4bef36732b3e8bbce534979208ee635add`.
   while the isolated production backup held 202 / 1,679 / 10,757 D1 rows in
   matching windows. At 22:45:42 UTC, live read-only D1 counts were 195 /
   1,673 / 10,740, versus legacy arrays 175 / 1,354 / 5,907 and complete feeds
-  252 / 2,138 / 10,686. Counts cannot prove ID-level completeness or deletions.
-  First compare IDs and source revisions in one bounded complete snapshot against
-  D1 and the legacy lists; then design a validated, backed-up rebuild under a
-  separate release. No list replacement was part of this activation.
+  252 / 2,138 / 10,686. Counts alone cannot prove ID-level completeness or
+  deletions. A subsequent fixed-window, read-only comparison at 22:53–22:54
+  UTC found **20 / 309 / 4,507** day/week/month IDs present in both a complete
+  feed and D1 but absent from the legacy array. All legacy IDs were present in
+  D1 within those windows. The feeds also contained **62 / 548 / 761** IDs
+  absent from D1 and the legacy arrays, so a replacement source and deletion
+  policy need explicit design. The private
+  [ID audit](/Users/theair/Projects/earthquake/.reconciliation.local/production-0022-20260923/legacy-list-id-audit-20260923T2254Z.json)
+  is mode 0600, SHA-256
+  `85124c78257979b08a90a407ca00fabe5df8cc9616ac7c16edf2df5eafcba84c`.
+  Prepare a validated, backed-up list rebuild under a separate release; no
+  list replacement was part of this activation.
 
 Recovery: the paused predecessor is a code recovery candidate only after a
 fresh compatibility review. It contains an older writer contract; rolling back
