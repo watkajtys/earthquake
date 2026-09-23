@@ -20,7 +20,7 @@ import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap compone
  *   - `properties.place` (string) or `properties.title` (string): Location description.
  * @returns {JSX.Element|null} The `EarthquakeMap` configured for the cluster, or a placeholder message if data is invalid/insufficient.
  */
-const ClusterMiniMap = ({ cluster }) => {
+const ClusterMiniMap = ({ cluster, onPlotSelection }) => {
   // Section: Initial data validation
   // Check for the presence of cluster data and the originalQuakes array.
   if (!cluster) {
@@ -37,20 +37,19 @@ const ClusterMiniMap = ({ cluster }) => {
   // Filter originalQuakes to find quakes that are valid for being considered the "latest" highlighted quake.
   // Criteria for a valid quake for highlighting:
   // - Must have a `properties` object.
-  // - `properties.time` must be a number.
+  // - `properties.time` must be a finite number.
   // - Must have a `geometry` object with `geometry.coordinates` as an array of at least two numbers.
-  // - `properties.mag` must be a number.
-  // - `properties.place` or `properties.title` must be a string.
+  // - `properties.mag` must be finite. A missing place has a safe fallback.
   const validQuakesForLatest = originalQuakes.filter(q =>
     q.properties &&
-    typeof q.properties.time === 'number' &&
+    Number.isFinite(q.properties.time) &&
     q.geometry &&
     Array.isArray(q.geometry.coordinates) &&
     q.geometry.coordinates.length >= 2 &&
-    typeof q.geometry.coordinates[0] === 'number' && // lng
-    typeof q.geometry.coordinates[1] === 'number' && // lat
-    typeof q.properties.mag === 'number' &&
-    (typeof q.properties.place === 'string' || typeof q.properties.title === 'string')
+    Number.isFinite(q.geometry.coordinates[0]) && // lng
+    Number.isFinite(q.geometry.coordinates[1]) && // lat
+    q.geometry.coordinates[1] >= -90 && q.geometry.coordinates[1] <= 90 &&
+    Number.isFinite(q.properties.mag)
   );
 
   let latestQuake = null;
@@ -103,11 +102,6 @@ const ClusterMiniMap = ({ cluster }) => {
     return <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155' }} className="text-slate-400">Cannot determine map center for cluster.</div>;
   }
 
-  // Section: Determine Other Quakes for Display
-  // Create an array of quakes to be displayed as "nearby" markers, excluding the main highlighted (latest) quake.
-  // This prevents rendering the same quake twice if EarthquakeMap doesn't de-duplicate.
-  const otherQuakes = originalQuakes.filter(quake => quake.id !== latestQuake.id);
-
   // Section: Prepare Props for EarthquakeMap
   const mapProps = {
     mapCenterLatitude: avgLat,                                  // Center the map on the geographic average of the cluster.
@@ -115,9 +109,11 @@ const ClusterMiniMap = ({ cluster }) => {
     highlightQuakeLatitude: latestQuake.geometry.coordinates[1],  // Latitude of the latest quake to highlight.
     highlightQuakeLongitude: latestQuake.geometry.coordinates[0], // Longitude of the latest quake to highlight.
     highlightQuakeMagnitude: latestQuake.properties.mag,        // Magnitude of the latest quake.
+    highlightQuakeId: latestQuake.id,
     highlightQuakeTitle: latestQuake.properties.place || latestQuake.properties.title || 'Latest Event', // Title for the highlighted quake.
-    nearbyQuakes: otherQuakes,                                  // Other quakes in the cluster.
-    aggregateNearbyQuakes: true,                               // Cap visual markers; retain all events for bounds and faults.
+    nearbyQuakes: originalQuakes,                               // Include the highlighted event in overlap selection.
+    individualNearbyQuakes: true,                              // Plot every member using Leaflet's canvas renderer.
+    onPlotSelection,
     fitMapToBounds: true,                                     // Instruct EarthquakeMap to fit bounds to show all points.
     shakeMapUrl: null,                                          // Clusters don't have a single ShakeMap URL.
     mainQuakeDetailUrl: null,                                   // No single detail URL for the entire cluster view.

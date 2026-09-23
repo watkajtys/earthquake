@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { vi } from 'vitest'; // Import vi for Vitest mocks
 import '@testing-library/jest-dom';
 import EarthquakeSequenceChart from './EarthquakeSequenceChart';
@@ -104,16 +104,60 @@ const mockEmptyClusterData = {
     originalQuakes: []
 };
 
-test('large sequences render a bounded set of event points and disclose sampling', () => {
+test('large sequences plot every individual event point', () => {
     const quakes = Array.from({ length: 1217 }, (_, index) =>
         mockQuake(`large-${index}`, mainshockTime + index * 60_000, index === 500 ? 7.2 : 2 + index % 3));
     const { container } = render(<EarthquakeSequenceChart cluster={{ originalQuakes: quakes }} />);
     const circles = container.querySelectorAll('svg circle');
-    expect(circles.length).toBeLessThanOrEqual(303);
-    expect(circles.length).toBeGreaterThan(0);
-    expect(screen.getByText(/of 1217 event points and a simplified line at this chart width/)).toBeInTheDocument();
+    expect(circles.length).toBe(1217);
+    expect(circles[0].querySelector('title')).toHaveTextContent('Mag');
+    expect(circles[1216].querySelector('title')).toHaveTextContent('Mag');
     expect(container.querySelector('svg circle[stroke]')).toBeInTheDocument();
     expect(quakes).toHaveLength(1217);
+});
+
+test('selecting one of 1,217 coincident points returns every plotted event in input order', () => {
+    const quakes = Array.from({ length: 1217 }, (_, index) =>
+        mockQuake(`coincident-${index}`, mainshockTime, 3.2));
+    const onPlotSelection = vi.fn();
+    const { container } = render(<EarthquakeSequenceChart
+        cluster={{ originalQuakes: quakes }} onPlotSelection={onPlotSelection} />);
+    const circles = Array.from(container.querySelectorAll('svg circle'));
+
+    expect(circles).toHaveLength(quakes.length);
+    expect(container.querySelectorAll('svg [tabindex="0"]')).toHaveLength(0);
+    expect(container.querySelector('svg')).toHaveAttribute('tabindex', '0');
+    expect(circles.every(circle => circle.getAttribute('aria-hidden') === 'true' && !circle.hasAttribute('role') && !circle.hasAttribute('tabindex'))).toBe(true);
+    expect(new Set(circles.map(circle => `${circle.getAttribute('cx')},${circle.getAttribute('cy')}`)).size).toBe(1);
+    fireEvent.click(circles[0]);
+    expect(onPlotSelection).toHaveBeenCalledExactlyOnceWith(quakes.map(quake => quake.id));
+});
+
+test('selection includes nearby overlapping circles and excludes separate points', () => {
+    const quakes = [
+        mockQuake('first', mainshockTime, 3),
+        mockQuake('nearby', mainshockTime + 60_000, 3),
+        mockQuake('separate', mainshockTime + 3 * 60 * 60_000, 3),
+    ];
+    const onPlotSelection = vi.fn();
+    const { container } = render(<EarthquakeSequenceChart
+        cluster={{ originalQuakes: quakes }} onPlotSelection={onPlotSelection} />);
+    const circles = container.querySelectorAll('svg circle');
+
+    fireEvent.click(circles[0]);
+    expect(onPlotSelection).toHaveBeenLastCalledWith(['first', 'nearby']);
+    const plot = container.querySelector('svg');
+    const status = container.querySelector('[role="status"]');
+    expect(plot).toHaveAttribute('aria-describedby', status.id);
+    expect(status).toHaveTextContent('Point 1 of 3: magnitude 3.0');
+    fireEvent.keyDown(plot, { key: 'ArrowRight' });
+    fireEvent.keyDown(plot, { key: 'ArrowRight' });
+    expect(status).toHaveTextContent('Point 3 of 3: magnitude 3.0');
+    fireEvent.keyDown(plot, { key: 'Enter' });
+    expect(onPlotSelection).toHaveBeenLastCalledWith(['separate']);
+    fireEvent.keyDown(plot, { key: ' ' });
+    expect(onPlotSelection).toHaveBeenLastCalledWith(['separate']);
+    expect(onPlotSelection).toHaveBeenCalledTimes(3);
 });
 
 // This mock is for the test: 'renders "No data available" message when cluster.properties is missing'

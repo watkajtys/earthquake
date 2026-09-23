@@ -70,10 +70,11 @@ describe('ClusterMiniMap - Core Logic', () => {
     expect(passedProps.highlightQuakeTitle).toBe(expectedLatestQuake.properties.place);
     expect(passedProps.mapCenterLatitude).toBeCloseTo(avgLat);
     expect(passedProps.mapCenterLongitude).toBeCloseTo(avgLng);
-    expect(passedProps.nearbyQuakes).toHaveLength(originalQuakes.length - 1);
-    expect(passedProps.nearbyQuakes.find(q => q.id === expectedLatestQuake.id)).toBeUndefined();
+    expect(passedProps.nearbyQuakes).toHaveLength(originalQuakes.length);
+    expect(passedProps.nearbyQuakes.find(q => q.id === expectedLatestQuake.id)).toBe(expectedLatestQuake);
+    expect(passedProps.highlightQuakeId).toBe(expectedLatestQuake.id);
     expect(passedProps.fitMapToBounds).toBe(true);
-    expect(passedProps.aggregateNearbyQuakes).toBe(true);
+    expect(passedProps.individualNearbyQuakes).toBe(true);
   });
 
   it('should correctly identify the latest quake with different times', () => {
@@ -98,7 +99,7 @@ describe('ClusterMiniMap - Core Logic', () => {
     const passedProps = EarthquakeMap.mock.calls[0][0];
     expect(passedProps.highlightQuakeLatitude).toBe(single.geometry.coordinates[1]);
     expect(passedProps.mapCenterLatitude).toBe(single.geometry.coordinates[1]);
-    expect(passedProps.nearbyQuakes).toHaveLength(0);
+    expect(passedProps.nearbyQuakes).toEqual([single]);
   });
 
   it('calculates geographic center correctly with mixed valid/invalid coordinates', () => {
@@ -165,15 +166,16 @@ describe('ClusterMiniMap - Malformed Data Handling', () => {
     expect(EarthquakeMap).not.toHaveBeenCalled();
   });
 
-  it('renders "Cannot determine highlight quake" if all quakes miss place/title (thus no valid latest)', () => {
+  it('plots events with missing place/title using the latest-event fallback', () => {
     const quakesMissingPlace = mockClusterBase.originalQuakes.map(q => ({
       ...q,
       properties: { ...q.properties, place: undefined, title: undefined }
     }));
     const cluster = { ...mockClusterBase, originalQuakes: quakesMissingPlace };
     render(<ClusterMiniMap cluster={cluster} />);
-    expect(screen.getByText(/Cannot determine highlight quake for cluster/i)).toBeInTheDocument();
-    expect(EarthquakeMap).not.toHaveBeenCalled();
+    expect(EarthquakeMap).toHaveBeenCalledTimes(1);
+    expect(EarthquakeMap.mock.calls[0][0].highlightQuakeTitle).toBe('Latest Event');
+    expect(EarthquakeMap.mock.calls[0][0].nearbyQuakes).toHaveLength(3);
   });
 
   it('renders "Cannot determine map center" if all quakes miss valid coordinates for center calc, but a valid latest could theoretically exist otherwise', () => {
@@ -214,7 +216,7 @@ describe('ClusterMiniMap - Malformed Data Handling', () => {
   it('renders "Cannot determine highlight quake" if all quakes are invalid for highlighting (e.g. combo of missing fields)', () => {
      const cluster = { ...mockClusterBase, originalQuakes: [
        { id: 'q1', properties: { mag: undefined, place: 'No Mag', time: now - 1000}, geometry: { coordinates: [1,1]}},
-       { id: 'q2', properties: { mag: 4.0, place: undefined, time: now - 2000}, geometry: { coordinates: [2,2]}},
+       { id: 'q2', properties: { mag: 4.0, place: undefined, time: undefined}, geometry: { coordinates: [2,2]}},
        { id: 'q3', properties: { mag: 3.0, place: 'No Time', time: undefined}, geometry: { coordinates: [3,3]}},
      ]};
     render(<ClusterMiniMap cluster={cluster} />);

@@ -7,9 +7,9 @@ import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PREVIOUS_RELEASE_ASSETS } from '../src/previousReleaseAssets.js';
 
-// Covers the verified 146-path union plus the 24-file predecessor, with a
+// Covers the verified 167-path union plus the 26-file predecessor, with a
 // small margin for shared hashed files and an explicit future review gate.
-export const MAX_ASSETS = 176;
+export const MAX_ASSETS = 200;
 const MAX_ASSET_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
 const ASSET_NAME = /^[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.(?:js|css)$/;

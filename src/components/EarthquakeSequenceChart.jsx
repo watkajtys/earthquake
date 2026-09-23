@@ -7,7 +7,6 @@ import { timeHour } from 'd3-time'; // Import timeHour
 import { line as d3Line } from 'd3-shape'; // Import d3Line
 import { getMagnitudeColor, formatDate, isValidNumber, isValuePresent, formatNumber } from '../utils/utils'; // Corrected path
 import EarthquakeSequenceChartSkeleton from './skeletons/EarthquakeSequenceChartSkeleton'; // Import skeleton
-import { sampleQuakesForChart } from '../utils/clusterVisualSampling.js';
 
 const axisLabelColor = "text-slate-400"; // From EarthquakeTimelineSVGChart
 const tickLabelColor = "text-slate-500"; // From EarthquakeTimelineSVGChart
@@ -16,9 +15,13 @@ const mainshockStrokeWidth = 2;
 // const mainshockRadius = 8; // Unused
 // const eventRadius = 5; // Unused
 
-const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
+const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false, onPlotSelection }) => {
   const svgRef = useRef(null);
+  const activePointStatusId = React.useId();
   const [chartRenderWidth, setChartRenderWidth] = useState(800); // Default width
+  const [focusPointIndex, setFocusPointIndex] = useState(0);
+
+  useEffect(() => setFocusPointIndex(0), [cluster?.id]);
 
   useEffect(() => {
     if (svgRef.current && svgRef.current.parentElement) {
@@ -116,6 +119,47 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
       .clamp(true),
   [magDomain]);
 
+  // Keep the same geometry for rendering and hit selection. Events at one
+  // position must remain individually represented, even when circles overlap.
+  const plottedPoints = useMemo(() => originalQuakes.map(quake => {
+    const { time, mag } = quake.properties;
+    const cx = xScale(new Date(time));
+    const cy = yScale(mag);
+    const isMain = processedMainshock?.id === quake.id;
+    const baseRadius = radiusScale(mag);
+    const radius = isMain ? baseRadius + 2 : baseRadius;
+
+    if (cx < -radius || cx > width + radius || cy < -radius || cy > height + radius) {
+      return null;
+    }
+    return { quake, cx, cy, radius, isMain };
+  }).filter(Boolean), [originalQuakes, processedMainshock, xScale, yScale, radiusScale, width, height]);
+  const activePointIndex = Math.min(focusPointIndex, Math.max(0, plottedPoints.length - 1));
+  const activePoint = plottedPoints[activePointIndex];
+
+  const selectPoint = (selectedPoint) => {
+    if (!onPlotSelection) return;
+    const selectedIds = plottedPoints.filter(point => {
+      const dx = point.cx - selectedPoint.cx;
+      const dy = point.cy - selectedPoint.cy;
+      const combinedRadius = point.radius + selectedPoint.radius;
+      return dx * dx + dy * dy <= combinedRadius * combinedRadius;
+    }).map(point => point.quake.id);
+    onPlotSelection(selectedIds);
+  };
+
+  const handlePlotKeyDown = event => {
+    if (!onPlotSelection || !plottedPoints.length) return;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const direction = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
+      setFocusPointIndex((activePointIndex + direction + plottedPoints.length) % plottedPoints.length);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      selectPoint(activePoint);
+    }
+  };
+
   const timeAxisTicks = useMemo(() => {
     if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
     const tempScale = scaleTime().domain(timeDomain).range([0, width]);
@@ -202,16 +246,13 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
       })).filter(tick => tick.offset >= -1 && tick.offset <= height + 1);
   }, [yScale, height, magDomain]);
 
-  const plottedQuakes = useMemo(() => sampleQuakesForChart(originalQuakes, width, processedMainshock),
-    [originalQuakes, width, processedMainshock]);
-
   const { linePath } = useMemo(() => {
-    if (plottedQuakes.length === 0) {
+    if (originalQuakes.length === 0) {
         return { linePath: null };
     }
 
     // Filter quakes for the line (magnitude >= 1.5 and valid properties)
-    const quakesForLine = plottedQuakes.filter(q =>
+    const quakesForLine = originalQuakes.filter(q =>
         q.properties &&
         typeof q.properties.mag === 'number' &&
         q.properties.mag >= 1.5
@@ -232,7 +273,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
         .y(d => yScale(d.properties.mag)); // No .defined() here anymore
 
     return { linePath: lineGenerator(sortedForLine) };
-  }, [plottedQuakes, xScale, yScale]);
+  }, [originalQuakes, xScale, yScale]);
 
   // Conditional returns now happen *after* all useMemo hooks have been called
   if (isLoading) {
@@ -251,7 +292,18 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
   return (
     <div className="bg-slate-700 p-4 rounded-lg border border-slate-600 shadow-md">
       {/* Chart Title H3 element removed */}
-      <svg ref={svgRef} width="100%" height={chartHeight} viewBox={`0 0 ${chartRenderWidth} ${chartHeight}`}>
+      {onPlotSelection && activePoint && (
+        <span id={activePointStatusId} className="sr-only" role="status" aria-live="polite">
+          Point {activePointIndex + 1} of {plottedPoints.length}: magnitude {formatNumber(activePoint.quake.properties.mag, 1)}, {activePoint.quake.properties.place || 'unknown location'}, {formatDate(activePoint.quake.properties.time)}.
+        </span>
+      )}
+      <svg ref={svgRef} width="100%" height={chartHeight} viewBox={`0 0 ${chartRenderWidth} ${chartHeight}`}
+        role={onPlotSelection && activePoint ? 'button' : undefined} tabIndex={onPlotSelection && activePoint ? 0 : undefined}
+        aria-label={onPlotSelection && activePoint
+          ? 'Earthquake sequence chart. Use arrow keys to choose a point and Enter to inspect overlapping earthquakes.'
+          : undefined}
+        aria-describedby={onPlotSelection && activePoint ? activePointStatusId : undefined}
+        onKeyDown={onPlotSelection ? handlePlotKeyDown : undefined}>
         <g transform={`translate(${margin.left},${margin.top})`}>
           {/* Y-Axis Gridlines */}
           {yAxisTicks.map(({ value, offset }) => (
@@ -349,24 +401,12 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
           )}
 
           {/* Data Points */}
-          {plottedQuakes.map(quake => {
-            // Properties already validated in the initial processing memo
+          {plottedPoints.map(point => {
+            const { quake, cx, cy, radius: circleRadius, isMain } = point;
             const { id, properties } = quake;
             const { time, mag, place } = properties;
-
-            const cx = xScale(new Date(time));
-            const cy = yScale(mag);
             const color = getMagnitudeColor(mag);
-            const isMain = processedMainshock && processedMainshock.id === id;
-
-            // Basic check if points are outside the main plot area before rendering
-            const baseRadius = radiusScale(mag);
-            const circleRadius = isMain ? baseRadius + 2 : baseRadius; // Mainshock slightly larger
-
-            // Add a small buffer for radius for visibility at edges
-            if (cx < -circleRadius || cx > width + circleRadius || cy < -circleRadius || cy > height + circleRadius) {
-              return null;
-            }
+            const isFocused = onPlotSelection && point === activePoint;
 
             return (
               <g key={id}>
@@ -375,11 +415,14 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
                   cy={cy}
                   r={circleRadius}
                   fill={isMain ? 'none' : color}
-                  stroke={isMain ? color : 'none'} // REVERTED: uses 'color' from getMagnitudeColor(mag)
-                  strokeWidth={isMain ? mainshockStrokeWidth : 0}
+                  stroke={isFocused ? '#ffffff' : isMain ? color : 'none'}
+                  strokeWidth={isFocused ? 2 : isMain ? mainshockStrokeWidth : 0}
                   fillOpacity={isMain ? 1.0 : 0.7}
                   strokeOpacity={isMain ? 1.0 : 0.7}
                   className="transition-opacity duration-200 hover:opacity-100" // REVERTED: removed conditional text-slate-300
+                  aria-hidden={onPlotSelection ? true : undefined}
+                  // Keyboard users select the same point through the single chart control.
+                  onClick={onPlotSelection ? () => selectPoint(point) : undefined}
                 >
                   <title>{`Mag ${formatNumber(mag,1)} ${place || 'Unknown location'} - ${formatDate(time)}`}</title>
                 </circle>
@@ -398,11 +441,6 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
           })}
         </g>
       </svg>
-      {plottedQuakes.length < originalQuakes.length && (
-        <p className="mt-1 text-xs text-slate-300">
-          Showing {plottedQuakes.length} of {originalQuakes.length} event points and a simplified line at this chart width. The event list contains every earthquake.
-        </p>
-      )}
     </div>
   );
 });
@@ -427,6 +465,7 @@ EarthquakeSequenceChart.propTypes = {
     // })
   }).isRequired,
   isLoading: PropTypes.bool,
+  onPlotSelection: PropTypes.func,
 };
 
 EarthquakeSequenceChart.defaultProps = {

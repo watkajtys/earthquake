@@ -31,19 +31,31 @@ const EARTHQUAKES_PER_PAGE = 50;
 function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorStyle, onIndividualQuakeSelect }) {
     const modalContentRef = React.useRef(null);
     const closeButtonRef = React.useRef(null);
+    const listHeadingRef = React.useRef(null);
     const clusterIdentity = cluster?.id ?? cluster?.clusterId ?? cluster?.slug ?? cluster;
     const [pagination, setPagination] = React.useState({ identity: clusterIdentity, page: 1 });
+    const [plotSelection, setPlotSelection] = React.useState({ identity: clusterIdentity, ids: null });
 
     const sortedQuakes = React.useMemo(() => [...(cluster?.originalQuakes || [])].sort((a, b) => {
         const timeA = a.properties?.time || 0;
         const timeB = b.properties?.time || 0;
         return timeB - timeA;
     }), [cluster?.originalQuakes]);
-    const totalPages = Math.ceil(sortedQuakes.length / EARTHQUAKES_PER_PAGE);
+    const selectedIds = plotSelection.identity === clusterIdentity ? plotSelection.ids : null;
+    const listQuakes = selectedIds ? sortedQuakes.filter(quake => selectedIds.has(quake.id)) : sortedQuakes;
+    const totalPages = Math.ceil(listQuakes.length / EARTHQUAKES_PER_PAGE);
     const currentPage = pagination.identity === clusterIdentity
         ? Math.min(pagination.page, Math.max(1, totalPages)) : 1;
     const firstVisibleIndex = (currentPage - 1) * EARTHQUAKES_PER_PAGE;
-    const visibleQuakes = sortedQuakes.slice(firstVisibleIndex, firstVisibleIndex + EARTHQUAKES_PER_PAGE);
+    const visibleQuakes = listQuakes.slice(firstVisibleIndex, firstVisibleIndex + EARTHQUAKES_PER_PAGE);
+
+    const selectPlottedQuakes = React.useCallback(ids => {
+        const allowed = new Set(sortedQuakes.map(quake => quake.id));
+        const selected = new Set(ids.filter(id => allowed.has(id)));
+        if (!selected.size) return;
+        setPlotSelection({ identity: clusterIdentity, ids: selected });
+        setPagination({ identity: clusterIdentity, page: 1 });
+    }, [clusterIdentity, sortedQuakes]);
 
     // Keep a refreshed cluster on its current page, but immediately clamp a
     // shortened list and reset when a different canonical cluster opens.
@@ -51,6 +63,13 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
         setPagination(previous => previous.identity === clusterIdentity && previous.page === currentPage
             ? previous : { identity: clusterIdentity, page: currentPage });
     }, [clusterIdentity, currentPage]);
+    React.useEffect(() => {
+        setPlotSelection(previous => previous.identity === clusterIdentity
+            ? previous : { identity: clusterIdentity, ids: null });
+    }, [clusterIdentity]);
+    React.useEffect(() => {
+        if (selectedIds) listHeadingRef.current?.scrollIntoView?.({ block: 'nearest' });
+    }, [selectedIds]);
 
     useDialogKeyboard({ dialogRef: modalContentRef, initialFocusRef: closeButtonRef, onClose, active: Boolean(cluster) });
 
@@ -124,21 +143,30 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
 
                 {/* Cluster Mini Map */}
                 <div className="my-4"> {/* Added margin for spacing */}
-                    <ClusterMiniMap cluster={cluster} />
+                    <ClusterMiniMap cluster={cluster} onPlotSelection={selectPlottedQuakes} />
                 </div>
 
                 {/* Earthquake Sequence Chart */}
                 {/* The chart component handles its own "No data" state internally */}
                 <div className="my-4 py-4 border-t border-b border-slate-700">
-                    <EarthquakeSequenceChart cluster={cluster} />
+                    <EarthquakeSequenceChart cluster={cluster} onPlotSelection={selectPlottedQuakes} />
                 </div>
 
                 {/* Individual Earthquakes List */}
-                <h2 className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2"> {/* Removed border-t as chart section has it now */}
+                <h2 ref={listHeadingRef} className="text-md sm:text-lg font-semibold text-indigo-300 mb-2 pt-2"> {/* Removed border-t as chart section has it now */}
                     Earthquakes in this Cluster
                 </h2>
+                {selectedIds && (
+                    <div className="mb-3 flex items-center justify-between gap-3 rounded border border-indigo-400 p-2 text-sm text-slate-100">
+                        <p role="status" aria-live="polite">{listQuakes.length} plotted {listQuakes.length === 1 ? 'earthquake' : 'earthquakes'} selected. Inspect each event in the list below.</p>
+                        <button type="button" onClick={() => { setPlotSelection({ identity: clusterIdentity, ids: null }); setPagination({ identity: clusterIdentity, page: 1 }); }}
+                            className="shrink-0 rounded bg-slate-700 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                            Clear selection
+                        </button>
+                    </div>
+                )}
                 <div className="flex-grow space-y-2 pr-1">
-                    {sortedQuakes.length > 0 ? (
+                    {listQuakes.length > 0 ? (
                         visibleQuakes.map(quake => {
                             const quakeTitle = `Click to view details for M ${quake.properties?.mag?.toFixed(1) || 'N/A'} - ${quake.properties?.place || 'Unknown Place'}`;
 
@@ -190,7 +218,7 @@ function ClusterDetailModal({ cluster, onClose, formatDate, getMagnitudeColorSty
                             Previous page
                         </button>
                         <span role="status" aria-live="polite" className="text-center">
-                            {firstVisibleIndex + 1}–{firstVisibleIndex + visibleQuakes.length} of {sortedQuakes.length}
+                            {firstVisibleIndex + 1}–{firstVisibleIndex + visibleQuakes.length} of {listQuakes.length}
                         </span>
                         <button type="button" onClick={() => setPagination({ identity: clusterIdentity, page: currentPage + 1 })}
                             disabled={currentPage === totalPages} className="rounded bg-slate-700 px-3 py-2 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-400">

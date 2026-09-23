@@ -40,10 +40,16 @@ const mockProps = {
 
 // Mock ClusterMiniMap as it's a child component that might have its own complexities
 vi.mock('./ClusterMiniMap', () => ({
-  default: ({ cluster }) => <div data-testid="mock-cluster-mini-map" data-members={cluster.originalQuakes.length}>Mock Cluster Mini Map</div>,
+  default: ({ cluster, onPlotSelection }) => <div data-testid="mock-cluster-mini-map" data-members={cluster.originalQuakes.length}>
+    Mock Cluster Mini Map
+    <button type="button" onClick={() => onPlotSelection(cluster.originalQuakes.map(quake => quake.id))}>Select map overlap</button>
+  </div>,
 }));
 vi.mock('./EarthquakeSequenceChart', () => ({
-  default: ({ cluster }) => <div data-testid="mock-sequence-chart" data-members={cluster.originalQuakes.length}>Mock Sequence Chart</div>,
+  default: ({ cluster, onPlotSelection }) => <div data-testid="mock-sequence-chart" data-members={cluster.originalQuakes.length}>
+    Mock Sequence Chart
+    <button type="button" onClick={() => onPlotSelection([cluster.originalQuakes[0]?.id, cluster.originalQuakes.at(-1)?.id])}>Select chart overlap</button>
+  </div>,
 }));
 
 const clusterWithMembers = (count, id = 'many-members') => ({
@@ -206,6 +212,35 @@ describe('ClusterDetailModal bounded event list', () => {
     await user.click(screen.getByRole('button', { name: 'Next page' }));
     rerender(<ClusterDetailModal {...mockProps} cluster={clusterWithMembers(51, 'second')} />);
     expect(screen.getByRole('status')).toHaveTextContent('1–50 of 51');
+  });
+
+  it('uses the paginated list to inspect every coincident map event and clears the selection', async () => {
+    const user = userEvent.setup();
+    const cluster = clusterWithMembers(1217);
+    const { container } = render(<ClusterDetailModal {...mockProps} cluster={cluster} />);
+    await user.click(screen.getByRole('button', { name: 'Select map overlap' }));
+    expect(screen.getByText(/1217 plotted earthquakes selected/)).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Cluster earthquake pages' }).querySelector('[role="status"]')).toHaveTextContent('1–50 of 1217');
+    for (let page = 1; page < 25; page++) await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(container.querySelectorAll('button[title^="Click to view details"]')).toHaveLength(17);
+    expect(screen.getByTitle('Click to view details for M 2.5 - Place 1216')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+    expect(screen.queryByText(/plotted earthquakes selected/)).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Cluster earthquake pages' }).querySelector('[role="status"]')).toHaveTextContent('1–50 of 1217');
+  });
+
+  it('resets a later page for an overlapping chart selection and clears it on cluster change', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ClusterDetailModal {...mockProps} cluster={clusterWithMembers(1217, 'first')} />);
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    await user.click(screen.getByRole('button', { name: 'Select chart overlap' }));
+    expect(screen.getByText(/2 plotted earthquakes selected/)).toBeInTheDocument();
+    expect(screen.getByTitle('Click to view details for M 6.1 - Place 0')).toBeInTheDocument();
+    expect(screen.getByTitle('Click to view details for M 2.5 - Place 1216')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Cluster earthquake pages' })).not.toBeInTheDocument();
+    rerender(<ClusterDetailModal {...mockProps} cluster={clusterWithMembers(51, 'second')} />);
+    expect(screen.queryByText(/plotted earthquakes selected/)).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Cluster earthquake pages' }).querySelector('[role="status"]')).toHaveTextContent('1–50 of 51');
   });
 });
 

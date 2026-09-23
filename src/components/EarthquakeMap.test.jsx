@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen, within, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import EarthquakeMap from './EarthquakeMap';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -16,8 +16,6 @@ vi.mock('../assets/TectonicPlateBoundaries.json', () => ({
 let mockFitBounds = vi.fn();
 let mockSetView = vi.fn();
 let mockInvalidateSize = vi.fn();
-let mockMapZoom = 8;
-let mockMapViewHandler = null;
 
 vi.mock('react-leaflet', async () => {
   const actual = await vi.importActual('react-leaflet');
@@ -28,16 +26,18 @@ vi.mock('react-leaflet', async () => {
             fitBounds: mockFitBounds,
             setView: mockSetView,
             invalidateSize: mockInvalidateSize,
-            getZoom: () => mockMapZoom,
-            getBounds: () => null,
-            on: (_events, handler) => { mockMapViewHandler = handler; },
-            off: () => { mockMapViewHandler = null; },
+            latLngToContainerPoint: ([latitude, longitude]) => L.point(longitude * 100, latitude * 100),
       }), []);
       return <div data-testid="map-container" data-center={center ? JSON.stringify(center) : undefined} data-zoom={zoom} style={style}>{children}</div>;
     }),
     TileLayer: ({ url, attribution }) => <div data-testid="tile-layer" data-url={url} data-attribution={attribution}></div>,
-    Marker: ({ position, icon, children }) => (
-      <div data-testid="marker" data-position={position ? JSON.stringify(position) : undefined} data-icon-classname={icon?.options?.className} data-icon-html={icon?.options?.html} data-icon-size={icon?.options?.iconSize ? JSON.stringify(icon.options.iconSize) : undefined}>
+    Marker: ({ position, icon, children, eventHandlers }) => (
+      <div data-testid="marker" role="button" tabIndex={0} onClick={eventHandlers?.click} onKeyDown={eventHandlers?.click} data-position={position ? JSON.stringify(position) : undefined} data-icon-classname={icon?.options?.className} data-icon-html={icon?.options?.html} data-icon-size={icon?.options?.iconSize ? JSON.stringify(icon.options.iconSize) : undefined}>
+        {children}
+      </div>
+    ),
+    CircleMarker: ({ center, renderer, children, eventHandlers }) => (
+      <div data-testid="canvas-quake" role="button" tabIndex={0} onClick={eventHandlers?.click} onKeyDown={eventHandlers?.click} data-center={JSON.stringify(center)} data-renderer={renderer ? 'canvas' : 'none'}>
         {children}
       </div>
     ),
@@ -73,8 +73,6 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     mockFitBounds.mockClear();
     mockSetView.mockClear();
     mockInvalidateSize.mockClear();
-    mockMapZoom = 8;
-    mockMapViewHandler = null;
     vi.spyOn(console, 'warn').mockImplementation(() => {}); // Mock console.warn for all tests in this block
   });
 
@@ -153,7 +151,7 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     });
   });
 
-  it('bounds cluster markers but fits the map to all 1,217 nearby events', async () => {
+  it('plots all 1,217 cluster members with a canvas renderer and fits every location', async () => {
     const denseQuakes = Array.from({ length: 1216 }, (_, index) => ({
       id: `dense-${index}`,
       geometry: { coordinates: [-118, 34, 5] },
@@ -166,40 +164,57 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     };
     render(<MemoryRouter><EarthquakeMap {...baseProps}
       nearbyQuakes={[...denseQuakes, outlier]}
-      aggregateNearbyQuakes={true}
+      individualNearbyQuakes={true}
       fitMapToBounds={true}
     /></MemoryRouter>);
 
-    expect(screen.getAllByTestId('marker').length).toBeLessThanOrEqual(161);
-    expect(screen.getByText('1216 earthquakes in this area')).toBeInTheDocument();
+    const points = screen.getAllByTestId('canvas-quake');
+    expect(points).toHaveLength(1217);
+    expect(points.every(point => point.dataset.renderer === 'canvas')).toBe(true);
+    expect(screen.getAllByTestId('marker')).toHaveLength(1);
     await waitFor(() => expect(mockFitBounds).toHaveBeenCalledTimes(1));
     const fitted = mockFitBounds.mock.calls[0][0];
     expect(fitted.contains(L.latLng(40, -110))).toBe(true);
     expect(fitted.contains(L.latLng(34, -118))).toBe(true);
   });
 
-  it('recomputes grouped markers after zoom to reveal more event locations', async () => {
+  it('keeps every individual cluster point even for dense locations', async () => {
     const quakes = Array.from({ length: 661 }, (_, index) => ({
       id: `zoom-${index}`,
       geometry: { coordinates: [-118 + index * 0.0001, 34, 5] },
       properties: { mag: 2, time: 1_700_000_000_000 + index },
     }));
-    mockMapZoom = 5;
     render(<MemoryRouter><EarthquakeMap {...baseProps}
       nearbyQuakes={quakes}
-      aggregateNearbyQuakes={true}
+      individualNearbyQuakes={true}
       defaultZoom={5}
     /></MemoryRouter>);
-    const before = screen.getAllByTestId('marker').length;
-    expect(mockMapViewHandler).toBeTypeOf('function');
-    act(() => {
-      mockMapZoom = 15;
-      mockMapViewHandler();
-    });
-    const after = screen.getAllByTestId('marker').length;
-    expect(after).toBeGreaterThan(before);
-    expect(after).toBeLessThanOrEqual(161);
+    expect(screen.getAllByTestId('canvas-quake')).toHaveLength(661);
+    expect(screen.getAllByTestId('marker')).toHaveLength(1);
     await screen.findAllByTestId('geojson-layer');
+  });
+
+  it('selects every overlapping member from a canvas point or highlighted marker', async () => {
+    const dense = Array.from({ length: 51 }, (_, index) => ({
+      id: `dense-${index}`,
+      geometry: { coordinates: [-118, 34, 5] },
+      properties: { mag: 2, time: 1_700_000_000_000 + index },
+    }));
+    const outlier = { id: 'outlier', geometry: { coordinates: [-110, 40, 5] },
+      properties: { mag: 6, time: 1_700_000_000_000 } };
+    const onPlotSelection = vi.fn();
+    render(<MemoryRouter><EarthquakeMap {...baseProps}
+      highlightQuakeId="dense-0" highlightQuakeLatitude={34} highlightQuakeLongitude={-118}
+      nearbyQuakes={[...dense, outlier]} individualNearbyQuakes onPlotSelection={onPlotSelection}
+    /></MemoryRouter>);
+    await screen.findAllByTestId('geojson-layer');
+
+    fireEvent.click(screen.getAllByTestId('canvas-quake')[1]);
+    expect(onPlotSelection).toHaveBeenLastCalledWith(dense.map(quake => quake.id));
+    fireEvent.click(screen.getByTestId('marker'));
+    expect(onPlotSelection).toHaveBeenLastCalledWith(dense.map(quake => quake.id));
+    fireEvent.click(screen.getAllByTestId('canvas-quake')[51]);
+    expect(onPlotSelection).toHaveBeenLastCalledWith(['outlier']);
   });
 
   it('renders map and only valid nearbyQuakes when some have missing data, logging warnings', async () => {

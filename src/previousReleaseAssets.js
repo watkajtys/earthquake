@@ -24,6 +24,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "byteLength": 8054,
     "contentType": "application/javascript; charset=utf-8"
   },
+  "/assets/ClusterDetailModalWrapper-Ck6bU-EW.js": {
+    "key": "static-assets/v1/0e37d7d31700cb39aee64d745bf7a58d35c18b298513467c8358b730afea7c68",
+    "sha256": "0e37d7d31700cb39aee64d745bf7a58d35c18b298513467c8358b730afea7c68",
+    "byteLength": 38773,
+    "contentType": "application/javascript; charset=utf-8"
+  },
   "/assets/ClusterDetailModalWrapper-DZTWKC4H.js": {
     "key": "static-assets/v1/c815747671a5d4d38e7e33f104ac80266cd13484474af34f5b54065dc6149503",
     "sha256": "c815747671a5d4d38e7e33f104ac80266cd13484474af34f5b54065dc6149503",
@@ -90,11 +96,29 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "byteLength": 78052,
     "contentType": "application/javascript; charset=utf-8"
   },
+  "/assets/EarthquakeDetailModalComponent-Dy63-P6M.js": {
+    "key": "static-assets/v1/fe734b01f3ad57fc8e7730926bbe23c348b5d5c377ffe23e0104cfdfd5320272",
+    "sha256": "fe734b01f3ad57fc8e7730926bbe23c348b5d5c377ffe23e0104cfdfd5320272",
+    "byteLength": 78048,
+    "contentType": "application/javascript; charset=utf-8"
+  },
   "/assets/EarthquakeDetailModalComponent-X90ohEHy.js": {
     "key": "static-assets/v1/0542c74ec8156dfd986b5e0df71ded3fae255696633f6438340e3438433e1486",
     "sha256": "0542c74ec8156dfd986b5e0df71ded3fae255696633f6438340e3438433e1486",
     "byteLength": 78052,
     "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/EarthquakeMap-B9wCul8t.js": {
+    "key": "static-assets/v1/18dd4dd155dc926ac6521be8c20a6ede18cf1589790ead3bf8c054400c4d3fb6",
+    "sha256": "18dd4dd155dc926ac6521be8c20a6ede18cf1589790ead3bf8c054400c4d3fb6",
+    "byteLength": 169897,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/EarthquakeMap-Dgihpmma.css": {
+    "key": "static-assets/v1/7e14f0f44c4713eb7519182d93575f59139200ca781397a493a11f1dff0ce5e1",
+    "sha256": "7e14f0f44c4713eb7519182d93575f59139200ca781397a493a11f1dff0ce5e1",
+    "byteLength": 15037,
+    "contentType": "text/css; charset=utf-8"
   },
   "/assets/EarthquakeSafetyPage-7XvEtHtz.js": {
     "key": "static-assets/v1/983f669c93f9903c8a6b5dc4af487ce643d8ecef98ae98b64c16f2f4556e15db",
@@ -111,6 +135,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
   "/assets/EarthquakeSafetyPage-CS_gV7Y0.js": {
     "key": "static-assets/v1/cb14ae9b73171a45bcf34d18838b2cb8a4e3c3a6f52e5a6bd3dfab2d92874698",
     "sha256": "cb14ae9b73171a45bcf34d18838b2cb8a4e3c3a6f52e5a6bd3dfab2d92874698",
+    "byteLength": 4111,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/EarthquakeSafetyPage-D40CQSg7.js": {
+    "key": "static-assets/v1/6e54f2fdb5eadb5510c1503ee3f6f64e36b2233c847085b8a31178596501c508",
+    "sha256": "6e54f2fdb5eadb5510c1503ee3f6f64e36b2233c847085b8a31178596501c508",
     "byteLength": 4111,
     "contentType": "application/javascript; charset=utf-8"
   },
@@ -180,6 +210,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "byteLength": 5300,
     "contentType": "application/javascript; charset=utf-8"
   },
+  "/assets/EarthquakeTimelineSVGChart-DgX8dAir.js": {
+    "key": "static-assets/v1/049d53455109cf2b3d0c5cb597ba204511023bf07db86c52b6b3fc03e69c7af7",
+    "sha256": "049d53455109cf2b3d0c5cb597ba204511023bf07db86c52b6b3fc03e69c7af7",
+    "byteLength": 5300,
+    "contentType": "application/javascript; charset=utf-8"
+  },
   "/assets/EarthquakeTimelineSVGChart-SaevECUR.js": {
     "key": "static-assets/v1/399e9edfc8678c972c7e2d6814ba58de6926f72ce831de811c6ea6f877b3985c",
     "sha256": "399e9edfc8678c972c7e2d6814ba58de6926f72ce831de811c6ea6f877b3985c",
@@ -196,6 +232,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "key": "static-assets/v1/5a4f556c3d3ef75dd0e5bfbe113c71097c37cb86f102a82d9449b54c5a3eeafc",
     "sha256": "5a4f556c3d3ef75dd0e5bfbe113c71097c37cb86f102a82d9449b54c5a3eeafc",
     "byteLength": 7722,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/FeedsPageLayout-BKTvJlQ0.js": {
+    "key": "static-assets/v1/f3277c68d6a0ca84089b86957ab17b94d1d4558d67a4f57e04a41733611cd794",
+    "sha256": "f3277c68d6a0ca84089b86957ab17b94d1d4558d67a4f57e04a41733611cd794",
+    "byteLength": 7768,
     "contentType": "application/javascript; charset=utf-8"
   },
   "/assets/FeedsPageLayout-BLxMu4G8.js": {
@@ -238,6 +280,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "key": "static-assets/v1/59fccf06314cbfac37d8e4ba64206178294bbce3482b9ba7b04d21cad6d48907",
     "sha256": "59fccf06314cbfac37d8e4ba64206178294bbce3482b9ba7b04d21cad6d48907",
     "byteLength": 7768,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/InteractiveGlobeView-8CSzEFlA.js": {
+    "key": "static-assets/v1/34e2af0e1c7c5e12889b98087892ac0f481ecc9556c14ece7aeb4658bf63e20b",
+    "sha256": "34e2af0e1c7c5e12889b98087892ac0f481ecc9556c14ece7aeb4658bf63e20b",
+    "byteLength": 1713854,
     "contentType": "application/javascript; charset=utf-8"
   },
   "/assets/InteractiveGlobeView-CDPh87V9.js": {
@@ -297,6 +345,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
   "/assets/LearnPage-B8UbtE6J.js": {
     "key": "static-assets/v1/6334d06b0e2fdfd8fac14383d301eb5bda7ed8c57d9b9dccb1c5ada5fffb50af",
     "sha256": "6334d06b0e2fdfd8fac14383d301eb5bda7ed8c57d9b9dccb1c5ada5fffb50af",
+    "byteLength": 2747,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/LearnPage-BZjlGq72.js": {
+    "key": "static-assets/v1/6c27ca6806054766b05215009d921b6095672a3ef0027032e71f6701c6bc7317",
+    "sha256": "6c27ca6806054766b05215009d921b6095672a3ef0027032e71f6701c6bc7317",
     "byteLength": 2747,
     "contentType": "application/javascript; charset=utf-8"
   },
@@ -366,6 +420,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "byteLength": 5908,
     "contentType": "application/javascript; charset=utf-8"
   },
+  "/assets/MagnitudeDepthScatterSVGChart-DC4M1WN2.js": {
+    "key": "static-assets/v1/3bea2a39e0ef1813447bcac84a4bcea3886bf540c8c86dc9fece79aca59c3f2a",
+    "sha256": "3bea2a39e0ef1813447bcac84a4bcea3886bf540c8c86dc9fece79aca59c3f2a",
+    "byteLength": 5908,
+    "contentType": "application/javascript; charset=utf-8"
+  },
   "/assets/MagnitudeDepthScatterSVGChart-DcsY3FPW.js": {
     "key": "static-assets/v1/d60a03a8c347af61c7c189b53c7aa2be34b80cec8f0693b28cc5659c959226a8",
     "sha256": "d60a03a8c347af61c7c189b53c7aa2be34b80cec8f0693b28cc5659c959226a8",
@@ -388,6 +448,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "key": "static-assets/v1/3f8e27bb8aff2137dedb9cbc59de27e978f804d99ae8117e260797c31218974e",
     "sha256": "3f8e27bb8aff2137dedb9cbc59de27e978f804d99ae8117e260797c31218974e",
     "byteLength": 4673,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/MagnitudeDistributionSVGChart-BhW5rW0U.js": {
+    "key": "static-assets/v1/1a9c71687ecdece8a41003c46765284d84e05bef3fdf0776dd6a1b9fc6a6ee5c",
+    "sha256": "1a9c71687ecdece8a41003c46765284d84e05bef3fdf0776dd6a1b9fc6a6ee5c",
+    "byteLength": 4668,
     "contentType": "application/javascript; charset=utf-8"
   },
   "/assets/MagnitudeDistributionSVGChart-C673PZg8.js": {
@@ -441,6 +507,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
   "/assets/MagnitudeVsIntensityPage-BICrwIMY.js": {
     "key": "static-assets/v1/d3f4f8038890276bf8731d75c64178a1c0f8ad775e609076a3e53a2fe70b4440",
     "sha256": "d3f4f8038890276bf8731d75c64178a1c0f8ad775e609076a3e53a2fe70b4440",
+    "byteLength": 1371,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/MagnitudeVsIntensityPage-CASjsqAr.js": {
+    "key": "static-assets/v1/f8a94e60e98fbbe84e7de8e3da52e2fdae3813f8288bcc53e4e1e74f2362f1b1",
+    "sha256": "f8a94e60e98fbbe84e7de8e3da52e2fdae3813f8288bcc53e4e1e74f2362f1b1",
     "byteLength": 1371,
     "contentType": "application/javascript; charset=utf-8"
   },
@@ -516,6 +588,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "byteLength": 1379,
     "contentType": "application/javascript; charset=utf-8"
   },
+  "/assets/MeasuringEarthquakesPage-Dd8WgkOl.js": {
+    "key": "static-assets/v1/c800b5da22a3437fc0121a72510bc638a67c1609a61d5f41c8a0a8e713279e4d",
+    "sha256": "c800b5da22a3437fc0121a72510bc638a67c1609a61d5f41c8a0a8e713279e4d",
+    "byteLength": 1379,
+    "contentType": "application/javascript; charset=utf-8"
+  },
   "/assets/MeasuringEarthquakesPage-akTm1te3.js": {
     "key": "static-assets/v1/48d9c2d0d8e6060ef3de1d8fca61ec330a1d3426aa890eb76886cbaff6c626a5",
     "sha256": "48d9c2d0d8e6060ef3de1d8fca61ec330a1d3426aa890eb76886cbaff6c626a5",
@@ -543,6 +621,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
   "/assets/MonitoringPage-C9HqEV5y.js": {
     "key": "static-assets/v1/77963fddb2ff5965203cd14e1ee840d1281559da1ab85e0e32db42e62d40c571",
     "sha256": "77963fddb2ff5965203cd14e1ee840d1281559da1ab85e0e32db42e62d40c571",
+    "byteLength": 34625,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/MonitoringPage-D8BDyE1I.js": {
+    "key": "static-assets/v1/d85399dc857f96202fda591019e74a338699e9fa76b947c24689586ef838a94c",
+    "sha256": "d85399dc857f96202fda591019e74a338699e9fa76b947c24689586ef838a94c",
     "byteLength": 34625,
     "contentType": "application/javascript; charset=utf-8"
   },
@@ -624,6 +708,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "byteLength": 6896,
     "contentType": "application/javascript; charset=utf-8"
   },
+  "/assets/OverviewPage-fhm8VMav.js": {
+    "key": "static-assets/v1/0bfa707461b8c6c1e78f717e7dc56762d0a7c79f4f5a7acaeda5658d736c4971",
+    "sha256": "0bfa707461b8c6c1e78f717e7dc56762d0a7c79f4f5a7acaeda5658d736c4971",
+    "byteLength": 6896,
+    "contentType": "application/javascript; charset=utf-8"
+  },
   "/assets/PaginatedEarthquakeTable-AJzgkCt8.js": {
     "key": "static-assets/v1/8d1a98c083c6f7a2f05cd85c9890cfb90d18a97c85588094a03a687c34f8c1ea",
     "sha256": "8d1a98c083c6f7a2f05cd85c9890cfb90d18a97c85588094a03a687c34f8c1ea",
@@ -664,6 +754,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "key": "static-assets/v1/3c54275fffd8ae97c8978cd7225d2be389595d1dc99ad20166892731ec3e7985",
     "sha256": "3c54275fffd8ae97c8978cd7225d2be389595d1dc99ad20166892731ec3e7985",
     "byteLength": 5054,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/PaginatedEarthquakeTable-CjIKJP6j.js": {
+    "key": "static-assets/v1/99769bec7b5694f2598335572f3966a5d6a9d55c5d56d47abd70ade379589267",
+    "sha256": "99769bec7b5694f2598335572f3966a5d6a9d55c5d56d47abd70ade379589267",
+    "byteLength": 5059,
     "contentType": "application/javascript; charset=utf-8"
   },
   "/assets/PaginatedEarthquakeTable-vTZHq9vC.js": {
@@ -714,6 +810,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "byteLength": 1232,
     "contentType": "application/javascript; charset=utf-8"
   },
+  "/assets/PlateTectonicsPage-DatKmAgy.js": {
+    "key": "static-assets/v1/2f9b57c0536dacecbdbc88366c42248d12b4240d1fc75f5823d0d973039e2791",
+    "sha256": "2f9b57c0536dacecbdbc88366c42248d12b4240d1fc75f5823d0d973039e2791",
+    "byteLength": 1232,
+    "contentType": "application/javascript; charset=utf-8"
+  },
   "/assets/PlateTectonicsPage-Dx5vMFc9.js": {
     "key": "static-assets/v1/8092e0484d269a9b720292d830ff29e46bd7f4cf78c5db93381887d9750baa5b",
     "sha256": "8092e0484d269a9b720292d830ff29e46bd7f4cf78c5db93381887d9750baa5b",
@@ -747,6 +849,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
   "/assets/RegionalDistributionList-De2dr8Vi.js": {
     "key": "static-assets/v1/b6feb2e25a87508cac1ac3e6996b7b7c2702af9a1ad1b9d7dc60147ca86c5018",
     "sha256": "b6feb2e25a87508cac1ac3e6996b7b7c2702af9a1ad1b9d7dc60147ca86c5018",
+    "byteLength": 2125,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/RegionalDistributionList-DhFq10gI.js": {
+    "key": "static-assets/v1/cf7a16174534c18beb99bd74390340d5280860c670559c9b52f83ae9fff9fdb4",
+    "sha256": "cf7a16174534c18beb99bd74390340d5280860c670559c9b52f83ae9fff9fdb4",
     "byteLength": 2125,
     "contentType": "application/javascript; charset=utf-8"
   },
@@ -840,6 +948,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "byteLength": 5036,
     "contentType": "application/javascript; charset=utf-8"
   },
+  "/assets/TsunamisPage-BuJ3aVNK.js": {
+    "key": "static-assets/v1/5a51cf922fc327fbb92bca8257e4da4f3047e3f7c7866108083a890a93b1550e",
+    "sha256": "5a51cf922fc327fbb92bca8257e4da4f3047e3f7c7866108083a890a93b1550e",
+    "byteLength": 5036,
+    "contentType": "application/javascript; charset=utf-8"
+  },
   "/assets/TsunamisPage-Cp85WK2y.js": {
     "key": "static-assets/v1/42ccfd72ae9d3c956dd62d2f72c9adaa2e8bcc7aeca245a51dc3f84aacc5df15",
     "sha256": "42ccfd72ae9d3c956dd62d2f72c9adaa2e8bcc7aeca245a51dc3f84aacc5df15",
@@ -897,6 +1011,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
   "/assets/WhatCausesEarthquakesPage-CEgeb9ZB.js": {
     "key": "static-assets/v1/3dc56be667520ffeb5cb5786b8f8beaf6f465d8edc1590bcbf807ecfc59541ab",
     "sha256": "3dc56be667520ffeb5cb5786b8f8beaf6f465d8edc1590bcbf807ecfc59541ab",
+    "byteLength": 3696,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/WhatCausesEarthquakesPage-ChNOC752.js": {
+    "key": "static-assets/v1/2cc722df5c751de988c05136bf3bf21849661ad42f932a168a06c1e4b2a1b70a",
+    "sha256": "2cc722df5c751de988c05136bf3bf21849661ad42f932a168a06c1e4b2a1b70a",
     "byteLength": 3696,
     "contentType": "application/javascript; charset=utf-8"
   },
@@ -972,6 +1092,18 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "byteLength": 550717,
     "contentType": "application/javascript; charset=utf-8"
   },
+  "/assets/index-CZEw7iGX.js": {
+    "key": "static-assets/v1/76d2c22c3d02317f03d2248c1982ba26dc0d5832a2ba01a6a0105c9dd609e000",
+    "sha256": "76d2c22c3d02317f03d2248c1982ba26dc0d5832a2ba01a6a0105c9dd609e000",
+    "byteLength": 346039,
+    "contentType": "application/javascript; charset=utf-8"
+  },
+  "/assets/index-D2h8ijiD.css": {
+    "key": "static-assets/v1/913bc84c39796a1e11c302f6725104f580451c62f037e8c06fe54bd9f2f03993",
+    "sha256": "913bc84c39796a1e11c302f6725104f580451c62f037e8c06fe54bd9f2f03993",
+    "byteLength": 44982,
+    "contentType": "text/css; charset=utf-8"
+  },
   "/assets/index-LCtbW58D.css": {
     "key": "static-assets/v1/ef3e6f3a7c919d6a57d735a8f5a71670f9c34db1d29b529cc7516469bf00bc48",
     "sha256": "ef3e6f3a7c919d6a57d735a8f5a71670f9c34db1d29b529cc7516469bf00bc48",
@@ -995,6 +1127,12 @@ export const PREVIOUS_RELEASE_ASSETS = {
     "sha256": "338a12f2bb108e2861e51e193b14885db199bec790d4c57eb4d62e8d71357a90",
     "byteLength": 60018,
     "contentType": "text/css; charset=utf-8"
+  },
+  "/assets/linear-CWAM12bf.js": {
+    "key": "static-assets/v1/d3f5a40bdbd676b079ad2d204faa02f6fd0e3f54bc37e2cd5dfb19d8451008be",
+    "sha256": "d3f5a40bdbd676b079ad2d204faa02f6fd0e3f54bc37e2cd5dfb19d8451008be",
+    "byteLength": 19069,
+    "contentType": "application/javascript; charset=utf-8"
   },
   "/assets/ne_110m_coastline-BmLK7DdU.js": {
     "key": "static-assets/v1/b43aa0bea3509e63c755efd821ff39a33f68979755bc22845d29095b0d2b7205",

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, memo, useState, useMemo } from 'react'; // Added useState and useMemo
 // PropTypes import removed
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, CircleMarker, Popup, GeoJSON } from 'react-leaflet';
 import { Link, useLocation } from 'react-router-dom';
 import { buildEarthquakePath, buildModalNavigationState, eventIdFromDetailUrl, parseEarthquakePath } from '../utils/entityRoutes.js';
 import 'leaflet/dist/leaflet.css';
@@ -11,7 +11,6 @@ import {
   calculateBoundingBoxFromPoints, 
   filterGeoJSONByBoundingBox
 } from '../utils/geoSpatialUtils.js';
-import { groupQuakesForMap } from '../utils/clusterVisualSampling.js';
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -72,12 +71,13 @@ const createNearbyQuakeIcon = (magnitude, time) => {
   });
 };
 
-const createGroupedQuakeIcon = (count, magnitude) => new L.DivIcon({
-  html: `<span role="img" aria-label="${count} earthquakes" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:3px solid ${getMagnitudeColor(magnitude)};border-radius:50%;background:#0f172a;color:white;font-size:11px;font-weight:bold;box-shadow:0 1px 4px #0008">${count}</span>`,
-  className: 'cluster-group-icon',
-  iconSize: [30, 30],
-  iconAnchor: [15, 15],
-});
+const isRenderableNearbyQuake = quake => {
+  const coordinates = quake?.geometry?.coordinates;
+  return Array.isArray(coordinates) && coordinates.length >= 2 &&
+    Number.isFinite(coordinates[0]) && Number.isFinite(coordinates[1]) &&
+    coordinates[1] >= -90 && coordinates[1] <= 90 &&
+    Number.isFinite(quake?.properties?.mag) && Number.isFinite(quake?.properties?.time);
+};
 
 /**
  * Defines the styling for tectonic plate boundary GeoJSON features.
@@ -161,12 +161,14 @@ const EarthquakeMap = ({
   highlightQuakeLongitude = undefined,
   highlightQuakeMagnitude = undefined,
   highlightQuakeTitle = '',
+  highlightQuakeId = null,
   shakeMapUrl = null,
   nearbyQuakes = [],
   mainQuakeDetailUrl = null,
   fitMapToBounds = false,
   defaultZoom = 8,
-  aggregateNearbyQuakes = false,
+  individualNearbyQuakes = false,
+  onPlotSelection = null,
 }) => {
   const location = useLocation();
   const detailNavigationState = buildModalNavigationState(location);
@@ -176,12 +178,23 @@ const EarthquakeMap = ({
   const [activeFaultsDataJson, setActiveFaultsDataJson] = useState(null);
   const [isActiveFaultsLoading, setIsActiveFaultsLoading] = useState(true);
   const [fullActiveFaultsData, setFullActiveFaultsData] = useState(null);
-  const [mapView, setMapView] = useState({ zoom: defaultZoom, bounds: null });
+  // One Leaflet canvas draws every cluster member without one DOM icon per
+  // earthquake. Other map uses keep their existing individual DivIcon markers.
+  const nearbyCanvasRenderer = useMemo(() => individualNearbyQuakes ? L.canvas() : null, [individualNearbyQuakes]);
 
-  const nearbyMarkerGroups = useMemo(() => aggregateNearbyQuakes
-    ? groupQuakesForMap(nearbyQuakes, mapView.zoom, mapView.bounds)
-    : nearbyQuakes.map(quake => ({ quake, count: 1 })),
-  [aggregateNearbyQuakes, nearbyQuakes, mapView]);
+  const inspectNearbyQuake = quake => {
+    if (!onPlotSelection) return;
+    const map = mapRef.current;
+    const coordinates = quake.geometry.coordinates;
+    const clicked = map?.latLngToContainerPoint?.([coordinates[1], coordinates[0]]);
+    // Leaflet's canvas click dispatches only the topmost hit. Select every
+    // member covered by that drawn point so coincident quakes stay inspectable.
+    const ids = clicked ? nearbyQuakes.filter(isRenderableNearbyQuake).filter(candidate => {
+      const [longitude, latitude] = candidate.geometry.coordinates;
+      return map.latLngToContainerPoint([latitude, longitude]).distanceTo(clicked) <= 10;
+    }).map(candidate => candidate.id) : [quake.id];
+    onPlotSelection(ids);
+  };
 
   const initialMapCenter = useMemo(() => [mapCenterLatitude, mapCenterLongitude], [mapCenterLatitude, mapCenterLongitude]);
   const highlightedQuakePosition = useMemo(() => {
@@ -238,20 +251,6 @@ const EarthquakeMap = ({
     initialMapCenter,
     highlightedQuakePosition
   ]);
-
-  useEffect(() => {
-    const mapInstance = mapRef.current;
-    if (!aggregateNearbyQuakes || !mapInstance?.on) return undefined;
-    const updateView = () => {
-      const zoom = mapInstance.getZoom();
-      const bounds = mapInstance.getBounds();
-      setMapView(previous => previous.zoom === zoom && previous.bounds === bounds
-        ? previous : { zoom, bounds });
-    };
-    mapInstance.on('moveend zoomend', updateView);
-    updateView();
-    return () => mapInstance.off('moveend zoomend', updateView);
-  }, [aggregateNearbyQuakes]);
 
   useEffect(() => {
     let isMounted = true;
@@ -367,8 +366,14 @@ const EarthquakeMap = ({
       />
 
       {highlightedQuakePosition && highlightQuakeMagnitude !== undefined && (
-        <Marker position={highlightedQuakePosition} icon={createEpicenterIcon(highlightQuakeMagnitude)}>
-          <Popup>
+        <Marker position={highlightedQuakePosition} icon={createEpicenterIcon(highlightQuakeMagnitude)}
+          eventHandlers={individualNearbyQuakes && onPlotSelection ? {
+            click: () => {
+              const highlighted = nearbyQuakes.find(quake => quake?.id === highlightQuakeId);
+              if (highlighted && isRenderableNearbyQuake(highlighted)) inspectNearbyQuake(highlighted);
+            },
+          } : undefined}>
+          {!(individualNearbyQuakes && onPlotSelection) && <Popup>
             <strong>{highlightQuakeTitle || 'Highlighted Quake'}</strong>
             <br />
             Magnitude: {highlightQuakeMagnitude}
@@ -388,50 +393,45 @@ const EarthquakeMap = ({
                 </a>
               </>
             )}
-          </Popup>
+          </Popup>}
         </Marker>
       )}
 
-      {nearbyMarkerGroups.map(({ quake, count }, index) => {
-        const coordinates = quake.geometry?.coordinates;
-        if (
-          !quake.geometry ||
-          !Array.isArray(coordinates) || // Check if coordinates is an array
-          coordinates.length < 2 ||      // Check for at least two elements (lon, lat)
-          typeof quake.properties?.mag !== 'number' ||
-          typeof quake.properties?.time !== 'number'
-        ) {
+      {nearbyQuakes.map((quake, index) => {
+        const coordinates = quake?.geometry?.coordinates;
+        if (!isRenderableNearbyQuake(quake)) {
           console.warn("Skipping rendering of nearby quake due to missing data:", quake);
           return null;
         }
-        if (count > 1) {
+        const popup = (
+          <Popup>
+            Magnitude: {quake.properties.mag.toFixed(1)}
+            <br />
+            {quake.properties.place || quake.properties.title || 'N/A'}
+            <br />
+            Time: {formatTimeAgo(quake.properties.time)}
+            <br />
+            {quake.properties.detail && (
+               <Link to={buildEarthquakePath(quake) || "/"} state={detailNavigationState} className="text-blue-500 hover:underline">
+                 View Details
+               </Link>
+            )}
+          </Popup>
+        );
+        if (individualNearbyQuakes) {
+          const ageInDays = (Date.now() - quake.properties.time) / 86400_000;
+          const fillOpacity = ageInDays < 1 ? 1 : ageInDays < 7 ? 0.8 : ageInDays < 14 ? 0.6 : 0.4;
           return (
-            <Marker
-              key={`group-${quake.id || index}`}
-              position={[coordinates[1], coordinates[0]]}
-              icon={createGroupedQuakeIcon(count, quake.properties.mag)}
-              title={`${count} earthquakes in this area`}
+            <CircleMarker
+              key={quake.id || index}
+              center={[coordinates[1], coordinates[0]]}
+              radius={5}
+              renderer={nearbyCanvasRenderer}
+              pathOptions={{ color: getMagnitudeColor(quake.properties.mag), weight: 1, fillColor: getMagnitudeColor(quake.properties.mag), fillOpacity }}
+              eventHandlers={onPlotSelection ? { click: () => inspectNearbyQuake(quake) } : undefined}
             >
-              <Popup>
-                <strong>{count} earthquakes in this area</strong>
-                <br />
-                Strongest: magnitude {quake.properties.mag.toFixed(1)}
-                <br />
-                See the event list for every earthquake.
-                {mapView.zoom < 16 && (
-                  <>
-                    <br />
-                    <button
-                      type="button"
-                      className="text-blue-500 hover:underline"
-                      onClick={() => mapRef.current?.setView([coordinates[1], coordinates[0]], Math.min(16, mapView.zoom + 2))}
-                    >
-                      Zoom in to separate events
-                    </button>
-                  </>
-                )}
-              </Popup>
-            </Marker>
+              {!onPlotSelection && popup}
+            </CircleMarker>
           );
         }
         return (
@@ -440,19 +440,7 @@ const EarthquakeMap = ({
             position={[quake.geometry.coordinates[1], quake.geometry.coordinates[0]]}
             icon={createNearbyQuakeIcon(quake.properties.mag, quake.properties.time)}
           >
-            <Popup>
-              Magnitude: {quake.properties.mag.toFixed(1)}
-              <br />
-              {quake.properties.place || quake.properties.title || 'N/A'}
-              <br />
-              Time: {formatTimeAgo(quake.properties.time)}
-              <br />
-              {quake.properties.detail && (
-                 <Link to={buildEarthquakePath(quake) || "/"} state={detailNavigationState} className="text-blue-500 hover:underline">
-                   View Details
-                 </Link>
-              )}
-            </Popup>
+            {popup}
           </Marker>
         );
       })}
