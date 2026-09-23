@@ -138,6 +138,12 @@ export function productionArchiveReader(apiFetch) {
         assert(typeof object?.key === 'string' && !objects.has(object.key), 'Production archive metadata has duplicate or invalid keys');
         objects.set(object.key, object);
       }
+      // R2 omits result_info on the terminal page, including the first page
+      // when every object fits. A full page without pagination is ambiguous.
+      if (payload.result_info === undefined) {
+        assert(payload.result.length < 1000, 'Production archive metadata pagination is invalid');
+        return objects;
+      }
       if (payload.result_info?.is_truncated === false) return objects;
       cursor = payload.result_info?.cursor;
       assert(payload.result_info?.is_truncated === true && typeof cursor === 'string' && cursor.length > 0 &&

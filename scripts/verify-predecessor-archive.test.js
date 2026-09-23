@@ -161,7 +161,8 @@ describe('read-only predecessor archive gate', () => {
 });
 
 describe('authenticated production archive reader', () => {
-  function apiFixture({ changedMetadata = false, loopCursor = false, splitPages = false } = {}) {
+  function apiFixture({ changedMetadata = false, loopCursor = false, splitPages = false,
+    terminalWithoutInfo = false, ambiguousFullPage = false } = {}) {
     const manifest = manifestFor(contents);
     const records = Object.entries(contents).map(([path]) => ({ key: manifest[path].key,
       size: manifest[path].byteLength,
@@ -175,10 +176,12 @@ describe('authenticated production archive reader', () => {
         expect(url.searchParams.get('prefix')).toBe('static-assets/v1/');
         expect(url.searchParams.get('per_page')).toBe('1000');
         const next = url.searchParams.has('cursor');
+        const result = loopCursor ? (next ? [] : records) : splitPages ? (next ? records.slice(1) : records.slice(0, 1)) : records;
+        const isTruncated = loopCursor || (splitPages && !next);
         return Response.json({ success: true,
-          result: loopCursor ? (next ? [] : records) : splitPages ? (next ? records.slice(1) : records.slice(0, 1)) : records,
-          result_info: { is_truncated: loopCursor || (splitPages && !next),
-            ...((loopCursor || (splitPages && !next)) ? { cursor: 'same' } : {}) } });
+          result: ambiguousFullPage ? Array.from({ length: 1000 }, (_, index) => ({ key: `key-${index}` })) : result,
+          ...((terminalWithoutInfo && !isTruncated) || ambiguousFullPage ? {} : {
+            result_info: { is_truncated: isTruncated, ...(isTruncated ? { cursor: 'same' } : {}) } }) });
       }
       const record = Object.entries(contents).find(([path]) => manifest[path].key === url.pathname.split('/objects/')[1]);
       return record ? new Response(record[1]) : new Response('missing', { status: 404 });
@@ -208,5 +211,20 @@ describe('authenticated production archive reader', () => {
     await expect(verify({ ...fixture({ manifest }), bucket: productionArchiveReader(apiFetch) }))
       .resolves.toMatchObject({ retainedAssets: 3 });
     expect(apiFetch.mock.calls[1][0].searchParams.get('cursor')).toBe('same');
+  });
+
+  it('accepts R2 terminal pages with no result_info, both directly and after a cursor', async () => {
+    for (const splitPages of [false, true]) {
+      const { apiFetch, manifest } = apiFixture({ splitPages, terminalWithoutInfo: true });
+      await expect(verify({ ...fixture({ manifest }), bucket: productionArchiveReader(apiFetch) }))
+        .resolves.toMatchObject({ retainedAssets: 3 });
+      expect(apiFetch.mock.calls.filter(([url]) => !url.pathname.includes('/objects/'))).toHaveLength(splitPages ? 2 : 1);
+    }
+  });
+
+  it('rejects a full R2 page with no result_info because more pages may exist', async () => {
+    const { apiFetch, manifest } = apiFixture({ ambiguousFullPage: true });
+    await expect(verify({ ...fixture({ manifest }), bucket: productionArchiveReader(apiFetch) }))
+      .rejects.toThrow('pagination is invalid');
   });
 });
