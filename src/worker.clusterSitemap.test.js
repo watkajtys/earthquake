@@ -35,7 +35,7 @@ describe('deployed Worker cluster sitemap', () => {
     expect(upstream).not.toHaveBeenCalled();
     expect(xml).toContain('<loc>https://earthquakeslive.com/cluster/overview_cluster_us7000test_3</loc>');
     expect(xml).toContain('<loc>https://earthquakeslive.com/cluster/5-quakes-near-test-m4.2-stable</loc>');
-    expect(xml).toContain('<lastmod>2025-06-15T15:06:40.000Z</lastmod>');
+    expect(xml).not.toContain('<lastmod>');
     expect(xml).not.toContain('invalid/slug');
     expect(xml).not.toContain('up-to-m');
   });

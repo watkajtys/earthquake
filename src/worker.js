@@ -167,12 +167,11 @@ async function handleClustersSitemapRequest(request, env) {
         // pages. Rebuilding old overview slugs from USGS detail both advertises
         // a different URL and multiplies each sitemap request into upstream calls.
         if (!isValidClusterRouteValue(row.slug)) continue;
-        const updated = timestampMilliseconds(row.updatedAt);
-        const lastmod = updated !== null && Number.isFinite(new Date(updated).getTime())
-          ? `<lastmod>${new Date(updated).toISOString()}</lastmod>` : "";
+        // The scheduled writer can refresh updatedAt without changing the
+        // public cluster page. Do not advertise that clock as page freshness.
         const sitemapUrl = `https://earthquakeslive.com${buildClusterPath(row)}`;
         clustersXml += `
-  <url><loc>${escapeXml2(sitemapUrl)}</loc>${lastmod}<changefreq>daily</changefreq><priority>0.7</priority></url>`;
+  <url><loc>${escapeXml2(sitemapUrl)}</loc><changefreq>daily</changefreq><priority>0.7</priority></url>`;
       }
     } else {
       console.log(
