@@ -7,7 +7,7 @@ import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PREVIOUS_RELEASE_ASSETS } from '../src/previousReleaseAssets.js';
 
-// Covers the verified 105-path union while keeping future release additions reviewed.
+// Covers the verified 126-path union while keeping future release additions reviewed.
 export const MAX_ASSETS = 128;
 const MAX_ASSET_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 100 * 1024 * 1024;

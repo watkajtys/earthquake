@@ -43,10 +43,10 @@ describe('bounded retained asset union staging', () => {
     expect(await stagePreviousAssets(options)).toMatchObject({ predecessorCount: 2, unionCount: 2 });
   });
 
-  it('accepts the reviewed 105-path graph and still rejects a graph beyond 128 paths', async () => {
+  it('accepts the reviewed 126-path graph and still rejects a graph beyond 128 paths', async () => {
     const accepted = await setup();
-    await addPredecessorFiles(accepted.predecessorDirectory, 103);
-    expect(await stagePreviousAssets(accepted)).toMatchObject({ unionCount: 105, newPaths: 104 });
+    await addPredecessorFiles(accepted.predecessorDirectory, 124);
+    expect(await stagePreviousAssets(accepted)).toMatchObject({ unionCount: 126, newPaths: 125 });
 
     const rejected = await setup();
     await addPredecessorFiles(rejected.predecessorDirectory, 127);
