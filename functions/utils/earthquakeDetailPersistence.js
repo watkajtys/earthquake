@@ -3,6 +3,26 @@ import { isValidUsgsEventId, usgsDetailUrl, USGS_LIMITS } from './usgs-transport
 // Leave space below the Queue message limit for serialization metadata.
 export const MAX_DETAIL_QUEUE_BYTES = 120_000;
 
+const SUMMARY_COLUMNS = ['event_time', 'latitude', 'longitude', 'depth', 'magnitude', 'place', 'usgs_detail_url'];
+
+function detailRevisionError(code) {
+  const error = new Error(code === 'STALE_DETAIL_REVISION'
+    ? 'Earthquake detail revision is older than the stored summary'
+    : 'Earthquake detail conflicts with the stored summary at the same revision');
+  error.code = code;
+  return error;
+}
+
+function assertCurrentDetailRevision(row, updatedAtMs, summary) {
+  if (!row || row.source_updated_at_ms === null) return;
+  if (!Number.isSafeInteger(row.source_updated_at_ms)) throw new Error('Stored earthquake revision is invalid');
+  if (row.source_updated_at_ms > updatedAtMs) throw detailRevisionError('STALE_DETAIL_REVISION');
+  if (row.source_updated_at_ms === updatedAtMs &&
+      SUMMARY_COLUMNS.some(column => row[column] !== summary[column])) {
+    throw detailRevisionError('CONFLICTING_DETAIL_REVISION');
+  }
+}
+
 export function extractProductFlags(detailData) {
   const products = detailData?.properties?.products;
   if (products != null && (typeof products !== 'object' || Array.isArray(products))) {
@@ -34,6 +54,7 @@ export async function persistEarthquakeDetail({ env, detailData, previousAttempt
       !Number.isFinite(properties?.time) ||
       !(properties.mag === null || Number.isFinite(properties.mag)) ||
       !(properties.place === null || typeof properties.place === 'string') ||
+      !Number.isSafeInteger(properties.updated) || Math.abs(properties.updated) > 8640000000000000 ||
       !Array.isArray(coordinates) || coordinates.length !== 3 || !coordinates.every(Number.isFinite) ||
       !Number.isInteger(previousAttempts) || previousAttempts < 0) {
     throw new Error('Invalid validated earthquake detail');
@@ -44,6 +65,16 @@ export async function persistEarthquakeDetail({ env, detailData, previousAttempt
   if (encoder.encode(detailJson).byteLength > USGS_LIMITS.detailBytes) throw new Error('Earthquake detail exceeds storage limit');
   const message = { id: requestedId, geojson: detailData };
   const messageBytes = encoder.encode(JSON.stringify(message)).byteLength;
+  const summary = {
+    event_time: properties.time,
+    latitude: coordinates[1], longitude: coordinates[0], depth: coordinates[2],
+    magnitude: properties.mag, place: properties.place, usgs_detail_url: usgsDetailUrl(requestedId),
+  };
+  // Avoid queuing an already stale detail. The SQL predicate below remains
+  // authoritative when a summary writer wins after this read.
+  const existing = await env.DB.prepare(`SELECT ${SUMMARY_COLUMNS.join(', ')}, source_updated_at_ms FROM EarthquakeEvents WHERE id = ?`)
+    .bind(requestedId).first();
+  assertCurrentDetailRevision(existing, properties.updated, summary);
   let archiveDisposition;
   if (env.GEOJSON_QUEUE && messageBytes <= MAX_DETAIL_QUEUE_BYTES) {
     // A rejected send must not set detail_fetched. The caller records a retry.
@@ -61,15 +92,16 @@ export async function persistEarthquakeDetail({ env, detailData, previousAttempt
   const now = Date.now();
   const result = await env.DB.prepare(`
     INSERT INTO EarthquakeEvents (
-      id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at,
+      id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at, source_updated_at_ms,
       has_shakemap, has_moment_tensor, has_focal_mechanism, has_dyfi, has_losspager, has_finite_fault,
       has_enhanced_data, products_json, detail_fetched, detail_fetch_time, detail_fetch_attempts,
       last_detail_fetch_attempt, next_detail_fetch_attempt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, NULL)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, NULL)
     ON CONFLICT(id) DO UPDATE SET
       event_time = excluded.event_time, latitude = excluded.latitude, longitude = excluded.longitude,
       depth = excluded.depth, magnitude = excluded.magnitude, place = excluded.place,
       usgs_detail_url = excluded.usgs_detail_url, retrieved_at = excluded.retrieved_at,
+      source_updated_at_ms = excluded.source_updated_at_ms,
       has_shakemap = excluded.has_shakemap, has_moment_tensor = excluded.has_moment_tensor,
       has_focal_mechanism = excluded.has_focal_mechanism, has_dyfi = excluded.has_dyfi,
       has_losspager = excluded.has_losspager, has_finite_fault = excluded.has_finite_fault,
@@ -77,13 +109,26 @@ export async function persistEarthquakeDetail({ env, detailData, previousAttempt
       detail_fetched = 1, detail_fetch_time = excluded.detail_fetch_time,
       detail_fetch_attempts = MAX(COALESCE(EarthquakeEvents.detail_fetch_attempts, 0), excluded.detail_fetch_attempts),
       last_detail_fetch_attempt = excluded.last_detail_fetch_attempt, next_detail_fetch_attempt = NULL
+    WHERE EarthquakeEvents.source_updated_at_ms IS NULL
+       OR excluded.source_updated_at_ms > EarthquakeEvents.source_updated_at_ms
+       OR (excluded.source_updated_at_ms = EarthquakeEvents.source_updated_at_ms
+           AND ${SUMMARY_COLUMNS.map(column => `excluded.${column} IS EarthquakeEvents.${column}`).join(' AND ')})
   `).bind(
-    requestedId, properties.time, coordinates[1], coordinates[0], coordinates[2], properties.mag,
-    properties.place, usgsDetailUrl(requestedId), now,
+    requestedId, summary.event_time, summary.latitude, summary.longitude, summary.depth, summary.magnitude,
+    summary.place, summary.usgs_detail_url, now, properties.updated,
     Number(flags.has_shakemap), Number(flags.has_moment_tensor), Number(flags.has_focal_mechanism),
     Number(flags.has_dyfi), Number(flags.has_losspager), Number(flags.has_finite_fault),
     Number(flags.has_enhanced_data), flags.products_json, now, previousAttempts + 1, now,
   ).run();
   if (result?.success !== true) throw new Error('Failed to persist earthquake detail metadata');
+  if (result.meta?.changes === 0) {
+    const current = await env.DB.prepare(`SELECT ${SUMMARY_COLUMNS.join(', ')}, source_updated_at_ms FROM EarthquakeEvents WHERE id = ?`)
+      .bind(requestedId).first();
+    assertCurrentDetailRevision(current, properties.updated, summary);
+    throw new Error('Earthquake detail write made no confirmed change');
+  }
+  if (!Number.isInteger(result.meta?.changes) || result.meta.changes < 0) {
+    throw new Error('Earthquake detail write had no confirmed result');
+  }
   return { flags, archiveDisposition };
 }

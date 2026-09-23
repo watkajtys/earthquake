@@ -26,12 +26,12 @@ describe('backfill and shared detail persistence against the migrated schema', (
   const row = (id = 'quake1') => database.prepare('SELECT * FROM EarthquakeEvents WHERE id = ?').get(id);
   const seed = (id = 'quake1', overrides = {}) => {
     const values = { magnitude: 4.5, event_time: now - 2 * hour, detail_fetch_attempts: 0,
-      next_detail_fetch_attempt: null, detail_fetched: 0, ...overrides };
+      next_detail_fetch_attempt: null, detail_fetched: 0, source_updated_at_ms: null, ...overrides };
     database.prepare(`INSERT INTO EarthquakeEvents
-      (id, magnitude, event_time, detail_fetch_attempts, next_detail_fetch_attempt, detail_fetched, usgs_detail_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      (id, magnitude, event_time, detail_fetch_attempts, next_detail_fetch_attempt, detail_fetched, usgs_detail_url, source_updated_at_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, values.magnitude, values.event_time, values.detail_fetch_attempts, values.next_detail_fetch_attempt,
-        values.detail_fetched, 'https://attacker.invalid/not-used');
+        values.detail_fetched, 'https://attacker.invalid/not-used', values.source_updated_at_ms);
   };
   const get = (query = 'batch_size=1') => onRequestGet({ ...context, request: new Request(`https://example.com/api/backfill-earthquake-details?${query}`) });
   const post = (body, headers = { 'Content-Type': 'application/json' }) => onRequestPost({
@@ -185,7 +185,59 @@ describe('backfill and shared detail persistence against the migrated schema', (
     expect(result.archiveDisposition).toBe('queued');
     expect(row()).toMatchObject({ detail_fetched: 1, detail_fetch_time: now, products_json: '[]',
       has_shakemap: 0, has_moment_tensor: 0, has_focal_mechanism: 0, has_dyfi: 0,
-      has_losspager: 0, has_finite_fault: 0, has_enhanced_data: 0, magnitude: null, place: null });
+      has_losspager: 0, has_finite_fault: 0, has_enhanced_data: 0, magnitude: null, place: null,
+      source_updated_at_ms: now });
+  });
+
+  it('keeps a newer summary intact and schedules a retry when backfill receives stale detail', async () => {
+    seed('quake1', { source_updated_at_ms: now + 1000 });
+    database.prepare('UPDATE EarthquakeEvents SET place = ? WHERE id = ?').run('Current location', 'quake1');
+
+    const response = await get();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: false, processed: 0, errors: 1 });
+    expect(row()).toMatchObject({ place: 'Current location', source_updated_at_ms: now + 1000,
+      detail_fetched: 0, next_detail_fetch_attempt: now + hour });
+    expect(env.GEOJSON_QUEUE.send).not.toHaveBeenCalled();
+    expect(env.GEOJSON_BUCKET.put).not.toHaveBeenCalled();
+  });
+
+  it('rejects an equal-revision scientific conflict before archiving', async () => {
+    seed('quake1', { source_updated_at_ms: now });
+    database.prepare('UPDATE EarthquakeEvents SET place = ? WHERE id = ?').run('Corrected location', 'quake1');
+
+    await expect(persistEarthquakeDetail({ env, detailData: feature() }))
+      .rejects.toMatchObject({ code: 'CONFLICTING_DETAIL_REVISION' });
+    expect(row()).toMatchObject({ place: 'Corrected location', source_updated_at_ms: now, detail_fetched: 0 });
+    expect(env.GEOJSON_QUEUE.send).not.toHaveBeenCalled();
+  });
+
+  it('enriches a matching revision and advances the source revision for a newer detail', async () => {
+    seed('quake1', { source_updated_at_ms: now });
+    database.prepare(`UPDATE EarthquakeEvents SET latitude = 34, longitude = -118, depth = 10,
+      place = 'Test location', usgs_detail_url = ? WHERE id = ?`)
+      .run('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/quake1.geojson', 'quake1');
+    await persistEarthquakeDetail({ env, detailData: feature() });
+    expect(row()).toMatchObject({ source_updated_at_ms: now, detail_fetched: 1, has_shakemap: 1 });
+
+    const newer = feature();
+    newer.properties.updated = now + 1000;
+    newer.properties.place = 'Newer detail location';
+    await persistEarthquakeDetail({ env, detailData: newer });
+    expect(row()).toMatchObject({ source_updated_at_ms: now + 1000, place: 'Newer detail location', detail_fetched: 1 });
+  });
+
+  it('keeps the summary fence when a newer summary arrives after the archive preflight', async () => {
+    seed('quake1', { source_updated_at_ms: now - 1000 });
+    env.GEOJSON_QUEUE.send.mockImplementationOnce(async () => {
+      database.prepare('UPDATE EarthquakeEvents SET source_updated_at_ms = ?, place = ? WHERE id = ?')
+        .run(now + 1000, 'Concurrent correction', 'quake1');
+    });
+
+    await expect(persistEarthquakeDetail({ env, detailData: feature() }))
+      .rejects.toMatchObject({ code: 'STALE_DETAIL_REVISION' });
+    expect(row()).toMatchObject({ source_updated_at_ms: now + 1000, place: 'Concurrent correction', detail_fetched: 0 });
+    expect(env.GEOJSON_QUEUE.send).toHaveBeenCalledTimes(1);
   });
 
   it('stores an accepted USGS alias under the requested event ID', async () => {
@@ -219,7 +271,8 @@ describe('backfill and shared detail persistence against the migrated schema', (
     env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));
     await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('R2 outage');
     expect(row().detail_fetched).toBe(0);
-    expect(env.DB.prepare).not.toHaveBeenCalled();
+    expect(env.DB.prepare).toHaveBeenCalledTimes(1);
+    expect(env.DB.prepare.mock.calls[0][0]).toMatch(/^SELECT/);
   });
 
   it('rejects details above the transport storage cap before any archive or D1 mutation', async () => {
@@ -232,7 +285,8 @@ describe('backfill and shared detail persistence against the migrated schema', (
   });
 
   it('does not report complete when D1 rejects metadata after archive acceptance', async () => {
-    env.DB.prepare.mockReturnValueOnce({ bind: () => ({ run: async () => ({ success: false }) }) });
+    env.DB.prepare.mockImplementationOnce(() => ({ bind: () => ({ first: async () => null }) }));
+    env.DB.prepare.mockImplementationOnce(() => ({ bind: () => ({ run: async () => ({ success: false }) }) }));
     await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('Failed to persist');
     expect(env.GEOJSON_QUEUE.send).toHaveBeenCalledTimes(1);
     expect(row()).toBeUndefined();
