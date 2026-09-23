@@ -84,24 +84,26 @@ const isRenderableNearbyQuake = quake => {
 // the cluster bounds. This child mounts with the map context available.
 const MapViewport = ({ center, highlight, quakes, fitBounds, defaultZoom }) => {
   const map = useMap();
-  useEffect(() => {
+  const points = useMemo(() => {
+    if (!fitBounds) return null;
     const points = [];
-    if (fitBounds && highlight) points.push(highlight);
-    if (fitBounds) {
-      quakes.forEach(quake => {
-        const coordinates = quake?.geometry?.coordinates;
-        const latitude = Number.parseFloat(coordinates?.[1]);
-        const longitude = Number.parseFloat(coordinates?.[0]);
-        if (Number.isFinite(latitude) && Number.isFinite(longitude)) points.push([latitude, longitude]);
-      });
-    }
+    if (highlight) points.push(highlight);
+    quakes.forEach(quake => {
+      const coordinates = quake?.geometry?.coordinates;
+      const latitude = Number.parseFloat(coordinates?.[1]);
+      const longitude = Number.parseFloat(coordinates?.[0]);
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) points.push([latitude, longitude]);
+    });
+    return points;
+  }, [fitBounds, highlight, quakes]);
+  useEffect(() => {
     if (fitBounds && points.length > 1) {
       map.fitBounds(L.latLngBounds(points.map(([latitude, longitude]) => L.latLng(latitude, longitude))), { padding: [50, 50] });
     } else {
       const target = fitBounds && points.length === 1 ? points[0] : center;
       map.setView(L.latLng(target[0], target[1]), defaultZoom);
     }
-  }, [map, center, highlight, quakes, fitBounds, defaultZoom]);
+  }, [map, center, points, fitBounds, defaultZoom]);
   return null;
 };
 

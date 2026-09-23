@@ -99,6 +99,14 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     });
   });
 
+  it('does not reset a regional map view when only nearby quake data changes', async () => {
+    const initial = <MemoryRouter><EarthquakeMap {...baseProps} nearbyQuakes={[]} /></MemoryRouter>;
+    const { rerender } = render(initial);
+    await waitFor(() => expect(mockSetView).toHaveBeenCalledTimes(1));
+    rerender(<MemoryRouter><EarthquakeMap {...baseProps} nearbyQuakes={nearbyQuakesData} /></MemoryRouter>);
+    expect(mockSetView).toHaveBeenCalledTimes(1);
+  });
+
   it('renders a marker with custom pulsing icon for the highlightQuake', async () => {
     render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
     const markers = await screen.findAllByTestId('marker');
