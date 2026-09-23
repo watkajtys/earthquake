@@ -10,8 +10,9 @@ import { MAX_ASSETS } from './stage-previous-assets.mjs';
 const CANONICAL_ORIGIN = 'https://earthquakeslive.com';
 const CRAWLER_USER_AGENT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 // The retained graph and this release's assets are both requested. Keep a
-// bounded margin for the current build's 26 files beyond the reviewed archive.
+// bounded margin for the current build's files and the non-asset route checks.
 const MAX_SMOKE_ASSETS = MAX_ASSETS + 32;
+const MAX_SMOKE_REQUESTS = MAX_SMOKE_ASSETS + 40;
 const decodeXml = value => value.replace(/&(amp|quot|apos|lt|gt);/g, (_, entity) => ({ amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' })[entity]);
 
 export async function smokeDeployment(args = [], { fetchImpl = fetch, log = console.log } = {}) {
@@ -33,7 +34,7 @@ let requests = 0;
 async function request(path, contentType, status = 200, userAgent = 'Earthquake-Deployment-Smoke/1.0', signal = AbortSignal.timeout(30_000)) {
   const url = new URL(path, base);
   assert.equal(url.origin, base.origin, `Refusing external URL ${url}`);
-  assert(++requests <= 280, 'Smoke request budget exceeded (280 GET requests).');
+  assert(++requests <= MAX_SMOKE_REQUESTS, `Smoke request budget exceeded (${MAX_SMOKE_REQUESTS} GET requests).`);
   const response = await fetchImpl(url, {
     method: 'GET', redirect: 'error', signal,
     headers: { 'User-Agent': userAgent },

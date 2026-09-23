@@ -7,8 +7,8 @@ import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PREVIOUS_RELEASE_ASSETS } from '../src/previousReleaseAssets.js';
 
-// Covers the verified 190-path union plus the 26-file predecessor, with a
-// small margin and an explicit future review gate.
+// Bounds the reviewed retained graph plus one exact predecessor build, with
+// a small margin and an explicit future review gate.
 export const MAX_ASSETS = 240;
 const MAX_ASSET_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
