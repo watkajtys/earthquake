@@ -16,6 +16,19 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(SUMMARY_TEST_TIME); fetc
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('compact cluster snapshot lifecycle', () => {
+  it('ages a verified unchanged observation rather than the immutable generation', async () => {
+    vi.setSystemTime(SUMMARY_TEST_TIME + 30 * 60_000);
+    fetchActiveClusters.mockResolvedValue(summaryPage(items(2), {
+      lastObservedAtMs: SUMMARY_TEST_TIME + 25 * 60_000, stale: false,
+    }));
+    const { result, rerender } = renderHook(() => useActiveClusters());
+    await flush();
+    expect(result.current.stale).toBe(false);
+    vi.setSystemTime(SUMMARY_TEST_TIME + 46 * 60_000);
+    rerender();
+    expect(result.current.stale).toBe(true);
+  });
+
   it('loads one first page, shares each continuation request, and preserves loaded pages on same-generation refresh', async () => {
     const pending = deferred();
     fetchActiveClusters.mockResolvedValueOnce(first()).mockImplementationOnce(() => pending.promise).mockResolvedValueOnce({ ...first(), nextCursor: 'new-issued-first-cursor' });

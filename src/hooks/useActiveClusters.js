@@ -135,5 +135,5 @@ export function useActiveClusters({ enabled = true } = {}) {
     totalCount: snapshot?.totalCount ?? 0, generationId: snapshot?.generationId ?? null,
     paginationKey: pages ? `${snapshot.generationId}:${pages.resetSequence}` : null,
     hasMore: Boolean(pages?.nextCursor), loadingMore: nextState.loading, nextError: nextState.error, loadMore,
-    stale: snapshot ? snapshot.stale || Date.now() - snapshot.generatedAtMs > SUMMARY_STALE_AFTER_MS : false };
+    stale: snapshot ? snapshot.stale || Date.now() - (snapshot.lastObservedAtMs ?? snapshot.generatedAtMs) > SUMMARY_STALE_AFTER_MS : false };
 }

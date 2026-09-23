@@ -45,6 +45,7 @@ export default function ClusterSummaryList({ clusters, onClusterSelect, totalCou
   return <>
     {snapshot && <p ref={snapshotLabelRef} tabIndex={-1} className="mb-2 text-xs text-slate-300">
       Stored cluster snapshot <time dateTime={new Date(snapshot.generatedAtMs).toISOString()}>{new Date(snapshot.generatedAtMs).toLocaleString()}</time>
+      {snapshot.lastObservedAtMs > snapshot.generatedAtMs && <> · checked <time dateTime={new Date(snapshot.lastObservedAtMs).toISOString()}>{new Date(snapshot.lastObservedAtMs).toLocaleString()}</time></>}
       {stale && <span className="text-amber-200"> — stale snapshot</span>}
     </p>}
     {clusters.length > 0 && <>

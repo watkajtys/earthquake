@@ -1,10 +1,12 @@
 import {
   SUMMARY_SCHEMA_VERSION, SUMMARY_SOURCE, SUMMARY_VIEW, SUMMARY_POINTER_KEY,
   SUMMARY_PAGE_SIZE, MAX_SUMMARY_ITEMS, MAX_SUMMARY_PAGE_BYTES,
-  MAX_SUMMARY_POINTER_BYTES, MAX_SUMMARY_MANIFEST_BYTES, SUMMARY_MAX_AGE_MS, SUMMARY_STALE_AFTER_MS,
-  MAX_RETAINED_GENERATIONS, generationManifestKey, generationPageKey,
+  MAX_SUMMARY_POINTER_BYTES, MAX_SUMMARY_MANIFEST_BYTES, MAX_SUMMARY_OBSERVATION_BYTES,
+  SUMMARY_MAX_AGE_MS, SUMMARY_REPUBLISH_AFTER_MS,
+  MAX_RETAINED_GENERATIONS, generationManifestKey, generationPageKey, generationObservationKey,
   summaryEnvelopeMetadata, projectSummaryItem, compareSummaryItems, sha256Hex,
-  validateSummaryPointer, validateSummaryDescriptor, validateSummaryManifest, validateSummaryPage,
+  summaryProjectionHash, validateSummaryPointer, validateSummaryDescriptor, validateSummaryManifest,
+  validateSummaryPage, validateSummaryObservation,
 } from '../../shared/clusterSummaryContract.js';
 
 export const SUMMARY_PROJECTION_SQL = `SELECT
@@ -51,12 +53,15 @@ export async function readSummaryPointer(bucket) {
   const object = await readSummaryJsonObject(bucket, SUMMARY_POINTER_KEY, MAX_SUMMARY_POINTER_BYTES);
   if (object === null) return { pointer: null, etag: null, projectionHash: null };
   const pointer = validateSummaryPointer(object.value);
-  const metadata = object.customMetadata;
-  const projectionHash = metadata && typeof metadata === 'object' && !Array.isArray(metadata) &&
-    metadata.summaryGenerationId === pointer.current.generationId &&
-    typeof metadata.summaryProjectionSha256 === 'string' && /^[a-f0-9]{64}$/.test(metadata.summaryProjectionSha256)
-    ? metadata.summaryProjectionSha256 : null;
+  const projectionHash = summaryProjectionHash(object.customMetadata, pointer.current.generationId);
   return { pointer, etag: object.etag, projectionHash };
+}
+async function readSummaryObservation(bucket, descriptor, projectionHash) {
+  const key = generationObservationKey(descriptor.generationId);
+  const object = await readSummaryJsonObject(bucket, key, MAX_SUMMARY_OBSERVATION_BYTES);
+  if (object === null) return { observation: null, etag: null };
+  if (projectionHash === null) throw new Error('Untrusted cluster summary observation');
+  return { observation: validateSummaryObservation(object.value, descriptor, projectionHash), etag: object.etag };
 }
 function encodeBounded(value, maxBytes) {
   const text = JSON.stringify(value);
@@ -81,6 +86,9 @@ export async function publishClusterSummarySnapshot(env, { now, randomUUID = () 
   // The base ETag MUST precede the source read. Never rebase these observed rows
   // after losing the final compare-and-swap; the next run must read fresh data.
   const { pointer: previous, etag: baseEtag, projectionHash: previousProjectionHash } = await readSummaryPointer(env.GEOJSON_BUCKET);
+  const { observation: previousObservation, etag: observationEtag } = previous
+    ? await readSummaryObservation(env.GEOJSON_BUCKET, previous.current, previousProjectionHash)
+    : { observation: null, etag: null };
   const observationStartedAtMs = clock();
   if (!Number.isSafeInteger(observationStartedAtMs) || observationStartedAtMs < 0) throw new Error('Invalid observation time');
   const result = await env.DB.prepare(SUMMARY_PROJECTION_SQL)
@@ -107,9 +115,26 @@ export async function publishClusterSummarySnapshot(env, { now, randomUUID = () 
   if (!Number.isSafeInteger(generatedAtMs) || generatedAtMs < sourceObservedAtMs) {
     throw new Error('Invalid summary publication time');
   }
+  const lastObservedAtMs = previousObservation?.observedAtMs ?? previous?.current.sourceObservedAtMs;
+  if (previous && (sourceObservedAtMs < lastObservedAtMs || generatedAtMs < previous.current.generatedAtMs)) {
+    throw new Error('Clock moved backwards after cluster summary observation');
+  }
   if (previous && previousProjectionHash === projectionHash &&
-      generatedAtMs >= previous.current.generatedAtMs &&
-      generatedAtMs - previous.current.generatedAtMs < SUMMARY_STALE_AFTER_MS) {
+      generatedAtMs - previous.current.generatedAtMs < SUMMARY_REPUBLISH_AFTER_MS) {
+    if (sourceObservedAtMs > lastObservedAtMs) {
+      // One tiny mutable object per generation. Its body changes with the time,
+      // so even content-derived ETags advance. The marker's ETag was captured
+      // before D1 was read; a losing observation cannot rebase stale rows.
+      const observation = validateSummaryObservation({ generationId: previous.current.generationId,
+        projectionHash, observedAtMs: sourceObservedAtMs }, previous.current, projectionHash);
+      const committed = await env.GEOJSON_BUCKET.put(generationObservationKey(previous.current.generationId),
+        encodeBounded(observation, MAX_SUMMARY_OBSERVATION_BYTES).text, {
+          onlyIf: observationEtag === null ? { etagDoesNotMatch: '*' } : { etagMatches: observationEtag },
+          httpMetadata: { contentType: 'application/json', cacheControl: 'private, no-store' },
+        });
+      if (committed === null) return { published: false, reason: 'superseded' };
+      confirmedWrite(committed);
+    }
     return { published: false, reason: 'unchanged', generationId: previous.current.generationId,
       snapshotSequence: previous.current.snapshotSequence, totalCount: items.length,
       pageCount: previous.current.pageCount };

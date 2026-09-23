@@ -5,7 +5,7 @@ import * as spatial from '../utils/spatialClusterUtils.js';
 import { storeClusterDefinition } from '../utils/d1ClusterUtils.js';
 import { clusterInput, clusterNow, createClusterSqliteFixture } from '../utils/clusterSqliteFixture.test-support.js';
 import { createMemorySummaryBucket } from '../utils/clusterSummarySnapshot.test-support.js';
-import { SUMMARY_POINTER_KEY, SUMMARY_STALE_AFTER_MS } from '../../shared/clusterSummaryContract.js';
+import { SUMMARY_POINTER_KEY, SUMMARY_REPUBLISH_AFTER_MS } from '../../shared/clusterSummaryContract.js';
 
 let fixture;
 let env;
@@ -158,7 +158,7 @@ describe('scheduled publication failure boundaries', () => {
   it('preserves the last compact pointer when a later page upload fails, while legacy delivery remains available', async () => {
     await worker.scheduled(null, env, {});
     const previous = env.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY);
-    vi.setSystemTime(clusterNow + SUMMARY_STALE_AFTER_MS);
+    vi.setSystemTime(clusterNow + SUMMARY_REPUBLISH_AFTER_MS);
     env.GEOJSON_BUCKET.hooks.beforePut = key => {
       if (key.includes('/pages/')) throw new Error('R2 page unavailable');
     };

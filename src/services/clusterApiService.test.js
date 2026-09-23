@@ -159,6 +159,14 @@ describe('clusterApiService', () => {
 
     });
 
+    it('uses a validated observation header without changing the JSON envelope', async () => {
+      const observedAtMs = mockServerCalculatedData.sourceObservedAtMs + 10 * 60_000;
+      server.use(http.get('/api/cluster-summaries', () => HttpResponse.json(mockServerCalculatedData, {
+        headers: { 'X-Summary-Observed-At': String(observedAtMs) },
+      })));
+      expect(await fetchActiveClusters()).toEqual({ ...mockServerCalculatedData, lastObservedAtMs: observedAtMs });
+    });
+
     it('throws if the server responds with an error', async () => {
       server.use(
         http.get('/api/cluster-summaries', () => {

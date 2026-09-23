@@ -8,7 +8,7 @@ import { onRequestGet as backfill } from '../functions/api/backfill-earthquake-d
 import { storeClusterDefinition } from '../functions/utils/d1ClusterUtils.js';
 import { clusterInput, clusterNow, createClusterSqliteFixture } from '../functions/utils/clusterSqliteFixture.test-support.js';
 import { createMemorySummaryBucket } from '../functions/utils/clusterSummarySnapshot.test-support.js';
-import { SUMMARY_POINTER_KEY } from '../shared/clusterSummaryContract.js';
+import { SUMMARY_POINTER_KEY, generationObservationKey } from '../shared/clusterSummaryContract.js';
 
 vi.mock('../functions/background/ingest-usgs-feed.js', () => ({ handleTrustedUsgsIngestion: vi.fn() }));
 vi.mock('../functions/background/generate-lists.js', () => ({ handleGenerateLists: vi.fn() }));
@@ -149,7 +149,9 @@ describe('exported Worker ten-minute cluster lifetime with migrated SQLite', () 
     expect(handleTrustedUsgsIngestion).not.toHaveBeenCalled();
     expect(handleGenerateLists).not.toHaveBeenCalled();
     expect(clusterEnv.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY).current.snapshotSequence).toBe(1);
-    expect(clusterEnv.GEOJSON_BUCKET.calls.filter(call => call.method === 'put')).toHaveLength(previousR2Writes);
+    const writes = clusterEnv.GEOJSON_BUCKET.calls.filter(call => call.method === 'put');
+    expect(writes).toHaveLength(previousR2Writes + 1);
+    expect(writes.at(-1).key).toBe(generationObservationKey(clusterEnv.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY).current.generationId));
   });
 
   it('rejects waitUntil on an unconfirmed write and makes no replacement KV write', async () => {

@@ -1,7 +1,8 @@
 import {
   SUMMARY_SCHEMA_VERSION, SUMMARY_POINTER_KEY, SUMMARY_PAGE_SIZE,
-  MAX_SUMMARY_PAGE_BYTES, MAX_SUMMARY_POINTER_BYTES, MAX_SUMMARY_MANIFEST_BYTES,
+  MAX_SUMMARY_PAGE_BYTES, MAX_SUMMARY_POINTER_BYTES, MAX_SUMMARY_MANIFEST_BYTES, MAX_SUMMARY_OBSERVATION_BYTES,
   MAX_SUMMARY_ITEMS, SUMMARY_MAX_AGE_MS, SUMMARY_STALE_AFTER_MS,
+  generationObservationKey, summaryProjectionHash, validateSummaryObservation,
   validateSummaryPointer, validateSummaryManifest, validateSummaryPage,
   validateSummaryEnvelope, isSummaryGenerationId, summaryEnvelopeMetadata, sha256Hex,
 } from '../../shared/clusterSummaryContract.js';
@@ -72,8 +73,9 @@ function readRequest(request, now) {
 
 // R2 metadata bounds the expected allocation; the stream bound also protects
 // against malformed objects or a dishonest test/storage adapter's size field.
-async function readObject(bucket, key, maxBytes) {
+async function readObject(bucket, key, maxBytes, allowMissing = false) {
   const object = await bucket.get(key);
+  if (allowMissing && object === null) return null;
   if (!object || !Number.isSafeInteger(object.size) || object.size < 0 || object.size > maxBytes || !object.body) {
     throw unavailable();
   }
@@ -97,7 +99,7 @@ async function readObject(bucket, key, maxBytes) {
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   const text = decoder.decode(bytes);
-  return { value: JSON.parse(text), text, byteLength: length };
+  return { value: JSON.parse(text), text, byteLength: length, customMetadata: object.customMetadata };
 }
 
 function sameSnapshot(actual, expected) {
@@ -121,11 +123,11 @@ async function nextCursor(descriptor, offset, request, key) {
   return cursor;
 }
 
-function json(value, status = 200) {
+function json(value, status = 200, headers = {}) {
   const body = JSON.stringify(value);
   if (encoder.encode(body).byteLength > MAX_SUMMARY_PAGE_BYTES) throw unavailable();
   return new Response(body, {
-    status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
   });
 }
 
@@ -135,13 +137,26 @@ export async function onRequestGet({ request, env }) {
     const query = readRequest(request, now);
     const bucket = env.GEOJSON_BUCKET;
     if (!bucket?.get) throw unavailable();
-    const pointer = validateSummaryPointer((await readObject(bucket, SUMMARY_POINTER_KEY, MAX_SUMMARY_POINTER_BYTES)).value);
+    const pointerObject = await readObject(bucket, SUMMARY_POINTER_KEY, MAX_SUMMARY_POINTER_BYTES);
+    const pointer = validateSummaryPointer(pointerObject.value);
     const descriptor = query.generationId === null || query.generationId === pointer.current.generationId
       ? pointer.current : pointer.history.find(item => item.generationId === query.generationId);
     if (!descriptor || (descriptor !== pointer.current && now - descriptor.generatedAtMs > SUMMARY_MAX_AGE_MS)) {
       throw new RequestFailure(410, 'GENERATION_EXPIRED');
     }
     if (descriptor.generatedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS || descriptor.sourceObservedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS) throw unavailable();
+    let lastObservedAtMs = descriptor.sourceObservedAtMs;
+    if (descriptor === pointer.current) {
+      const projectionHash = summaryProjectionHash(pointerObject.customMetadata, descriptor.generationId);
+      if (projectionHash !== null) {
+        const observation = await readObject(bucket, generationObservationKey(descriptor.generationId),
+          MAX_SUMMARY_OBSERVATION_BYTES, true);
+        if (observation !== null) {
+          lastObservedAtMs = validateSummaryObservation(observation.value, descriptor, projectionHash).observedAtMs;
+          if (lastObservedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS) throw unavailable();
+        }
+      }
+    }
     const manifest = validateSummaryManifest((await readObject(bucket, descriptor.manifestKey, MAX_SUMMARY_MANIFEST_BYTES)).value, descriptor);
     if (!sameSnapshot(manifest, descriptor) || manifest.pageCount !== descriptor.pageCount || manifest.manifestKey !== descriptor.manifestKey) {
       throw unavailable();
@@ -168,8 +183,8 @@ export async function onRequestGet({ request, env }) {
     if (items.length !== end - query.offset) throw unavailable();
     return json(validateSummaryEnvelope({ ...summaryEnvelopeMetadata(descriptor), items,
       nextCursor: end < descriptor.totalCount ? await nextCursor(descriptor, end, query, key) : null,
-      stale: now - descriptor.generatedAtMs > SUMMARY_STALE_AFTER_MS,
-    }));
+      stale: now - lastObservedAtMs > SUMMARY_STALE_AFTER_MS,
+    }), 200, { 'X-Summary-Observed-At': String(lastObservedAtMs) });
   } catch (error) {
     return json({ code: error instanceof RequestFailure ? error.code : 'SUMMARY_UNAVAILABLE' },
       error instanceof RequestFailure ? error.status : 503);

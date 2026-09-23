@@ -9,6 +9,16 @@ const summaries = count => Array.from({ length: count }, (_, index) => ({ id: `c
   timeRange: { prefix: 'Active over ', value: '30 days', suffix: '' } }));
 
 describe('bounded cluster cards', () => {
+  it('shows the immutable publication and later verified check times separately', () => {
+    const published = Date.UTC(2026, 8, 23, 8);
+    const checked = published + 30 * 60_000;
+    const { container } = render(<ClusterSummaryList clusters={[]} snapshot={{ generatedAtMs: published,
+      lastObservedAtMs: checked }} />);
+    expect(Array.from(container.querySelectorAll('time'), element => element.getAttribute('dateTime')))
+      .toEqual([new Date(published).toISOString(), new Date(checked).toISOString()]);
+    expect(container).toHaveTextContent(/checked/i);
+  });
+
   it('reduces a 1200-card fixture to 20 initial cards while preserving the total and selection identity', () => {
     const clusters = summaries(1200);
     const before = render(<ul>{clusters.map(cluster => <ClusterSummaryItem key={cluster.id} clusterData={cluster} />)}</ul>);

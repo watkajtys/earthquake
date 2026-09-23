@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { publishClusterSummarySnapshot, readSummaryPointer, readSummaryJsonObject } from './clusterSummarySnapshot.js';
 import { createMemorySummaryBucket } from './clusterSummarySnapshot.test-support.js';
 import { createClusterSqliteFixture, clusterNow } from './clusterSqliteFixture.test-support.js';
-import { SUMMARY_POINTER_KEY, SUMMARY_PAGE_SIZE, SUMMARY_MAX_AGE_MS, SUMMARY_STALE_AFTER_MS, MAX_SUMMARY_ITEMS,
-  generationManifestKey, generationPageKey, sha256Hex, validateSummaryManifest, validateSummaryPage } from '../../shared/clusterSummaryContract.js';
+import { SUMMARY_POINTER_KEY, SUMMARY_PAGE_SIZE, SUMMARY_MAX_AGE_MS, SUMMARY_REPUBLISH_AFTER_MS, MAX_SUMMARY_ITEMS,
+  generationManifestKey, generationPageKey, generationObservationKey, sha256Hex,
+  validateSummaryManifest, validateSummaryPage } from '../../shared/clusterSummaryContract.js';
 
 const ids = Array.from({ length: 20 }, (_, i) => `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
 let fixture;
@@ -63,27 +64,55 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
     expect(validateSummaryManifest(manifest)).toBe(manifest);
   });
 
-  it('keeps an unchanged fresh projection without staging R2 objects', async () => {
+  it('renews an unchanged observation with one fenced marker write and no immutable writes', async () => {
     seed();
     await publish();
     const before = bucket.objects.get(SUMMARY_POINTER_KEY);
-    const writes = bucket.calls.filter(call => call.method === 'put').length;
+    const immutableWrites = bucket.calls.filter(call => call.method === 'put' &&
+      (call.key.includes('/pages/') || call.key.endsWith('/manifest.json'))).length;
     expect(await publish({ now: clusterNow + 10 * 60_000 })).toEqual({
       published: false, reason: 'unchanged', generationId: ids[0], snapshotSequence: 1,
       totalCount: 1, pageCount: 1,
     });
     expect(bucket.objects.get(SUMMARY_POINTER_KEY)).toBe(before);
-    expect(bucket.calls.filter(call => call.method === 'put')).toHaveLength(writes);
+    expect(bucket.readJson(generationObservationKey(ids[0]))).toMatchObject({ generationId: ids[0],
+      observedAtMs: clusterNow + 10 * 60_000 });
+    expect(bucket.calls.filter(call => call.method === 'put' &&
+      (call.key.includes('/pages/') || call.key.endsWith('/manifest.json')))).toHaveLength(immutableWrites);
+    expect(bucket.calls.at(-1)).toMatchObject({ method: 'put', key: generationObservationKey(ids[0]),
+      options: { onlyIf: { etagDoesNotMatch: '*' } } });
     expect(fixture.queries).toHaveLength(2);
     expect(nextId).toBe(1);
   });
 
-  it('refreshes an unchanged projection at the freshness boundary', async () => {
+  it('keeps a thirty-minute unchanged view fresh across jittered ten-minute runs without rewriting pages', async () => {
     seed(); await publish();
-    expect(await publish({ now: clusterNow + SUMMARY_STALE_AFTER_MS })).toMatchObject({
-      published: true, generationId: ids[1], snapshotSequence: 2, totalCount: 1,
-    });
-    expect(bucket.readJson(SUMMARY_POINTER_KEY).current.generatedAtMs).toBe(clusterNow + SUMMARY_STALE_AFTER_MS);
+    for (const offset of [9 * 60_000 + 20_000, 19 * 60_000 + 5_000, 30 * 60_000 + 1_000]) {
+      expect(await publish({ now: clusterNow + offset })).toMatchObject({ published: false, reason: 'unchanged', snapshotSequence: 1 });
+    }
+    expect(bucket.readJson(SUMMARY_POINTER_KEY).current.generatedAtMs).toBe(clusterNow);
+    expect(bucket.readJson(generationObservationKey(ids[0])).observedAtMs).toBe(clusterNow + 30 * 60_000 + 1_000);
+    expect(bucket.calls.filter(call => call.method === 'put' && call.key.includes('/pages/'))).toHaveLength(1);
+    expect(bucket.calls.filter(call => call.method === 'put' && call.key.endsWith('/manifest.json'))).toHaveLength(1);
+    expect(nextId).toBe(1);
+  });
+
+  it('rotates an unchanged generation after one hour', async () => {
+    seed(); await publish();
+    expect(await publish({ now: clusterNow + SUMMARY_REPUBLISH_AFTER_MS })).toMatchObject({
+      published: true, generationId: ids[1], snapshotSequence: 2, totalCount: 1 });
+    expect(bucket.readJson(SUMMARY_POINTER_KEY)).toMatchObject({ current: { generatedAtMs: clusterNow + SUMMARY_REPUBLISH_AFTER_MS } });
+  });
+
+  it('rejects a malformed observation marker before querying D1 or writing R2', async () => {
+    seed(); await publish();
+    bucket.seed(generationObservationKey(ids[0]), { generationId: ids[0], projectionHash: '0'.repeat(64),
+      observedAtMs: clusterNow + 1000 });
+    const queries = fixture.queries.length;
+    const writes = bucket.calls.filter(call => call.method === 'put').length;
+    await expect(publish({ now: clusterNow + 10 * 60_000 })).rejects.toThrow('observation identity');
+    expect(fixture.queries).toHaveLength(queries);
+    expect(bucket.calls.filter(call => call.method === 'put')).toHaveLength(writes);
   });
 
   it('publishes changed projected scalars before the freshness boundary', async () => {
@@ -163,7 +192,7 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
       if ((stage === 'page' && key.includes('/pages/')) || (stage === 'manifest' && key.endsWith('/manifest.json')) ||
           (stage === 'pointer' && key === SUMMARY_POINTER_KEY)) throw new Error('write failed');
     };
-    await expect(publish({ now: clusterNow + SUMMARY_STALE_AFTER_MS })).rejects.toThrow('write failed');
+    await expect(publish({ now: clusterNow + SUMMARY_REPUBLISH_AFTER_MS })).rejects.toThrow('write failed');
     expect(bucket.objects.get(SUMMARY_POINTER_KEY)).toBe(before);
   });
 
@@ -184,7 +213,7 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
 
   it('rejects an immutable generation collision without overwriting its pages', async () => {
     seed(); await publish(); const before = bucket.objects.get(generationPageKey(ids[0], 0));
-    await expect(publish({ now: clusterNow + SUMMARY_STALE_AFTER_MS, randomUUID: () => ids[0] })).rejects.toThrow('did not confirm');
+    await expect(publish({ now: clusterNow + SUMMARY_REPUBLISH_AFTER_MS, randomUUID: () => ids[0] })).rejects.toThrow('did not confirm');
     expect(bucket.objects.get(generationPageKey(ids[0], 0))).toBe(before);
     expect(bucket.readJson(SUMMARY_POINTER_KEY).current.snapshotSequence).toBe(1);
   });
@@ -192,7 +221,7 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
   it.each([undefined, {}, { etag: '' }])('rejects an unconfirmed R2 page result: %j', async acknowledgement => {
     seed(); await publish(); const before = bucket.objects.get(SUMMARY_POINTER_KEY);
     bucket.hooks.afterPut = (key, result) => key.includes('/pages/') ? acknowledgement : result;
-    await expect(publish({ now: clusterNow + SUMMARY_STALE_AFTER_MS })).rejects.toThrow('did not confirm');
+    await expect(publish({ now: clusterNow + SUMMARY_REPUBLISH_AFTER_MS })).rejects.toThrow('did not confirm');
     expect(bucket.objects.get(SUMMARY_POINTER_KEY)).toBe(before);
   });
 
@@ -216,6 +245,57 @@ describe('bounded scalar snapshot publisher with actual migrated SQL', () => {
 });
 
 describe('publication compare-and-swap races', () => {
+  it('discards a delayed unchanged observation after a newer observation wins its marker', async () => {
+    seed(); await publish();
+    const held = deferred(); const release = deferred(); let heldOnce = false;
+    bucket.hooks.beforePut = async key => {
+      if (key === generationObservationKey(ids[0]) && !heldOnce) { heldOnce = true; held.resolve(); await release.promise; }
+    };
+    const delayed = publish({ now: clusterNow + 10 * 60_000 });
+    await held.promise;
+    const winner = await publish({ now: clusterNow + 10 * 60_000 + 1000 });
+    release.resolve();
+    expect(await delayed).toEqual({ published: false, reason: 'superseded' });
+    expect(winner).toMatchObject({ published: false, reason: 'unchanged' });
+    expect(bucket.readJson(generationObservationKey(ids[0])).observedAtMs).toBe(clusterNow + 10 * 60_000 + 1000);
+    expect(bucket.readJson(SUMMARY_POINTER_KEY).current.generationId).toBe(ids[0]);
+  });
+
+  it('keeps a marker for an older generation isolated from a newer pointer', async () => {
+    seed(); await publish();
+    const held = deferred(); const release = deferred(); let heldOnce = false;
+    bucket.hooks.beforePut = async key => {
+      if (key === generationObservationKey(ids[0]) && !heldOnce) { heldOnce = true; held.resolve(); await release.promise; }
+    };
+    const delayed = publish({ now: clusterNow + 10 * 60_000 });
+    await held.promise;
+    fixture.database.prepare('UPDATE ClusterDefinitions SET title = ?').run('Newer title');
+    const winner = await publish({ now: clusterNow + 10 * 60_000 + 1000 });
+    release.resolve(); await delayed;
+    const { pointer, pages } = await currentObjects();
+    expect(pointer.current.generationId).toBe(winner.generationId);
+    expect(pages[0].items[0].title).toBe('Newer title');
+    expect(bucket.readJson(generationObservationKey(ids[0])).observedAtMs).toBe(clusterNow + 10 * 60_000);
+    expect(bucket.readJson(generationObservationKey(winner.generationId))).toBeNull();
+  });
+
+  it('does not advance freshness after a failed marker write and reports an unconfirmed write', async () => {
+    seed(); await publish();
+    bucket.hooks.beforePut = key => { if (key === generationObservationKey(ids[0])) throw new Error('R2 unavailable'); };
+    await expect(publish({ now: clusterNow + 10 * 60_000 })).rejects.toThrow('R2 unavailable');
+    expect(bucket.readJson(generationObservationKey(ids[0]))).toBeNull();
+    delete bucket.hooks.beforePut;
+    bucket.hooks.afterPut = (key, result) => key === generationObservationKey(ids[0]) ? { ...result, etag: '' } : result;
+    await expect(publish({ now: clusterNow + 10 * 60_000 })).rejects.toThrow('did not confirm');
+  });
+
+  it('rejects a backwards observation clock without changing the pointer', async () => {
+    seed(); await publish({ now: clusterNow + 10_000 });
+    const before = bucket.objects.get(SUMMARY_POINTER_KEY);
+    await expect(publish({ now: clusterNow + 9000 })).rejects.toThrow('Clock moved backwards');
+    expect(bucket.objects.get(SUMMARY_POINTER_KEY)).toBe(before);
+  });
+
   it.each([false, true])('discards delayed stale observations without rebase (existing pointer=%s)', async existing => {
     seed(); if (existing) await publish();
     if (existing) fixture.database.prepare('UPDATE ClusterDefinitions SET title = ?').run('Delayed observation');

@@ -180,7 +180,16 @@ export async function fetchActiveClusters({ signal, cursor } = {}) {
         if (response.status === 410 && data?.code === 'GENERATION_EXPIRED') error.code = 'GENERATION_EXPIRED';
         throw error;
       }
-      return validateClusterSummaryPage(data);
+      const page = validateClusterSummaryPage(data);
+      // The JSON envelope remains compatible with older clients. New clients
+      // use this response header to time a verified unchanged observation.
+      const observed = response.headers.get('X-Summary-Observed-At');
+      if (observed && /^(0|[1-9]\d*)$/.test(observed)) {
+        const observedAtMs = Number(observed);
+        if (Number.isSafeInteger(observedAtMs) && observedAtMs >= page.sourceObservedAtMs &&
+            observedAtMs <= Date.now() + 5 * 60_000) return { ...page, lastObservedAtMs: observedAtMs };
+      }
+      return page;
     })();
     return await Promise.race([work, cancelled]);
   } finally {

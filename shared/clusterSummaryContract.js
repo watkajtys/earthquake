@@ -12,8 +12,10 @@ export const MAX_SUMMARY_PAGE_BYTES = 512 * 1024;
 export const MAX_SUMMARY_ITEM_BYTES = 2400;
 export const MAX_SUMMARY_POINTER_BYTES = 64 * 1024;
 export const MAX_SUMMARY_MANIFEST_BYTES = 64 * 1024;
+export const MAX_SUMMARY_OBSERVATION_BYTES = 512;
 export const SUMMARY_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 export const SUMMARY_STALE_AFTER_MS = 20 * 60 * 1000;
+export const SUMMARY_REPUBLISH_AFTER_MS = 60 * 60 * 1000;
 export const MAX_RETAINED_GENERATIONS = 12;
 export const SUMMARY_DEFAULT_LIMIT = 100;
 export const SUMMARY_MAX_LIMIT = 200;
@@ -47,6 +49,16 @@ export function generationManifestKey(generationId) {
 export function generationPageKey(generationId, index) {
   check(isSummaryGenerationId(generationId) && Number.isSafeInteger(index) && index >= 0 && index < MAX_SUMMARY_ITEMS / SUMMARY_PAGE_SIZE, 'page identity');
   return `${SUMMARY_PREFIX}${generationId}/pages/${index}.json`;
+}
+export function generationObservationKey(generationId) {
+  check(isSummaryGenerationId(generationId), 'generation ID');
+  return `${SUMMARY_PREFIX}${generationId}/observation.json`;
+}
+export function summaryProjectionHash(metadata, generationId) {
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata) &&
+    metadata.summaryGenerationId === generationId &&
+    typeof metadata.summaryProjectionSha256 === 'string' && HASH.test(metadata.summaryProjectionSha256)
+    ? metadata.summaryProjectionSha256 : null;
 }
 export function summaryEnvelopeMetadata(value) {
   return Object.fromEntries(metadataKeys.map(key => [key, value[key]]));
@@ -115,6 +127,14 @@ export function validateSummaryDescriptor(value) {
   exactKeys(value, descriptorKeys); validateMetadata(value);
   check(value.pageCount === Math.max(1, Math.ceil(value.totalCount / SUMMARY_PAGE_SIZE)), 'page count');
   check(value.manifestKey === generationManifestKey(value.generationId), 'manifest key');
+  return value;
+}
+export function validateSummaryObservation(value, descriptor, projectionHash) {
+  exactKeys(value, ['generationId', 'projectionHash', 'observedAtMs']);
+  validateSummaryDescriptor(descriptor);
+  check(value.generationId === descriptor.generationId && value.projectionHash === projectionHash &&
+    typeof projectionHash === 'string' && HASH.test(projectionHash), 'observation identity');
+  check(time(value.observedAtMs) && value.observedAtMs >= descriptor.sourceObservedAtMs, 'observation time');
   return value;
 }
 export function validateSummaryPointer(value) {

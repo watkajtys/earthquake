@@ -7,7 +7,7 @@ import { createClusterSqliteFixture } from '../utils/clusterSqliteFixture.test-s
 import {
   SUMMARY_SCHEMA_VERSION, SUMMARY_POINTER_KEY, SUMMARY_PAGE_SIZE,
   MAX_SUMMARY_PAGE_BYTES, MAX_SUMMARY_ITEMS, SUMMARY_MAX_AGE_MS,
-  generationManifestKey, generationPageKey, sha256Hex,
+  generationManifestKey, generationPageKey, generationObservationKey, sha256Hex,
 } from '../../shared/clusterSummaryContract.js';
 
 const NOW = Date.UTC(2026, 8, 21, 12);
@@ -213,6 +213,27 @@ describe('bounded committed cluster summaries', () => {
       expect(sqlite.queries).toHaveLength(1);
       expect(env.DB.prepare).not.toHaveBeenCalled(); expect(env.CLUSTER_KV.get).not.toHaveBeenCalled();
       expect(JSON.stringify(first.body)).not.toContain(hugeLegacyVersion);
+      vi.spyOn(Date, 'now').mockReturnValue(NOW + 30 * 60_000);
+      const stale = await call();
+      expect(stale.body.stale).toBe(true);
+      expect(await publishClusterSummarySnapshot({ DB: sqlite.db, GEOJSON_BUCKET: bucket },
+        { now: NOW + 30 * 60_000, randomUUID: () => { throw new Error('No new generation expected'); } }))
+        .toMatchObject({ published: false, reason: 'unchanged', generationId: GENERATION_A });
+      const renewed = await call();
+      expect(renewed.response.status).toBe(200);
+      expect(renewed.response.headers.get('X-Summary-Observed-At')).toBe(String(NOW + 30 * 60_000));
+      expect(renewed.body).toMatchObject({ generationId: GENERATION_A, snapshotSequence: 1,
+        generatedAtMs: NOW, stale: false });
+      expect(renewed.body).not.toHaveProperty('lastObservedAtMs');
+      const continued = await call(withCursor(first.body.nextCursor));
+      expect(continued.response.status).toBe(200);
+      expect(continued.body.items[0].id).toBe(item(200).id);
+      expect(continued.body.stale).toBe(false);
+      expect(Object.keys(bucket.readJson(SUMMARY_POINTER_KEY)).sort()).toEqual(['current', 'history', 'schemaVersion']);
+      expect(sqlite.queries).toHaveLength(2);
+      bucket.seed(generationObservationKey(GENERATION_A), { ...bucket.readJson(generationObservationKey(GENERATION_A)),
+        projectionHash: '0'.repeat(64) });
+      expect((await call()).response.status).toBe(503);
     } finally { sqlite.database.close(); }
   });
 });
