@@ -73,6 +73,7 @@ describe('ClusterMiniMap - Core Logic', () => {
     expect(passedProps.nearbyQuakes).toHaveLength(originalQuakes.length - 1);
     expect(passedProps.nearbyQuakes.find(q => q.id === expectedLatestQuake.id)).toBeUndefined();
     expect(passedProps.fitMapToBounds).toBe(true);
+    expect(passedProps.aggregateNearbyQuakes).toBe(true);
   });
 
   it('should correctly identify the latest quake with different times', () => {

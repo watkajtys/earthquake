@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { act, render, screen, within, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import EarthquakeMap from './EarthquakeMap';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -16,17 +16,23 @@ vi.mock('../assets/TectonicPlateBoundaries.json', () => ({
 let mockFitBounds = vi.fn();
 let mockSetView = vi.fn();
 let mockInvalidateSize = vi.fn();
+let mockMapZoom = 8;
+let mockMapViewHandler = null;
 
 vi.mock('react-leaflet', async () => {
   const actual = await vi.importActual('react-leaflet');
   return {
     ...actual,
     MapContainer: React.forwardRef(({ children, center, zoom, style }, ref) => {
-      React.useEffect(() => {
-        if (ref) {
-          ref.current = { fitBounds: mockFitBounds, setView: mockSetView, invalidateSize: mockInvalidateSize };
-        }
-      }, [ref]);
+      React.useImperativeHandle(ref, () => ({
+            fitBounds: mockFitBounds,
+            setView: mockSetView,
+            invalidateSize: mockInvalidateSize,
+            getZoom: () => mockMapZoom,
+            getBounds: () => null,
+            on: (_events, handler) => { mockMapViewHandler = handler; },
+            off: () => { mockMapViewHandler = null; },
+      }), []);
       return <div data-testid="map-container" data-center={center ? JSON.stringify(center) : undefined} data-zoom={zoom} style={style}>{children}</div>;
     }),
     TileLayer: ({ url, attribution }) => <div data-testid="tile-layer" data-url={url} data-attribution={attribution}></div>,
@@ -67,6 +73,8 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     mockFitBounds.mockClear();
     mockSetView.mockClear();
     mockInvalidateSize.mockClear();
+    mockMapZoom = 8;
+    mockMapViewHandler = null;
     vi.spyOn(console, 'warn').mockImplementation(() => {}); // Mock console.warn for all tests in this block
   });
 
@@ -143,6 +151,55 @@ describe('EarthquakeMap Component - Core Rendering', () => {
       const nearbyMarkers = markers.filter(m => m.getAttribute('data-icon-classname') === 'custom-nearby-quake-icon');
       expect(nearbyMarkers.length).toBe(nearbyQuakesData.length);
     });
+  });
+
+  it('bounds cluster markers but fits the map to all 1,217 nearby events', async () => {
+    const denseQuakes = Array.from({ length: 1216 }, (_, index) => ({
+      id: `dense-${index}`,
+      geometry: { coordinates: [-118, 34, 5] },
+      properties: { mag: 2, time: 1_700_000_000_000 + index },
+    }));
+    const outlier = {
+      id: 'outlier',
+      geometry: { coordinates: [-110, 40, 5] },
+      properties: { mag: 6.5, time: 1_700_000_000_000 },
+    };
+    render(<MemoryRouter><EarthquakeMap {...baseProps}
+      nearbyQuakes={[...denseQuakes, outlier]}
+      aggregateNearbyQuakes={true}
+      fitMapToBounds={true}
+    /></MemoryRouter>);
+
+    expect(screen.getAllByTestId('marker').length).toBeLessThanOrEqual(161);
+    expect(screen.getByText('1216 earthquakes in this area')).toBeInTheDocument();
+    await waitFor(() => expect(mockFitBounds).toHaveBeenCalledTimes(1));
+    const fitted = mockFitBounds.mock.calls[0][0];
+    expect(fitted.contains(L.latLng(40, -110))).toBe(true);
+    expect(fitted.contains(L.latLng(34, -118))).toBe(true);
+  });
+
+  it('recomputes grouped markers after zoom to reveal more event locations', async () => {
+    const quakes = Array.from({ length: 661 }, (_, index) => ({
+      id: `zoom-${index}`,
+      geometry: { coordinates: [-118 + index * 0.0001, 34, 5] },
+      properties: { mag: 2, time: 1_700_000_000_000 + index },
+    }));
+    mockMapZoom = 5;
+    render(<MemoryRouter><EarthquakeMap {...baseProps}
+      nearbyQuakes={quakes}
+      aggregateNearbyQuakes={true}
+      defaultZoom={5}
+    /></MemoryRouter>);
+    const before = screen.getAllByTestId('marker').length;
+    expect(mockMapViewHandler).toBeTypeOf('function');
+    act(() => {
+      mockMapZoom = 15;
+      mockMapViewHandler();
+    });
+    const after = screen.getAllByTestId('marker').length;
+    expect(after).toBeGreaterThan(before);
+    expect(after).toBeLessThanOrEqual(161);
+    await screen.findAllByTestId('geojson-layer');
   });
 
   it('renders map and only valid nearbyQuakes when some have missing data, logging warnings', async () => {

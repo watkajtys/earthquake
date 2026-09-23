@@ -11,6 +11,7 @@ import {
   calculateBoundingBoxFromPoints, 
   filterGeoJSONByBoundingBox
 } from '../utils/geoSpatialUtils.js';
+import { groupQuakesForMap } from '../utils/clusterVisualSampling.js';
 
 // Corrects issues with Leaflet's default icon paths in some bundlers.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -70,6 +71,13 @@ const createNearbyQuakeIcon = (magnitude, time) => {
     iconAnchor: [9, 9],
   });
 };
+
+const createGroupedQuakeIcon = (count, magnitude) => new L.DivIcon({
+  html: `<span role="img" aria-label="${count} earthquakes" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:3px solid ${getMagnitudeColor(magnitude)};border-radius:50%;background:#0f172a;color:white;font-size:11px;font-weight:bold;box-shadow:0 1px 4px #0008">${count}</span>`,
+  className: 'cluster-group-icon',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+});
 
 /**
  * Defines the styling for tectonic plate boundary GeoJSON features.
@@ -158,6 +166,7 @@ const EarthquakeMap = ({
   mainQuakeDetailUrl = null,
   fitMapToBounds = false,
   defaultZoom = 8,
+  aggregateNearbyQuakes = false,
 }) => {
   const location = useLocation();
   const detailNavigationState = buildModalNavigationState(location);
@@ -167,6 +176,12 @@ const EarthquakeMap = ({
   const [activeFaultsDataJson, setActiveFaultsDataJson] = useState(null);
   const [isActiveFaultsLoading, setIsActiveFaultsLoading] = useState(true);
   const [fullActiveFaultsData, setFullActiveFaultsData] = useState(null);
+  const [mapView, setMapView] = useState({ zoom: defaultZoom, bounds: null });
+
+  const nearbyMarkerGroups = useMemo(() => aggregateNearbyQuakes
+    ? groupQuakesForMap(nearbyQuakes, mapView.zoom, mapView.bounds)
+    : nearbyQuakes.map(quake => ({ quake, count: 1 })),
+  [aggregateNearbyQuakes, nearbyQuakes, mapView]);
 
   const initialMapCenter = useMemo(() => [mapCenterLatitude, mapCenterLongitude], [mapCenterLatitude, mapCenterLongitude]);
   const highlightedQuakePosition = useMemo(() => {
@@ -225,6 +240,20 @@ const EarthquakeMap = ({
   ]);
 
   useEffect(() => {
+    const mapInstance = mapRef.current;
+    if (!aggregateNearbyQuakes || !mapInstance?.on) return undefined;
+    const updateView = () => {
+      const zoom = mapInstance.getZoom();
+      const bounds = mapInstance.getBounds();
+      setMapView(previous => previous.zoom === zoom && previous.bounds === bounds
+        ? previous : { zoom, bounds });
+    };
+    mapInstance.on('moveend zoomend', updateView);
+    updateView();
+    return () => mapInstance.off('moveend zoomend', updateView);
+  }, [aggregateNearbyQuakes]);
+
+  useEffect(() => {
     let isMounted = true;
     const loadTectonicPlates = async () => {
       setIsTectonicPlatesLoading(true);
@@ -252,7 +281,7 @@ const EarthquakeMap = ({
     const loadActiveFaults = async () => {
       setIsActiveFaultsLoading(true);
       try {
-        const faultsData = await import('../assets/gem_active_faults_harmonized.json');
+        const faultsData = await import('../assets/gem_active_faults_display.json');
         if (isMounted) {
           setFullActiveFaultsData(faultsData.default);
         }
@@ -363,7 +392,7 @@ const EarthquakeMap = ({
         </Marker>
       )}
 
-      {nearbyQuakes.map((quake, index) => {
+      {nearbyMarkerGroups.map(({ quake, count }, index) => {
         const coordinates = quake.geometry?.coordinates;
         if (
           !quake.geometry ||
@@ -374,6 +403,36 @@ const EarthquakeMap = ({
         ) {
           console.warn("Skipping rendering of nearby quake due to missing data:", quake);
           return null;
+        }
+        if (count > 1) {
+          return (
+            <Marker
+              key={`group-${quake.id || index}`}
+              position={[coordinates[1], coordinates[0]]}
+              icon={createGroupedQuakeIcon(count, quake.properties.mag)}
+              title={`${count} earthquakes in this area`}
+            >
+              <Popup>
+                <strong>{count} earthquakes in this area</strong>
+                <br />
+                Strongest: magnitude {quake.properties.mag.toFixed(1)}
+                <br />
+                See the event list for every earthquake.
+                {mapView.zoom < 16 && (
+                  <>
+                    <br />
+                    <button
+                      type="button"
+                      className="text-blue-500 hover:underline"
+                      onClick={() => mapRef.current?.setView([coordinates[1], coordinates[0]], Math.min(16, mapView.zoom + 2))}
+                    >
+                      Zoom in to separate events
+                    </button>
+                  </>
+                )}
+              </Popup>
+            </Marker>
+          );
         }
         return (
           <Marker
