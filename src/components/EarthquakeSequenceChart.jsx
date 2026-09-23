@@ -1,9 +1,8 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { scaleLinear, scaleTime, scaleSqrt } from 'd3-scale'; // Import scaleSqrt
+import { scaleLinear, scaleUtc, scaleSqrt } from 'd3-scale'; // Import scaleSqrt
 import { max as d3Max, min as d3Min, extent as d3Extent } from 'd3-array';
-import { timeFormat } from 'd3-time-format';
-import { timeHour } from 'd3-time'; // Import timeHour
+import { utcFormat } from 'd3-time-format';
 import { line as d3Line } from 'd3-shape'; // Import d3Line
 import { getMagnitudeColor, formatDate, isValidNumber, isValuePresent, formatNumber } from '../utils/utils'; // Corrected path
 import EarthquakeSequenceChartSkeleton from './skeletons/EarthquakeSequenceChartSkeleton'; // Import skeleton
@@ -12,6 +11,9 @@ const axisLabelColor = "text-slate-400"; // From EarthquakeTimelineSVGChart
 const tickLabelColor = "text-slate-500"; // From EarthquakeTimelineSVGChart
 const gridLineColor = "stroke-slate-600"; // Similar to border color in EarthquakeTimelineSVGChart
 const mainshockStrokeWidth = 2;
+const longRangeThresholdMs = 72 * 60 * 60 * 1000;
+const minTimeLabelGap = 66;
+const minDateLabelGap = 90;
 // const mainshockRadius = 8; // Unused
 // const eventRadius = 5; // Unused
 
@@ -22,16 +24,6 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false, onPlot
   const [focusPointIndex, setFocusPointIndex] = useState(0);
 
   useEffect(() => setFocusPointIndex(0), [cluster?.id]);
-
-  useEffect(() => {
-    if (svgRef.current && svgRef.current.parentElement) {
-      // Ensure parentElement has a clientWidth, otherwise default
-      const parentWidth = svgRef.current.parentElement.clientWidth;
-      setChartRenderWidth(parentWidth > 0 ? parentWidth : 800);
-    }
-    // Note: For full responsiveness on resize, a ResizeObserver would be needed.
-    // This useEffect only sets the initial width based on the parent.
-  }, []);
 
   const chartHeight = 350;
   const margin = { top: 40, right: 35, bottom: 90, left: 35 };
@@ -69,6 +61,21 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false, onPlot
     return { originalQuakes: validQuakes, processedMainshock: mainshock };
   }, [cluster]);
 
+  useEffect(() => {
+    const svg = svgRef.current;
+    const container = svg?.parentElement;
+    if (!container) return;
+    const measure = () => {
+      const measuredWidth = svg.getBoundingClientRect().width || container.clientWidth;
+      if (measuredWidth > 0) setChartRenderWidth(measuredWidth);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [isLoading, originalQuakes.length]);
+
   // All other useMemo hooks moved here, before any conditional returns
   const timeDomain = useMemo(() => {
     if (originalQuakes.length === 0) return [new Date(0), new Date()]; // Default to prevent crash
@@ -105,7 +112,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false, onPlot
   }, [originalQuakes]);
 
   const xScale = useMemo(() =>
-    scaleTime().domain(timeDomain).range([0, width]),
+    scaleUtc().domain(timeDomain).range([0, width]),
   [timeDomain, width]);
 
   const yScale = useMemo(() =>
@@ -160,45 +167,43 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false, onPlot
     }
   };
 
+  const isLongRange = timeDomain[1] - timeDomain[0] >= longRangeThresholdMs;
   const timeAxisTicks = useMemo(() => {
-    if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
-    const tempScale = scaleTime().domain(timeDomain).range([0, width]);
-    const [domainStartTime, domainEndTime] = timeDomain;
-    const durationMs = domainEndTime.getTime() - domainStartTime.getTime();
-    const durationHours = durationMs / (1000 * 60 * 60);
+    if (width <= 0 || !timeDomain[0] || !timeDomain[1]) return [];
+    const minimumGap = isLongRange ? minDateLabelGap : minTimeLabelGap;
+    const tickCount = Math.max(2, Math.floor(width / minimumGap));
+    const crossesYear = timeDomain[0].getUTCFullYear() !== timeDomain[1].getUTCFullYear();
+    const formatTick = utcFormat(isLongRange ? (crossesYear ? "%b %-d '%y" : "%b %-d") : "%-I%p");
+    const seenDates = new Set();
+    let lastOffset = -Infinity;
 
-    let tickInterval;
-    if (durationHours < 12) { // Less than 12 hours
-      tickInterval = timeHour.every(durationHours < 6 ? 1 : 2);
-    } else if (durationHours < 24) { // 12 to 24 hours
-      tickInterval = timeHour.every(3);
-    } else if (durationHours < 72) { // 24 to 72 hours (1 to 3 days)
-      tickInterval = timeHour.every(6);
-    } else { // 72 hours (3 days) or more
-      tickInterval = timeHour.every(24);
-    }
-
-    const potentialTicks = tempScale.ticks(tickInterval);
-    const timeTickFormat = timeFormat("%-I%p");
-
-    return potentialTicks.map(value => ({
-        value,
-        offset: xScale(value),
-        label: timeTickFormat(value)
-    })).filter(tick => tick.offset >= -5 && tick.offset <= width + 5);
-  }, [xScale, width, timeDomain]);
+    return xScale.ticks(tickCount).map(value => ({
+      value,
+      offset: xScale(value),
+      label: formatTick(value),
+    })).filter(tick => {
+      if (tick.offset < 0 || tick.offset > width || tick.offset - lastOffset < minimumGap) return false;
+      if (isLongRange) {
+        const dateKey = utcFormat("%Y-%m-%d")(tick.value);
+        if (seenDates.has(dateKey)) return false;
+        seenDates.add(dateKey);
+      }
+      lastOffset = tick.offset;
+      return true;
+    });
+  }, [xScale, width, timeDomain, isLongRange]);
 
   const dateAxisTicks = useMemo(() => {
-    if (width <= 0 || !timeDomain || !timeDomain[0] || !timeDomain[1] || !xScale) return [];
+    if (width <= 0 || isLongRange || !timeDomain[0] || !timeDomain[1]) return [];
     const dates = [];
     const [domainStart, domainEnd] = timeDomain;
     let current = new Date(domainStart);
-    current.setHours(0, 0, 0, 0); // Start from the beginning of the day
+    current.setUTCHours(0, 0, 0, 0); // Start from the beginning of the UTC day
 
     while (current <= domainEnd) {
         const dayStartOffset = xScale(current);
         const nextDay = new Date(current);
-        nextDay.setDate(current.getDate() + 1);
+        nextDay.setUTCDate(current.getUTCDate() + 1);
 
         // Determine the actual end of the day for xScale, capped by domainEnd
         const endOfDayForScale = nextDay > domainEnd ? domainEnd : nextDay;
@@ -207,12 +212,14 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false, onPlot
         const visibleStart = Math.max(0, dayStartOffset);
         const visibleEnd = Math.min(width, dayEndOffset);
 
-        // Add tick if the visible part of the day is wider than 20 pixels
-        if (visibleEnd > visibleStart && (visibleEnd - visibleStart > 20)) {
+        // A day needs enough room for its centered label. Keep the widest
+        // partial day as a fallback when the plot is especially narrow.
+        if (visibleEnd > visibleStart) {
             dates.push({
-                label: timeFormat("%b %d")(current),
+                label: utcFormat("%b %d")(current),
                 x: visibleStart + (visibleEnd - visibleStart) / 2,
-                dayStartDate: new Date(current) // For unique key
+                dayStartDate: new Date(current), // For unique key
+                visibleWidth: visibleEnd - visibleStart,
             });
         }
 
@@ -220,8 +227,9 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false, onPlot
         if (nextDay.getTime() <= current.getTime() || nextDay > new Date(domainEnd.getTime() + 24*60*60*1000 * 2)) break;
         current = nextDay;
     }
-    return dates;
-  }, [timeDomain, xScale, width]);
+    const spaciousDates = dates.filter(date => date.visibleWidth >= minDateLabelGap);
+    return spaciousDates.length ? spaciousDates : dates.sort((a, b) => b.visibleWidth - a.visibleWidth).slice(0, 1);
+  }, [timeDomain, xScale, width, isLongRange]);
 
   const yAxisTicks = useMemo(() => {
       if (height <= 0 || !yScale.ticks) return [];
@@ -351,11 +359,12 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false, onPlot
           {/* X-Axis */}
           <line x1={0} y1={height} x2={width} y2={height} className={gridLineColor} />
 
-          {/* Time Tier Labels (Upper Tier with new format) */}
+          {/* UTC time labels for short spans, date labels for long spans. */}
           {timeAxisTicks.map(({ value, offset, label }) =>
             (offset >= 0 && offset <= width) && (
             <text
               key={`time-label-${value.toISOString()}`}
+              data-testid="sequence-axis-tick"
               x={offset}
               y={height + 20} // This might need adjustment if labels are too long
               textAnchor="middle"
@@ -365,10 +374,11 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false, onPlot
             </text>
           ))}
 
-          {/* Date Tier Labels (Lower Tier) */}
+          {/* Day labels beneath the time labels for short spans. */}
           {dateAxisTicks.map(({ label: dateLabel, x, dayStartDate }) => (
             <text
               key={`date-label-${dayStartDate.toISOString()}`}
+              data-testid="sequence-day-label"
               x={x}
               y={height + 40} // Position for date labels
               textAnchor="middle"

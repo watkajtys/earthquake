@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { vi } from 'vitest'; // Import vi for Vitest mocks
 import '@testing-library/jest-dom';
 import EarthquakeSequenceChart from './EarthquakeSequenceChart';
@@ -452,21 +452,26 @@ describe('EarthquakeSequenceChart', () => {
                 expect(dateLabels.length).toBeGreaterThanOrEqual(1);
             });
 
-            test('renders time labels with 6-hour interval for ~70 hour duration', () => {
+            test('uses UTC day boundaries even when the viewer is west of UTC', () => {
+                const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataLongSpan} />);
+                const svg = currentContainer.querySelector('svg');
+                const dayLabels = Array.from(svg.querySelectorAll('[data-testid="sequence-day-label"]'));
+                expect(dayLabels.map(label => label.textContent)).toEqual(['Jan 01', 'Jan 02']);
+                const timeLabels = Array.from(svg.querySelectorAll('[data-testid="sequence-axis-tick"]'));
+                expect(timeLabels.some(label => label.textContent === '12AM')).toBe(true);
+            });
+
+            test('bounds the time label count and spacing for a ~70 hour duration', () => {
                 const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataApprox70Hours} />);
                 const svgElement = getSvgContainer(currentContainer);
                 if (!svgElement) throw new Error("SVG container not found for ~70hr time labels test");
 
-                // Duration is 70 hours. Expected interval: timeHour.every(6)
-                // Check for presence of labels like "12AM", "6AM", "12PM", "6PM"
-                const timeLabels = within(svgElement).getAllByText(/\d{1,2}(AM|PM)/i);
-                expect(timeLabels.length).toBeGreaterThanOrEqual(Math.floor(70 / 6) - 2); // Approximate, D3 might add/remove some edge ticks
-
-                // Check for specific labels that should appear with 6-hour intervals
-                const expectedLabels = ["12AM", "6AM", "12PM", "6PM"];
-                expectedLabels.forEach(expectedLabel => {
-                    expect(timeLabels.some(l => l.textContent === expectedLabel)).toBe(true);
-                });
+                const timeLabels = within(svgElement).getAllByTestId('sequence-axis-tick');
+                expect(timeLabels.length).toBeGreaterThanOrEqual(2);
+                expect(timeLabels.length).toBeLessThanOrEqual(Math.floor(730 / 66) + 1);
+                expect(timeLabels.every(label => /^\d{1,2}(AM|PM)$/i.test(label.textContent))).toBe(true);
+                const offsets = timeLabels.map(label => Number(label.getAttribute('x')));
+                offsets.slice(1).forEach((offset, index) => expect(offset - offsets[index]).toBeGreaterThanOrEqual(66));
 
                 timeLabels.forEach(label => {
                     expect(label.getAttribute('y')).toBe(String(plotHeight + 20));
@@ -474,27 +479,21 @@ describe('EarthquakeSequenceChart', () => {
                 });
             });
 
-            test('renders time labels with 24-hour interval for ~74 hour duration', () => {
+            test('uses spaced dates rather than repeated midnight labels for a ~74 hour duration', () => {
                 const { container: currentContainer } = render(<EarthquakeSequenceChart cluster={mockClusterDataApprox74Hours} />);
                 const svgElement = getSvgContainer(currentContainer);
                 if (!svgElement) throw new Error("SVG container not found for ~74hr time labels test");
 
-                // Duration is 74 hours. Expected interval: timeHour.every(24)
-                // Time labels should primarily be "12AM" if data spans across midnight
-                const timeLabels = within(svgElement).getAllByText(/\d{1,2}(AM|PM)/i);
-                 // Expect approx 74/24 ~ 3-4 labels. D3 might be clever.
-                expect(timeLabels.length).toBeGreaterThanOrEqual(Math.floor(74 / 24) -1 );
-                expect(timeLabels.length).toBeLessThanOrEqual(Math.ceil(74 / 24) + 2 );
-
-
-                // Check that most (if not all) labels are "12AM"
-                const twelveAmLabels = timeLabels.filter(l => l.textContent === "12AM");
-                // For a 74hr span (3 days + 2hrs), we expect "12AM" for Day1, Day2, Day3, Day4 start.
-                // So at least 3, possibly 4 depending on D3's rounding for the domain.
-                expect(twelveAmLabels.length).toBeGreaterThanOrEqual(3);
+                const dateLabels = within(svgElement).getAllByTestId('sequence-axis-tick');
+                expect(dateLabels.length).toBeGreaterThanOrEqual(2);
+                expect(dateLabels.length).toBeLessThanOrEqual(4);
+                expect(dateLabels.every(label => /^Jan \d$/.test(label.textContent))).toBe(true);
+                expect(within(svgElement).queryAllByTestId('sequence-day-label')).toHaveLength(0);
+                const offsets = dateLabels.map(label => Number(label.getAttribute('x')));
+                offsets.slice(1).forEach((offset, index) => expect(offset - offsets[index]).toBeGreaterThanOrEqual(90));
 
                 // Verify all rendered time labels are correctly positioned
-                timeLabels.forEach(label => {
+                dateLabels.forEach(label => {
                     expect(label.getAttribute('y')).toBe(String(plotHeight + 20));
                     expect(label.getAttribute('text-anchor')).toBe('middle');
                 });
@@ -528,6 +527,51 @@ describe('EarthquakeSequenceChart', () => {
             expect(titleTexts).toContain(expectedMainshockTooltip);
             expect(titleTexts).toContain(expectedAftershockTooltip);
         });
+    });
+
+    test('keeps a 47-event multi-month axis legible when its container narrows', () => {
+        const longCluster = {
+            originalQuakes: Array.from({ length: 47 }, (_, index) =>
+                mockQuake(`long-${index}`, Date.parse('2026-01-01T00:00:00Z') + index * 3 * 86_400_000, 2 + index % 3)),
+        };
+        let measuredWidth = 800;
+        let notifyResize;
+        const originalResizeObserver = globalThis.ResizeObserver;
+        const originalMeasure = Element.prototype.getBoundingClientRect.getMockImplementation();
+        Element.prototype.getBoundingClientRect.mockImplementation(function () {
+            const rect = originalMeasure.call(this);
+            return this.tagName?.toLowerCase() === 'svg' ? { ...rect, width: measuredWidth } : rect;
+        });
+        globalThis.ResizeObserver = class {
+            constructor(callback) { notifyResize = callback; }
+            observe() {}
+            disconnect() {}
+        };
+
+        try {
+            const { container, unmount } = render(<EarthquakeSequenceChart cluster={longCluster} />);
+            const svg = container.querySelector('svg');
+            const assertSpacedDates = () => {
+                const ticks = Array.from(svg.querySelectorAll('[data-testid="sequence-axis-tick"]'));
+                const offsets = ticks.map(tick => Number(tick.getAttribute('x')));
+                expect(ticks.length).toBeGreaterThanOrEqual(2);
+                expect(ticks.length).toBeLessThanOrEqual(Math.floor((measuredWidth - 70) / 90) + 1);
+                expect(ticks.every(tick => /^\w{3} \d{1,2}$/.test(tick.textContent))).toBe(true);
+                offsets.slice(1).forEach((offset, index) => expect(offset - offsets[index]).toBeGreaterThanOrEqual(90));
+                expect(svg.querySelectorAll('circle')).toHaveLength(47);
+            };
+
+            expect(svg).toHaveAttribute('viewBox', '0 0 800 350');
+            assertSpacedDates();
+            measuredWidth = 360;
+            act(() => notifyResize());
+            expect(svg).toHaveAttribute('viewBox', '0 0 360 350');
+            assertSpacedDates();
+            unmount();
+        } finally {
+            Element.prototype.getBoundingClientRect.mockImplementation(originalMeasure);
+            globalThis.ResizeObserver = originalResizeObserver;
+        }
     });
 
     describe('Connecting Line', () => {
