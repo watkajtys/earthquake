@@ -15,7 +15,6 @@ import GlobalLastMajorQuakeTimer from "../components/GlobalLastMajorQuakeTimer.j
 import BottomNav from "../components/BottomNav.jsx";
 import ClusterSummaryList from '../components/ClusterSummaryList.jsx';
 import { buildClusterSummaries } from '../utils/clusterSummary.js';
-import ClusterDetailModal from '../components/ClusterDetailModal'; // This is for the cluster map point, not the route component
 // import ClusterDetailModalWrapper from '../components/ClusterDetailModalWrapper.jsx'; // Removed static import, will use lazy loaded
 import { getMagnitudeColor, getMagnitudeColorStyle } from '../utils/utils.js';
 // import { findActiveClusters } from '../utils/clusterUtils.js'; // Import findActiveClusters - REMOVED
