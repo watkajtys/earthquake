@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './worker.js';
 import { readBoundedJson } from './utils/workerRequestPolicy.js';
+import * as spatial from '../functions/utils/spatialClusterUtils.js';
 
 const token = 'synthetic-test-credential-never-deployed';
 const request = (path, options = {}) => new Request(`https://earthquakeslive.com${path}`, {
@@ -25,7 +26,7 @@ describe('deployed Worker trust boundaries', () => {
     expect(prepare).not.toHaveBeenCalled();
   });
 
-  it.each([...mutations, '/api/cluster-definition', '/api/cache-stats'])('requires a configured server credential for %s', async path => {
+  it.each([...mutations, '/api/cluster-definition', '/api/calculate-clusters', '/api/cache-stats'])('requires a configured server credential for %s', async path => {
     const prepare = vi.fn();
     const req = path.endsWith('cache-stats') ? request(path, { method: 'DELETE' }) : post(path, {});
     const response = await worker.fetch(req, { DB: { prepare } }, ctx);
@@ -39,6 +40,42 @@ describe('deployed Worker trust boundaries', () => {
     const response = await worker.fetch(post('/api/cluster-definition', {}, credential), { ADMIN_API_TOKEN: token, DB: { prepare } }, ctx);
     expect(response.status).toBe(401);
     expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing server secret', undefined, `Bearer ${token}`, 503],
+    ['missing credential', token, undefined, 401],
+    ['wrong credential', token, 'Bearer wrong', 401],
+  ])('rejects legacy cluster calculation before reading its body or running spatial work: %s', async (_name, secret, authorization, status) => {
+    const bodyRead = vi.fn(() => { throw new Error('body must not be read'); });
+    const spatialWork = vi.spyOn(spatial, 'findActiveClustersOptimized');
+    const req = { url: 'https://earthquakeslive.com/api/calculate-clusters', method: 'POST',
+      headers: new Headers({ 'User-Agent': 'Mozilla/5.0', 'Content-Type': 'application/json',
+        'Content-Length': '1508774',
+        ...(authorization ? { Authorization: authorization } : {}) }),
+      get body() { return bodyRead(); } };
+    const response = await worker.fetch(req, { ...(secret ? { ADMIN_API_TOKEN: secret } : {}) }, ctx);
+    expect(response.status).toBe(status);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(bodyRead).not.toHaveBeenCalled();
+    expect(spatialWork).not.toHaveBeenCalled();
+  });
+
+  it('preserves authorized cluster calculation without database or queue work', async () => {
+    const earthquakes = [
+      { id: 'q1', properties: { mag: 5, time: 1_700_000_000_000 }, geometry: { type: 'Point', coordinates: [-118, 34, 10] } },
+      { id: 'q2', properties: { mag: 4, time: 1_700_000_000_000 }, geometry: { type: 'Point', coordinates: [-118, 34.01, 10] } },
+      { id: 'q3', properties: { mag: 3, time: 1_700_000_000_000 }, geometry: { type: 'Point', coordinates: [-118, 34.02, 10] } },
+    ];
+    const prepare = vi.fn();
+    const send = vi.fn();
+    const response = await worker.fetch(post('/api/calculate-clusters', { earthquakes }),
+      { ADMIN_API_TOKEN: token, DB: { prepare }, GEOJSON_QUEUE: { send } }, ctx);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ clusters: [earthquakes], cacheHit: 'false' });
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(prepare).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('checks authentication equally on the workers.dev host', async () => {

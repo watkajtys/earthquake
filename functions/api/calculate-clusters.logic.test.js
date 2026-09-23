@@ -6,12 +6,13 @@ const quake = (id, magnitude, latitude, longitude) => ({
   properties: { mag: magnitude, time: 1_700_000_000_000 },
   geometry: { type: 'Point', coordinates: [longitude, latitude, 10] },
 });
+const token = 'synthetic-test-credential-never-deployed';
 
 const requestClusters = payload => worker.fetch(new Request('https://example.com/api/calculate-clusters', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+  headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0', Authorization: `Bearer ${token}` },
   body: JSON.stringify(payload),
-}), {}, { waitUntil: vi.fn() });
+}), { ADMIN_API_TOKEN: token }, { waitUntil: vi.fn() });
 
 describe('POST /api/calculate-clusters through the deployed Worker handler', () => {
   it.each([null, {}, { earthquakes: 'invalid' }])('rejects a payload without an earthquake array: %j', async payload => {
@@ -22,8 +23,8 @@ describe('POST /api/calculate-clusters through the deployed Worker handler', () 
 
   it('rejects malformed JSON', async () => {
     const response = await worker.fetch(new Request('https://example.com/api/calculate-clusters', {
-      method: 'POST', headers: { 'User-Agent': 'Mozilla/5.0', 'Content-Type': 'application/json' }, body: '{',
-    }), {}, { waitUntil: vi.fn() });
+      method: 'POST', headers: { 'User-Agent': 'Mozilla/5.0', 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: '{',
+    }), { ADMIN_API_TOKEN: token }, { waitUntil: vi.fn() });
     expect(response.status).toBe(400);
     expect(await response.text()).toContain('Invalid JSON body');
   });

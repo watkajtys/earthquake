@@ -120,6 +120,7 @@ export async function enforceRoutePolicy(request, env) {
     return requireAdmin(request, env);
   }
   if ((path === '/api/cluster-definition' && request.method === 'POST') ||
+      (path === '/api/calculate-clusters' && request.method === 'POST') ||
       (path === '/api/cache-stats' && request.method === 'DELETE')) {
     return requireAdmin(request, env);
   }

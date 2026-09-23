@@ -101,7 +101,7 @@ Use an environment-specific Worker secret named `ADMIN_API_TOKEN` for the first 
 | `/api/fix-enhanced-data-flag` | Authenticated POST only; GET 405/no-store. Retain or disable as documented operational maintenance, not a public repair endpoint. |
 | `/api/cache-stats` | Read-only GET may remain public if its payload is intentionally public; DELETE requires auth and is no-store. Use explicit protected POST operation instead if consolidating admin methods, but avoid gratuitous route renaming. |
 | `/api/cluster-definition` | GET remains read-only; POST requires auth. Validate authoritative membership/strongest event and bounded record size even for authorized input. No browser credential. |
-| `/api/calculate-clusters` | Public POST may remain, with the strict input/work bounds below. Results/error responses are no-store. |
+| `/api/calculate-clusters` | POST requires the same server credential as cluster registration before reading the body or running spatial work. Strict input/work bounds remain for authorized callers. Results/error responses are no-store. |
 | `/api/system-health`, `/api/system-logs`, `/api/task-metrics` | Inspect for mutations and expensive probes. Remove public health-check KV writes; expose intentionally public read status or protect operator-only work. Do not add a frontend auth dependency accidentally. |
 
 Extract internal backfill/import/repair functions from HTTP wrappers so `scheduled` can call them with structured validated arguments. HTTP authentication must not apply to in-process scheduled events, but the same numerical/data bounds do. Keep all production cron definitions and queue bindings unchanged in this release.
