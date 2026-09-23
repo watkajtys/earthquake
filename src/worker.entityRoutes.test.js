@@ -94,7 +94,7 @@ describe('exported Worker entity routes', () => {
     expect(waitUntil).not.toHaveBeenCalled();
   });
   it('resolves a committed immutable pointer for crawler and JSON detail reads', async () => {
-    const key = 'details/v1/us123/1750000003000/test-hash.json';
+    const key = `details/v1/us123/1750000003000/${'a'.repeat(64)}.json`;
     const data = usgsFeature('us123', { place: 'Committed detail', updated: 1750000003000 });
     earthquakeRow = id => ({ ...earthquakeRowBase(id), source_updated_at_ms: 1750000003000,
       detail_archive_revision_ms: 1750000003000, detail_archive_key: key });
@@ -109,6 +109,21 @@ describe('exported Worker entity routes', () => {
     expect((await json.json()).properties.place).toBe('Committed detail');
     expect(env.GEOJSON_BUCKET.get).toHaveBeenCalledTimes(2);
     expect(env.GEOJSON_BUCKET.get).toHaveBeenCalledWith(key);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it.each([
+    `details/v1/other123/1750000003000/${'a'.repeat(64)}.json`,
+    `details/v1/us123/1750000002000/${'a'.repeat(64)}.json`,
+    'details/v1/us123/1750000003000/not-a-hash.json',
+    'details/v1/us123/1750000003000/../../other123.json',
+    '',
+  ])('rejects a corrupt D1 archive pointer before any R2 or upstream read: %s', async key => {
+    earthquakeRow = id => ({ ...earthquakeRowBase(id), source_updated_at_ms: 1750000003000,
+      detail_archive_revision_ms: 1750000003000, detail_archive_key: key });
+    env.GEOJSON_BUCKET = { get: vi.fn() };
+    const response = await crawler('/quake/id/us123');
+    expect(response.status).toBe(502);
+    expect(env.GEOJSON_BUCKET.get).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
   it('rejects stale legacy R2 science and keeps crawler on D1 without upstream work', async () => {

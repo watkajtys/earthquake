@@ -23,10 +23,11 @@ var geojson_archive_default = {
         await persistEarthquakeDetail({ env, detailData: geojson, requestedId: id });
         message.ack();
       } catch (error) {
-        if (['STALE_DETAIL_REVISION', 'CONFLICTING_DETAIL_REVISION'].includes(error.code)) {
-          // A newer D1 source revision has already won. Retrying an old body
-          // or a same-revision conflict cannot improve it.
-          console.error(`[geojson-archive] Rejected legacy revision for ${id}:`, error.message);
+        if (['STALE_DETAIL_REVISION', 'CONFLICTING_DETAIL_REVISION', 'DETAIL_JOB_NOT_DUE'].includes(error.code)) {
+          // A newer D1 source revision has won, an equal revision conflicts,
+          // or a durable job already owns the retry. Queue redelivery cannot
+          // help any of these cases; cron recovers due jobs from D1.
+          console.error(`[geojson-archive] Ignored legacy delivery for ${id}:`, error.message);
           message.ack();
         } else {
           console.error(`[geojson-archive] Could not archive ${id}:`, error);

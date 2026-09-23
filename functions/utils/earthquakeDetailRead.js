@@ -26,10 +26,19 @@ export async function readArchivedEarthquakeDetail(bucket, eventId, { db, timeou
           }
         }
         const pointer = row?.detail_archive_key;
-        if (pointer && (!Number.isSafeInteger(row.detail_archive_revision_ms) ||
-            (Number.isSafeInteger(row.source_updated_at_ms) &&
-              row.detail_archive_revision_ms < row.source_updated_at_ms))) return null;
-        const object = await bucket.get(pointer || `${eventId}.json`);
+        if (pointer != null) {
+          if (!Number.isSafeInteger(row.detail_archive_revision_ms) ||
+              (Number.isSafeInteger(row.source_updated_at_ms) &&
+                row.detail_archive_revision_ms < row.source_updated_at_ms)) return null;
+          const prefix = `details/v1/${eventId}/${row.detail_archive_revision_ms}/`;
+          if (typeof pointer !== 'string' || !pointer.startsWith(prefix) ||
+              !/^[a-f0-9]{64}\.json$/.test(pointer.slice(prefix.length))) {
+            throw new UsgsTransportError('Stored earthquake archive pointer is invalid', {
+              code: 'ARCHIVE_POINTER_INVALID',
+            });
+          }
+        }
+        const object = await bucket.get(pointer ?? `${eventId}.json`);
         if (controller.signal.aborted) {
           await object?.body?.cancel().catch(() => {});
           throw timeoutError;

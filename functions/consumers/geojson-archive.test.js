@@ -113,9 +113,28 @@ describe('revisioned detail archive and legacy queue delivery', () => {
     expect(first.retry).toHaveBeenCalledOnce();
     expect(row()).toMatchObject({ detail_fetched: 0, detail_archive_key: null });
     expect(job(now)).toMatchObject({ status: 'pending', attempts: 1, next_attempt_at_ms: now + 60 * 60 * 1000 });
+    const duplicate = await deliver(detail);
+    expect(duplicate.ack).toHaveBeenCalledOnce();
+    expect(duplicate.retry).not.toHaveBeenCalled();
+    expect(bucket.calls.filter(call => call.method === 'put')).toHaveLength(1);
     delete bucket.hooks.beforePut;
     vi.setSystemTime(now + 60 * 60 * 1000);
     expect((await deliver(detail)).ack).toHaveBeenCalledOnce();
+    expect(job(now).status).toBe('completed');
+  });
+
+  it('acknowledges a duplicate delivery while the durable job is leased', async () => {
+    const detail = feature(now);
+    let duplicate;
+    bucket.hooks.beforePut = async () => {
+      delete bucket.hooks.beforePut;
+      duplicate = await deliver(detail);
+    };
+    const first = await deliver(detail);
+    expect(first.ack).toHaveBeenCalledOnce();
+    expect(duplicate.ack).toHaveBeenCalledOnce();
+    expect(duplicate.retry).not.toHaveBeenCalled();
+    expect(bucket.calls.filter(call => call.method === 'put')).toHaveLength(1);
     expect(job(now).status).toBe('completed');
   });
 
