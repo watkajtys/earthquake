@@ -106,6 +106,18 @@ backup. A rollback after activation must select a writer compatible with the
 new list protocol; rolling back to the old unconditional writer can regress
 public arrays.
 
+The read-only activation receipt gate is
+`node scripts/verify-durable-activation-evidence.mjs --evidence .reconciliation.local/production-0022-20260923/evidence.json --candidate-revision <full activation commit SHA>`.
+It binds the paused Worker trace and drain interval, fresh D1 export and Time
+Travel bookmark, isolated restore/0022 SQL rehearsal report, applied migration
+checksum, and post-drain byte-verified list before-images to one candidate.
+It leaves production configuration paused. The release operator must also read
+back the actual production 0022 ledger/schema and current Worker version before
+activation; private receipts alone cannot establish current Cloudflare state.
+When running this candidate in a separate worktree, pass
+`--repository-root /Users/theair/Projects/earthquake` so receipt paths resolve
+under the original repository's private reconciliation directory.
+
 The no-store `/api/release-identity` response reports revision, environment and the platform version ID. Missing required bindings return an error; identity does not write probes. The initial identity check may wait up to 90 seconds for the exactly captured previous revision/version to disappear. Each attempt rechecks the active control-plane version. Authentication errors, malformed/cacheable responses, unknown revisions, and competing deployments fail immediately; post-smoke identity checks have no old-version grace. Requests identify themselves with the same first-party User-Agent as the smoke script.
 
 Smoke follows a real emitted cluster sitemap URL, checks browser/crawler canonical agreement and validates built assets and archived quake details. These checks do not establish feed freshness/completeness beyond the existing contract. Package 5 adds that contract; current release evidence and remaining limitations are in `docs/remediation/RELEASE-LEDGER.md`.
