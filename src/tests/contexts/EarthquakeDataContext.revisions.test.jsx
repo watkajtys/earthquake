@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { earthquakeReducer, initialState, actionTypes } from '../../contexts/earthquakeDataContextUtils.js';
+import { MAX_COVERAGE_SEGMENTS } from '../../contexts/earthquakeRevisionState.js';
 
 const now = Date.UTC(2026, 8, 21);
 const day = 86400_000;
@@ -11,8 +12,209 @@ const feed = (state, type, features, options = {}) => earthquakeReducer(state, {
 } });
 const complete = (asOfMs, days = 1) => ({ sourceGeneratedAtMs: asOfMs,
   coverage: { complete: true, asOfMs, startTimeMs: asOfMs - days * day, endTimeMs: asOfMs } });
+const rollDay = (state = initialState, count = MAX_COVERAGE_SEGMENTS * 2) => {
+  for (let i = 0; i < count; i++) {
+    state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], { fetchTime: now + i * 1000, ...complete(now + i * 1000) });
+  }
+  return state;
+};
 
 describe('consistent event revisions across feed state', () => {
+  it.each([actionTypes.WEEKLY_DATA_PROCESSED, actionTypes.MONTHLY_DATA_PROCESSED])(
+    'retains a swept-out day boundary when a late %s introduces an unknown event', type => {
+      const absent = quake('absent', 5, { time: now - day + 45_000, updated: now - 1000 });
+      const unrelated = quake('history', 4, { time: now - 3 * day });
+      let state = feed(initialState, actionTypes.DAILY_DATA_PROCESSED, [], {
+        fetchTime: now + 30_000, ...complete(now + 30_000),
+      });
+      state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], {
+        fetchTime: now + 60_000, ...complete(now + 60_000),
+      });
+      state = feed(state, type, [absent, unrelated], {
+        fetchTime: now + 70_000, ...complete(now, type === actionTypes.WEEKLY_DATA_PROCESSED ? 7 : 30),
+      });
+      expect(type === actionTypes.WEEKLY_DATA_PROCESSED ? state.earthquakesLast7Days : state.allEarthquakes).toEqual([unrelated]);
+      expect(state.lastMajorQuake).toBeNull();
+      expect(state.knownEarthquakeRevisions.absent.deletedAtMs).toBe(now + 30_000);
+    },
+  );
+
+  it.each([true, false])('lets presence win equal source clocks regardless of arrival order (absence first: %s)', absenceFirst => {
+    const a = quake('A', 5, { updated: now - 1000 });
+    let state = feed(initialState, actionTypes.MONTHLY_DATA_PROCESSED, [a], complete(now - 100, 30));
+    const absent = current => feed(current, actionTypes.DAILY_DATA_PROCESSED, [], complete(now));
+    const present = current => feed(current, actionTypes.MONTHLY_DATA_PROCESSED, [a], complete(now, 30));
+    state = absenceFirst ? present(absent(state)) : absent(present(state));
+    expect(state.allEarthquakes).toEqual([a]);
+    expect(state.lastMajorQuake).toEqual(a);
+    expect(state.knownEarthquakeRevisions.A.deletedAtMs).toBeUndefined();
+  });
+
+  it('reconsiders absence at the corrected event time before applying a tombstone', () => {
+    const original = quake('A', 5, { time: now - day + 10_000, updated: now - 40_000 });
+    const corrected = quake('A', 5, { time: now - day - 10_000, updated: now - 10_000 });
+    let state = feed(initialState, actionTypes.MONTHLY_DATA_PROCESSED, [original], complete(now - 30_000, 30));
+    state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], complete(now));
+    expect(state.lastMajorQuake).toBeNull();
+    state = feed(state, actionTypes.MONTHLY_DATA_PROCESSED, [corrected], complete(now - 5000, 30));
+    expect(state.allEarthquakes).toEqual([corrected]);
+    expect(state.lastMajorQuake).toEqual(corrected);
+    expect(state.knownEarthquakeRevisions.A.deletedAtMs).toBeUndefined();
+  });
+
+  it.each([true, false])('treats newer source presence as identity evidence while retaining corrected fields (correction first: %s)', correctionFirst => {
+    const original = quake('A', 5, { time: now - 3 * day, updated: now - 40_000 });
+    const corrected = quake('A', 5, { time: now - 1000, updated: now - 20_000 });
+    const correction = state => feed(state, actionTypes.WEEKLY_DATA_PROCESSED, [corrected], complete(now - 30_000, 7));
+    const newerPresence = state => feed(state, actionTypes.MONTHLY_DATA_PROCESSED, [original], complete(now + 20_000, 30));
+    let state = correctionFirst ? correction(initialState) : newerPresence(initialState);
+    state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], complete(now + 10_000));
+    state = correctionFirst ? newerPresence(state) : correction(state);
+    expect(state.knownEarthquakeRevisions.A.feature).toEqual(corrected);
+    expect(state.knownEarthquakeRevisions.A.asOfMs).toBe(now + 20_000);
+    expect(state.lastMajorQuake).toEqual(corrected);
+  });
+
+  it('bounds rolling history without admitting old events or blocking unrelated periods', () => {
+    let state = rollDay();
+    const segments = state.completeFeedCoverage.day.segments;
+    expect(segments.length).toBeLessThanOrEqual(MAX_COVERAGE_SEGMENTS);
+    expect(segments.some(item => item.floor)).toBe(true);
+    expect(segments.every(item => !Object.hasOwn(item, 'eventIds'))).toBe(true);
+    const absent = quake('absent', 5, { time: now - day + 500, updated: now - 20_000 });
+    const outside = quake('outside', 4, { time: now - 3 * day });
+    state = feed(state, actionTypes.WEEKLY_DATA_PROCESSED, [absent, outside], {
+      fetchTime: now + 300_000, ...complete(now - 10_000, 7),
+    });
+    expect(state.earthquakesLast7Days).toEqual([outside]);
+    expect(state.knownEarthquakeRevisions.absent.feature).toBeNull();
+    expect(state.knownEarthquakeRevisions.absent.admissionCoverage).toMatchObject({ floor: true });
+    state = feed(state, actionTypes.WEEKLY_DATA_PROCESSED, [absent, outside], complete(now + 300_000, 7));
+    expect(state.earthquakesLast7Days).toEqual([absent, outside]);
+    expect(state.lastMajorQuake).toEqual(absent);
+  });
+
+  it('does not turn compacted evidence into a deletion of an accepted unchanged member', () => {
+    const present = quake('A', 5, { time: now - day + 500, updated: now - 20_000 });
+    let state = feed(initialState, actionTypes.MONTHLY_DATA_PROCESSED, [present], complete(now - 1000, 30));
+    state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [present], complete(now));
+    for (let i = 1; i <= MAX_COVERAGE_SEGMENTS * 2; i++) {
+      state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], { fetchTime: now + i * 1000, ...complete(now + i * 1000) });
+    }
+    expect(state.completeFeedCoverage.day.segments.some(item => item.floor)).toBe(true);
+    expect(state.knownEarthquakeRevisions.A.feature).toEqual(present);
+    expect(state.lastMajorQuake).toEqual(present);
+  });
+
+  it('applies new exact absence before compacting history at the cap', () => {
+    let state = rollDay(initialState, MAX_COVERAGE_SEGMENTS);
+    const present = quake('A', 5, { updated: now + 200_000 });
+    state = feed(state, actionTypes.MONTHLY_DATA_PROCESSED, [present], complete(now + 200_000, 30));
+    state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], complete(now + 300_000));
+    expect(state.completeFeedCoverage.day.segments.length).toBeLessThanOrEqual(MAX_COVERAGE_SEGMENTS);
+    expect(state.knownEarthquakeRevisions.A.feature).toBeNull();
+    expect(state.knownEarthquakeRevisions.A.deletedAtMs).toBe(now + 300_000);
+  });
+
+  it('keeps source and scientific equality distinct at a compacted floor without renewing old receipts', () => {
+    const base = rollDay();
+    const floor = base.completeFeedCoverage.day.segments.find(item => item.floor);
+    const feature = quake('A', 5, { time: floor.startTimeMs, updated: floor.asOfMs });
+    let cached = feed(base, actionTypes.MONTHLY_DATA_PROCESSED, [feature], {
+      dataSource: 'R2', fetchTime: now + 400_000, sourceObservedAtMs: now + 400_000,
+    });
+    expect(cached.knownEarthquakeRevisions.A.feature).toBeNull();
+    cached = feed(cached, actionTypes.MONTHLY_DATA_PROCESSED, [feature], {
+      dataSource: 'R2', fetchTime: now + 500_000, sourceObservedAtMs: now + 500_000,
+    });
+    expect(cached.knownEarthquakeRevisions.A.feature).toBeNull();
+    const sourceConfirmed = feed(cached, actionTypes.MONTHLY_DATA_PROCESSED, [feature], complete(floor.asOfMs, 30));
+    expect(sourceConfirmed.knownEarthquakeRevisions.A.feature).toEqual(feature);
+    const revised = quake('A', 5, { time: floor.startTimeMs, updated: floor.asOfMs + 1 });
+    const scientificallyConfirmed = feed(cached, actionTypes.MONTHLY_DATA_PROCESSED, [revised], { dataSource: 'R2' });
+    expect(scientificallyConfirmed.knownEarthquakeRevisions.A.feature).toEqual(revised);
+  });
+
+  it('applies floor admission when a live event moves into retired coverage and rechecks when it moves out', () => {
+    const original = quake('A', 5, { time: now - 3 * day, updated: now - 30_000 });
+    let state = feed(initialState, actionTypes.MONTHLY_DATA_PROCESSED, [original], complete(now - 20_000, 30));
+    state = rollDay(state);
+    const movedInside = quake('A', 5, { time: now - day + 500, updated: now - 10_000 });
+    state = feed(state, actionTypes.MONTHLY_DATA_PROCESSED, [movedInside], complete(now - 5000, 30));
+    expect(state.knownEarthquakeRevisions.A.feature).toBeNull();
+    expect(state.knownEarthquakeRevisions.A.admissionCoverage).toMatchObject({ floor: true });
+    const movedOutside = quake('A', 5, { time: now - 2 * day, updated: now - 1000 });
+    state = feed(state, actionTypes.MONTHLY_DATA_PROCESSED, [movedOutside], complete(now, 30));
+    expect(state.knownEarthquakeRevisions.A.feature).toEqual(movedOutside);
+    expect(state.lastMajorQuake).toEqual(movedOutside);
+  });
+
+  it('distinguishes scientific equality from source equality and retains the newest fields after restoration', () => {
+    const original = quake('A', 5, { updated: now - 2000 });
+    let state = feed(initialState, actionTypes.MONTHLY_DATA_PROCESSED, [original], complete(now - 1000, 30));
+    state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], complete(now));
+    const equalRevision = quake('A', 6, { updated: now });
+    state = feed(state, actionTypes.WEEKLY_DATA_PROCESSED, [equalRevision], { dataSource: 'R2', fetchTime: now + 1000 });
+    expect(state.knownEarthquakeRevisions.A.feature).toBeNull();
+    const corrected = quake('A', 4, { updated: now + 1000, place: 'Latest revision' });
+    state = feed(state, actionTypes.WEEKLY_DATA_PROCESSED, [corrected], complete(now - 500, 7));
+    expect(state.knownEarthquakeRevisions.A.feature).toEqual(corrected);
+    state = feed(state, actionTypes.MONTHLY_DATA_PROCESSED, [original], complete(now + 2000, 30));
+    expect(state.knownEarthquakeRevisions.A.feature).toEqual(corrected);
+    expect(state.knownEarthquakeRevisions.A.asOfMs).toBe(now + 2000);
+  });
+
+  it('uses half-open proof boundaries and never bridges disjoint coverage gaps', () => {
+    let state = feed(initialState, actionTypes.DAILY_DATA_PROCESSED, [], complete(now - 2 * day));
+    state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], complete(now));
+    const before = quake('before', 4, { time: now - day - 1, updated: now - 1000 });
+    const start = quake('start', 4, { time: now - day, updated: now - 1000 });
+    const end = quake('end', 4, { time: now, updated: now - 1000 });
+    state = feed(state, actionTypes.MONTHLY_DATA_PROCESSED, [before, start, end], { sourceGeneratedAtMs: now - 1000 });
+    expect(state.knownEarthquakeRevisions.before.feature).toEqual(before);
+    expect(state.knownEarthquakeRevisions.start.feature).toBeNull();
+    expect(state.knownEarthquakeRevisions.end.feature).toEqual(end);
+    expect(state.completeFeedCoverage.day.segments).toHaveLength(2);
+  });
+
+  it('trims expired proof ranges without losing a retained major event', () => {
+    const major = quake('major', 5);
+    let state = feed(initialState, actionTypes.MONTHLY_DATA_PROCESSED, [major], complete(now, 30));
+    state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], {
+      fetchTime: now + 32 * day, ...complete(now + 32 * day),
+    });
+    expect(state.completeFeedCoverage.month.segments).toEqual([]);
+    expect(state.completeFeedCoverage.day.segments).toHaveLength(1);
+    expect(state.lastMajorQuake).toEqual(major);
+  });
+
+  it('bounds disconnected ranges even when source clocks advance faster than local receipts', () => {
+    let state = initialState;
+    for (let i = 0; i <= MAX_COVERAGE_SEGMENTS; i++) {
+      state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], complete(now + i * 2 * day));
+      expect(state.completeFeedCoverage.day.segments.length).toBeLessThanOrEqual(MAX_COVERAGE_SEGMENTS);
+    }
+    const segments = state.completeFeedCoverage.day.segments;
+    expect(segments.every(item => !item.floor)).toBe(true);
+    expect(segments.length).toBeLessThanOrEqual(16);
+    state = feed(state, actionTypes.DAILY_DATA_PROCESSED, [], { dataSource: 'R2' });
+    expect(state.completeFeedCoverage.day.segments).toEqual(segments);
+  });
+
+  it('does not use partial, mismatched-source or noncanonical windows as absence evidence', () => {
+    const a = quake('A', 5);
+    const baseline = feed(initialState, actionTypes.MONTHLY_DATA_PROCESSED, [a], complete(now, 30));
+    for (const invalid of [
+      { ...complete(now + 1000), coverage: { ...complete(now + 1000).coverage, complete: false } },
+      { ...complete(now + 1000), sourceGeneratedAtMs: now + 2000 },
+      complete(now + 1000, 0.5),
+    ]) {
+      const state = feed(baseline, actionTypes.DAILY_DATA_PROCESSED, [], invalid);
+      expect(state.knownEarthquakeRevisions.A.feature).toEqual(a);
+      expect(state.completeFeedCoverage.day).toBeUndefined();
+    }
+  });
+
   it('propagates a time correction past older snapshot receipt times into all rolling views', () => {
     const original = quake('A', 5);
     let state = feed(initialState, actionTypes.MONTHLY_DATA_PROCESSED, [original], complete(now, 30));
