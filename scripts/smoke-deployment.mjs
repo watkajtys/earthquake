@@ -12,7 +12,7 @@ const CRAWLER_USER_AGENT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.
 // The retained graph and this release's assets are both requested. Keep a
 // bounded margin for the current build's files and the non-asset route checks.
 const MAX_SMOKE_ASSETS = MAX_ASSETS + 32;
-const MAX_SMOKE_REQUESTS = MAX_SMOKE_ASSETS + 40;
+const MAX_SMOKE_REQUESTS = MAX_SMOKE_ASSETS + 64;
 const decodeXml = value => value.replace(/&(amp|quot|apos|lt|gt);/g, (_, entity) => ({ amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' })[entity]);
 
 export async function smokeDeployment(args = [], { fetchImpl = fetch, log = console.log } = {}) {

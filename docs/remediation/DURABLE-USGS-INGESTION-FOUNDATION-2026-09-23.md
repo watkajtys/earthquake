@@ -1,10 +1,11 @@
 # Durable trusted USGS ingestion foundation — 2026-09-23 UTC
 
-Status: **local candidate only; rollout gate off.** This branch starts at deployed
-`f5f4341`. It adds no public mutation route and changes no production, preview,
-or historical row. `handleTrustedUsgsIngestion` takes this path only when the
-server environment sets `DURABLE_INGESTION_ENABLED=true` after migration 0022.
-The current deployed writer remains the default.
+Status: **local candidate only; rollout gate off.** The original foundation
+started at deployed `f5f4341`; the current integration branch rebases its
+commits on deployed `5f51d0b`. It adds no public mutation route and changes no
+production or historical row. `handleTrustedUsgsIngestion` takes the durable
+path only when the server environment sets `DURABLE_INGESTION_ENABLED=true`
+after migration 0022. The deployed writer remains the default.
 
 ## Progress and replay contract
 
@@ -111,6 +112,26 @@ requests / 167 built assets**. No Git remote or production resource changed.
 
 ## Release limits and remaining work
 
+- The integrated production config sets `LIST_PUBLICATION_PAUSED=true` and
+  leaves durable ingestion disabled. Its release wrapper refuses an unpaused
+  config and verifies the pause binding in the uploaded version. The scheduled
+  five-minute task still ingests hourly data and publishes the independent
+  complete period feeds; `list-day/week/month.json` stop refreshing while
+  paused. A missing environment/pause binding also stops list writes. The
+  paused Cron logs its revision, version ID and scheduled time for drain
+  evidence. This integration has only local validation until preview is free.
+- Before any later unpause, read back the exact paused version at 100%, observe
+  a five-minute paused execution for that version, and establish that no old
+  unconditional list invocation can remain. Cloudflare bounds a Cron
+  invocation to 15 minutes; the waiting period begins after the last possible
+  old-version dispatch, not merely after upload. The current release wrapper
+  deliberately rejects activation; a separate reviewed gate must encode and
+  verify this evidence together with migration 0022 before switching both
+  `LIST_PUBLICATION_PAUSED=false` and `DURABLE_INGESTION_ENABLED=true`.
+- Archive and verify the complete deployed predecessor asset graph before
+  uploading the paused release. The production release wrapper now invokes
+  the GET-only predecessor archive verifier before its upload. It cannot
+  create missing archive objects on the release path.
 - The rollout flag must stay off until actual scheduled Worker replay under
   the gate is exercised in isolated preview and a production backup/recovery
   point is captured. The preview proof above validates remote D1/R2
@@ -118,9 +139,9 @@ requests / 167 built assets**. No Git remote or production resource changed.
   invoke the gated USGS handler. Do not apply this candidate against production
   merely because its code is packaged.
 - An older Worker binary still has unconditional R2 list writes and mutable KV
-  writes. Pause the five-minute cron or otherwise drain old scheduled
-  invocations before enabling this candidate; a new CAS writer cannot fence an
-  old writer that ignores CAS. The gated path ignores a late legacy KV value,
+  writes. The paused release drains those invocations while keeping all four
+  production crons configured; a new CAS writer cannot fence an old writer
+  that ignores CAS. The gated path ignores a late legacy KV value,
   as an actual-handler/list test demonstrates. The new path does not update the
   approximate `earthquake_stats` KV increment; authoritative D1 stats are a
   separate remediation stage.

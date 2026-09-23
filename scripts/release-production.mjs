@@ -39,6 +39,8 @@ export function validateConfig(config) {
   requireCheck(config.assets?.binding === 'ASSETS' && config.assets.run_worker_first === true, 'Worker-first ASSETS configuration is required.');
   requireCheck(config.version_metadata?.binding === 'WORKER_VERSION_METADATA', 'Version metadata binding is required.');
   requireCheck(config.vars?.DEPLOYMENT_ENVIRONMENT === 'production', 'Production environment identity is required.');
+  requireCheck(config.vars?.LIST_PUBLICATION_PAUSED === 'true' && config.vars?.DURABLE_INGESTION_ENABLED === undefined,
+    'This release may only stage the paused list writer with durable ingestion disabled.');
   for (const [field, names] of [['kv_namespaces', ['CLUSTER_KV', 'USGS_LAST_RESPONSE_KV', 'STATIC_KV']], ['d1_databases', ['DB']], ['r2_buckets', ['GEOJSON_BUCKET']]]) {
     assert.deepEqual(config[field].map(item => item.binding).sort(), names.sort(), `Unexpected ${field} configuration`);
   }
@@ -60,8 +62,11 @@ export function verifyBindings(bindings, config, revision) {
   if (revision) expected.push(
     { name: 'WORKER_VERSION_METADATA', type: 'version_metadata' },
     { name: 'DEPLOYMENT_ENVIRONMENT', type: 'plain_text', text: 'production' },
+    { name: 'LIST_PUBLICATION_PAUSED', type: 'plain_text', text: 'true' },
     { name: 'RELEASE_REVISION', type: 'plain_text', text: revision },
   );
+  if (revision) requireCheck(!bindings.some(item => item.name === 'DURABLE_INGESTION_ENABLED'),
+    'Durable ingestion must remain disabled for this paused release.');
   for (const wanted of expected) {
     const actual = bindings.find(item => item.name === wanted.name);
     requireCheck(actual && Object.entries(wanted).every(([key, value]) => (key === 'id' ? actual.id || actual.database_id : actual[key]) === value), `Missing or incorrect binding: ${wanted.name}`);

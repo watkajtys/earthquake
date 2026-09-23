@@ -900,6 +900,19 @@ var worker_default = {
     const logger =
       parentLogger ||
       createScheduledTaskLogger("generate-lists", event.scheduledTime);
+    // A production release must first drain every in-flight legacy list writer.
+    // Missing or malformed environment/pause bindings fail closed. Only the
+    // named preview environment can publish without activation bindings.
+    if (env.DEPLOYMENT_ENVIRONMENT !== "preview" &&
+        (env.LIST_PUBLICATION_PAUSED !== "false" ||
+          env.DURABLE_INGESTION_ENABLED !== "true")) {
+      logger.logMilestone("List publication paused during writer transition", {
+        versionId: env.WORKER_VERSION_METADATA?.id || null,
+        revision: env.RELEASE_REVISION || null,
+        scheduledTime: event.scheduledTime,
+      });
+      return;
+    }
     console.log(
       `[worker-scheduled] Generating lists with ${newFeatures.length} new/updated features.`,
     );

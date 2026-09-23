@@ -11,7 +11,7 @@ const REPLACEMENT = '33333333-3333-3333-3333-333333333333';
 const config = {
   name: 'earthquake', account_id: 'f7e27d63f4766d7fb6a0f5b4789e2cdb', main: resolve('src/worker.js'),
   assets: { binding: 'ASSETS', run_worker_first: true }, version_metadata: { binding: 'WORKER_VERSION_METADATA' },
-  vars: { DEPLOYMENT_ENVIRONMENT: 'production' }, workers_dev: true,
+  vars: { DEPLOYMENT_ENVIRONMENT: 'production', LIST_PUBLICATION_PAUSED: 'true' }, workers_dev: true,
   kv_namespaces: ['CLUSTER_KV', 'USGS_LAST_RESPONSE_KV', 'STATIC_KV'].map(binding => ({ binding, id: `id-${binding}` })),
   d1_databases: [{ binding: 'DB', database_id: 'db-id' }], r2_buckets: [{ binding: 'GEOJSON_BUCKET', bucket_name: 'geojson-bucket' }],
   queues: { producers: [{ binding: 'GEOJSON_QUEUE', queue: 'geojson-queue' }], consumers: [{ queue: 'geojson-queue', max_batch_size: 10, max_batch_timeout: 5, max_retries: 3, retry_delay: 0 }] },
@@ -23,7 +23,9 @@ function bindings() {
     { name: 'ASSETS', type: 'assets' }, ...config.kv_namespaces.map(item => ({ name: item.binding, type: 'kv_namespace', namespace_id: item.id })),
     { name: 'DB', type: 'd1', id: 'db-id' }, { name: 'GEOJSON_BUCKET', type: 'r2_bucket', bucket_name: 'geojson-bucket' },
     { name: 'GEOJSON_QUEUE', type: 'queue', queue_name: 'geojson-queue' }, { name: 'WORKER_VERSION_METADATA', type: 'version_metadata' },
-    { name: 'DEPLOYMENT_ENVIRONMENT', type: 'plain_text', text: 'production' }, { name: 'RELEASE_REVISION', type: 'plain_text', text: REVISION },
+    { name: 'DEPLOYMENT_ENVIRONMENT', type: 'plain_text', text: 'production' },
+    { name: 'LIST_PUBLICATION_PAUSED', type: 'plain_text', text: 'true' },
+    { name: 'RELEASE_REVISION', type: 'plain_text', text: REVISION },
   ];
 }
 function state() {
@@ -70,6 +72,13 @@ describe('production release controls', () => {
     expect(preview.triggers.crons).toEqual([]);
     expect(preview.d1_databases[0].database_id).not.toBe(actual.d1_databases[0].database_id);
     expect(() => validateConfig(preview)).toThrow();
+  });
+  it('allows only a paused release with durable ingestion disabled', () => {
+    expect(() => validateConfig({ ...config, vars: { DEPLOYMENT_ENVIRONMENT: 'production' } })).toThrow();
+    expect(() => validateConfig({ ...config, vars: { ...config.vars, LIST_PUBLICATION_PAUSED: 'false' } })).toThrow();
+    expect(() => validateConfig({ ...config, vars: { ...config.vars, DURABLE_INGESTION_ENABLED: 'true' } })).toThrow();
+    expect(() => verifyBindings(bindings().filter(item => item.name !== 'LIST_PUBLICATION_PAUSED'), config, REVISION)).toThrow();
+    expect(() => verifyBindings([...bindings(), { name: 'DURABLE_INGESTION_ENABLED', type: 'plain_text', text: 'true' }], config, REVISION)).toThrow();
   });
   it('runs gates before upload and checks both hosts before and after smoke', async () => {
     const { deps, options } = fixture();

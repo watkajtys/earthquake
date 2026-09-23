@@ -90,6 +90,9 @@ binding = "WORKER_VERSION_METADATA"
 
 [env.production.vars]
 DEPLOYMENT_ENVIRONMENT = "production"
+# Stage the revisioned list writer behind a pause. The production release
+# wrapper requires this until old scheduled invocations have drained.
+LIST_PUBLICATION_PAUSED = "true"
 
 [env.production.triggers]
 crons = ["*/5 * * * *", "*/30 * * * *", "0 0 * * *", "*/10 * * * *"]

@@ -76,7 +76,7 @@ describe('exported Worker and real R2 list writer under overlapping ingestion', 
       .mockResolvedValueOnce(Response.json({ newOrUpdatedFeatures: [old] }))
       .mockResolvedValueOnce(Response.json({ newOrUpdatedFeatures: [latest] }));
     const bucket = makeCasBucket();
-    const env = { DB: {}, GEOJSON_BUCKET: bucket };
+    const env = { DB: {}, GEOJSON_BUCKET: bucket, DEPLOYMENT_ENVIRONMENT: 'preview' };
     let releaseOld;
     const oldPaused = new Promise(resolve => { releaseOld = resolve; });
     let oldReached;

@@ -78,10 +78,11 @@ function fixture({ magnitude = 4, canonicalMismatch = false, externalSitemap = f
 }
 
 describe('deployment smoke crawler contract', () => {
-  it('checks the 252 retained paths plus the next build without exhausting the request budget', async () => {
+  it('checks the combined retained and current asset graph within the reviewed request budget', async () => {
     const { fetchImpl } = fixture({ extraCurrentAssetCount: 17 });
+    const expectedAssets = Object.keys(PREVIOUS_RELEASE_ASSETS).length + 4 + 17;
     await expect(smokeDeployment([ORIGIN, '--preview'], { fetchImpl, log: vi.fn() }))
-      .resolves.toMatchObject({ assets: 273, checks: 305 });
+      .resolves.toMatchObject({ assets: expectedAssets, checks: expectedAssets + 32 });
   });
 
   it.each([4, -0.2, null])('checks the emitted sitemap route, normal/crawler variants and built assets with magnitude %s', async magnitude => {

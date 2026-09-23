@@ -16,7 +16,7 @@ vi.mock('../functions/background/publish-earthquake-feeds.js', () => ({ publishE
 vi.mock('../functions/api/backfill-earthquake-details.js', () => ({ onRequestGet: vi.fn(), onRequestPost: vi.fn() }));
 
 const features = [{ type: 'Feature', id: 'us-test', properties: { time: 1, updated: 2, mag: 3, place: 'Fixture' }, geometry: { type: 'Point', coordinates: [0, 0, 1] } }];
-const env = { DB: {}, USGS_LAST_RESPONSE_KV: {} };
+const env = { DB: {}, USGS_LAST_RESPONSE_KV: {}, DEPLOYMENT_ENVIRONMENT: 'preview' };
 async function runScheduled(cron, bindings = env) {
   const tasks = [];
   const context = { waitUntil: vi.fn(promise => {
@@ -41,6 +41,31 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe('actual Worker scheduled failure propagation', () => {
+  it.each([
+    { LIST_PUBLICATION_PAUSED: 'true' },
+    {},
+    { LIST_PUBLICATION_PAUSED: 'false' },
+  ])('keeps ingestion and complete period feeds running while production lists are paused: %j', async flags => {
+    const productionEnv = { ...env, DEPLOYMENT_ENVIRONMENT: 'production',
+      WORKER_VERSION_METADATA: { id: 'paused-version' }, RELEASE_REVISION: 'a'.repeat(40), ...flags };
+    const { results, context } = await runScheduled('*/5 * * * *', productionEnv);
+    expect(results[0].status).toBe('fulfilled');
+    expect(handleTrustedUsgsIngestion).toHaveBeenCalledWith(expect.objectContaining({ env: productionEnv, executionContext: context }));
+    expect(publishEarthquakeFeeds).toHaveBeenCalledWith(productionEnv);
+    expect(handleGenerateLists).not.toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith('[scheduled-worker] MILESTONE',
+      expect.objectContaining({ milestone: 'List publication paused during writer transition',
+        data: expect.objectContaining({ versionId: 'paused-version', revision: 'a'.repeat(40) }) }));
+  });
+
+  it('allows production list publication only with both explicit activation bindings', async () => {
+    const productionEnv = { ...env, DEPLOYMENT_ENVIRONMENT: 'production',
+      LIST_PUBLICATION_PAUSED: 'false', DURABLE_INGESTION_ENABLED: 'true' };
+    const { results } = await runScheduled('*/5 * * * *', productionEnv);
+    expect(results[0].status).toBe('fulfilled');
+    expect(handleGenerateLists).toHaveBeenCalledWith({ env: productionEnv, newFeatures: features });
+  });
+
   it('passes the trusted hourly payload to list generation and registers its completion', async () => {
     const { results, context } = await runScheduled('*/5 * * * *');
     expect(results[0].status).toBe('fulfilled');

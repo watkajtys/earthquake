@@ -21,6 +21,15 @@ Exact resource IDs are in `wrangler.toml`. Production retains the original `STAT
 
 This release uses the existing production data schema and does not apply production migrations. Preview seeding applies repository migrations only to the dedicated preview database, or its local simulation. The seed script refuses production targets and checks remote resource names before writing.
 
+The durable-ingestion integration is staged with `LIST_PUBLICATION_PAUSED=true`
+and no `DURABLE_INGESTION_ENABLED` binding. The production release wrapper
+checks both conditions in the reviewed config and uploaded version. During the
+paused stage, the five-minute cron continues hourly D1 ingestion and complete
+period-feed publication; the three legacy list arrays retain their last
+published values. The pause is intentional while old unconditional list
+invocations drain. Missing or malformed activation bindings stop production
+list writes.
+
 The frontend accepts R2 summaries only when every record includes complete alert, tsunami, felt-report, and significance metadata refreshed within ten minutes. Sparse or older caches retain the existing USGS fallback. The hourly ingestion scope is unchanged; retaining richer new records does not guarantee a complete fresh snapshot for every period. This prevents cached summaries from silently removing alert information.
 
 ## Local development and checks
@@ -79,6 +88,23 @@ The wrapper performs these gates:
 2. Run `npm test`, explicitly build the frontend, and dry-run the production package. Wrangler's existing custom build hook also runs Vite during packaging and deployment. These repeated builds are intentional for this first release control; removing them requires proof the same tested asset manifest is published.
 3. Recheck the clean revision and unchanged current deployment, then run pinned local Wrangler with explicit production environment, full revision tag and release identity variable.
 4. Capture the new version from Wrangler's machine-readable output, read back its bindings/revision and live configuration, and check release identity plus the bounded GET smoke on **both public hosts**. Recheck identity and live version after each smoke so a concurrent replacement fails the release.
+
+For the paused durable-integration release, read back the version at 100% and
+confirm a five-minute scheduled log milestone, "List publication paused during
+writer transition," with the same revision and version ID. Keep the exact
+time of that observation. Do not activate the revisioned writer until every
+old unconditional writer is finished; [Cloudflare bounds Cron invocations to
+15 minutes](https://developers.cloudflare.com/workers/platform/limits/), so
+the drain interval must start after the last possible old-version dispatch.
+The current wrapper blocks unpausing and blocks the durable flag; activation
+requires a separately reviewed release gate and actual-handler preview proof.
+Immediately before any later production 0022 migration, take a **fresh** D1
+export and Time Travel bookmark, verify their checksums, restore the export in
+isolation, rehearse the exact migration, then apply it only after those checks
+pass. The previous preview and local rehearsals are evidence, not that fresh
+backup. A rollback after activation must select a writer compatible with the
+new list protocol; rolling back to the old unconditional writer can regress
+public arrays.
 
 The no-store `/api/release-identity` response reports revision, environment and the platform version ID. Missing required bindings return an error; identity does not write probes. The initial identity check may wait up to 90 seconds for the exactly captured previous revision/version to disappear. Each attempt rechecks the active control-plane version. Authentication errors, malformed/cacheable responses, unknown revisions, and competing deployments fail immediately; post-smoke identity checks have no old-version grace. Requests identify themselves with the same first-party User-Agent as the smoke script.
 

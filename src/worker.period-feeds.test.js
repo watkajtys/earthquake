@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
   bucket = createMemorySummaryBucket();
-  env = { GEOJSON_BUCKET: bucket, DB: { prepare: vi.fn(() => { throw new Error('No request-path D1'); }) }, CLUSTER_KV: { get: vi.fn() } };
+  env = { GEOJSON_BUCKET: bucket, DB: { prepare: vi.fn(() => { throw new Error('No request-path D1'); }) }, CLUSTER_KV: { get: vi.fn() }, DEPLOYMENT_ENVIRONMENT: 'preview' };
   handleTrustedUsgsIngestion.mockResolvedValue(Response.json({ newOrUpdatedFeatures: [] }));
   handleGenerateLists.mockResolvedValue(undefined);
 });
