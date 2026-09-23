@@ -193,6 +193,11 @@ export async function releaseProduction(options, deps) {
     // the explicit build gate too, so its success is recorded before publication.
     await check('frontend-build', () => deps.run('npm', ['run', 'build'], { timeout: 5 * 60_000 }));
     await check('production-package', () => deps.run('wrangler', ['deploy', '--env', 'production', '--dry-run'], { timeout: 5 * 60_000 }));
+    await check('predecessor-archive', () => {
+      requireCheck(previousIdentity?.versionId === report.previousVersion,
+        'Exact deployed predecessor identity is required for the asset archive gate.');
+      return deps.verifyPredecessorArchive(previousIdentity);
+    });
     await check('source-before-upload', () => deps.verifySource(options.revision));
     await check('version-before-upload', async () => {
       requireCheck(currentVersion(await deps.api(deploymentsPath)) === report.previousVersion, 'Concurrent deployment before upload; release stopped.');
@@ -298,6 +303,9 @@ export async function main(args = process.argv.slice(2)) {
       requireCheck(await runCommand('git', ['status', '--porcelain', '--untracked-files=normal'], { capture: true }) === '', 'Release requires a clean checkout, including untracked source files.');
     },
     run: runCommand, api,
+    verifyPredecessorArchive: ({ revision, versionId }) => runCommand('node',
+      ['scripts/verify-predecessor-archive.mjs', '--revision', revision, '--version', versionId],
+      { timeout: 10 * 60_000 }),
     identity: (origin, revision, version, identityOptions) => verifyIdentity(fetch, origin, revision, version, identityOptions),
     deploy: async revision => {
       const directory = await mkdtemp(resolve(tmpdir(), 'earthquake-release-'));

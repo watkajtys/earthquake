@@ -48,7 +48,8 @@ function fixture() {
       if (path.includes('/versions/')) return { id: NEW, annotations: { 'workers/tag': REVISION }, resources: { bindings: live.settings.bindings } };
       throw new Error('Unexpected API path');
     }),
-    run: vi.fn(async () => {}), deploy: vi.fn(async () => { deployed = true; return NEW; }),
+    run: vi.fn(async () => {}), verifyPredecessorArchive: vi.fn(async () => {}),
+    deploy: vi.fn(async () => { deployed = true; return NEW; }),
     identity: vi.fn(async () => {}), writeReport: vi.fn(async () => {}), log: vi.fn(),
   };
   return { deps, live, options: { environment: 'production', revision: REVISION, reportPath: 'unused.json' } };
@@ -79,6 +80,9 @@ describe('production release controls', () => {
       ['node', 'scripts/smoke-deployment.mjs', 'https://earthquakeslive.com'], ['node', 'scripts/smoke-deployment.mjs', 'https://earthquake.matty-f7e.workers.dev'],
     ]);
     expect(deps.run.mock.invocationCallOrder[2]).toBeLessThan(deps.deploy.mock.invocationCallOrder[0]);
+    expect(deps.verifyPredecessorArchive).toHaveBeenCalledExactlyOnceWith({ revision: OLD_REVISION, versionId: OLD });
+    expect(deps.run.mock.invocationCallOrder[2]).toBeLessThan(deps.verifyPredecessorArchive.mock.invocationCallOrder[0]);
+    expect(deps.verifyPredecessorArchive.mock.invocationCallOrder[0]).toBeLessThan(deps.deploy.mock.invocationCallOrder[0]);
     expect(deps.identity).toHaveBeenCalledTimes(4); expect(deps.verifySource).toHaveBeenCalledTimes(2);
     expect(deps.writeReport).toHaveBeenCalledWith('unused.json', result);
   });
@@ -88,6 +92,27 @@ describe('production release controls', () => {
     const result = await releaseProduction(options, deps);
     expect(result.status).toBe('failed'); expect(result.failedCheck).toBe(stage); expect(deps.deploy).not.toHaveBeenCalled();
     expect(JSON.stringify(result)).not.toContain('sensitive body');
+  });
+  it('fails before upload when any predecessor archive check fails', async () => {
+    const { deps, options } = fixture();
+    deps.verifyPredecessorArchive.mockRejectedValue(new Error('Missing archived predecessor bytes'));
+    const result = await releaseProduction(options, deps);
+    expect(result.failedCheck).toBe('predecessor-archive');
+    expect(result.uploadAttempted).toBe(false);
+    expect(deps.deploy).not.toHaveBeenCalled();
+    expect(deps.verifySource).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(result)).not.toContain('Missing archived predecessor bytes');
+  });
+  it('fails before upload when the deployed predecessor has no exact revision identity', async () => {
+    const { deps, options } = fixture();
+    const api = deps.api.getMockImplementation();
+    deps.api.mockImplementation(path => path.endsWith(`/versions/${OLD}`)
+      ? { id: OLD, annotations: { 'workers/tag': OLD_REVISION }, resources: { bindings: [] } }
+      : api(path));
+    const result = await releaseProduction(options, deps);
+    expect(result.failedCheck).toBe('predecessor-archive');
+    expect(deps.verifyPredecessorArchive).not.toHaveBeenCalled();
+    expect(deps.deploy).not.toHaveBeenCalled();
   });
   it('refuses changed source before upload', async () => {
     const { deps, options } = fixture(); deps.verifySource.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('dirty'));
@@ -301,13 +326,14 @@ it('does not accept an otherwise matching identity after the propagation deadlin
   await expect(verifyIdentity(async () => identityResponse(currentIdentity), 'https://earthquakeslive.com', REVISION, NEW, options)).rejects.toMatchObject({ diagnostic: { code: 'IDENTITY_PROPAGATION_TIMEOUT', attempts: 1 } });
 });
 
-it('does not grant rollout grace when baseline version tag and revision binding disagree', async () => {
+it('blocks upload when baseline version tag and revision binding disagree', async () => {
   const { deps, options } = fixture();
   const api = deps.api.getMockImplementation();
   deps.api.mockImplementation(path => path.endsWith(`/versions/${OLD}`) ? { id: OLD, annotations: { 'workers/tag': OLD_REVISION }, resources: { bindings: [{ name: 'RELEASE_REVISION', text: 'c'.repeat(40) }] } } : api(path));
   const fetch = vi.fn(async () => identityResponse(oldIdentity));
   deps.identity.mockImplementation((origin, revision, version, identityOptions) => verifyIdentity(fetch, origin, revision, version, identityOptions));
   const report = await releaseProduction(options, deps);
-  expect(report.failureDiagnostic.code).toBe('IDENTITY_UNEXPECTED_RELEASE');
-  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(report.failedCheck).toBe('predecessor-archive');
+  expect(deps.deploy).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
 });
