@@ -2,6 +2,7 @@
 // This is the only routine production publisher. Importing it never runs a release.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, mkdir, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir, devNull } from 'node:os';
 import { resolve, dirname } from 'node:path';
@@ -19,6 +20,7 @@ const ACTIVATION_ATTESTATION = {
   databaseId: DATABASE,
   pausedRevision: PAUSED_REVISION,
   pausedVersionId: PAUSED_VERSION,
+  pausedObservationSha256: 'e58a7483741def2995c69ecbdcae8b6d4f74c09a146db77eb71e9614cadf9e40',
   migrationSqlSha256: '4aa9a6a5b081f6de4c58d1ff26ab5c7b22606ac2fd9eb124428d99252da3062c',
   backupManifestSha256: 'b50562c279126a1cd297f1d45eb451edac5b36f78206df3f56ff99d1af580898',
   listBeforeImagesManifestSha256: '602b8c8221821b2e59de9660dfdd91982193959bf6484ad2c6c8b592e0482401',
@@ -27,7 +29,7 @@ const ACTIVATION_ATTESTATION = {
   pausedIdentityReceiptSha256: 'e4eb425bc1e8998d19f12e8feb0c65c598708b2722687aea4a3094456b535473',
 };
 const D1_ACTIVATION_READBACK_SQL = "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1; " +
-  "SELECT name, type FROM sqlite_master WHERE name IN ('UsgsIngestionState','UsgsIngestionRuns','UsgsIngestionIssues','idx_usgs_ingestion_runs_feed_due') ORDER BY name; " +
+  "SELECT name, type, sql FROM sqlite_master WHERE name IN ('UsgsIngestionState','UsgsIngestionRuns','UsgsIngestionIssues','idx_usgs_ingestion_runs_feed_due') ORDER BY name; " +
   'SELECT COUNT(*) AS n FROM UsgsIngestionState; ' +
   'SELECT COUNT(*) AS n FROM UsgsIngestionRuns; ' +
   'SELECT COUNT(*) AS n FROM UsgsIngestionIssues;';
@@ -54,12 +56,10 @@ export function verifyLiveD1Readback(queries, { requireEmpty = false } = {}) {
   const results = queries.map(query => query?.results);
   assert.deepEqual(results[0], [{ name: '0022_durable_usgs_ingestion.sql' }],
     'Production D1 migration 0022 is not the latest applied migration.');
-  assert.deepEqual(results[1], [
-    { name: 'UsgsIngestionIssues', type: 'table' },
-    { name: 'UsgsIngestionRuns', type: 'table' },
-    { name: 'UsgsIngestionState', type: 'table' },
-    { name: 'idx_usgs_ingestion_runs_feed_due', type: 'index' },
-  ], 'Production D1 ingestion schema is incomplete.');
+  requireCheck(Array.isArray(results[1]) && results[1].length === 4 &&
+    createHash('sha256').update(JSON.stringify(results[1])).digest('hex') ===
+      '28f4d63d2b43967b980fb42b504a6d81a9dd2709eed9c8be98ba72bdb86c4c2b',
+  'Production D1 ingestion schema differs from rehearsed migration 0022.');
   for (const [index, label] of [[2, 'state'], [3, 'runs'], [4, 'issues']]) {
     const count = results[index]?.[0]?.n;
     requireCheck(results[index]?.length === 1 && Number.isSafeInteger(count) && count >= 0,
@@ -279,6 +279,8 @@ export async function releaseProduction(options, deps) {
       return deps.verifyPredecessorArchive(previousIdentity);
     });
     await check('source-before-upload', () => deps.verifySource(options.revision));
+    if (active) await check('live-d1-0022-before-upload',
+      () => deps.verifyLiveD1({ requireEmpty: firstActivation }));
     await check('version-before-upload', async () => {
       requireCheck(currentVersion(await deps.api(deploymentsPath)) === report.previousVersion, 'Concurrent deployment before upload; release stopped.');
     });

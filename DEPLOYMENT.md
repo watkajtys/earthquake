@@ -96,8 +96,12 @@ time of that observation. Do not activate the revisioned writer until every
 old unconditional writer is finished; [Cloudflare bounds Cron invocations to
 15 minutes](https://developers.cloudflare.com/workers/platform/limits/), so
 the drain interval must start after the last possible old-version dispatch.
-The current wrapper blocks unpausing and blocks the durable flag; activation
-requires a separately reviewed release gate and actual-handler preview proof.
+The staged wrapper blocked unpausing. The activation wrapper permits publication
+only when `LIST_PUBLICATION_PAUSED=false` and `DURABLE_INGESTION_ENABLED=true`
+are both present. On the first active release it requires the exact paused
+revision/version, the reviewed digest-only attestation, and a fresh read-only
+check that migration 0022 is applied and the new tables are still empty.
+The actual scheduled handler must pass its isolated preview replay first.
 Immediately before any later production 0022 migration, take a **fresh** D1
 export and Time Travel bookmark, verify their checksums, restore the export in
 isolation, rehearse the exact migration, then apply it only after those checks
@@ -111,9 +115,12 @@ The read-only activation receipt gate is
 It binds the paused Worker trace and drain interval, fresh D1 export and Time
 Travel bookmark, isolated restore/0022 SQL rehearsal report, applied migration
 checksum, and post-drain byte-verified list before-images to one candidate.
-It leaves production configuration paused. The release operator must also read
-back the actual production 0022 ledger/schema and current Worker version before
-activation; private receipts alone cannot establish current Cloudflare state.
+Run this private gate against the final clean activation commit before pushing
+it to `main`. It does not change production. The committed digest-only
+attestation gives Workers Builds a reviewable receipt without exporting the
+database backup or Time Travel bookmarks into Git. The automatic release gate
+also reads the live production 0022 ledger/schema and paused Worker version;
+the digest-only attestation alone cannot establish current Cloudflare state.
 When running this candidate in a separate worktree, pass
 `--repository-root /Users/theair/Projects/earthquake` so receipt paths resolve
 under the original repository's private reconciliation directory.

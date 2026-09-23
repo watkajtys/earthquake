@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseArgs, validateConfig, verifyBindings, verifyConfiguration, verifyIdentity, currentVersion, releaseProduction, readWranglerCredentials, verifyActivationAttestation, verifyLiveD1Readback } from './release-production.mjs';
 
@@ -389,16 +390,18 @@ describe('one-time durable activation release', () => {
   it('accepts only the reviewed attestation bytes and exact live D1 schema', async () => {
     await expect(verifyActivationAttestation()).resolves.toBeUndefined();
     const result = results => ({ success: true, meta: { changed_db: false, rows_written: 0 }, results });
+    const migration = await readFile(new URL('../migrations/0022_durable_usgs_ingestion.sql', import.meta.url), 'utf8');
+    const schema = [...migration.matchAll(/CREATE (TABLE|INDEX) (\w+)[\s\S]*?(?=;)/g)]
+      .map(([sql, kind, name]) => ({ name, type: kind.toLowerCase(), sql }))
+      .sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
     const queries = [
       result([{ name: '0022_durable_usgs_ingestion.sql' }]),
-      result([
-        { name: 'UsgsIngestionIssues', type: 'table' },
-        { name: 'UsgsIngestionRuns', type: 'table' },
-        { name: 'UsgsIngestionState', type: 'table' },
-        { name: 'idx_usgs_ingestion_runs_feed_due', type: 'index' },
-      ]), result([{ n: 0 }]), result([{ n: 0 }]), result([{ n: 0 }]),
+      result(schema), result([{ n: 0 }]), result([{ n: 0 }]), result([{ n: 0 }]),
     ];
     expect(() => verifyLiveD1Readback(queries, { requireEmpty: true })).not.toThrow();
+    expect(() => verifyLiveD1Readback([queries[0], result(schema.map((row, i) => i === 1
+      ? { ...row, sql: `${row.sql} /* changed */` } : row)), ...queries.slice(2)],
+    { requireEmpty: true })).toThrow(/schema differs/);
     expect(() => verifyLiveD1Readback([...queries.slice(0, 3), result([{ n: 1 }]), queries[4]],
       { requireEmpty: true })).toThrow(/not empty/);
     expect(() => verifyLiveD1Readback([...queries.slice(0, 4), { ...queries[4], meta: { changed_db: true, rows_written: 1 } }])).toThrow(/read-only/);
@@ -409,8 +412,13 @@ describe('one-time durable activation release', () => {
     expect(result.status).toBe('passed');
     expect(result.previousVersion).toBe(PAUSED_VERSION);
     expect(deps.verifyActivationAttestation).toHaveBeenCalledOnce();
-    expect(deps.verifyLiveD1).toHaveBeenCalledExactlyOnceWith({ requireEmpty: true });
-    expect(deps.verifyLiveD1.mock.invocationCallOrder[0]).toBeLessThan(deps.deploy.mock.invocationCallOrder[0]);
+    expect(deps.verifyLiveD1).toHaveBeenCalledTimes(2);
+    expect(deps.verifyLiveD1).toHaveBeenNthCalledWith(1, { requireEmpty: true });
+    expect(deps.verifyLiveD1).toHaveBeenNthCalledWith(2, { requireEmpty: true });
+    expect(deps.verifyLiveD1.mock.invocationCallOrder[1]).toBeLessThan(deps.deploy.mock.invocationCallOrder[0]);
+    const deploymentReads = deps.api.mock.calls.flatMap(([path], i) =>
+      path.endsWith('/deployments') ? [deps.api.mock.invocationCallOrder[i]] : []);
+    expect(deps.verifyLiveD1.mock.invocationCallOrder[1]).toBeLessThan(deploymentReads[1]);
   });
   it('refuses activation if the live D1 check fails', async () => {
     const { deps, options } = activationFixture();
@@ -420,6 +428,14 @@ describe('one-time durable activation release', () => {
     expect(result.uploadAttempted).toBe(false);
     expect(deps.deploy).not.toHaveBeenCalled();
     expect(JSON.stringify(result)).not.toContain('private readback body');
+  });
+  it('rechecks live D1 after the long test and archive gates, immediately before upload', async () => {
+    const { deps, options } = activationFixture();
+    deps.verifyLiveD1.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('schema changed'));
+    const result = await releaseProduction(options, deps);
+    expect(result.failedCheck).toBe('live-d1-0022-before-upload');
+    expect(result.uploadAttempted).toBe(false);
+    expect(deps.deploy).not.toHaveBeenCalled();
   });
   it('refuses a different paused predecessor revision', async () => {
     const { deps, options } = activationFixture();

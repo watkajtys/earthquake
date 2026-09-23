@@ -4,6 +4,7 @@
   "databaseId": "8a0a26e9-ba3c-4984-9023-c1803f611a05",
   "pausedRevision": "e6ed7248fa0c250bd3fd83c250c71a8bccd07310",
   "pausedVersionId": "79754405-4027-46cb-b004-42e41dedfb77",
+  "pausedObservationSha256": "e58a7483741def2995c69ecbdcae8b6d4f74c09a146db77eb71e9614cadf9e40",
   "migrationSqlSha256": "4aa9a6a5b081f6de4c58d1ff26ab5c7b22606ac2fd9eb124428d99252da3062c",
   "backupManifestSha256": "b50562c279126a1cd297f1d45eb451edac5b36f78206df3f56ff99d1af580898",
   "listBeforeImagesManifestSha256": "602b8c8221821b2e59de9660dfdd91982193959bf6484ad2c6c8b592e0482401",
