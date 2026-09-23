@@ -18,6 +18,7 @@
     "deploy:preview": "wrangler deploy --env preview",
     "check:deploy": "wrangler deploy --env production --dry-run",
     "seed:preview": "node scripts/seed-preview.mjs",
+    "generate:fault-display": "node scripts/generate-fault-display.mjs",
     "smoke": "node scripts/smoke-deployment.mjs",
     "release:production": "node scripts/release-production.mjs --env production"
   },

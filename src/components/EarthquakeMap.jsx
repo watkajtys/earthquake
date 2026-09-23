@@ -281,7 +281,7 @@ const EarthquakeMap = ({
     const loadActiveFaults = async () => {
       setIsActiveFaultsLoading(true);
       try {
-        const faultsData = await import('../assets/gem_active_faults_harmonized.json');
+        const faultsData = await import('../assets/gem_active_faults_display.json');
         if (isMounted) {
           setFullActiveFaultsData(faultsData.default);
         }
