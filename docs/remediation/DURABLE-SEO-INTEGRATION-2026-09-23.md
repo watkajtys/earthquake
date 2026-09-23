@@ -1,8 +1,9 @@
 # SEO successor for paused durable ingestion — 2026-09-23 UTC
 
 Status: **local integration only; production ingestion gate off.** The isolated
-`codex/durable-0022-seo-integration` branch starts at SEO candidate
-`8925122674c54d0ff285baa8306d2809e9f89fc8`, which descends from the
+`codex/durable-0022-seo-af487` branch starts at revised SEO candidate
+`af48744877396ef73188784b20ef312c97cdcc7c`, which descends from
+`8925122674c54d0ff285baa8306d2809e9f89fc8` and the
 axis/feed candidate `c282b99465b476d63047e871dbc011acf67e8843`. It
 integrates the additive 0022 D1 schema, immutable R2 source snapshots,
 fenced run progress, per-revision R2 list publication, and the paused
@@ -14,21 +15,27 @@ The SEO branch already contained the same predecessor archive verifier and
 cherry-picked a second time. One smoke-test conflict was resolved using the
 actual retained manifest size rather than a fixed count. No production
 Worker, D1, R2, Git remote, backup, or migration was changed for this
-integration. The dedicated preview remained in use for SEO browser checks and
-was not touched by this branch.
+integration. Preview verification is tracked separately from this code commit.
+
+The revised SEO base adds acceptance for a valid terminal R2 object-list page
+that omits `result_info`; its fail-closed continuation checks are retained in
+this integration.
 
 ## Exact predecessor graph
 
-An isolated build of exact SEO commit `8925122` using the pinned lockfile
+Independent isolated builds of SEO commits `8925122` and `af48744` using the
+same pinned lockfile produced byte-identical web assets. The revised build
 produced 26 JS/CSS assets totaling 6,026,614 bytes. Its six paths already in
 the inherited 252-path manifest matched by SHA-256 and byte length. The other
 20 files add 2,441,227 bytes. The staged successor graph is **272 paths and
 40,776,284 bytes**. All 252 inherited local objects were rechecked against
 their manifest checksums. The existing 280-file and 100 MiB caps accommodate
-the graph, leaving eight file slots. The exact per-path comparison is in
-`/private/tmp/earthquake-seo-8925122-asset-rebuild-20260923/asset-graph-comparison.json`.
+the graph, leaving eight file slots. The manifest SHA-256 is
+`00312a42deedd05e5771f9e79c78ab03cc0765f86462e875a40945f517cf0d70`.
+The fresh `af48744` asset path/SHA-256/size list hashes to
+`677a47fb2ef5f309a8288fe4cbe4b772362758b9870741203f845799a9fe2f47`.
 
-This is a candidate predecessor graph until `8925122` is actually deployed.
+This is a candidate predecessor graph until the revised SEO code is actually deployed.
 Before a later production upload, read back the sole deployed version,
 revision, HTML and import graph. If they differ, restage from the actual live
 bytes. Create-only archive any newly required objects, then let the
@@ -41,10 +48,10 @@ uploaded to production R2.
 - The migration bytes match the c282-based integration; SHA-256 is
   `4aa9a6a5b081f6de4c58d1ff26ab5c7b22606ac2fd9eb124428d99252da3062c`.
 - Focused actual-handler, list overlap, scheduled, period-feed and release
-  tests passed: 124/124 across six files.
+  tests passed: 142/142 across eight files.
 - The 272-path staged union passed independent SHA-256/length readback;
   staging/archive tests passed 24/24 and deployment smoke tests 18/18.
-- The full suite passed **1,694 tests, three skipped, across 130 files**.
+- The full suite passed **1,696 tests, three skipped, across 130 files**.
   `npm run build` and `npm run check:deploy` passed; Wrangler's production
   dry run showed `LIST_PUBLICATION_PAUSED=true` and no durable activation
   binding. Lint on every changed JavaScript file passed. Repository-wide lint
@@ -56,7 +63,7 @@ uploaded to production R2.
 
 ## Safe production order if the SEO candidate deploys first
 
-1. If `8925122` is the deployed predecessor, verify it is the sole 100%
+1. If `af48744` is the deployed predecessor, verify it is the sole 100%
    production version and its live asset graph matches this 272-path
    candidate. A different deployed revision requires restaging from its
    actual live graph. Archive the 20 new paths using
