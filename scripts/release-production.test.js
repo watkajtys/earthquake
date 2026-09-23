@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest';
 import { resolve } from 'node:path';
-import { parseArgs, validateConfig, verifyBindings, verifyConfiguration, verifyIdentity, currentVersion, releaseProduction, readWranglerCredentials } from './release-production.mjs';
+import { parseArgs, validateConfig, verifyBindings, verifyConfiguration, verifyIdentity, currentVersion, releaseProduction, readWranglerCredentials, verifyActivationAttestation, verifyLiveD1Readback } from './release-production.mjs';
 
 const REVISION = 'a'.repeat(40);
 const OLD_REVISION = 'b'.repeat(40);
@@ -67,13 +67,14 @@ describe('production release controls', () => {
   it('parses production using installed Wrangler schema and isolates preview', async () => {
     const { unstable_readConfig } = await import('wrangler');
     const actual = unstable_readConfig({ config: 'wrangler.toml', env: 'production' }, { hideWarnings: true });
-    expect(() => validateConfig(actual)).not.toThrow();
+    expect(() => validateConfig(actual)).toThrow();
+    expect(() => validateConfig(actual, { allowActivation: true })).not.toThrow();
     const preview = unstable_readConfig({ config: 'wrangler.toml', env: 'preview' }, { hideWarnings: true });
     expect(preview.triggers.crons).toEqual([]);
     expect(preview.d1_databases[0].database_id).not.toBe(actual.d1_databases[0].database_id);
     expect(() => validateConfig(preview)).toThrow();
   });
-  it('allows only a paused release with durable ingestion disabled', () => {
+  it('requires deliberate opt in for both production activation bindings', () => {
     expect(() => validateConfig({ ...config, vars: { DEPLOYMENT_ENVIRONMENT: 'production' } })).toThrow();
     expect(() => validateConfig({ ...config, vars: { ...config.vars, LIST_PUBLICATION_PAUSED: 'false' } })).toThrow();
     expect(() => validateConfig({ ...config, vars: { ...config.vars, DURABLE_INGESTION_ENABLED: 'true' } })).toThrow();
@@ -345,4 +346,90 @@ it('blocks upload when baseline version tag and revision binding disagree', asyn
   expect(report.failedCheck).toBe('predecessor-archive');
   expect(deps.deploy).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();
+});
+
+describe('one-time durable activation release', () => {
+  const PAUSED_REVISION = 'e6ed7248fa0c250bd3fd83c250c71a8bccd07310';
+  const PAUSED_VERSION = '79754405-4027-46cb-b004-42e41dedfb77';
+  const DATABASE = '8a0a26e9-ba3c-4984-9023-c1803f611a05';
+  const activeConfig = { ...config,
+    vars: { DEPLOYMENT_ENVIRONMENT: 'production', LIST_PUBLICATION_PAUSED: 'false', DURABLE_INGESTION_ENABLED: 'true' },
+    d1_databases: [{ binding: 'DB', database_id: DATABASE }],
+  };
+  const pausedBindings = () => bindings().map(item => item.name === 'DB' ? { ...item, id: DATABASE }
+    : item.name === 'RELEASE_REVISION' ? { ...item, text: PAUSED_REVISION } : item);
+  const activeBindings = () => [
+    ...pausedBindings().map(item => item.name === 'LIST_PUBLICATION_PAUSED' ? { ...item, text: 'false' }
+      : item.name === 'RELEASE_REVISION' ? { ...item, text: REVISION } : item),
+    { name: 'DURABLE_INGESTION_ENABLED', type: 'plain_text', text: 'true' },
+  ];
+  function activationFixture() {
+    const { deps, options, live } = fixture();
+    let deployed = false;
+    live.settings.bindings = pausedBindings();
+    deps.readConfig = async () => activeConfig;
+    deps.verifyActivationAttestation = vi.fn(async () => {});
+    deps.verifyLiveD1 = vi.fn(async () => {});
+    deps.api = vi.fn(async path => {
+      if (path.endsWith('/deployments')) return { deployments: [{ versions: [{ version_id: deployed ? NEW : PAUSED_VERSION, percentage: 100 }] }] };
+      if (path.endsWith('/settings')) return live.settings;
+      if (path.endsWith('/schedules')) return live.schedules;
+      if (path.includes('/workers/domains?')) return live.domains;
+      if (path.endsWith('/subdomain')) return live.subdomain;
+      if (path.includes('/queues?')) return live.queues;
+      if (path.endsWith(`/versions/${PAUSED_VERSION}`)) return { id: PAUSED_VERSION,
+        annotations: { 'workers/tag': PAUSED_REVISION }, resources: { bindings: pausedBindings() } };
+      if (path.endsWith(`/versions/${NEW}`)) return { id: NEW,
+        annotations: { 'workers/tag': REVISION }, resources: { bindings: activeBindings() } };
+      throw new Error('Unexpected API path');
+    });
+    deps.deploy = vi.fn(async () => { deployed = true; live.settings.bindings = activeBindings(); return NEW; });
+    return { deps, options, live };
+  }
+  it('accepts only the reviewed attestation bytes and exact live D1 schema', async () => {
+    await expect(verifyActivationAttestation()).resolves.toBeUndefined();
+    const result = results => ({ success: true, meta: { changed_db: false, rows_written: 0 }, results });
+    const queries = [
+      result([{ name: '0022_durable_usgs_ingestion.sql' }]),
+      result([
+        { name: 'UsgsIngestionIssues', type: 'table' },
+        { name: 'UsgsIngestionRuns', type: 'table' },
+        { name: 'UsgsIngestionState', type: 'table' },
+        { name: 'idx_usgs_ingestion_runs_feed_due', type: 'index' },
+      ]), result([{ n: 0 }]), result([{ n: 0 }]), result([{ n: 0 }]),
+    ];
+    expect(() => verifyLiveD1Readback(queries, { requireEmpty: true })).not.toThrow();
+    expect(() => verifyLiveD1Readback([...queries.slice(0, 3), result([{ n: 1 }]), queries[4]],
+      { requireEmpty: true })).toThrow(/not empty/);
+    expect(() => verifyLiveD1Readback([...queries.slice(0, 4), { ...queries[4], meta: { changed_db: true, rows_written: 1 } }])).toThrow(/read-only/);
+  });
+  it('validates the exact paused predecessor, receipts and live schema before upload', async () => {
+    const { deps, options } = activationFixture();
+    const result = await releaseProduction(options, deps);
+    expect(result.status).toBe('passed');
+    expect(result.previousVersion).toBe(PAUSED_VERSION);
+    expect(deps.verifyActivationAttestation).toHaveBeenCalledOnce();
+    expect(deps.verifyLiveD1).toHaveBeenCalledExactlyOnceWith({ requireEmpty: true });
+    expect(deps.verifyLiveD1.mock.invocationCallOrder[0]).toBeLessThan(deps.deploy.mock.invocationCallOrder[0]);
+  });
+  it('refuses activation if the live D1 check fails', async () => {
+    const { deps, options } = activationFixture();
+    deps.verifyLiveD1.mockRejectedValue(new Error('private readback body'));
+    const result = await releaseProduction(options, deps);
+    expect(result.failedCheck).toBe('live-d1-0022');
+    expect(result.uploadAttempted).toBe(false);
+    expect(deps.deploy).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain('private readback body');
+  });
+  it('refuses a different paused predecessor revision', async () => {
+    const { deps, options } = activationFixture();
+    const api = deps.api.getMockImplementation();
+    deps.api.mockImplementation(path => path.endsWith(`/versions/${PAUSED_VERSION}`)
+      ? { id: PAUSED_VERSION, annotations: { 'workers/tag': OLD_REVISION },
+        resources: { bindings: pausedBindings().map(item => item.name === 'RELEASE_REVISION'
+          ? { ...item, text: OLD_REVISION } : item) } } : api(path));
+    const result = await releaseProduction(options, deps);
+    expect(result.failedCheck).toBe('metadata-access-and-baseline');
+    expect(deps.deploy).not.toHaveBeenCalled();
+  });
 });

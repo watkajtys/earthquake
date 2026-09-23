@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "accountId": "f7e27d63f4766d7fb6a0f5b4789e2cdb",
+  "databaseId": "8a0a26e9-ba3c-4984-9023-c1803f611a05",
+  "pausedRevision": "e6ed7248fa0c250bd3fd83c250c71a8bccd07310",
+  "pausedVersionId": "79754405-4027-46cb-b004-42e41dedfb77",
+  "migrationSqlSha256": "4aa9a6a5b081f6de4c58d1ff26ab5c7b22606ac2fd9eb124428d99252da3062c",
+  "backupManifestSha256": "b50562c279126a1cd297f1d45eb451edac5b36f78206df3f56ff99d1af580898",
+  "listBeforeImagesManifestSha256": "602b8c8221821b2e59de9660dfdd91982193959bf6484ad2c6c8b592e0482401",
+  "immediateBookmarkReceiptSha256": "8258b0e9a317b0d083122435917c7b7e46880b10587209a8d5e6b412f8264158",
+  "liveD1ReadbackSha256": "0146530a514cf69c2ded80a01245d7dcccb5eaa6a3b8752f49e740fa30d88bc0",
+  "pausedIdentityReceiptSha256": "e4eb425bc1e8998d19f12e8feb0c65c598708b2722687aea4a3094456b535473"
+}

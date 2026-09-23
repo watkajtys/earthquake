@@ -10,11 +10,63 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ACCOUNT = 'f7e27d63f4766d7fb6a0f5b4789e2cdb';
 const WORKER = 'earthquake';
+const PAUSED_REVISION = 'e6ed7248fa0c250bd3fd83c250c71a8bccd07310';
+const PAUSED_VERSION = '79754405-4027-46cb-b004-42e41dedfb77';
+const DATABASE = '8a0a26e9-ba3c-4984-9023-c1803f611a05';
+const ACTIVATION_ATTESTATION = {
+  schemaVersion: 1,
+  accountId: ACCOUNT,
+  databaseId: DATABASE,
+  pausedRevision: PAUSED_REVISION,
+  pausedVersionId: PAUSED_VERSION,
+  migrationSqlSha256: '4aa9a6a5b081f6de4c58d1ff26ab5c7b22606ac2fd9eb124428d99252da3062c',
+  backupManifestSha256: 'b50562c279126a1cd297f1d45eb451edac5b36f78206df3f56ff99d1af580898',
+  listBeforeImagesManifestSha256: '602b8c8221821b2e59de9660dfdd91982193959bf6484ad2c6c8b592e0482401',
+  immediateBookmarkReceiptSha256: '8258b0e9a317b0d083122435917c7b7e46880b10587209a8d5e6b412f8264158',
+  liveD1ReadbackSha256: '0146530a514cf69c2ded80a01245d7dcccb5eaa6a3b8752f49e740fa30d88bc0',
+  pausedIdentityReceiptSha256: 'e4eb425bc1e8998d19f12e8feb0c65c598708b2722687aea4a3094456b535473',
+};
+const D1_ACTIVATION_READBACK_SQL = "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1; " +
+  "SELECT name, type FROM sqlite_master WHERE name IN ('UsgsIngestionState','UsgsIngestionRuns','UsgsIngestionIssues','idx_usgs_ingestion_runs_feed_due') ORDER BY name; " +
+  'SELECT COUNT(*) AS n FROM UsgsIngestionState; ' +
+  'SELECT COUNT(*) AS n FROM UsgsIngestionRuns; ' +
+  'SELECT COUNT(*) AS n FROM UsgsIngestionIssues;';
 const ORIGINS = ['https://earthquakeslive.com', 'https://earthquake.matty-f7e.workers.dev'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function requireCheck(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+export async function verifyActivationAttestation() {
+  const path = resolve(ROOT, 'docs/remediation/DURABLE-0022-ACTIVATION.json');
+  const attestation = JSON.parse(await readFile(path, 'utf8'));
+  assert.deepEqual(attestation, ACTIVATION_ATTESTATION,
+    'The committed activation attestation differs from the reviewed receipts.');
+}
+
+export function verifyLiveD1Readback(queries, { requireEmpty = false } = {}) {
+  requireCheck(Array.isArray(queries) && queries.length === 5,
+    'Production D1 migration readback is incomplete.');
+  requireCheck(queries.every(query => query?.success === true &&
+    query.meta?.changed_db === false && query.meta?.rows_written === 0),
+  'Production D1 migration readback was not read-only or did not succeed.');
+  const results = queries.map(query => query?.results);
+  assert.deepEqual(results[0], [{ name: '0022_durable_usgs_ingestion.sql' }],
+    'Production D1 migration 0022 is not the latest applied migration.');
+  assert.deepEqual(results[1], [
+    { name: 'UsgsIngestionIssues', type: 'table' },
+    { name: 'UsgsIngestionRuns', type: 'table' },
+    { name: 'UsgsIngestionState', type: 'table' },
+    { name: 'idx_usgs_ingestion_runs_feed_due', type: 'index' },
+  ], 'Production D1 ingestion schema is incomplete.');
+  for (const [index, label] of [[2, 'state'], [3, 'runs'], [4, 'issues']]) {
+    const count = results[index]?.[0]?.n;
+    requireCheck(results[index]?.length === 1 && Number.isSafeInteger(count) && count >= 0,
+      `Production D1 ingestion ${label} count is invalid.`);
+    if (requireEmpty) requireCheck(count === 0,
+      `Production D1 ingestion ${label} is not empty before activation.`);
+  }
 }
 
 export function parseArgs(args, env = process.env) {
@@ -33,17 +85,22 @@ export function parseArgs(args, env = process.env) {
   return { environment: 'production', revision, reportPath: values['--report'] || `.reconciliation.local/releases/${revision}-${Date.now()}.json` };
 }
 
-export function validateConfig(config) {
+export function validateConfig(config, { allowActivation = false } = {}) {
   requireCheck(config.name === WORKER && config.account_id === ACCOUNT, 'Production account/Worker differs from the reviewed target.');
   requireCheck(config.main === resolve(ROOT, 'src/worker.js'), 'Production must use the active src/worker.js entrypoint.');
   requireCheck(config.assets?.binding === 'ASSETS' && config.assets.run_worker_first === true, 'Worker-first ASSETS configuration is required.');
   requireCheck(config.version_metadata?.binding === 'WORKER_VERSION_METADATA', 'Version metadata binding is required.');
   requireCheck(config.vars?.DEPLOYMENT_ENVIRONMENT === 'production', 'Production environment identity is required.');
-  requireCheck(config.vars?.LIST_PUBLICATION_PAUSED === 'true' && config.vars?.DURABLE_INGESTION_ENABLED === undefined,
-    'This release may only stage the paused list writer with durable ingestion disabled.');
+  const paused = config.vars?.LIST_PUBLICATION_PAUSED === 'true' && config.vars?.DURABLE_INGESTION_ENABLED === undefined;
+  const active = config.vars?.LIST_PUBLICATION_PAUSED === 'false' && config.vars?.DURABLE_INGESTION_ENABLED === 'true';
+  requireCheck(paused || (allowActivation && active),
+    'Production list publication requires both reviewed activation bindings.');
   for (const [field, names] of [['kv_namespaces', ['CLUSTER_KV', 'USGS_LAST_RESPONSE_KV', 'STATIC_KV']], ['d1_databases', ['DB']], ['r2_buckets', ['GEOJSON_BUCKET']]]) {
     assert.deepEqual(config[field].map(item => item.binding).sort(), names.sort(), `Unexpected ${field} configuration`);
   }
+  if (active) requireCheck(config.d1_databases[0].database_id === DATABASE &&
+    config.r2_buckets[0].bucket_name === 'geojson-bucket',
+  'Activation must target the reviewed production D1 database and R2 bucket.');
   requireCheck(config.queues.producers.length === 1 && config.queues.producers[0].binding === 'GEOJSON_QUEUE' && config.queues.consumers.length === 1, 'Expected queue producer and consumer are required.');
   assert.deepEqual([...config.triggers.crons].sort(), ['*/5 * * * *', '*/10 * * * *', '*/30 * * * *', '0 0 * * *'].sort(), 'Unexpected production crons');
   assert.deepEqual(config.routes, [{ pattern: 'earthquakeslive.com', custom_domain: true }], 'Unexpected production domain');
@@ -62,11 +119,14 @@ export function verifyBindings(bindings, config, revision) {
   if (revision) expected.push(
     { name: 'WORKER_VERSION_METADATA', type: 'version_metadata' },
     { name: 'DEPLOYMENT_ENVIRONMENT', type: 'plain_text', text: 'production' },
-    { name: 'LIST_PUBLICATION_PAUSED', type: 'plain_text', text: 'true' },
+    { name: 'LIST_PUBLICATION_PAUSED', type: 'plain_text', text: config.vars.LIST_PUBLICATION_PAUSED },
     { name: 'RELEASE_REVISION', type: 'plain_text', text: revision },
   );
-  if (revision) requireCheck(!bindings.some(item => item.name === 'DURABLE_INGESTION_ENABLED'),
-    'Durable ingestion must remain disabled for this paused release.');
+  if (revision && config.vars.DURABLE_INGESTION_ENABLED === 'true') expected.push(
+    { name: 'DURABLE_INGESTION_ENABLED', type: 'plain_text', text: 'true' },
+  );
+  else if (revision) requireCheck(!bindings.some(item => item.name === 'DURABLE_INGESTION_ENABLED'),
+    'Durable ingestion must remain disabled for a paused release.');
   for (const wanted of expected) {
     const actual = bindings.find(item => item.name === wanted.name);
     requireCheck(actual && Object.entries(wanted).every(([key, value]) => (key === 'id' ? actual.id || actual.database_id : actual[key]) === value), `Missing or incorrect binding: ${wanted.name}`);
@@ -178,10 +238,12 @@ export async function releaseProduction(options, deps) {
   };
   const deploymentsPath = `/accounts/${ACCOUNT}/workers/scripts/${WORKER}/deployments`;
   let previousIdentity;
+  let firstActivation = false;
   try {
     requireCheck(options.environment === 'production' && /^[0-9a-f]{40}$/.test(options.revision), 'Explicit production environment and full revision are required.');
     const config = await deps.readConfig();
-    validateConfig(config);
+    const active = config.vars?.DURABLE_INGESTION_ENABLED === 'true';
+    validateConfig(config, { allowActivation: active });
     await check('source', () => deps.verifySource(options.revision));
     await check('metadata-access-and-baseline', async () => {
       report.previousVersion = currentVersion(await deps.api(deploymentsPath));
@@ -191,8 +253,21 @@ export async function releaseProduction(options, deps) {
       if (previous.id === report.previousVersion && /^[0-9a-f]{40}$/.test(previousRevision || '') && previousBinding?.text === previousRevision) {
         previousIdentity = { versionId: report.previousVersion, revision: previousRevision };
       }
-      verifyConfiguration(await readConfiguration(deps.api, config), config);
+      firstActivation = active && report.previousVersion === PAUSED_VERSION;
+      if (active) requireCheck(previousIdentity?.versionId === report.previousVersion,
+        'The active release requires an exact deployed predecessor identity.');
+      if (firstActivation) requireCheck(previousIdentity.revision === PAUSED_REVISION,
+        'The paused predecessor revision differs from the reviewed activation base.');
+      const baselineConfig = firstActivation
+        ? { ...config, vars: { ...config.vars, LIST_PUBLICATION_PAUSED: 'true', DURABLE_INGESTION_ENABLED: undefined } }
+        : config;
+      verifyConfiguration(await readConfiguration(deps.api, config), baselineConfig,
+        active ? previousIdentity.revision : undefined);
     });
+    if (active) {
+      await check('activation-attestation', () => deps.verifyActivationAttestation());
+      await check('live-d1-0022', () => deps.verifyLiveD1({ requireEmpty: firstActivation }));
+    }
     await check('tests', () => deps.run('npm', ['test'], { timeout: 15 * 60_000 }));
     // Wrangler's configured custom build runs Vite before packaging/upload. Keep
     // the explicit build gate too, so its success is recorded before publication.
@@ -306,6 +381,12 @@ export async function main(args = process.argv.slice(2)) {
     verifySource: async revision => {
       requireCheck(await runCommand('git', ['rev-parse', 'HEAD'], { capture: true }) === revision, 'Expected revision is not HEAD.');
       requireCheck(await runCommand('git', ['status', '--porcelain', '--untracked-files=normal'], { capture: true }) === '', 'Release requires a clean checkout, including untracked source files.');
+    },
+    verifyActivationAttestation,
+    verifyLiveD1: async ({ requireEmpty }) => {
+      const output = await runCommand('wrangler', ['d1', 'execute', 'DB', '--env', 'production', '--remote', '--json',
+        '--command', D1_ACTIVATION_READBACK_SQL], { capture: true, timeout: 60_000 });
+      verifyLiveD1Readback(JSON.parse(output), { requireEmpty });
     },
     run: runCommand, api,
     verifyPredecessorArchive: ({ revision, versionId }) => runCommand('node',
