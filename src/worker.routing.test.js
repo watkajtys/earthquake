@@ -188,7 +188,14 @@ describe('deployed Worker routing', () => {
     const response = await worker.fetch(makeRequest('/sitemap-static-pages.xml'), env, ctx);
 
     expect(response.headers.get('Content-Type')).toBe('application/xml');
-    expect(await response.text()).toContain('https://earthquakeslive.com/learn/plate-tectonics');
+    const xml = await response.text();
+    expect(xml).toContain('https://earthquakeslive.com/learn/plate-tectonics');
+    expect(xml).toContain('https://earthquakeslive.com/learn/what-causes-earthquakes');
+    expect(xml).toContain('https://earthquakeslive.com/learn/earthquake-safety');
+    expect(xml).toContain('https://earthquakeslive.com/learn/tsunamis-and-earthquakes');
+    expect(xml).toContain('https://earthquakeslive.com/feeds?activeFeedPeriod=last_24_hours');
+    expect(xml).not.toContain('<loc>https://earthquakeslive.com/feeds</loc>');
+    expect(xml).not.toContain('<lastmod>');
     expect(env.ASSETS.fetch).not.toHaveBeenCalled();
   });
 

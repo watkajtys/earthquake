@@ -136,6 +136,8 @@ const FeedsPageLayout = ({
                 title={seoInfo.title}
                 description={seoInfo.description}
                 keywords={seoInfo.keywords}
+                pageUrl={seoInfo.pageUrl}
+                canonicalUrl={seoInfo.canonicalUrl}
                 imageUrl="/vite.svg"
                 type="website"
             />

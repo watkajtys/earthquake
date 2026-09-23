@@ -11,7 +11,7 @@ import FeedSelector from './FeedSelector';
 import SummaryStatisticsCard from './SummaryStatisticsCard';
 import PaginatedEarthquakeTable from './PaginatedEarthquakeTable';
 import LoadMoreDataButton from './LoadMoreDataButton';
-// SeoMetadata is also mocked but not asserted with vi.mocked in the new tests, so direct import not strictly needed yet.
+import SeoMetadata from './SeoMetadata';
 
 // Mock child components
 vi.mock('./SeoMetadata', () => ({
@@ -55,7 +55,7 @@ const mockUIStateContextValue = {
 
 const mockProps = {
   handleQuakeClick: vi.fn(),
-  getFeedPageSeoInfo: vi.fn(() => ({ title: 'Test Title', description: 'Test Desc', keywords: 'test' })),
+  getFeedPageSeoInfo: vi.fn(() => ({ title: 'Test Title', description: 'Test Desc', keywords: 'test', pageUrl: 'https://earthquakeslive.com/feeds?activeFeedPeriod=last_24_hours', canonicalUrl: 'https://earthquakeslive.com/feeds?activeFeedPeriod=last_24_hours' })),
   calculateStats: vi.fn(() => ({ total: 0, maxMag: 0, avgMag: 0, change: 0, trend: 'neutral' })),
   getMagnitudeColorStyle: vi.fn(() => ({ color: 'white' })),
   formatTimeAgo: vi.fn(() => 'some time ago'),
@@ -65,6 +65,16 @@ const mockProps = {
 describe('FeedsPageLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks(); // Reset mocks before each test
+  });
+
+  it('passes the selected feed canonical URL to document metadata', () => {
+    render(<EarthquakeDataContext.Provider value={mockEarthquakeDataContextValue}>
+      <UIStateContext.Provider value={mockUIStateContextValue}><FeedsPageLayout {...mockProps} /></UIStateContext.Provider>
+    </EarthquakeDataContext.Provider>);
+    expect(SeoMetadata).toHaveBeenCalledWith(expect.objectContaining({
+      pageUrl: 'https://earthquakeslive.com/feeds?activeFeedPeriod=last_24_hours',
+      canonicalUrl: 'https://earthquakeslive.com/feeds?activeFeedPeriod=last_24_hours',
+    }), undefined);
   });
 
   it('keeps weekly coverage labels after a failed first monthly attempt and exposes retry state', () => {

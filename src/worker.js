@@ -28,7 +28,7 @@ import { CLUSTER_MIN_QUAKES } from './constants/appConstants.js';
 import { handleLegacyStaticAsset } from './legacyStaticAssets.js';
 import { enforceRoutePolicy, finalizeResponse, policyError, readBoundedJson, RequestPolicyError, validateCalculation } from './utils/workerRequestPolicy.js';
 import { releaseIdentity } from './utils/releaseIdentity.js';
-import { buildEarthquakePath, parseEarthquakePath, parseClusterPath, timestampMilliseconds } from './utils/entityRoutes.js';
+import { buildClusterPath, buildEarthquakePath, isValidClusterRouteValue, parseEarthquakePath, parseClusterPath, timestampMilliseconds } from './utils/entityRoutes.js';
 import { resolveClusterDefinition } from '../functions/utils/clusterResolver.js';
 
 var jsonErrorResponse = (message, status, sourceName, upstreamStatus = void 0) => {
@@ -73,72 +73,57 @@ function isCrawler(request) {
   return crawlerRegex.test(userAgent);
 }
 async function handleStaticPagesSitemapRequest() {
-  const today = /* @__PURE__ */ new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-  const lastModified = `${year}-${month}-${day}`;
   const staticPages = [
     {
       loc: "https://earthquakeslive.com/",
       priority: "1.0",
       changefreq: "daily",
-      lastmod: lastModified,
     },
     {
       loc: "https://earthquakeslive.com/overview",
       priority: "0.9",
       changefreq: "daily",
-      lastmod: lastModified,
     },
-    {
-      loc: "https://earthquakeslive.com/feeds",
-      priority: "0.9",
-      changefreq: "hourly",
-      lastmod: lastModified,
-    },
-    // Feeds page itself might change if new feed types are added
   ];
   const feedPeriods = [
     {
       period: "last_hour",
       priority: "0.9",
       changefreq: "hourly",
-      lastmod: lastModified,
     },
     {
       period: "last_24_hours",
       priority: "0.9",
       changefreq: "hourly",
-      lastmod: lastModified,
     },
     {
       period: "last_7_days",
       priority: "0.9",
       changefreq: "daily",
-      lastmod: lastModified,
     },
     {
       period: "last_30_days",
       priority: "0.7",
       changefreq: "daily",
-      lastmod: lastModified,
     },
   ];
   let urlsXml = "";
   staticPages.forEach((page) => {
     urlsXml += `
-  <url><loc>${page.loc}</loc><lastmod>${page.lastmod}</lastmod><changefreq>${page.changefreq}</changefreq><priority>${page.priority}</priority></url>`;
+  <url><loc>${page.loc}</loc><changefreq>${page.changefreq}</changefreq><priority>${page.priority}</priority></url>`;
   });
   feedPeriods.forEach((feed) => {
     urlsXml += `
-  <url><loc>https://earthquakeslive.com/feeds?activeFeedPeriod=${feed.period}</loc><lastmod>${feed.lastmod}</lastmod><changefreq>${feed.changefreq}</changefreq><priority>${feed.priority}</priority></url>`;
+  <url><loc>https://earthquakeslive.com/feeds?activeFeedPeriod=${feed.period}</loc><changefreq>${feed.changefreq}</changefreq><priority>${feed.priority}</priority></url>`;
   });
   urlsXml += `
-  <url><loc>https://earthquakeslive.com/learn</loc><lastmod>${lastModified}</lastmod><priority>0.5</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://earthquakeslive.com/learn/magnitude-vs-intensity</loc><lastmod>${lastModified}</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://earthquakeslive.com/learn/measuring-earthquakes</loc><lastmod>${lastModified}</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://earthquakeslive.com/learn/plate-tectonics</loc><lastmod>${lastModified}</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>`;
+  <url><loc>https://earthquakeslive.com/learn</loc><priority>0.5</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://earthquakeslive.com/learn/magnitude-vs-intensity</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://earthquakeslive.com/learn/measuring-earthquakes</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://earthquakeslive.com/learn/plate-tectonics</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://earthquakeslive.com/learn/what-causes-earthquakes</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://earthquakeslive.com/learn/earthquake-safety</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://earthquakeslive.com/learn/tsunamis-and-earthquakes</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>`;
   const sitemapXML = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urlsXml}
 </urlset>`;
@@ -153,7 +138,6 @@ async function handleClustersSitemapRequest(request, env) {
   const sourceName = "clusters-sitemap-handler";
   const DB = env.DB;
   let clustersXml = "";
-  const currentDate = /* @__PURE__ */ new Date().toISOString();
   if (!DB) {
     console.error(`[${sourceName}] D1 Database (DB) not available`);
     return new Response(
@@ -162,9 +146,10 @@ async function handleClustersSitemapRequest(request, env) {
 <!-- D1 Database not available -->
 </urlset>`,
       {
+        status: 503,
         headers: {
           "Content-Type": "application/xml",
-          "Cache-Control": "public, max-age=3600",
+          "Cache-Control": "no-store",
         },
       },
     );
@@ -173,66 +158,21 @@ async function handleClustersSitemapRequest(request, env) {
     const stmt = DB.prepare(
       "SELECT slug, updatedAt FROM ClusterDefinitions WHERE slug IS NOT NULL AND slug <> '' ORDER BY updatedAt DESC LIMIT 500",
     );
-    const { results } = await stmt.all();
-    if (results && results.length > 0) {
+    const readResult = await stmt.all();
+    if (readResult?.success !== true || !Array.isArray(readResult.results)) throw new Error('Cluster sitemap query failed');
+    const { results } = readResult;
+    if (results.length > 0) {
       for (const row of results) {
-        const d1Slug = row.slug;
-        const lastmod = row.updatedAt
-          ? new Date(row.updatedAt).toISOString()
-          : currentDate;
-        const slugPatternRegex = /^overview_cluster_([a-zA-Z0-9]+)_(\d+)$/;
-        const slugMatch = d1Slug.match(slugPatternRegex);
-        if (!slugMatch) {
-          const sitemapUrlPath = d1Slug.startsWith("/")
-            ? d1Slug.substring(1)
-            : d1Slug;
-          const sitemapUrl = `https://earthquakeslive.com/cluster/${sitemapUrlPath}`;
-          clustersXml += `
-  <url><loc>${escapeXml2(sitemapUrl)}</loc><lastmod>${lastmod}</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>`;
-          continue;
-        }
-        const strongestQuakeIdFromDb = slugMatch[1];
-        const quakeCountFromDb = slugMatch[2];
-        let quakeData;
-        try {
-          quakeData = await fetchValidatedDetail(strongestQuakeIdFromDb);
-        } catch (fetchError) {
-          console.error(
-            `[${sourceName}] Error fetching USGS data for ${strongestQuakeIdFromDb}: ${fetchError.message}. Skipping.`,
-          );
-          continue;
-        }
-        if (!quakeData || !quakeData.properties) {
-          console.warn(
-            `[${sourceName}] Invalid or missing properties in USGS data for ${strongestQuakeIdFromDb}. Skipping.`,
-          );
-          continue;
-        }
-        const locationName = quakeData.properties.place;
-        const maxMagnitude = quakeData.properties.mag;
-        if (!locationName || typeof locationName !== "string") {
-          console.warn(
-            `[${sourceName}] Missing or invalid locationName for ${strongestQuakeIdFromDb}. Skipping.`,
-          );
-          continue;
-        }
-        if (
-          maxMagnitude === null ||
-          maxMagnitude === void 0 ||
-          typeof maxMagnitude !== "number"
-        ) {
-          console.warn(
-            `[${sourceName}] Missing or invalid maxMagnitude for ${strongestQuakeIdFromDb}. Skipping.`,
-          );
-          continue;
-        }
-        const locationSlug = locationName
-          .toLowerCase()
-          .replace(/\s+/g, "-")
-          .replace(/[^a-z0-9-]/g, "");
-        const newUrl = `https://earthquakeslive.com/cluster/${quakeCountFromDb}-quakes-near-${locationSlug}-up-to-m${maxMagnitude.toFixed(1)}-${strongestQuakeIdFromDb}`;
+        // The stored slug is the same canonical path used by cluster detail
+        // pages. Rebuilding old overview slugs from USGS detail both advertises
+        // a different URL and multiplies each sitemap request into upstream calls.
+        if (!isValidClusterRouteValue(row.slug)) continue;
+        const updated = timestampMilliseconds(row.updatedAt);
+        const lastmod = updated !== null && Number.isFinite(new Date(updated).getTime())
+          ? `<lastmod>${new Date(updated).toISOString()}</lastmod>` : "";
+        const sitemapUrl = `https://earthquakeslive.com${buildClusterPath(row)}`;
         clustersXml += `
-  <url><loc>${escapeXml2(newUrl)}</loc><lastmod>${lastmod}</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>`;
+  <url><loc>${escapeXml2(sitemapUrl)}</loc>${lastmod}<changefreq>daily</changefreq><priority>0.7</priority></url>`;
       }
     } else {
       console.log(
@@ -250,9 +190,10 @@ async function handleClustersSitemapRequest(request, env) {
 <!-- Exception processing cluster data from D1: ${escapeXml2(error.message)} -->
 </urlset>`,
       {
+        status: 503,
         headers: {
           "Content-Type": "application/xml",
-          "Cache-Control": "public, max-age=3600",
+          "Cache-Control": "no-store",
         },
       },
     );
