@@ -11,8 +11,11 @@ Small scheduling differences therefore let the next generation slip to about
 minutes. This also failed the production release smoke at 09:00 UTC before
 sequence 301 refreshed.
 
-This branch starts at deployed code commit `f381899fd1fb56c8753c24342d8ebb6d9520c53b`.
-It has no database migration, remote R2 writes, preview deployment, or
+This candidate starts at plotting code commit
+`9864b597d01c38d6e9800c8419e03f8488797fdc`, which was pending production
+promotion when this branch was prepared. The summary fix was cherry-picked
+from `025e54760cf7e9da60350be196afdfd834a34359` without conflicts. This
+branch has no database migration, remote R2 writes, preview deployment, or
 production deployment.
 
 ## Local change
@@ -47,9 +50,9 @@ isolated under the old generation key and cannot affect the current API result.
   sequence, unchanged marker CAS loss, an old marker racing a new pointer,
   backwards clocks, malformed markers, API freshness and cursor continuity,
   and client aging from the response header.
-- Full test suite: 128 files passed, 1,628 tests passed, 3 skipped.
-- Production Vite build, changed-file ESLint, `git diff --check`, and Wrangler
-  4.135.0 production `deploy --dry-run` passed. Dry-run only packaged code.
+- The final local candidate passed 1,629 tests in 127 files (3 skipped),
+  production Vite build, changed-file ESLint, `git diff --check`, and Wrangler
+  4.135.0 production `deploy --dry-run`. The dry run only packaged code.
 - Independent read-only review found no release-blocking issue in the marker
   compare-and-swap, pointer rotation, API history handling, or client header
   validation.
@@ -62,6 +65,13 @@ observation. A missed or failed cron still leaves `stale: true` after 20
 minutes, as it should. Browser bundles already open before this release still
 compute their local stale label from immutable `generatedAtMs`; they can show
 the stale label after minute 20 until reloaded or the hourly generation rotates.
-The JSON API stays valid for those bundles. As with any new browser asset, the
-next release must retain and verify its predecessor asset graph before
-promotion.
+The JSON API stays valid for those bundles. The plotting release's 26-file
+browser build adds 21 unique paths to its retained 190-path graph. This
+candidate stages all 211 prior paths (33,410,503 bytes) in a frozen local
+union at `/private/tmp/earthquake-summary-after-plots-union-20260923`; its
+manifest is embedded in `src/previousReleaseAssets.js`. The reviewed file
+limit was raised from 200 to 240. Before any summary promotion, archive the
+21 new files to production R2 with create-only writes and byte-verify all 211
+retained paths. The current summary build adds 20 further unique paths, making
+231 paths to check during deployment smoke. No archive or deployment is part
+of this local candidate.
