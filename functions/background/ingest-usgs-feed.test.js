@@ -39,11 +39,97 @@ describe('trusted scheduled USGS ingestion', () => {
   });
 
   it('returns all hourly features to list generation even when no D1 writes are needed', async () => {
-    stored.set(checkpoint, JSON.stringify(usgsCollection().features));
+    const feature = usgsCollection().features[0];
+    stored.set(checkpoint, JSON.stringify([feature]));
+    db.prepare.mockImplementation(() => ({
+      bind: vi.fn(function () { return this; }),
+      all: vi.fn().mockResolvedValue({ success: true, results: [{ id: feature.id, source_updated_at_ms: feature.properties.updated }] }),
+    }));
     const response = await handleTrustedUsgsIngestion(context);
     expect(response.status).toBe(200);
     expect((await response.json()).newOrUpdatedFeatures).toEqual(usgsCollection().features);
     expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it('sends an unchanged checkpoint feature through the guard when its migrated D1 row lacks a revision', async () => {
+    const feature = usgsCollection().features[0];
+    stored.set(checkpoint, JSON.stringify([feature]));
+    db.prepare.mockImplementation(sql => ({
+      bind: vi.fn(function () { return this; }),
+      all: vi.fn().mockResolvedValue({
+        success: true,
+        results: sql.includes('source_updated_at_ms')
+          ? [{ id: feature.id, source_updated_at_ms: null }]
+          : [{ id: feature.id }],
+      }),
+    }));
+
+    const response = await handleTrustedUsgsIngestion(context);
+
+    expect(response.status).toBe(200);
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT id, source_updated_at_ms'));
+    expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining('ON CONFLICT(id) DO UPDATE'));
+    expect(JSON.parse(stored.get(checkpoint))).toEqual([feature]);
+  });
+
+  it('does not checkpoint when the migrated revision lookup fails', async () => {
+    const feature = usgsCollection().features[0];
+    stored.set(checkpoint, JSON.stringify([feature]));
+    db.prepare.mockImplementation(() => ({
+      bind: vi.fn(function () { return this; }),
+      all: vi.fn().mockResolvedValue({ success: false, results: [] }),
+    }));
+
+    expect((await handleTrustedUsgsIngestion(context)).status).toBe(503);
+    expect(db.batch).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it('keeps the newer per-feed feature while an older overlap is superseded in D1', async () => {
+    const saved = usgsCollection([usgsFeature('us-test-1', { updated: 1750000002000 })]);
+    stored.set(checkpoint, JSON.stringify(saved.features));
+    db.batch.mockResolvedValueOnce([{ success: true, meta: { changes: 0 } }]);
+    db.prepare.mockImplementation(sql => ({
+      bind: vi.fn(function () { return this; }),
+      all: vi.fn().mockResolvedValue({ success: true, results: sql.includes('source_updated_at_ms') ? [{
+        id: 'us-test-1', event_time: 1750000000000, latitude: 37.5, longitude: -121.5,
+        depth: 8, magnitude: 2.4, place: 'Test location',
+        usgs_detail_url: saved.features[0].properties.detail,
+        source_updated_at_ms: 1750000002000,
+      }] : [{ id: 'us-test-1' }] }),
+    }));
+    const response = await handleTrustedUsgsIngestion(context);
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).ingestion.supersededIds).toEqual(['us-test-1']);
+    expect(JSON.parse(stored.get(checkpoint))).toEqual(saved.features);
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(kv.put).toHaveBeenCalledWith(checkpoint, JSON.stringify(saved.features));
+  });
+
+  it('checks an equal-clock field conflict before advancing the checkpoint', async () => {
+    const saved = usgsCollection();
+    stored.set(checkpoint, JSON.stringify(saved.features));
+    fetch.mockResolvedValue(Response.json(usgsCollection([
+      usgsFeature('us-test-1', { place: 'Different place at the same revision' }),
+    ])));
+    db.batch.mockResolvedValueOnce([{ success: true, meta: { changes: 0 } }]);
+    db.prepare.mockImplementation(sql => ({
+      bind: vi.fn(function () { return this; }),
+      all: vi.fn().mockResolvedValue({ success: true, results: sql.includes('source_updated_at_ms') ? [{
+        id: 'us-test-1', event_time: 1750000000000, latitude: 37.5, longitude: -121.5,
+        depth: 8, magnitude: 2.4, place: 'Test location',
+        usgs_detail_url: saved.features[0].properties.detail,
+        source_updated_at_ms: 1750000001000,
+      }] : [{ id: 'us-test-1' }] }),
+    }));
+
+    const response = await handleTrustedUsgsIngestion(context);
+    expect(response.status).toBe(503);
+    expect((await response.json()).ingestion.rejectedIds).toEqual(['us-test-1']);
+    expect(JSON.parse(stored.get(checkpoint))).toEqual(saved.features);
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it('does not checkpoint partial success and retries the failed90 rows on the next identical91-feature feed', async () => {

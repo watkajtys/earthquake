@@ -1,7 +1,7 @@
 // Outcomes count input features, including duplicate IDs if a caller supplies
 // them. A failed/unknown batch is safe to retry, but never safe to checkpoint.
-function persistenceOutcome(persistedIds, unchangedIds, failedIds, rejectedIds) {
-  const successCount = persistedIds.length + unchangedIds.length;
+function persistenceOutcome(persistedIds, unchangedIds, supersededIds, failedIds, rejectedIds) {
+  const successCount = persistedIds.length + unchangedIds.length + supersededIds.length;
   const errorCount = failedIds.length + rejectedIds.length;
   return {
     successCount,
@@ -9,6 +9,7 @@ function persistenceOutcome(persistedIds, unchangedIds, failedIds, rejectedIds) 
     complete: errorCount === 0,
     persistedIds,
     unchangedIds,
+    supersededIds,
     failedIds,
     rejectedIds,
   };
@@ -20,6 +21,7 @@ function isPersistableFeature(feature) {
   return (
     typeof feature?.id === "string" && feature.id.length > 0 &&
     properties && Number.isFinite(properties.time) &&
+    Number.isSafeInteger(properties.updated) && Math.abs(properties.updated) <= 8640000000000000 &&
     (properties.mag === null || Number.isFinite(properties.mag)) &&
     (properties.place === null || typeof properties.place === "string") &&
     (properties.detail == null || typeof properties.detail === "string") &&
@@ -28,12 +30,38 @@ function isPersistableFeature(feature) {
   );
 }
 
+function summaryValues(feature) {
+  const { properties, geometry } = feature;
+  return {
+    id: feature.id,
+    event_time: properties.time,
+    latitude: geometry.coordinates[1],
+    longitude: geometry.coordinates[0],
+    depth: geometry.coordinates[2],
+    magnitude: properties.mag,
+    place: properties.place,
+    usgs_detail_url: properties.detail || `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${feature.id}.geojson`,
+    source_updated_at_ms: properties.updated,
+  };
+}
+
+const summaryColumns = ['event_time', 'latitude', 'longitude', 'depth', 'magnitude', 'place', 'usgs_detail_url'];
+
+function classifyNoChange(feature, row) {
+  const incoming = summaryValues(feature);
+  if (!row || !Number.isSafeInteger(row.source_updated_at_ms)) return 'failed';
+  if (row.source_updated_at_ms > incoming.source_updated_at_ms) return 'superseded';
+  if (row.source_updated_at_ms < incoming.source_updated_at_ms) return 'failed';
+  return summaryColumns.every(column => row[column] === incoming[column]) ? 'unchanged' : 'rejected';
+}
+
 async function upsertEarthquakeFeaturesToD1(db, features) {
   const persistedIds = [];
   const unchangedIds = [];
+  const supersededIds = [];
   const failedIds = [];
   const rejectedIds = [];
-  const outcome = () => persistenceOutcome(persistedIds, unchangedIds, failedIds, rejectedIds);
+  const outcome = () => persistenceOutcome(persistedIds, unchangedIds, supersededIds, failedIds, rejectedIds);
   if (!Array.isArray(features)) {
     rejectedIds.push(null);
     return outcome();
@@ -54,8 +82,8 @@ async function upsertEarthquakeFeaturesToD1(db, features) {
   }
 
   const upsertStmtText = `
-    INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, retrieved_at, next_detail_fetch_attempt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO EarthquakeEvents (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url, source_updated_at_ms, retrieved_at, next_detail_fetch_attempt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
         event_time = excluded.event_time,
         latitude = excluded.latitude,
@@ -64,14 +92,10 @@ async function upsertEarthquakeFeaturesToD1(db, features) {
         magnitude = excluded.magnitude,
         place = excluded.place,
         usgs_detail_url = excluded.usgs_detail_url,
+        source_updated_at_ms = excluded.source_updated_at_ms,
         retrieved_at = excluded.retrieved_at
-    WHERE excluded.event_time IS NOT EarthquakeEvents.event_time
-       OR excluded.latitude IS NOT EarthquakeEvents.latitude
-       OR excluded.longitude IS NOT EarthquakeEvents.longitude
-       OR excluded.depth IS NOT EarthquakeEvents.depth
-       OR excluded.magnitude IS NOT EarthquakeEvents.magnitude
-       OR excluded.place IS NOT EarthquakeEvents.place
-       OR excluded.usgs_detail_url IS NOT EarthquakeEvents.usgs_detail_url;
+    WHERE EarthquakeEvents.source_updated_at_ms IS NULL
+       OR excluded.source_updated_at_ms > EarthquakeEvents.source_updated_at_ms;
   `;
   let stmt;
   try {
@@ -87,17 +111,18 @@ async function upsertEarthquakeFeaturesToD1(db, features) {
     const batchFeatures = validFeatures.slice(i, i + batchSize);
     try {
       const operations = batchFeatures.map((feature) => {
-        const { properties, geometry } = feature;
+        const values = summaryValues(feature);
         const retrievedAt = Date.now();
         return stmt.bind(
-          feature.id,
-          properties.time,
-          geometry.coordinates[1],
-          geometry.coordinates[0],
-          geometry.coordinates[2],
-          properties.mag,
-          properties.place,
-          properties.detail || `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${feature.id}.geojson`,
+          values.id,
+          values.event_time,
+          values.latitude,
+          values.longitude,
+          values.depth,
+          values.magnitude,
+          values.place,
+          values.usgs_detail_url,
+          values.source_updated_at_ms,
           retrievedAt,
           retrievedAt + 45 * 60 * 1000,
         );
@@ -110,10 +135,32 @@ async function upsertEarthquakeFeaturesToD1(db, features) {
             !Number.isInteger(result.meta?.changes) || result.meta.changes < 0)) {
         throw new Error("D1 batch returned incomplete persistence results");
       }
+      const noChanges = [];
       results.forEach((result, index) => {
-        const ids = result.meta.changes === 0 ? unchangedIds : persistedIds;
-        ids.push(batchFeatures[index].id);
+        if (result.meta.changes === 0) noChanges.push(batchFeatures[index]);
+        else persistedIds.push(batchFeatures[index].id);
       });
+      if (noChanges.length) {
+        // A guarded no-op can mean identical, superseded, or an equal-clock
+        // conflict. Read it back before declaring this batch checkpointable.
+        const ids = [...new Set(noChanges.map(feature => feature.id))];
+        try {
+          const query = `SELECT id, ${summaryColumns.join(', ')}, source_updated_at_ms FROM EarthquakeEvents WHERE id IN (${ids.map(() => '?').join(', ')})`;
+          const readback = await db.prepare(query).bind(...ids).all();
+          if (readback?.success !== true || !Array.isArray(readback.results)) throw new Error('D1 summary readback was incomplete');
+          const byId = new Map(readback.results.map(row => [row.id, row]));
+          for (const feature of noChanges) {
+            const category = classifyNoChange(feature, byId.get(feature.id));
+            if (category === 'unchanged') unchangedIds.push(feature.id);
+            else if (category === 'superseded') supersededIds.push(feature.id);
+            else if (category === 'rejected') rejectedIds.push(feature.id);
+            else failedIds.push(feature.id);
+          }
+        } catch (error) {
+          failedIds.push(...noChanges.map(feature => feature.id));
+          console.error(`[d1Utils-upsert] Batch starting at index ${i} readback failed:`, error);
+        }
+      }
     } catch (error) {
       failedIds.push(...batchFeatures.map(feature => feature.id));
       console.error(`[d1Utils-upsert] Batch starting at index ${i} failed:`, error);

@@ -23,7 +23,7 @@ const makeFeature = (id = 'quake1') => ({
 });
 const expectedOutcome = (overrides = {}) => ({
   successCount: 0, errorCount: 0, complete: true,
-  persistedIds: [], unchangedIds: [], failedIds: [], rejectedIds: [],
+  persistedIds: [], unchangedIds: [], supersededIds: [], failedIds: [], rejectedIds: [],
   ...overrides,
 });
 
@@ -44,7 +44,10 @@ describe('earthquake persistence against the migrated D1 schema', () => {
         return {
           bind(...values) {
             if (values.length > 100) throw new Error('D1 bound parameter limit exceeded');
-            return { run: () => ({ success: true, meta: statement.run(...values) }) };
+            return {
+              run: () => ({ success: true, meta: statement.run(...values) }),
+              all: async () => ({ success: true, results: statement.all(...values) }),
+            };
           },
         };
       }),
@@ -85,6 +88,7 @@ describe('earthquake persistence against the migrated D1 schema', () => {
     expect(rows()[0]).toMatchObject({
       id: 'quake1', event_time: 0, magnitude: null, place: null,
       longitude: 0, latitude: 0, depth: 0,
+      source_updated_at_ms: now,
       retrieved_at: now, next_detail_fetch_attempt: now + 45 * 60 * 1000,
     });
   });
@@ -113,6 +117,7 @@ describe('earthquake persistence against the migrated D1 schema', () => {
     const feature = makeFeature();
     await upsertEarthquakeFeaturesToD1(db, [feature]);
     revise(feature);
+    feature.properties.updated += 1;
     vi.setSystemTime(now + 1000);
 
     expect(await upsertEarthquakeFeaturesToD1(db, [feature])).toEqual(expectedOutcome({
@@ -128,11 +133,13 @@ describe('earthquake persistence against the migrated D1 schema', () => {
     await upsertEarthquakeFeaturesToD1(db, [feature]);
     feature.properties.mag = null;
     feature.properties.place = null;
+    feature.properties.updated += 1;
     expect((await upsertEarthquakeFeaturesToD1(db, [feature])).persistedIds).toEqual(['quake1']);
     expect(rows()[0]).toMatchObject({ magnitude: null, place: null });
     expect((await upsertEarthquakeFeaturesToD1(db, [feature])).unchangedIds).toEqual(['quake1']);
     feature.properties.mag = -0.5;
     feature.properties.place = 'Revised location';
+    feature.properties.updated += 1;
     expect((await upsertEarthquakeFeaturesToD1(db, [feature])).persistedIds).toEqual(['quake1']);
     expect(rows()[0]).toMatchObject({ magnitude: -0.5, place: 'Revised location' });
   });
@@ -142,6 +149,60 @@ describe('earthquake persistence against the migrated D1 schema', () => {
     delete feature.properties.detail;
     await upsertEarthquakeFeaturesToD1(db, [feature]);
     expect(rows()[0].usgs_detail_url).toBe('https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/quake1.geojson');
+  });
+
+  it('fences an older summary after a newer correction in either arrival order', async () => {
+    const older = makeFeature();
+    older.properties.updated = now - 1000;
+    older.properties.place = 'Older location';
+    const newer = makeFeature();
+    newer.properties.place = 'Corrected location';
+
+    expect((await upsertEarthquakeFeaturesToD1(db, [newer])).persistedIds).toEqual(['quake1']);
+    const corrected = rows()[0];
+    expect(await upsertEarthquakeFeaturesToD1(db, [older])).toEqual(expectedOutcome({
+      successCount: 1, supersededIds: ['quake1'],
+    }));
+    expect(rows()[0]).toEqual(corrected);
+
+    database.exec('DELETE FROM EarthquakeEvents');
+    await upsertEarthquakeFeaturesToD1(db, [older]);
+    expect((await upsertEarthquakeFeaturesToD1(db, [newer])).persistedIds).toEqual(['quake1']);
+    expect(rows()[0]).toMatchObject({ place: 'Corrected location', source_updated_at_ms: now });
+  });
+
+  it('rejects conflicting fields at the same source revision without rewriting the row', async () => {
+    const original = makeFeature();
+    await upsertEarthquakeFeaturesToD1(db, [original]);
+    const saved = rows()[0];
+    const conflict = makeFeature();
+    conflict.properties.place = 'Conflicting location';
+
+    expect(await upsertEarthquakeFeaturesToD1(db, [conflict])).toEqual(expectedOutcome({
+      errorCount: 1, complete: false, rejectedIds: ['quake1'],
+    }));
+    expect(rows()[0]).toEqual(saved);
+  });
+
+  it('does not claim an identical or superseded revision when readback fails', async () => {
+    const feature = makeFeature();
+    await upsertEarthquakeFeaturesToD1(db, [feature]);
+    const realPrepare = db.prepare.getMockImplementation();
+    db.prepare.mockImplementation(sql => sql.startsWith('SELECT')
+      ? { bind: () => ({ all: () => Promise.reject(new Error('Readback unavailable')) }) }
+      : realPrepare(sql));
+
+    expect(await upsertEarthquakeFeaturesToD1(db, [feature])).toEqual(expectedOutcome({
+      errorCount: 1, complete: false, failedIds: ['quake1'],
+    }));
+  });
+
+  it('seeds only a freshly observed source revision for an existing legacy row', async () => {
+    const feature = makeFeature();
+    await upsertEarthquakeFeaturesToD1(db, [feature]);
+    database.prepare('UPDATE EarthquakeEvents SET source_updated_at_ms = NULL WHERE id = ?').run(feature.id);
+    expect((await upsertEarthquakeFeaturesToD1(db, [feature])).persistedIds).toEqual(['quake1']);
+    expect(rows()[0].source_updated_at_ms).toBe(now);
   });
 
   it('reports the failed first 90 features separately from a successful last feature and recovers on retry', async () => {
@@ -194,15 +255,17 @@ describe('earthquake persistence against the migrated D1 schema', () => {
   it('does not checkpoint rejected features even if other features persist', async () => {
     const invalidTime = makeFeature('invalid-time');
     invalidTime.properties.time = null;
+    const invalidRevision = makeFeature('invalid-revision');
+    invalidRevision.properties.updated = NaN;
     const invalidCoordinate = makeFeature('invalid-coordinate');
     invalidCoordinate.geometry.coordinates[2] = Infinity;
     const result = await upsertEarthquakeFeaturesToD1(db, [
-      makeFeature('valid'), { id: 'missing-properties' }, invalidTime, invalidCoordinate, null,
+      makeFeature('valid'), { id: 'missing-properties' }, invalidTime, invalidRevision, invalidCoordinate, null,
     ]);
 
     expect(result).toEqual(expectedOutcome({
-      successCount: 1, errorCount: 4, complete: false, persistedIds: ['valid'],
-      rejectedIds: ['missing-properties', 'invalid-time', 'invalid-coordinate', null],
+      successCount: 1, errorCount: 5, complete: false, persistedIds: ['valid'],
+      rejectedIds: ['missing-properties', 'invalid-time', 'invalid-revision', 'invalid-coordinate', null],
     }));
     expect(rows().map(row => row.id)).toEqual(['valid']);
   });
