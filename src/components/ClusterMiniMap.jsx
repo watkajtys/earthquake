@@ -117,6 +117,7 @@ const ClusterMiniMap = ({ cluster }) => {
     highlightQuakeMagnitude: latestQuake.properties.mag,        // Magnitude of the latest quake.
     highlightQuakeTitle: latestQuake.properties.place || latestQuake.properties.title || 'Latest Event', // Title for the highlighted quake.
     nearbyQuakes: otherQuakes,                                  // Other quakes in the cluster.
+    aggregateNearbyQuakes: true,                               // Cap visual markers; retain all events for bounds and faults.
     fitMapToBounds: true,                                     // Instruct EarthquakeMap to fit bounds to show all points.
     shakeMapUrl: null,                                          // Clusters don't have a single ShakeMap URL.
     mainQuakeDetailUrl: null,                                   // No single detail URL for the entire cluster view.

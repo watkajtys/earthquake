@@ -104,6 +104,18 @@ const mockEmptyClusterData = {
     originalQuakes: []
 };
 
+test('large sequences render a bounded set of event points and disclose sampling', () => {
+    const quakes = Array.from({ length: 1217 }, (_, index) =>
+        mockQuake(`large-${index}`, mainshockTime + index * 60_000, index === 500 ? 7.2 : 2 + index % 3));
+    const { container } = render(<EarthquakeSequenceChart cluster={{ originalQuakes: quakes }} />);
+    const circles = container.querySelectorAll('svg circle');
+    expect(circles.length).toBeLessThanOrEqual(303);
+    expect(circles.length).toBeGreaterThan(0);
+    expect(screen.getByText(/of 1217 event points and a simplified line at this chart width/)).toBeInTheDocument();
+    expect(container.querySelector('svg circle[stroke]')).toBeInTheDocument();
+    expect(quakes).toHaveLength(1217);
+});
+
 // This mock is for the test: 'renders "No data available" message when cluster.properties is missing'
 // which is now less relevant as originalQuakes is top-level.
 // However, testing with a cluster object that *doesn't* have originalQuakes is still valid.

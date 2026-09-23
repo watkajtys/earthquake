@@ -7,6 +7,7 @@ import { timeHour } from 'd3-time'; // Import timeHour
 import { line as d3Line } from 'd3-shape'; // Import d3Line
 import { getMagnitudeColor, formatDate, isValidNumber, isValuePresent, formatNumber } from '../utils/utils'; // Corrected path
 import EarthquakeSequenceChartSkeleton from './skeletons/EarthquakeSequenceChartSkeleton'; // Import skeleton
+import { sampleQuakesForChart } from '../utils/clusterVisualSampling.js';
 
 const axisLabelColor = "text-slate-400"; // From EarthquakeTimelineSVGChart
 const tickLabelColor = "text-slate-500"; // From EarthquakeTimelineSVGChart
@@ -201,13 +202,16 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
       })).filter(tick => tick.offset >= -1 && tick.offset <= height + 1);
   }, [yScale, height, magDomain]);
 
+  const plottedQuakes = useMemo(() => sampleQuakesForChart(originalQuakes, width, processedMainshock),
+    [originalQuakes, width, processedMainshock]);
+
   const { linePath } = useMemo(() => {
-    if (!originalQuakes || originalQuakes.length === 0) { // Check originalQuakes for emptiness first
+    if (plottedQuakes.length === 0) {
         return { linePath: null };
     }
 
     // Filter quakes for the line (magnitude >= 1.5 and valid properties)
-    const quakesForLine = originalQuakes.filter(q =>
+    const quakesForLine = plottedQuakes.filter(q =>
         q.properties &&
         typeof q.properties.mag === 'number' &&
         q.properties.mag >= 1.5
@@ -228,7 +232,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
         .y(d => yScale(d.properties.mag)); // No .defined() here anymore
 
     return { linePath: lineGenerator(sortedForLine) };
-  }, [originalQuakes, xScale, yScale]);
+  }, [plottedQuakes, xScale, yScale]);
 
   // Conditional returns now happen *after* all useMemo hooks have been called
   if (isLoading) {
@@ -345,7 +349,7 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
           )}
 
           {/* Data Points */}
-          {originalQuakes.map(quake => {
+          {plottedQuakes.map(quake => {
             // Properties already validated in the initial processing memo
             const { id, properties } = quake;
             const { time, mag, place } = properties;
@@ -394,6 +398,11 @@ const EarthquakeSequenceChart = React.memo(({ cluster, isLoading = false }) => {
           })}
         </g>
       </svg>
+      {plottedQuakes.length < originalQuakes.length && (
+        <p className="mt-1 text-xs text-slate-300">
+          Showing {plottedQuakes.length} of {originalQuakes.length} event points and a simplified line at this chart width. The event list contains every earthquake.
+        </p>
+      )}
     </div>
   );
 });
