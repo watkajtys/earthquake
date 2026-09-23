@@ -62,12 +62,61 @@ isolated copy SHA-256 was
 This is an offline schema/data preservation rehearsal, not an execution on
 Cloudflare D1.
 
+## Dedicated preview verification
+
+The preview-only rehearsal used Worker `earthquake-reconcile-preview`, D1
+`b027cfcd-bee0-4d5e-adf5-9505c3a8626d`, and its same-named R2 bucket. It
+replaced the already verified lazy-detail preview version
+`4a2b7756-c2ed-4509-885e-cc846f82a789` after coordination. Preview has no
+scheduled cron and no `DURABLE_INGESTION_ENABLED` variable or secret; this
+rehearsal did **not** turn on durable ingestion.
+
+Before the remote migration, `d1 export --env preview --remote` saved a
+13,270-byte SQL backup at
+`/private/tmp/earthquake-preview-0022-20260923T0849Z/pre-0022.sql` (mode 0600
+inside a mode-0700 directory), SHA-256
+`1e1af89155d500b1e9a246888b1be642c85b85e7422971926eb1eae9c0abdad7`.
+Its isolated SQLite restore passed integrity and foreign-key checks, retained
+four synthetic earthquake rows and two synthetic cluster rows, and ended at
+0021. Applying the exact 0022 file to a copy of that restore retained those
+counts and created three empty ingestion tables.
+
+Only 0022 was pending remotely. It was applied to the dedicated preview D1 at
+2026-09-23 08:50:38 UTC; readback found no pending migrations, the same four
+earthquake and two cluster rows, zero detail jobs, three empty ingestion
+tables, and no obsolete KV publication column. Remote `foreign_key_check`
+returned no rows. The D1 API denied remote `integrity_check` with
+`SQLITE_AUTH`; the exported restore passed that check locally.
+
+The clean code tip `56d35c3694482e2e58c2bc4b0bd5d143cfa08fcc` was deployed
+only to that preview Worker as version
+`d4a2dd27-a756-45a2-b5ac-be6b962684a2` (script ETag
+`8aeccbb9ffabb2de735b63aec8f30a1eeebb24a2339913da1e25648682d0caf1`).
+Version readback showed the dedicated D1/R2/KV/queue bindings and no rollout
+flag; deployment readback showed this version at 100%. An initial GET smoke
+found stale synthetic period snapshots, so the existing guarded preview seed
+refreshed only synthetic fixtures and verified R2 conditional create and stale
+ETag rejection. The GET-only smoke then passed **199 requests / 167 built
+assets**, including fresh day/week/month feeds and stored quake/cluster routes.
+
+`scripts/verify-durable-preview.mjs --remote` uses a frozen temporary config
+with only the dedicated preview D1/R2 bindings. Against remote D1, a failing
+two-statement batch rolled back the first insert; concurrent conditional lease
+claims had exactly one winner. Against remote R2, overlapping calls to the
+actual list handler lost a conditional write, reread, and retained the newer
+event revision in day, week, and month. The script restored the original
+synthetic list arrays and deleted its temporary D1 lease row; final readback
+found all three ingestion tables empty. Final GET smoke again passed **199
+requests / 167 built assets**. No Git remote or production resource changed.
+
 ## Release limits and remaining work
 
-- The rollout flag must stay off until 0022 is applied to an isolated preview,
-  actual Worker D1 transaction and R2 replay behavior are exercised, and a
-  production backup/recovery point is captured. Do not apply this candidate
-  against production merely because its code is packaged.
+- The rollout flag must stay off until actual scheduled Worker replay under
+  the gate is exercised in isolated preview and a production backup/recovery
+  point is captured. The preview proof above validates remote D1/R2
+  transaction and conditional primitives with synthetic fixtures; it does not
+  invoke the gated USGS handler. Do not apply this candidate against production
+  merely because its code is packaged.
 - An older Worker binary still has unconditional R2 list writes and mutable KV
   writes. Pause the five-minute cron or otherwise drain old scheduled
   invocations before enabling this candidate; a new CAS writer cannot fence an
