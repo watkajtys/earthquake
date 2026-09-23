@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { stagePreviousAssets } from './stage-previous-assets.mjs';
+import { MAX_ASSETS, stagePreviousAssets } from './stage-previous-assets.mjs';
 
 const directories = [];
 afterEach(async () => { await Promise.all(directories.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
@@ -43,13 +43,13 @@ describe('bounded retained asset union staging', () => {
     expect(await stagePreviousAssets(options)).toMatchObject({ predecessorCount: 2, unionCount: 2 });
   });
 
-  it('accepts the reviewed 231-path graph and still rejects a graph beyond 240 paths', async () => {
+  it('accepts the reviewed 252-path graph and rejects a graph beyond its cap', async () => {
     const accepted = await setup();
-    await addPredecessorFiles(accepted.predecessorDirectory, 229);
-    expect(await stagePreviousAssets(accepted)).toMatchObject({ unionCount: 231, newPaths: 230 });
+    await addPredecessorFiles(accepted.predecessorDirectory, 250);
+    expect(await stagePreviousAssets(accepted)).toMatchObject({ unionCount: 252, newPaths: 251 });
 
     const rejected = await setup();
-    await addPredecessorFiles(rejected.predecessorDirectory, 239);
+    await addPredecessorFiles(rejected.predecessorDirectory, MAX_ASSETS - 1);
     await expect(stagePreviousAssets(rejected)).rejects.toThrow('Asset graph exceeds reviewed file budget');
     await expect(access(rejected.outputDirectory)).rejects.toThrow();
   });
