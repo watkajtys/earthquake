@@ -1,7 +1,7 @@
 import {
   SUMMARY_SCHEMA_VERSION, SUMMARY_SOURCE, SUMMARY_VIEW, SUMMARY_POINTER_KEY,
   SUMMARY_PAGE_SIZE, MAX_SUMMARY_ITEMS, MAX_SUMMARY_PAGE_BYTES,
-  MAX_SUMMARY_POINTER_BYTES, MAX_SUMMARY_MANIFEST_BYTES, SUMMARY_MAX_AGE_MS,
+  MAX_SUMMARY_POINTER_BYTES, MAX_SUMMARY_MANIFEST_BYTES, SUMMARY_MAX_AGE_MS, SUMMARY_STALE_AFTER_MS,
   MAX_RETAINED_GENERATIONS, generationManifestKey, generationPageKey,
   summaryEnvelopeMetadata, projectSummaryItem, compareSummaryItems, sha256Hex,
   validateSummaryPointer, validateSummaryDescriptor, validateSummaryManifest, validateSummaryPage,
@@ -44,11 +44,19 @@ export async function readSummaryJsonObject(bucket, key, maxBytes) {
   const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   const uploaded = object.uploaded instanceof Date ? object.uploaded.getTime() : null;
   const uploadedAtMs = Number.isSafeInteger(uploaded) && uploaded >= 0 ? uploaded : null;
-  return { value: JSON.parse(text), etag: object.etag, byteLength: length, text, uploadedAtMs };
+  return { value: JSON.parse(text), etag: object.etag, byteLength: length, text, uploadedAtMs,
+    customMetadata: object.customMetadata };
 }
 export async function readSummaryPointer(bucket) {
   const object = await readSummaryJsonObject(bucket, SUMMARY_POINTER_KEY, MAX_SUMMARY_POINTER_BYTES);
-  return object === null ? { pointer: null, etag: null } : { pointer: validateSummaryPointer(object.value), etag: object.etag };
+  if (object === null) return { pointer: null, etag: null, projectionHash: null };
+  const pointer = validateSummaryPointer(object.value);
+  const metadata = object.customMetadata;
+  const projectionHash = metadata && typeof metadata === 'object' && !Array.isArray(metadata) &&
+    metadata.summaryGenerationId === pointer.current.generationId &&
+    typeof metadata.summaryProjectionSha256 === 'string' && /^[a-f0-9]{64}$/.test(metadata.summaryProjectionSha256)
+    ? metadata.summaryProjectionSha256 : null;
+  return { pointer, etag: object.etag, projectionHash };
 }
 function encodeBounded(value, maxBytes) {
   const text = JSON.stringify(value);
@@ -72,7 +80,7 @@ export async function publishClusterSummarySnapshot(env, { now, randomUUID = () 
   const clock = typeof now === 'function' ? now : () => now ?? Date.now();
   // The base ETag MUST precede the source read. Never rebase these observed rows
   // after losing the final compare-and-swap; the next run must read fresh data.
-  const { pointer: previous, etag: baseEtag } = await readSummaryPointer(env.GEOJSON_BUCKET);
+  const { pointer: previous, etag: baseEtag, projectionHash: previousProjectionHash } = await readSummaryPointer(env.GEOJSON_BUCKET);
   const observationStartedAtMs = clock();
   if (!Number.isSafeInteger(observationStartedAtMs) || observationStartedAtMs < 0) throw new Error('Invalid observation time');
   const result = await env.DB.prepare(SUMMARY_PROJECTION_SQL)
@@ -88,15 +96,32 @@ export async function publishClusterSummarySnapshot(env, { now, randomUUID = () 
     ids.add(item.id); items.push(item);
   }
   items.sort(compareSummaryItems);
+  if (!Number.isSafeInteger(sourceObservedAtMs) || sourceObservedAtMs < observationStartedAtMs) {
+    throw new Error('Invalid summary observation time');
+  }
+  // Each validated summaryRevision hashes every projected scalar. Hashing their
+  // sorted sequence commits to the complete view without allocating a second
+  // potentially large JSON copy of all 20,000 items.
+  const projectionHash = await sha256Hex(items.map(item => item.summaryRevision).join(''));
+  const generatedAtMs = clock();
+  if (!Number.isSafeInteger(generatedAtMs) || generatedAtMs < sourceObservedAtMs) {
+    throw new Error('Invalid summary publication time');
+  }
+  if (previous && previousProjectionHash === projectionHash &&
+      generatedAtMs >= previous.current.generatedAtMs &&
+      generatedAtMs - previous.current.generatedAtMs < SUMMARY_STALE_AFTER_MS) {
+    return { published: false, reason: 'unchanged', generationId: previous.current.generationId,
+      snapshotSequence: previous.current.snapshotSequence, totalCount: items.length,
+      pageCount: previous.current.pageCount };
+  }
   const generationId = randomUUID();
   const descriptor = validateSummaryDescriptor({
     schemaVersion: SUMMARY_SCHEMA_VERSION, source: SUMMARY_SOURCE, sourceWatermarkMs: null,
     view: SUMMARY_VIEW, generationId, snapshotSequence: (previous?.current.snapshotSequence ?? 0) + 1,
-    generatedAtMs: clock(), sourceObservedAtMs, totalCount: items.length,
+    generatedAtMs, sourceObservedAtMs, totalCount: items.length,
     pageCount: Math.max(1, Math.ceil(items.length / SUMMARY_PAGE_SIZE)),
     manifestKey: generationManifestKey(generationId),
   });
-  if (sourceObservedAtMs < observationStartedAtMs) throw new Error('Clock moved backwards during summary observation');
   const cursorSecret = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
   const manifest = { ...descriptor, pageSize: SUMMARY_PAGE_SIZE, pages: [], cursorSecret };
   for (let index = 0; index < descriptor.pageCount; index++) {
@@ -119,6 +144,7 @@ export async function publishClusterSummarySnapshot(env, { now, randomUUID = () 
   const committed = await env.GEOJSON_BUCKET.put(SUMMARY_POINTER_KEY, encodeBounded(pointer, MAX_SUMMARY_POINTER_BYTES).text, {
     onlyIf: baseEtag === null ? { etagDoesNotMatch: '*' } : { etagMatches: baseEtag },
     httpMetadata: { contentType: 'application/json', cacheControl: 'private, no-store' },
+    customMetadata: { summaryGenerationId: generationId, summaryProjectionSha256: projectionHash },
   });
   if (committed === null) return { published: false, reason: 'superseded' };
   confirmedWrite(committed);

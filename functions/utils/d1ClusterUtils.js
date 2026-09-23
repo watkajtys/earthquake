@@ -91,77 +91,62 @@ async function storeClusterDefinition(db, clusterData) {
       significanceScore,
     } = clusterData;
     const now = Date.now();
+    const optional = value => value === void 0 ? null : value;
+    const storedFields = [
+      ['strongestQuakeId', strongestQuakeId], ['earthquakeIds', JSON.stringify(earthquakeIds)],
+      ['title', optional(title)], ['description', optional(description)], ['locationName', optional(locationName)],
+      ['maxMagnitude', maxMagnitude], ['meanMagnitude', optional(meanMagnitude)], ['minMagnitude', optional(minMagnitude)],
+      ['depthRange', optional(depthRange)], ['centroidLat', optional(centroidLat)], ['centroidLon', optional(centroidLon)],
+      ['radiusKm', optional(radiusKm)], ['startTime', startTime], ['endTime', endTime],
+      ['durationHours', optional(durationHours)], ['quakeCount', quakeCount], ['significanceScore', optional(significanceScore)],
+    ];
+    const columns = storedFields.map(([column]) => column);
     // The legacy version column is TEXT and may contain years of concatenated
     // digits. Leave it completely untouched on updates; a numeric revision and
     // historical repair require the separately planned schema migration.
     // Resolve stable-key races in this statement, not with a read-before-write.
     const sqlQuery = `
       INSERT INTO ClusterDefinitions
-       (id, stableKey, slug, strongestQuakeId, earthquakeIds, title, description, locationName,
-        maxMagnitude, meanMagnitude, minMagnitude, depthRange, centroidLat, centroidLon,
-        radiusKm, startTime, endTime, durationHours, quakeCount, significanceScore, version,
-        createdAt, updatedAt)
+       (id, stableKey, slug, ${columns.join(', ')}, version, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(stableKey) DO UPDATE SET
-         strongestQuakeId = excluded.strongestQuakeId,
-         earthquakeIds = excluded.earthquakeIds,
-         title = excluded.title,
-         description = excluded.description,
-         locationName = excluded.locationName,
-         maxMagnitude = excluded.maxMagnitude,
-         meanMagnitude = excluded.meanMagnitude,
-         minMagnitude = excluded.minMagnitude,
-         depthRange = excluded.depthRange,
-         centroidLat = excluded.centroidLat,
-         centroidLon = excluded.centroidLon,
-         radiusKm = excluded.radiusKm,
-         startTime = excluded.startTime,
-         endTime = excluded.endTime,
-         durationHours = excluded.durationHours,
-         quakeCount = excluded.quakeCount,
-         significanceScore = excluded.significanceScore,
+         ${columns.map(column => `${column} = excluded.${column}`).join(',\n         ')},
          updatedAt = excluded.updatedAt
        WHERE NOT EXISTS (
          SELECT 1 FROM ClusterDefinitions AS other
          WHERE (other.id = excluded.id OR other.slug = excluded.slug)
            AND other.id != ClusterDefinitions.id
        )
+         AND (${columns.map(column => `ClusterDefinitions.${column} IS NOT excluded.${column}`).join(' OR ')})
        RETURNING id, stableKey, slug, createdAt
     `;
     const stmt = db.prepare(sqlQuery);
     const params = [
-      id,
-      stableKey === void 0 ? null : stableKey,
-      slug,
-      strongestQuakeId,
-      JSON.stringify(earthquakeIds || []),
-      title === void 0 ? null : title,
-      description === void 0 ? null : description,
-      locationName === void 0 ? null : locationName,
-      maxMagnitude,
-      meanMagnitude === void 0 ? null : meanMagnitude,
-      minMagnitude === void 0 ? null : minMagnitude,
-      depthRange === void 0 ? null : depthRange,
-      centroidLat === void 0 ? null : centroidLat,
-      centroidLon === void 0 ? null : centroidLon,
-      radiusKm === void 0 ? null : radiusKm,
-      startTime,
-      endTime,
-      durationHours === void 0 ? null : durationHours,
-      quakeCount,
-      significanceScore === void 0 ? null : significanceScore,
-      "1",
-      now,
-      now,
+      id, stableKey ?? null, slug, ...storedFields.map(([, value]) => value), "1", now, now,
     ];
     // RETURNING is deliberately limited to immutable identity fields. The
     // historical AFTER UPDATE triggers can still change updatedAt after it.
     const result = await stmt.bind(...params).all();
     if (result?.success !== true) throw new Error("D1 did not confirm cluster persistence");
-    if (!Array.isArray(result.results) || result.results.length !== 1) {
+    if (!Array.isArray(result.results) || result.results.length > 1) {
       throw new Error("Cluster persistence did not return one canonical identity; possible id or slug conflict");
     }
-    const canonical = result.results[0];
+    let canonical = result.results[0];
+    if (!canonical) {
+      // A no-op conflict emits no RETURNING row. Confirm all stored fields and
+      // collision freedom after the write before reusing the canonical ID.
+      // This also handles a lost RETURNING acknowledgement after a real write.
+      const unchangedSql = `SELECT canonical.id, canonical.stableKey, canonical.slug, canonical.createdAt
+        FROM ClusterDefinitions AS canonical
+        WHERE canonical.stableKey = ?
+          AND ${columns.map(column => `canonical.${column} IS ?`).join(' AND ')}
+          AND NOT EXISTS (
+            SELECT 1 FROM ClusterDefinitions AS other
+            WHERE (other.id = ? OR other.slug = ?) AND other.id != canonical.id
+          ) LIMIT 1`;
+      canonical = await db.prepare(unchangedSql).bind(stableKey, ...storedFields.map(([, value]) => value), id, slug).first();
+      if (!canonical) throw new Error("Cluster persistence did not return one canonical identity; possible id or slug conflict");
+    }
     if (typeof canonical.id !== "string" || !canonical.id ||
         typeof canonical.slug !== "string" || !canonical.slug ||
         canonical.stableKey !== (stableKey ?? null)) {

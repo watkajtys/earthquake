@@ -5,7 +5,7 @@ import * as spatial from '../utils/spatialClusterUtils.js';
 import { storeClusterDefinition } from '../utils/d1ClusterUtils.js';
 import { clusterInput, clusterNow, createClusterSqliteFixture } from '../utils/clusterSqliteFixture.test-support.js';
 import { createMemorySummaryBucket } from '../utils/clusterSummarySnapshot.test-support.js';
-import { SUMMARY_POINTER_KEY } from '../../shared/clusterSummaryContract.js';
+import { SUMMARY_POINTER_KEY, SUMMARY_STALE_AFTER_MS } from '../../shared/clusterSummaryContract.js';
 
 let fixture;
 let env;
@@ -50,23 +50,36 @@ describe('actual scheduled cluster persistence and publication', () => {
     fixture.database.prepare('UPDATE ClusterDefinitions SET version = ?, createdAt = ? WHERE id = ?')
       .run(version, null, original.id);
     const beforeBytes = fixture.database.prepare('SELECT hex(CAST(version AS BLOB)) AS bytes FROM ClusterDefinitions').get();
+    const unchangedUpdatedAt = definitions()[0].updatedAt;
     fixture.queries.length = 0;
     for (let i = 1; i <= 5; i++) {
       vi.setSystemTime(clusterNow + i * 600_000);
       await worker.scheduled(null, env, {});
       expect(definitions()).toHaveLength(1);
-      expect(definitions()[0]).toMatchObject({ id: original.id, slug: original.slug, createdAt: null, version });
+      expect(definitions()[0]).toMatchObject({ id: original.id, slug: original.slug, createdAt: null, version,
+        updatedAt: unchangedUpdatedAt });
       expect(published()[0]).toMatchObject({ id: original.id, slug: original.slug, version });
     }
     expect(fixture.database.prepare('SELECT hex(CAST(version AS BLOB)) AS bytes FROM ClusterDefinitions').get()).toEqual(beforeBytes);
     // The unchanged legacy snapshot still includes version. Writer requests and
     // returned identity do not transfer or concatenate it at all.
     expect(fixture.queries.filter(q => isWrite(q.sql))).toHaveLength(5);
-    expect(fixture.queries.some(q => q.method === 'first')).toBe(false);
+    expect(fixture.queries.filter(q => q.method === 'first')).toHaveLength(5);
     fixture.queries.filter(q => isWrite(q.sql)).forEach(q => {
       expect(q.values).not.toContain(version);
       expect(q.sql).not.toMatch(/RETURNING.*version|version\s*=/i);
     });
+  });
+
+  it('keeps the stored definition unchanged when source rows arrive in a different order', async () => {
+    await worker.scheduled(null, env, {});
+    const original = definitions()[0];
+    fixture.hooks.afterExecute = ({ sql, result }) => sql.includes('FROM EarthquakeEvents WHERE event_time >')
+      ? { ...result, results: [...result.results].reverse() } : result;
+    vi.setSystemTime(clusterNow + 600_000);
+    await worker.scheduled(null, env, {});
+    expect(definitions()[0]).toEqual(original);
+    expect(env.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY).current.snapshotSequence).toBe(1);
   });
 
   it('uses a concurrent stable-key winner in both logs and the published snapshot', async () => {
@@ -145,6 +158,7 @@ describe('scheduled publication failure boundaries', () => {
   it('preserves the last compact pointer when a later page upload fails, while legacy delivery remains available', async () => {
     await worker.scheduled(null, env, {});
     const previous = env.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY);
+    vi.setSystemTime(clusterNow + SUMMARY_STALE_AFTER_MS);
     env.GEOJSON_BUCKET.hooks.beforePut = key => {
       if (key.includes('/pages/')) throw new Error('R2 page unavailable');
     };

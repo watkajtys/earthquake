@@ -138,6 +138,7 @@ describe('exported Worker ten-minute cluster lifetime with migrated SQLite', () 
       .toMatchObject({ id: 'canonical-winner', slug: 'canonical-slug' });
     const version = `1.0${'1'.repeat(20_000)}`;
     fixture.database.prepare('UPDATE ClusterDefinitions SET version = ?').run(version);
+    const previousR2Writes = clusterEnv.GEOJSON_BUCKET.calls.filter(call => call.method === 'put').length;
     vi.setSystemTime(clusterNow + 600_000);
     const second = await runScheduled('*/10 * * * *', clusterEnv);
     expect(second.results).toEqual([{ status: 'fulfilled', value: undefined }]);
@@ -147,7 +148,8 @@ describe('exported Worker ten-minute cluster lifetime with migrated SQLite', () 
       .toMatchObject({ id: 'canonical-winner', slug: 'canonical-slug', version });
     expect(handleTrustedUsgsIngestion).not.toHaveBeenCalled();
     expect(handleGenerateLists).not.toHaveBeenCalled();
-    expect(clusterEnv.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY).current.snapshotSequence).toBe(2);
+    expect(clusterEnv.GEOJSON_BUCKET.readJson(SUMMARY_POINTER_KEY).current.snapshotSequence).toBe(1);
+    expect(clusterEnv.GEOJSON_BUCKET.calls.filter(call => call.method === 'put')).toHaveLength(previousR2Writes);
   });
 
   it('rejects waitUntil on an unconfirmed write and makes no replacement KV write', async () => {

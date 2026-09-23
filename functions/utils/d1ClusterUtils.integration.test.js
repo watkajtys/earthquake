@@ -49,6 +49,33 @@ describe('cluster writes against migrations and both production timestamp trigge
     expect(readRows()[0].createdAt).toBeNull();
   });
 
+  it('does not fire timestamp triggers for unchanged scientific fields, then updates on a real change', async () => {
+    await write();
+    const original = readRows()[0];
+    vi.setSystemTime(clusterNow + 600_000);
+    expect(await write({ id: 'retry-id', slug: 'retry-slug' })).toMatchObject({
+      success: true, id: original.id, slug: original.slug,
+    });
+    expect(readRows()[0]).toEqual(original);
+    expect(fixture.queries.at(-1)).toMatchObject({ method: 'first' });
+    vi.setSystemTime(clusterNow + 1_200_000);
+    expect(await write({ id: 'retry-id', slug: 'retry-slug', maxMagnitude: 6 })).toMatchObject({
+      success: true, id: original.id, slug: original.slug,
+    });
+    expect(readRows()[0].maxMagnitude).toBe(6);
+    expect(readRows()[0].updatedAt).not.toEqual(original.updatedAt);
+  });
+
+  it('does not mistake an unchanged row for success when proposed identity collides elsewhere', async () => {
+    await write();
+    await write({ id: 'other-id', slug: 'other-slug', stableKey: 'other-key' });
+    const before = readRows();
+    expect(await write({ id: 'other-id', slug: 'other-slug' })).toMatchObject({
+      success: false, error: expect.stringContaining('possible id or slug conflict'),
+    });
+    expect(readRows()).toEqual(before);
+  });
+
   it.each([false, true])('keeps the first stable-key identity during competing writes (reverse=%s)', async reverse => {
     const inputs = [clusterInput({ id: 'first', slug: 'first-slug' }), clusterInput({ id: 'second', slug: 'second-slug', maxMagnitude: 6 })];
     if (reverse) inputs.reverse();
