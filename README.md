@@ -1,5 +1,7 @@
 # Global Seismic Activity Monitor
 
+**Current work and production status:** [Read the current handoff](docs/remediation/STOPPING-POINT.md). It supersedes the historical project-status and roadmap sections below.
+
 ## Description
 
 The Global Seismic Activity Monitor is a React-based web application that visualizes real-time and historical global earthquake data on an interactive 3D globe. It provides detailed statistics, insights into seismic events, and educational information about earthquake science. Users can explore recent and significant earthquakes, view their details, and understand their distribution and magnitude in a geographical context.

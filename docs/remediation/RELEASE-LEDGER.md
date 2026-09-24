@@ -285,7 +285,10 @@ Status: production deployed and independently verified. Source `504cf1d8940a8c43
 
 ## Paused durable ingestion and production migration 0022 — 2026-09-23 UTC
 
-Status: the paused Worker is live and additive D1 migration `0022_durable_usgs_ingestion.sql` is applied. Durable ingestion activation remains off; public list publication remains paused pending a separately gated activation release.
+Status at this stopping point: the paused Worker was live and additive D1
+migration `0022_durable_usgs_ingestion.sql` was applied. Durable ingestion
+activation and public list publication were still paused. The subsequent
+activation release is recorded below.
 
 - The production Worker at 100% is source `e6ed7248fa0c250bd3fd83c250c71a8bccd07310`, version `79754405-4027-46cb-b004-42e41dedfb77`, with `LIST_PUBLICATION_PAUSED=true` and no durable activation binding. A real five-minute scheduled trace at 19:00:27 UTC showed the paused-list milestone on that exact revision/version. The last possible old-version dispatch was bounded by 19:00:13 UTC; the writer drain was held past 19:16 UTC.
 - The fresh pre-0022 SQL export is 770,141,912 bytes, SHA-256 `a419df8e257566742e66a7f46fa795f4f38290798ad4dbc74a1c789cce9e0d20`. The private [backup manifest](/Users/theair/Projects/earthquake/.reconciliation.local/production-0022-20260923/pre-0022-backup-manifest.json) has SHA-256 `b50562c279126a1cd297f1d45eb451edac5b36f78206df3f56ff99d1af580898` and binds the export, both isolated SQLite files, the rehearsal report, and the post-drain list manifest by byte length and checksum. A fresh Time Travel bookmark was captured before export and another immediately before migration; their values remain in private receipts only.
@@ -293,6 +296,211 @@ Status: the paused Worker is live and additive D1 migration `0022_durable_usgs_i
 - The [post-migration production D1 readback](/Users/theair/Projects/earthquake/.reconciliation.local/production-0022-20260923/post-0022-live-d1-readback.json), SHA-256 `0146530a514cf69c2ded80a01245d7dcccb5eaa6a3b8752f49e740fa30d88bc0`, showed ledger row `0022` at 20:15:14 UTC, the three new empty ingestion tables and the expected index. Existing event, cluster and detail-job rows remained present. Both public hosts still returned the exact paused Worker identity after migration at 20:17 UTC.
 - The post-drain [list before-image manifest](/Users/theair/Projects/earthquake/.reconciliation.local/production-0022-20260923/list-before-images-post-drain-20260923T2009Z/manifest.json), SHA-256 `602b8c8221821b2e59de9660dfdd91982193959bf6484ad2c6c8b592e0482401`, binds all three public R2 list objects, 2,053,412 bytes total. Their bytes and ETags remained unchanged through the 20:15:44 UTC post-migration readback. No production list restore or synthetic production ingestion was performed.
 - Activation requires a final code revision with both flags enabled, the read-only private evidence gate, exact paused-predecessor readback, preview scheduled replay and guarded release checks. The backup and D1 migration do not themselves turn on durable ingestion.
+
+## Durable ingestion activation — 2026-09-23 UTC
+
+Status: production deployed through the guarded automatic build. The first 21
+five-minute durable ingestion runs completed, including an exact-version
+scheduled trace that verified list and period-feed publication. The production
+application revision is `c1c81c4bef36732b3e8bbce534979208ee635add`.
+
+- The original compute session stopped before activation. Recovery verified the
+  exact paused predecessor `e6ed724` / `79754405-4027-46cb-b004-42e41dedfb77`,
+  its 19:00 UTC paused Cron trace and the 19:16 UTC old-writer drain. The fresh
+  770,141,912-byte D1 SQL export has SHA-256
+  `a419df8e257566742e66a7f46fa795f4f38290798ad4dbc74a1c789cce9e0d20`.
+  Two private Time Travel bookmarks and the post-drain before-images of the
+  three list objects were saved before migration. Isolated restore and the exact
+  `0022` rehearsal passed integrity, foreign-key, unchanged-row and additive
+  schema checks; production then applied only `0022`. The private evidence gate
+  passed against the final clean application SHA. Backup/bookmark contents stay
+  under ignored `.reconciliation.local/production-0022-20260923/`.
+- The activation wrapper requires both production flags, the reviewed receipt
+  digests, exact paused predecessor, live read-only D1 migration/schema/empty
+  table checks before and immediately before upload, and a final predecessor
+  version check. It reruns tests, build, packaging and the predecessor archive
+  check before deployment. The selected Workers Builds token already had D1
+  access; production Builds uses `npm run release:production` from repository
+  root on `main`, and preview-branch Builds are disabled. No access scope was
+  changed.
+- The paused predecessor's 26 live assets were matched to exact local bytes.
+  Twenty-one missing immutable assets, 2,487,089 bytes, were created in each
+  isolated preview and production R2 archive. All **293 retained assets totaling
+  43,263,373 bytes** passed metadata and SHA-256 readback; the live predecessor
+  graph passed its 26-path archive gate. No older archived object was overwritten
+  or deleted. The retained asset cap rose to 320; the 100 MiB byte cap remains.
+- The final local candidate passed **1,712 tests across 131 files, three
+  skips**, changed-file lint, production Vite build and Wrangler dry run.
+  Dedicated preview version `dbdba220-44d9-4bbb-9436-87f0f6fc5f97` passed
+  **325 GET / 293 asset** smoke checks after refreshing time-sensitive preview
+  fixtures. Its actual scheduled handler replay passed paused legacy, unpaused
+  without durable, durable still paused, and durable active states; only the
+  last wrote three synthetic preview lists, and cleanup was verified. No
+  synthetic production data was inserted.
+- After confirming remote `main` remained at `e6ed724`, the exact application
+  SHA was pushed atomically to `main` and
+  `codex/durable-0022-activation-release`. [Cloudflare automatic build
+  72f21e36](https://dash.cloudflare.com/f7e27d63f4766d7fb6a0f5b4789e2cdb/workers/services/view/earthquake/production/builds/72f21e36-b679-45d0-b7c6-2af9b9d255d6)
+  ran the guarded deploy command and reported a passed release at **21:03:13
+  UTC**. Its private report was
+  `/opt/buildhome/repo/.reconciliation.local/releases/c1c81c4bef36732b3e8bbce534979208ee635add-1790197018935.json`.
+  Production version `a5d02414-2cc5-4add-9394-2e42c7e330f4` was deployed at
+  **21:00:53 UTC** with 100% traffic. Both public hosts returned its exact
+  no-store revision/version identity in independent readback. The active
+  version/tag readback had `LIST_PUBLICATION_PAUSED=false`,
+  `DURABLE_INGESTION_ENABLED=true` and the exact release revision.
+- At **22:40 UTC**, production D1 had one `hour` ingestion state and **20
+  completed runs**, with 179 of 179 features processed, zero pending/retry/
+  parked runs, no active run, and zero ingestion issues. The latest completed
+  source generation was 22:40:09 UTC. Cloudflare's Cron events showed Success
+  for five-minute runs at 22:35 and 22:40 UTC and for five-, ten-, and
+  thirty-minute runs at 22:30 UTC. Dashboard Cron history alone does not expose
+  Worker version; the D1 run ledger establishes that the new durable handler
+  executed repeatedly. The daily Cron remains unobserved in this release.
+- A version-filtered tail captured the **22:45:25 UTC** `*/5` invocation on
+  exact Worker version `a5d02414-2cc5-4add-9394-2e42c7e330f4` with outcome
+  `ok`, zero exceptions, 14.189 s wall and 865 ms CPU. Ingestion returned
+  HTTP 200, the three legacy R2 lists published **175 / 1,354 / 5,907**
+  day/week/month rows, and the three independent complete period feeds
+  published **252 / 2,138 / 10,686**. Post-Cron D1 readback showed **21 of 21
+  runs completed**, cursors equal to feature counts, zero retries/parked runs,
+  zero issues and no active lease. Both public hosts served the exact release
+  identity and fresh 200 read paths. The private [read-only comparison](/Users/theair/Projects/earthquake/.reconciliation.local/production-0022-20260923/independent-live-audit-20260923T2245Z.json)
+  found the legacy lists smaller than the complete period feeds. The legacy
+  lists already had smaller historical coverage before activation; the cause
+  and reconciliation policy remain open and are not attributed to this release.
+  The private version-filtered trace is
+  `.reconciliation.local/production-0022-20260923/activation-tail.jsonl`,
+  SHA-256 `6cbbd1d7364510f1285cece27a357268e44ccc6c285d5e6096390747c07861a2`.
+- The next data-integrity item is a separate legacy list coverage repair.
+  `generate-lists.js` merges the complete hourly source into existing R2
+  arrays and does not rebuild them from the independent complete day/week/month
+  feeds. Before migration, the legacy arrays held 199 / 1,364 / 5,916 rows
+  while the isolated production backup held 202 / 1,679 / 10,757 D1 rows in
+  matching windows. At 22:45:42 UTC, live read-only D1 counts were 195 /
+  1,673 / 10,740, versus legacy arrays 175 / 1,354 / 5,907 and complete feeds
+  252 / 2,138 / 10,686. Counts alone cannot prove ID-level completeness or
+  deletions. A subsequent fixed-window, read-only comparison at 22:53–22:54
+  UTC found **20 / 309 / 4,507** day/week/month IDs present in both a complete
+  feed and D1 but absent from the legacy array. All legacy IDs were present in
+  D1 within those windows. The feeds also contained **62 / 548 / 761** IDs
+  absent from D1 and the legacy arrays, so a replacement source and deletion
+  policy need explicit design. The private
+  [ID audit](/Users/theair/Projects/earthquake/.reconciliation.local/production-0022-20260923/legacy-list-id-audit-20260923T2254Z.json)
+  is mode 0600, SHA-256
+  `85124c78257979b08a90a407ca00fabe5df8cc9616ac7c16edf2df5eafcba84c`.
+  Prepare a validated, backed-up list rebuild under a separate release; no
+  list replacement was part of this activation.
+- A read-only comparison against the restored pre-0022 production backup found
+  that all **62 / 548 / 761** complete-feed IDs absent from current D1 were
+  already absent before migration. No backed-up ID in these current-feed
+  cohorts disappeared afterward. In the day cohort, 60 of 62 event occurrence
+  times predate the 19:00 UTC writer pause. The migration created only three
+  ingestion tables and one index; its rehearsal preserved all 190,243 existing
+  event rows. This rules out `0022` deleting the sampled missing IDs, while
+  historical source snapshots are unavailable to assign each ingestion miss to
+  one cause. The private [causality cross-check](/Users/theair/Projects/earthquake/.reconciliation.local/production-0022-20260923/feed-only-pre0022-crosscheck-20260923T2258Z.json)
+  is mode 0600, SHA-256
+  `222b3360b4bb22c49ea55e886b172720ab6e2947ec8ecca45fca2adb5c7dc534`.
+  A separate [coverage repair plan](USGS-COVERAGE-REPAIR-2026-09-23.md)
+  sequences a fresh backup, revision-fenced D1 backfill, complete-feed list
+  production and forward reconciliation. At 23:25:30 UTC, read-only production
+  D1 had **29 of 29 completed hourly durable runs**, zero retries/parked runs
+  and issues, and no active lease; that proves the current hourly handler is
+  completing, not that historical D1 coverage is complete.
+
+## Production D1 pinned-snapshot coverage backfill — 2026-09-24 UTC
+
+The authorized data repair inserted 791 IDs absent from D1, in nine bounded
+insert-only batches. This was a data repair, with no `0023` migration, Worker
+release, existing-row update or public-list replacement. A fresh production
+SQL export and Time Travel bookmark were taken immediately before writes; its
+private [backup manifest](/Users/theair/Projects/earthquake/.reconciliation.local/production-0022-20260923/primarydb-before-backfill-20260924T0131Z.manifest.json)
+has SHA-256
+`5a1920c123cbc69fef432c118cf09926046677dd462dc48e76e6aaacaf920576`.
+An isolated restore passed integrity and foreign-key checks. Each batch had a
+fresh live schema/absence preflight and typed full-row post-write readback.
+The [pinned-source final audit](/Users/theair/Projects/earthquake/.reconciliation.local/production-0022-20260923/d1-coverage-apply-20260924T0134Z/final-audit/id-coverage-report.json)
+(SHA-256
+`640946bfcbd6dac7ed207a5d40b6be8260ca6f46c734eb532a6efbc2c452b373`)
+found all 10,704 saved complete USGS snapshot IDs present in D1. At 01:38 UTC,
+the [hourly health report](/Users/theair/Projects/earthquake/.reconciliation.local/production-0022-20260923/d1-coverage-apply-20260924T0134Z/final-audit/hourly-health-report.json)
+(SHA-256
+`fd27570c16a67fae4c304e41c1870ef5a79fa8e767c74f8cddf5b9e2e5258fbf`)
+found 55 completed hourly runs, no active run, zero issues and 191,085 event
+rows. The [coverage repair record](USGS-COVERAGE-REPAIR-2026-09-23.md) has
+batch details and remaining work: permanent D1 reconciliation and separate
+legacy R2 list repair.
+
+Recovery: the paused predecessor is a code recovery candidate only after a
+fresh compatibility review. It contains an older writer contract; rolling back
+to it after active list publication can regress public arrays. The D1 export,
+bookmarks and post-drain list before-images remain private recovery evidence;
+a Worker rollback does not revert later D1/R2/KV writes. Do not restore the
+pre-activation list objects over live publications without reconciling all
+post-backup ingestion.
+
+## Preserve immutable complete-feed archives — 2026-09-24 UTC
+
+Production code `eb46fe7b31f89991d6a739597bf94403d7ff74f6` removes the
+complete-feed publisher's deletion of snapshots older than its two-entry
+pointer. Immutable writes, source validation, pointer compare-and-swap and
+fallback behavior are unchanged. The application now has no R2 deletion call.
+All R2 archives must be preserved; this supersedes earlier cleanup proposals.
+There was no production data migration or legacy public-list replacement.
+
+The single application commit follows production `c1c81c4` directly. Local
+validation passed 1,707 tests across 131 files (3 skipped), frontend build and
+production dry-run packaging. All 30 frontend build files matched the prior
+production build byte for byte. An independent review found no blocker.
+Preview version `84f931a4-2a17-4b9e-9850-94bd5cab56c2` served the exact revision
+and passed 325 GET checks / 293 asset checks with refreshed synthetic fixtures
+in dedicated preview resources. The read-only predecessor archive gate verified
+26 current assets and all 293 retained assets before promotion.
+
+An ordinary push of the exact code SHA to `main` invoked the existing guarded
+`npm run release:production` command. The [first build](https://dash.cloudflare.com/f7e27d63f4766d7fb6a0f5b4789e2cdb/workers/services/view/earthquake/production/builds/e3af812c-099b-4c5d-90b0-8e7ed59140b4)
+stopped before upload because an unchanged ingestion concurrency test timed out.
+Its focused rerun passed all seven tests. The [unchanged guarded retry](https://dash.cloudflare.com/f7e27d63f4766d7fb6a0f5b4789e2cdb/workers/services/view/earthquake/production/builds/f7503a8e-c800-4941-a0a2-50a2f7695511)
+passed at 03:08:20 UTC, including the full suite, deployment configuration,
+archive gate and 325 GET / 293 asset checks on each public host. No check or
+assertion was disabled. Investigation of the existing test timeout remains
+maintenance work; the retry made no source changes.
+
+The new production Worker version is `bbf6ad59-da33-4adc-93db-19151479fea8`.
+Both public hosts returned the exact revision and version. Production R2 has
+no enabled expiration rule for committed objects; its sole lifecycle rule
+aborts incomplete multipart uploads after seven days.
+
+A read-only baseline at 03:07:07–03:07:15 UTC pinned two immutable objects
+for each period. At 03:15:55 UTC, all six objects had identical SHA-256 hashes
+and lengths after **two advances per period**, and every pinned object was
+older than the live previous pointer. Sequences advanced day/week 831→833 and
+month 829→831. The final retention report has
+`retentionBeyondTwoEntryPointerProven: true`, SHA-256
+`52af39d7e48317feacb25b7b210145b2938d95eca3b7a54ce0515c4e4e07baa1`.
+The baseline SHA-256 is
+`dbd3199a40d40309816b294395d1ae2d2c5456b28822c55e06b80fa174d02fff`.
+
+Version-filtered observation captured successful 03:10 and 03:15 publication
+cycles with no exceptions, plus successful ten-minute cluster invocations.
+The final independent GET/304/HEAD checks passed for all three fresh complete
+feeds on both hosts: 268 day, 2,175 week and 10,730 month events. These are
+snapshot observations, not permanent totals. The tail was stopped after
+verification; no session-owned monitor remains. `verification-summary.json`
+records the exact captured event metadata and evidence checksums.
+
+Evidence lives in ignored `.reconciliation.local/archive-preserve-production/`.
+The release does not restore snapshots deleted before this change, prove a
+complete inventory of historical archives, or solve recurring D1/public-list
+coverage gaps. The permanent scanner and other repair prototypes remain local
+and inactive. Current scope and archive policy are in [STOPPING-POINT.md](STOPPING-POINT.md).
+
+Recovery must preserve the no-deletion publisher. The preceding code contains
+the old snapshot cleanup, so it is not an archive-preserving rollback target.
+If another regression requires recovery, retain this small deletion-removal
+patch while choosing a compatible application base. Code rollback does not
+restore previously deleted R2 objects or revert database changes.
 
 ## Subrelease record template
 

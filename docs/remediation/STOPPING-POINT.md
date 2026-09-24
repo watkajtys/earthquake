@@ -1,41 +1,86 @@
-# Remediation stopping point — 2026-09-23 UTC
+# Current handoff — 2026-09-24 UTC
 
-This is the current handoff for resuming work. The original numbered briefs describe the broader plan; [RELEASE-LEDGER.md](RELEASE-LEDGER.md) records observed results, limitations and recovery procedures. Historical status paragraphs in that ledger describe their own release, not necessarily the latest state.
+The archive-preservation release is complete and verified. This is the
+stopping point. The larger data-repair prototypes remain outside this release.
 
-## Safe place to pause
+## This release
 
-The rolling-window browser reconciliation block is finished, committed, pushed and production-verified. The complete period-feed producer/consumer block remains in place. There is no pending deployment or partially applied database migration. Temporary browser tabs were closed, the viewport was reset, and the bounded production tail was stopped. Production's normal scheduled jobs continue without this session. No ongoing agent monitoring is configured.
+The released code is `eb46fe7b31f89991d6a739597bf94403d7ff74f6`, based directly on
+the previously deployed application `c1c81c4bef36732b3e8bbce534979208ee635add`.
+It removes the complete-feed publisher's deletion of superseded snapshots.
+Feed publication and current/previous pointer updates retain their existing
+behavior. It makes no database migration or public-list replacement.
 
-Last verified application revision: `65abd594a15fbc896b0a8e625ce01531a997908b` on production `main`.
+Release status: **Complete — production and retention verified at 03:16 UTC**.
 
-Last verified Worker version: `36303d5a-624f-4b4a-a997-dd8c2f165fa2`.
+- Production application revision: `eb46fe7b31f89991d6a739597bf94403d7ff74f6`.
+- Production Worker version: `bbf6ad59-da33-4adc-93db-19151479fea8`.
+- Guarded automatic build: [f7503a8e](https://dash.cloudflare.com/f7e27d63f4766d7fb6a0f5b4789e2cdb/workers/services/view/earthquake/production/builds/f7503a8e-c800-4941-a0a2-50a2f7695511).
+- Validation: 1,707 tests passed (3 skipped), build and packaging passed;
+  preview and both production hosts passed 325 GET checks / 293 assets each.
+  Both public hosts returned the exact released revision and Worker version.
+- Retention proof: six day/week/month snapshots captured at 03:07 UTC retained
+  identical SHA-256 hashes and byte lengths after two publication advances,
+  beyond both pointer entries. The final readback completed at 03:15:55 UTC.
+- Fresh GET, conditional GET (304) and HEAD checks passed for all three periods
+  on both hosts. Observed scheduled invocations completed without exceptions.
+- The bucket has no committed-object expiration rule. Temporary monitoring is
+  stopped; no session-owned monitoring remains.
+- Private evidence: `.reconciliation.local/archive-preserve-production/`.
+  The first automatic build stopped before upload on an existing concurrency
+  test timeout. A focused rerun passed, and the unchanged full guarded retry
+  completed successfully at 03:08:20 UTC. No checks were bypassed.
 
-Working branch: `codex/complete-period-feeds`. The application commit is identical on this branch and production `main`; the later documentation-only commit records release evidence and does not change the deployed application. Recheck local/remote state and production identity when resuming; these are recorded observations, not a live monitor.
+The checks sample retained snapshots; they do not prove a complete historical
+archive inventory or restore snapshots deleted before this release.
 
-## Shipped and verified
+## Archive policy
 
-- **Release controls:** established the repository-to-site relationship, corrected Cloudflare's automatic deploy command, disabled non-production branch Builds, and added guarded tests, resource/configuration readback and exact deployment identity checks.
-- **Endpoint and writer foundations:** protected maintenance/mutation routes, restricted and bounded upstream requests, repaired several persistence/checkpoint/retry paths, propagated background failures, and removed unsafe tooltip HTML handling. Broader concurrency and historical integrity work remains below.
-- **Frontend correctness:** repaired detail URL resolution, desktop/mobile layouts, refresh/cancellation and monthly retries, correction handling, pagination, keyboard/focus behavior and crawler metadata.
-- **Cluster containment and delivery:** stopped destructive identity replacement and version-string growth in the repaired writer path, added a lookup index, used stored card counts, and introduced compact paginated summaries with full members loaded on detail. Small earthquakes remain members; the existing Overview eligibility threshold was not changed.
-- **Complete period feeds:** published validated day/week/month USGS snapshots with source-based freshness, conditional requests, bounded fallback and last-good retention. Healthy snapshots avoid the former second full upstream download. Static routes render independently of feed initialization; desktop Learn visibility was also fixed.
-- **Rolling-window reconciliation:** retained bounded complete-window absence proof across advancing day/week/month lower boundaries. Late older overlapping responses no longer resurrect an event from a discarded strip. Source identity, scientific revisions, corrected event times and equal-clock presence are handled separately; compacted history uses conservative admission floors.
-- **Compatibility:** archived and verified predecessor assets for these releases so previously opened clients can load their retained chunks. General retention automation remains open.
+The user explicitly requires **all R2 archives to be preserved**. This includes
+complete feed generations, earthquake detail archives, retained frontend
+assets, and any staged sidecars or shards. Older pointers becoming unreferenced
+does not authorize deleting their objects. Do not introduce archive cleanup or
+object-expiration rules as part of later reconciliation work. This policy
+supersedes earlier handoffs that proposed deferred R2 cleanup.
 
-Latest release evidence: **1,529 tests passed across 124 files, three skips**; build/packaging, isolated preview, and automatic production gate passed. Production passed **117 GET / 85 asset checks per host**. Independent readback matched both public identities, bindings and fresh feed GET/304/HEAD behavior. Desktop/mobile browser flows passed; one sampled 238-member cluster included 186 events below M2.5. The exact proof-order behavior is covered by deterministic tests and an independent 20,000-step reference, not observable from an ordinary live page. The final version's real **02:45:15 UTC** five-minute job published all three fresh complete periods with no exceptions. The daily scheduled job remains unobserved. Test exclusions and other validation limits are recorded in the ledger.
+## What was already shipped
 
-## Remaining work, in recommended order
+- SEO sitemap/canonical corrections and protections against excessive cluster
+  calculations are deployed. Google accepted the sitemap; an indexing recovery
+  has not been established.
+- Complete day/week/month feed snapshots and the browser's complete-feed
+  handling are live. Compact cluster summaries and paginated detail rows are
+  also live.
+- The durable writer for the one-hour USGS feed and migration `0022` are deployed.
+  Successful ingestion runs do not prove complete day/week/month database coverage.
+- The approved one-time backfill inserted **791 missing earthquake records**.
+  Its final audit covered all 10,704 IDs in the pinned source snapshots. A later
+  source generation exposed new gaps, so that repair did not solve recurrence.
 
-1. **Database integrity and historical repair.** Reconcile schema/migration history, duplicate cluster identities, mixed timestamps and historical version data. Strengthen concurrent-writer coordination, revision fencing, durable retry/outbox behavior and publication consistency. Prepare a fresh backup, restore rehearsal and dry-run repair manifest before historical mutations. Earlier containment and the lookup index do not close this package.
-2. **Rendering and delivery performance.** Bound large cluster detail rows, map markers and chart work; optimize globe/fault assets and route loading; remove upstream detail fan-out from sitemap requests. Preserve full-data statistics when reducing visual work.
-3. **Operational maintenance.** Clean up abandoned/deferred R2 objects safely, automate predecessor-asset retention, decide legacy payload retirement, address dependency/lint/test debt, and verify the daily job during a later observation window.
+## What remains separate
 
-Complete browser feeds do not establish historical D1 completeness or canonical scientific cluster identity. No production historical repair was performed. No measured CWV, latency-percentile or billing improvement is claimed.
+The permanent day/week/month comparison with D1 and the replacement of older
+public lists remain **undeployed**. They need a separately agreed scope and
+success criterion; neither is included in this archive-preservation release.
+Historical cluster repairs, intermittent feed failures, and SEO/performance
+measurement are also follow-up work, not reasons to extend this task.
 
-## Resume the next bounded block
+**Stop here.** Begin a new work block only on a fresh user request. A sensible
+next proposal is to
+prevent missing earthquake records from recurring within an agreed refresh
+window, with any public-list replacement scoped explicitly.
 
-Read [03-data-integrity-and-database.md](03-data-integrity-and-database.md), [CLUSTER-INDEX.md](CLUSTER-INDEX.md), and the latest release section of [RELEASE-LEDGER.md](RELEASE-LEDGER.md). Reconfirm the deployed revision, settings, D1 schema/migration history and current row counts before choosing the first small database change. The historical audit values are a baseline for comparison, not current truth.
+## Where to resume
 
-Start with a bounded, reviewable code or additive-schema step that prevents new integrity loss. Keep historical deduplication and rewrites separate. For any historical mutation, prepare a fresh production backup or Time Travel bookmark, an isolated restore rehearsal, a dry-run candidate/ambiguity manifest, exact migration or repair checksums, and a recovery path before applying it. Shared strongest-event IDs alone are not a duplicate predicate. Preserve the current public feed and cluster contracts while improving writers and readers.
+The project root contains the released application and this current
+handoff on `codex/archive-release-handoff` (documentation-only changes after
+the deployed code). The former root branch `codex/cluster-writer-churn` is
+preserved; it is an older checkpoint, not the current production source. The archive candidate originated in
+`.reconciliation.local/worktrees/archive-preserve-production` on
+`codex/archive-preserve-production`. Other private checkouts contain unfinished
+experiments; their presence does not mean their code is live.
 
-Follow the focused release workflow: targeted failure reproduction and regressions, full suite, packaging, isolated preview, browser/API checks where relevant, guarded production promotion and final evidence in the ledger. Do not redeploy merely to publish this handoff. The preceding compatible browser Worker version is `efd09f93-6a07-4c02-b756-b7af8c922171`; revalidate identity/configuration before considering a rollback. Code rollback does not restore database contents and must not undo writer containment or move feed pointers backward.
+Use this handoff for current scope, [RELEASE-LEDGER.md](RELEASE-LEDGER.md) for
+release evidence, and [USGS-COVERAGE-REPAIR-2026-09-23.md](USGS-COVERAGE-REPAIR-2026-09-23.md)
+for the completed one-time repair. Earlier timestamped observations are
+historical. Recheck live identity before any later release.
