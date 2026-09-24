@@ -502,6 +502,106 @@ If another regression requires recovery, retain this small deletion-removal
 patch while choosing a compatible application base. Code rollback does not
 restore previously deleted R2 objects or revert database changes.
 
+## Recurring month ID coverage — 2026-09-24 UTC
+
+Status: **complete — production repair and subsequent source progression verified
+at 03:57 UTC**. Temporary monitoring is stopped.
+
+The user authorized preventing recurring missing records after the archive
+preservation release. A fresh SELECT-only audit at 03:26 UTC found 13 day,
+24 week and 50 month IDs absent from D1; every missing event was older than
+one hour. Current browser feeds were already complete, but D1 gaps affected
+cluster input, enrichment, sitemap eligibility, and crawler detail lookup.
+
+The selected implementation is an insert-only scan of the existing immutable
+month snapshot, separate from the hourly writer and public publisher. It adds
+no USGS request, schema migration, binding, sidecar producer or archive deletion.
+Small retained R2 receipts pin source identity in the unused `month` slot of the
+existing 0022 ledger. Bounded JSON1 batches and cursor advancement commit in the
+same fenced transaction. Existing rows, including NULL and newer revisions,
+remain untouched. Transient failures retry with capped backoff without parking
+after six failures. This is current-window ID coverage; it does not establish
+scientific revision completeness or scan every historical generation.
+
+Validation and data protection:
+
+- Source `d762a03cb7feeb22a99fdfbcc57818873db481ff` on
+  `codex/month-coverage-repair`, based on the archive-preserving `eb46fe7` plus
+  its documentation handoff. Only the new background job, schedule, release
+  controls, tests and documentation changed.
+- Production gate: **1,740 tests / 133 files passed, three skipped**; build and
+  package passed. Focused SQLite tests cover full-row preservation, atomic
+  rollback/resume, eight successive outages, rollover, checksum failures,
+  lease takeover, 30,000 features, large UTF-8 values and empty sources.
+- Fresh 03:30 UTC SQL export: 770,990,274 bytes, SHA-256
+  `13f11e6b39cfabb4b765ce31d2a4c904461d6acbf09d39e8f2229556337c04fd`.
+  Time Travel receipts are private. Isolated restore passed integrity and
+  foreign-key checks; only the `hour` ledger state existed before rehearsal.
+- Actual scanner rehearsal on that isolated restore inserted all 50 absent
+  IDs in one invocation / 18 batches. All 191,101 preexisting earthquake rows
+  retained aggregate full-row hash
+  `fd0e25bb510060829b1b8e233ceb5974158c1556a96e998dc4e6a7121a8df61d`.
+  An immediate repeat was unchanged. No production mutation occurred in rehearsal.
+- Four real Cloudflare capacity probes, 30,000 features each, included a
+  17,728,238-byte dense optional-property snapshot. All finished in two passes
+  (19,200 then 30,000 IDs), 104 then 62 D1 statements, at most 7.084 seconds per
+  invocation. Existing newer/unknown rows were preserved. Explicitly releasing
+  the verified byte buffer before JSON parsing reduced memory pressure.
+  These are bounded fixture observations, not universal runtime guarantees.
+- Tested scanner SHA-256:
+  `27afb7bb34737c095d9f4c23ff505696f00cb11399b59a0d7ebdb07d42417b0a`.
+  Capacity receipt SHA-256:
+  `a5a085592e07409918d50f6ef5f0609e03f8a50640fbddd5d0adf7c42a321825`.
+  The temporary probe Worker, isolated test tables and ephemeral secret were
+  removed. Normal preview data and production were untouched; all R2 objects remain.
+- Independent review corrected the release gate's enable/disable transition:
+  baseline settings follow the verified predecessor in either direction, while
+  the uploaded candidate must exactly match its intended flag and schedule.
+
+Release and initial observation:
+
+- Exact preview version `0f876fd8-c752-4b17-b995-6ae33fa72848`; identity,
+  isolated bindings and absence of automatic schedules read back. Preview
+  passed **325 GET checks / 293 assets**, plus fresh GET/304/HEAD period checks.
+- Normal fast-forward push to main triggered [build dc1a53f9](https://dash.cloudflare.com/f7e27d63f4766d7fb6a0f5b4789e2cdb/workers/services/view/earthquake/production/builds/dc1a53f9-606c-4062-bf60-115d952f6ce2)
+  using `npm run release:production`. It deployed Worker
+  `9d2f20f2-44cb-430e-92b0-4eb1a132975e` at 03:45:11 UTC and passed at
+  03:46:12 UTC. Both public hosts passed **325 GET checks / 293 assets** and
+  returned the exact candidate identity. Independent configuration readback
+  confirmed all resources and the added `2-59/5 * * * *` schedule/flag.
+- The first automatic repair began at **03:52:14 UTC** after schedule
+  propagation. It completed 10,729 events in 18 batches, inserted **55** missing
+  IDs, and used 223 ms CPU / 9.126 seconds wall time. No exception occurred.
+  Completed run: `month-coverage:42525af4-683f-43ab-a2d1-cab04abe0635`.
+- Independent authenticated R2 receipt/source verification and D1 SELECTs at
+  03:52 UTC found **zero missing source IDs** and all original 50 gaps restored.
+  A separate 03:54 UTC current-feed audit found 264 day / 2,175 week / 10,729
+  month IDs, with **zero missing IDs in every period**. These pin specific
+  source generations; new arrivals can await the next bounded scheduled pass.
+- The second automatic repair at **03:57:14 UTC** completed a newer 10,731-event
+  source, 18 batches, 241 ms CPU / 9.187 seconds wall time, zero exceptions and
+  zero additional inserts. Independent R2 integrity checks and D1 SELECTs proved
+  every source ID present, all original 50 still present, and a strictly newer
+  completed source after the first readback. Run:
+  `month-coverage:abf6e619-4b04-4ece-ab18-b58aa6e3a468`. Its source was about
+  2.4 minutes old at completion. The final passed receipt is
+  `verify-release-20260924T035742943Z-61X7tU/verification.json`.
+  No manual production backfill was used. Verification tails were stopped.
+
+Private evidence is under `.reconciliation.local/coverage-current/`, including
+`release-summary.json`, `production-configuration.json`, backup/restore receipts,
+`capacity/remote-receipt.json`, source audits and `verify-release-*` readbacks.
+The exact initial passed readback is
+`verify-release-20260924T035247181Z-qAe6wD/verification.json`.
+Current scope and final completion status are in [STOPPING-POINT.md](STOPPING-POINT.md).
+
+Recovery preserves existing inserted rows, ledger progress and every archive.
+Use a reviewed forward release to remove the coverage flag and its schedule
+together if needed, retaining the archive-preserving publisher. Reverting code
+does not revert database writes; never overwrite active D1 with the old export.
+Historical reconciliation, stale existing revisions, legacy-list replacement,
+historical cluster repair and SEO/performance measurement remain separate.
+
 ## Subrelease record template
 
 Copy this section for each focused release. Replace placeholders with observed facts or explicit `not run` / `not applicable`, never assumed success.
