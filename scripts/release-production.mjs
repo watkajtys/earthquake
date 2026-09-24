@@ -35,6 +35,7 @@ const D1_ACTIVATION_READBACK_SQL = "SELECT name FROM d1_migrations ORDER BY id D
   'SELECT COUNT(*) AS n FROM UsgsIngestionIssues;';
 const ORIGINS = ['https://earthquakeslive.com', 'https://earthquake.matty-f7e.workers.dev'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MONTH_COVERAGE_CRON = '2-59/5 * * * *';
 
 function requireCheck(condition, message) {
   if (!condition) throw new Error(message);
@@ -93,6 +94,10 @@ export function validateConfig(config, { allowActivation = false } = {}) {
   requireCheck(config.vars?.DEPLOYMENT_ENVIRONMENT === 'production', 'Production environment identity is required.');
   const paused = config.vars?.LIST_PUBLICATION_PAUSED === 'true' && config.vars?.DURABLE_INGESTION_ENABLED === undefined;
   const active = config.vars?.LIST_PUBLICATION_PAUSED === 'false' && config.vars?.DURABLE_INGESTION_ENABLED === 'true';
+  const monthCoverage = config.vars?.MONTH_COVERAGE_ENABLED === 'true';
+  requireCheck(config.vars?.MONTH_COVERAGE_ENABLED === undefined || monthCoverage,
+    'Month coverage must be explicitly enabled or absent.');
+  requireCheck(!monthCoverage || active, 'Month coverage requires the active durable writer.');
   requireCheck(paused || (allowActivation && active),
     'Production list publication requires both reviewed activation bindings.');
   for (const [field, names] of [['kv_namespaces', ['CLUSTER_KV', 'USGS_LAST_RESPONSE_KV', 'STATIC_KV']], ['d1_databases', ['DB']], ['r2_buckets', ['GEOJSON_BUCKET']]]) {
@@ -102,7 +107,9 @@ export function validateConfig(config, { allowActivation = false } = {}) {
     config.r2_buckets[0].bucket_name === 'geojson-bucket',
   'Activation must target the reviewed production D1 database and R2 bucket.');
   requireCheck(config.queues.producers.length === 1 && config.queues.producers[0].binding === 'GEOJSON_QUEUE' && config.queues.consumers.length === 1, 'Expected queue producer and consumer are required.');
-  assert.deepEqual([...config.triggers.crons].sort(), ['*/5 * * * *', '*/10 * * * *', '*/30 * * * *', '0 0 * * *'].sort(), 'Unexpected production crons');
+  assert.deepEqual([...config.triggers.crons].sort(),
+    ['*/5 * * * *', '*/10 * * * *', '*/30 * * * *', '0 0 * * *',
+      ...(monthCoverage ? [MONTH_COVERAGE_CRON] : [])].sort(), 'Unexpected production crons');
   assert.deepEqual(config.routes, [{ pattern: 'earthquakeslive.com', custom_domain: true }], 'Unexpected production domain');
   requireCheck(config.workers_dev === true, 'The secondary public Worker host must remain enabled.');
 }
@@ -127,6 +134,11 @@ export function verifyBindings(bindings, config, revision) {
   );
   else if (revision) requireCheck(!bindings.some(item => item.name === 'DURABLE_INGESTION_ENABLED'),
     'Durable ingestion must remain disabled for a paused release.');
+  if (revision && config.vars.MONTH_COVERAGE_ENABLED === 'true') expected.push(
+    { name: 'MONTH_COVERAGE_ENABLED', type: 'plain_text', text: 'true' },
+  );
+  else if (revision) requireCheck(!bindings.some(item => item.name === 'MONTH_COVERAGE_ENABLED'),
+    'Month coverage must be absent for this release.');
   for (const wanted of expected) {
     const actual = bindings.find(item => item.name === wanted.name);
     requireCheck(actual && Object.entries(wanted).every(([key, value]) => (key === 'id' ? actual.id || actual.database_id : actual[key]) === value), `Missing or incorrect binding: ${wanted.name}`);
@@ -258,9 +270,25 @@ export async function releaseProduction(options, deps) {
         'The active release requires an exact deployed predecessor identity.');
       if (firstActivation) requireCheck(previousIdentity.revision === PAUSED_REVISION,
         'The paused predecessor revision differs from the reviewed activation base.');
-      const baselineConfig = firstActivation
+      let baselineConfig = firstActivation
         ? { ...config, vars: { ...config.vars, LIST_PUBLICATION_PAUSED: 'true', DURABLE_INGESTION_ENABLED: undefined } }
         : config;
+      const previousCoverage = previous.resources?.bindings?.find(binding => binding.name === 'MONTH_COVERAGE_ENABLED');
+      requireCheck(previousCoverage === undefined ||
+        (previousCoverage.type === 'plain_text' && previousCoverage.text === 'true'),
+      'The predecessor has an unrecognized month coverage binding.');
+      if (config.vars?.MONTH_COVERAGE_ENABLED === 'true') {
+        requireCheck(!firstActivation, 'Month coverage must follow durable writer activation.');
+      }
+      // Baseline settings follow the exact predecessor in either direction:
+      // first enablement and a reviewed disable release both require its
+      // unchanged flag/schedule. Post-upload checks use the candidate config.
+      baselineConfig = { ...baselineConfig,
+        vars: { ...baselineConfig.vars, MONTH_COVERAGE_ENABLED: previousCoverage?.text },
+        triggers: { ...baselineConfig.triggers,
+          crons: [...baselineConfig.triggers.crons.filter(cron => cron !== MONTH_COVERAGE_CRON),
+            ...(previousCoverage ? [MONTH_COVERAGE_CRON] : [])] },
+      };
       verifyConfiguration(await readConfiguration(deps.api, config), baselineConfig,
         active ? previousIdentity.revision : undefined);
     });

@@ -72,6 +72,9 @@ describe('production release controls', () => {
     expect(() => validateConfig(actual, { allowActivation: true })).not.toThrow();
     const preview = unstable_readConfig({ config: 'wrangler.toml', env: 'preview' }, { hideWarnings: true });
     expect(preview.triggers.crons).toEqual([]);
+    expect(preview.vars.MONTH_COVERAGE_ENABLED).toBeUndefined();
+    expect(actual.vars.MONTH_COVERAGE_ENABLED).toBe('true');
+    expect(actual.triggers.crons).toContain('2-59/5 * * * *');
     expect(preview.d1_databases[0].database_id).not.toBe(actual.d1_databases[0].database_id);
     expect(() => validateConfig(preview)).toThrow();
   });
@@ -171,6 +174,144 @@ describe('production release controls', () => {
   });
   it('does not accept gradual deployments as an unambiguous version', () => {
     expect(() => currentVersion({ deployments: [{ versions: [{ version_id: NEW, percentage: 50 }, { version_id: OLD, percentage: 50 }] }] })).toThrow();
+  });
+});
+
+describe('month coverage release transition', () => {
+  const cron = '2-59/5 * * * *';
+  const database = '8a0a26e9-ba3c-4984-9023-c1803f611a05';
+  const coverageConfig = { ...config,
+    vars: { DEPLOYMENT_ENVIRONMENT: 'production', LIST_PUBLICATION_PAUSED: 'false',
+      DURABLE_INGESTION_ENABLED: 'true', MONTH_COVERAGE_ENABLED: 'true' },
+    d1_databases: [{ binding: 'DB', database_id: database }],
+    triggers: { crons: [...config.triggers.crons, cron] },
+  };
+  const coverageBindings = (revision, enabled) => [
+    ...bindings().map(binding => binding.name === 'DB' ? { ...binding, id: database }
+      : binding.name === 'LIST_PUBLICATION_PAUSED' ? { ...binding, text: 'false' }
+        : binding.name === 'RELEASE_REVISION' ? { ...binding, text: revision } : binding),
+    { name: 'DURABLE_INGESTION_ENABLED', type: 'plain_text', text: 'true' },
+    ...(enabled ? [{ name: 'MONTH_COVERAGE_ENABLED', type: 'plain_text', text: 'true' }] : []),
+  ];
+  function coverageFixture(previouslyEnabled = false, candidateEnabled = true) {
+    const result = fixture();
+    const { deps, live } = result;
+    const candidateConfig = candidateEnabled ? coverageConfig : { ...coverageConfig,
+      vars: { ...coverageConfig.vars, MONTH_COVERAGE_ENABLED: undefined }, triggers: config.triggers };
+    live.settings.bindings = coverageBindings(OLD_REVISION, previouslyEnabled);
+    live.schedules.schedules = (previouslyEnabled ? coverageConfig : config).triggers.crons.map(cron => ({ cron }));
+    deps.readConfig = async () => candidateConfig;
+    deps.verifyActivationAttestation = vi.fn(async () => {});
+    deps.verifyLiveD1 = vi.fn(async () => {});
+    const api = deps.api.getMockImplementation();
+    deps.api.mockImplementation(path => path.endsWith(`/versions/${OLD}`)
+      ? { id: OLD, annotations: { 'workers/tag': OLD_REVISION },
+        resources: { bindings: coverageBindings(OLD_REVISION, previouslyEnabled) } }
+      : api(path));
+    const deploy = deps.deploy.getMockImplementation();
+    deps.deploy.mockImplementation(async () => {
+      const version = await deploy();
+      live.settings.bindings = coverageBindings(REVISION, candidateEnabled);
+      live.schedules.schedules = candidateConfig.triggers.crons.map(cron => ({ cron }));
+      return version;
+    });
+    return result;
+  }
+
+  it('requires the coverage flag and dedicated schedule together with the active writer', () => {
+    expect(() => validateConfig(coverageConfig, { allowActivation: true })).not.toThrow();
+    expect(() => validateConfig({ ...coverageConfig, triggers: config.triggers }, { allowActivation: true })).toThrow(/crons/);
+    expect(() => validateConfig({ ...coverageConfig,
+      vars: { ...coverageConfig.vars, MONTH_COVERAGE_ENABLED: undefined } }, { allowActivation: true })).toThrow(/crons/);
+    expect(() => validateConfig({ ...coverageConfig,
+      vars: { ...coverageConfig.vars, MONTH_COVERAGE_ENABLED: 'false' } }, { allowActivation: true })).toThrow(/explicitly enabled/);
+    expect(() => validateConfig({ ...coverageConfig,
+      vars: { ...coverageConfig.vars, DURABLE_INGESTION_ENABLED: undefined } }, { allowActivation: true })).toThrow(/active durable writer/);
+  });
+
+  it.each([false, true])('releases from a verified predecessor with coverage enabled=%s', async previouslyEnabled => {
+    const { deps, options } = coverageFixture(previouslyEnabled);
+    const result = await releaseProduction(options, deps);
+    expect(result.status).toBe('passed');
+    expect(deps.verifyLiveD1).toHaveBeenCalledTimes(2);
+    expect(deps.verifyLiveD1).toHaveBeenNthCalledWith(1, { requireEmpty: false });
+    expect(deps.verifyLiveD1).toHaveBeenNthCalledWith(2, { requireEmpty: false });
+  });
+
+  it('disables coverage from an exactly verified enabled predecessor', async () => {
+    const { deps, options, live } = coverageFixture(true, false);
+    const result = await releaseProduction(options, deps);
+    expect(result.status).toBe('passed');
+    expect(deps.deploy).toHaveBeenCalledOnce();
+    expect(live.settings.bindings.some(binding => binding.name === 'MONTH_COVERAGE_ENABLED')).toBe(false);
+    expect(live.schedules.schedules.some(schedule => schedule.cron === cron)).toBe(false);
+  });
+
+  it.each(['flag', 'cron'])('rejects an enabled predecessor missing its %s before a disable release', async field => {
+    const { deps, options, live } = coverageFixture(true, false);
+    if (field === 'flag') live.settings.bindings = coverageBindings(OLD_REVISION, false);
+    else live.schedules.schedules = config.triggers.crons.map(cron => ({ cron }));
+    const result = await releaseProduction(options, deps);
+    expect(result.failedCheck).toBe('metadata-access-and-baseline');
+    expect(deps.deploy).not.toHaveBeenCalled();
+  });
+
+  it.each(['flag', 'cron'])('rejects a lingering %s after a disable release', async field => {
+    const { deps, options, live } = coverageFixture(true, false);
+    const deploy = deps.deploy.getMockImplementation();
+    deps.deploy.mockImplementation(async () => {
+      const version = await deploy();
+      if (field === 'flag') live.settings.bindings = coverageBindings(REVISION, true);
+      else live.schedules.schedules.push({ cron });
+      return version;
+    });
+    const result = await releaseProduction(options, deps);
+    expect(result.failedCheck).toBe('configuration');
+    expect(result.uploadAttempted).toBe(true);
+  });
+
+  it.each(['flag', 'cron'])('rejects unexpected %s on the predecessor before upload', async field => {
+    const { deps, options, live } = coverageFixture();
+    if (field === 'flag') live.settings.bindings = coverageBindings(OLD_REVISION, true);
+    else live.schedules.schedules.push({ cron });
+    const result = await releaseProduction(options, deps);
+    expect(result.failedCheck).toBe('metadata-access-and-baseline');
+    expect(deps.deploy).not.toHaveBeenCalled();
+  });
+
+  it.each(['flag', 'cron'])('rejects missing %s after publication', async field => {
+    const { deps, options, live } = coverageFixture();
+    const deploy = deps.deploy.getMockImplementation();
+    deps.deploy.mockImplementation(async () => {
+      const version = await deploy();
+      if (field === 'flag') live.settings.bindings = coverageBindings(REVISION, false);
+      else live.schedules.schedules = config.triggers.crons.map(cron => ({ cron }));
+      return version;
+    });
+    const result = await releaseProduction(options, deps);
+    expect(result.failedCheck).toBe('configuration');
+    expect(result.uploadAttempted).toBe(true);
+  });
+
+  it('requires the exact enabled flag in version binding readback', () => {
+    const bad = coverageBindings(REVISION, true);
+    bad.find(binding => binding.name === 'MONTH_COVERAGE_ENABLED').text = 'false';
+    expect(() => verifyBindings(bad, coverageConfig, REVISION)).toThrow(/MONTH_COVERAGE_ENABLED/);
+  });
+
+  it('rejects an unrecognized predecessor coverage flag even when mutable settings differ', async () => {
+    const { deps, options } = coverageFixture(true);
+    const api = deps.api.getMockImplementation();
+    deps.api.mockImplementation(async path => {
+      const value = await api(path);
+      if (path.endsWith(`/versions/${OLD}`)) {
+        value.resources.bindings.find(binding => binding.name === 'MONTH_COVERAGE_ENABLED').text = 'false';
+      }
+      return value;
+    });
+    const result = await releaseProduction(options, deps);
+    expect(result.failedCheck).toBe('metadata-access-and-baseline');
+    expect(deps.deploy).not.toHaveBeenCalled();
   });
 });
 

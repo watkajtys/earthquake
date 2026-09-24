@@ -12,6 +12,7 @@ import { onRequestGet as onRequestGet3 } from '../functions/api/get-clusters.js'
 import { onRequestGet as getClusterSummaries } from '../functions/api/cluster-summaries.js';
 import { onRequestGet as getEarthquakeFeeds } from '../functions/api/earthquake-feeds.js';
 import { publishEarthquakeFeeds } from '../functions/background/publish-earthquake-feeds.js';
+import { reconcileMonthCoverage } from '../functions/background/reconcile-month-coverage.js';
 import { handleBatchUsgsFetch } from '../functions/api/batch-usgs-fetch.js';
 import { handleIndexSitemap } from '../functions/routes/sitemaps/index-sitemap.js';
 import { handleEarthquakesSitemap } from '../functions/routes/sitemaps/earthquakes-sitemap.js';
@@ -766,6 +767,14 @@ var worker_default = {
     );
     logger.addContext("cronTrigger", { cron: event.cron });
     switch (event.cron) {
+      case "2-59/5 * * * *":
+        if (env.MONTH_COVERAGE_ENABLED === "true") {
+          ctx.waitUntil(reconcileMonthCoverage(env).then(result => {
+            logger.logMilestone("Month coverage reconciliation finished", result);
+            return result;
+          }));
+        }
+        break;
       case "*/5 * * * *":
         console.log(
           `[worker-scheduled] Cron matched '${event.cron}'. Running high-frequency tasks.`,

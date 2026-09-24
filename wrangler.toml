@@ -94,9 +94,11 @@ DEPLOYMENT_ENVIRONMENT = "production"
 # release gate verifies the drained paused predecessor and 0022 schema.
 LIST_PUBLICATION_PAUSED = "false"
 DURABLE_INGESTION_ENABLED = "true"
+# Insert-only reconciliation of the existing complete month snapshot.
+MONTH_COVERAGE_ENABLED = "true"
 
 [env.production.triggers]
-crons = ["*/5 * * * *", "*/30 * * * *", "0 0 * * *", "*/10 * * * *"]
+crons = ["*/5 * * * *", "*/30 * * * *", "0 0 * * *", "*/10 * * * *", "2-59/5 * * * *"]
 
 [[env.production.queues.producers]]
 binding = "GEOJSON_QUEUE"

@@ -1,7 +1,30 @@
 # Current handoff — 2026-09-24 UTC
 
-The archive-preservation release is complete and verified. This is the
-stopping point. The larger data-repair prototypes remain outside this release.
+The archive-preservation release is complete and verified. The user subsequently
+authorized a focused repair for recurring missing database records. That new
+work is on `codex/month-coverage-repair`; production remains the archive release
+below until the guarded deployment is verified.
+
+## Current work: recurring missing records
+
+The fresh 03:26 UTC audit found 50 month-feed IDs absent from D1, all older than
+one hour. The hourly ingestion window cannot recover these automatically.
+The chosen repair inserts missing IDs from the already-published complete month
+snapshot every five minutes. It preserves existing rows and all R2 archives,
+uses the existing migration `0022` ledger, and adds no upstream requests.
+
+The operational target is coverage within 15 minutes at the current feed size
+when publication and storage are healthy. Larger feeds resume across bounded
+passes. This is current-window ID coverage, not scientific-revision or complete
+historical-archive reconciliation. See [MONTH-COVERAGE.md](MONTH-COVERAGE.md).
+
+Local validation: 1,735 tests passed (3 skipped), build and packaging passed.
+A fresh production backup restored with no integrity or foreign-key errors.
+An isolated rehearsal inserted all 50 missing IDs in one pass and preserved
+the full-row hash of all 191,101 preexisting earthquake records. Actual Cloudflare
+capacity probes processed 30,000-record sources up to 17.73 MB in two passes.
+Exact preview, production rollout, and subsequent scheduled-source verification
+remain release gates.
 
 ## This release
 
@@ -59,22 +82,17 @@ supersedes earlier handoffs that proposed deferred R2 cleanup.
 
 ## What remains separate
 
-The permanent day/week/month comparison with D1 and the replacement of older
-public lists remain **undeployed**. They need a separately agreed scope and
-success criterion; neither is included in this archive-preservation release.
-Historical cluster repairs, intermittent feed failures, and SEO/performance
-measurement are also follow-up work, not reasons to extend this task.
-
-**Stop here.** Begin a new work block only on a fresh user request. A sensible
-next proposal is to
-prevent missing earthquake records from recurring within an agreed refresh
-window, with any public-list replacement scoped explicitly.
+Replacement of older public lists, scientific revision repair for existing
+rows, every-generation historical reconciliation, historical cluster repairs,
+and SEO/performance measurement remain separate. The earlier larger scanner
+prototypes are not the selected implementation. Finish the focused current
+repair and its production verification, then stop.
 
 ## Where to resume
 
-The project root contains the released application and this current
-handoff on `codex/archive-release-handoff` (documentation-only changes after
-the deployed code). The former root branch `codex/cluster-writer-churn` is
+The project root contains the focused candidate on `codex/month-coverage-repair`,
+based on the preserved `codex/archive-release-handoff` checkpoint.
+The former root branch `codex/cluster-writer-churn` is
 preserved; it is an older checkpoint, not the current production source. The archive candidate originated in
 `.reconciliation.local/worktrees/archive-preserve-production` on
 `codex/archive-preserve-production`. Other private checkouts contain unfinished
