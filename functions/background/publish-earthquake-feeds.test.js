@@ -47,7 +47,7 @@ describe('independent immutable complete period publication', () => {
     });
     const result = await publish();
     expect(result).toMatchObject({ period: 'day', published: true, generationId: generation(1), snapshotSequence: 1,
-      totalCount: 1, upstreamGeneratedAtMs: baseTime, durationMs: 0, cleanupDeferred: false });
+      totalCount: 1, upstreamGeneratedAtMs: baseTime, durationMs: 0 });
     const saved = pointer();
     expect(validateFeedPointer(saved, { period: 'day', now: time })).toBe(saved);
     const data = snapshot();
@@ -222,62 +222,34 @@ describe('single-attempt compare-and-swap', () => {
   });
 });
 
-describe('bounded retirement after acknowledged publication', () => {
-  it('retires exactly prior.previous after grace and preserves current plus last-good fallback', async () => {
-    await publish(); const first = pointer().current.objectKey;
-    advance(); await publish(); const second = pointer().current.objectKey;
-    advance(); expect(await publish()).toMatchObject({ published: true, cleanupDeferred: false });
-    expect(bucket.calls.filter(call => call.method === 'delete')).toEqual([{ method: 'delete', key: first }]);
-    expect(bucket.objects.has(first)).toBe(false);
-    expect(bucket.objects.has(second)).toBe(true);
-    expect(bucket.objects.has(pointer().current.objectKey)).toBe(true);
-    expect(pointer().previous.objectKey).toBe(second);
-  });
+describe('permanent immutable complete-feed archive', () => {
+  it('retains every generation after the pointer has moved beyond it', async () => {
+    const archived = [];
+    for (let index = 0; index < 5; index++) {
+      if (index) advance();
+      const result = await publish();
+      expect(result).toMatchObject({ published: true, snapshotSequence: index + 1 });
+      expect(result).not.toHaveProperty('cleanupDeferred');
+      const key = pointer().current.objectKey;
+      archived.push({ key, sha256: await sha256Hex(bucket.objects.get(key).bytes) });
+    }
 
-  it('does not retire early during rapid publication', async () => {
-    await publish(); const first = pointer().current.objectKey;
-    advance(1000); await publish(); advance(1000);
-    expect(await publish()).toMatchObject({ published: true, cleanupDeferred: true });
-    expect(bucket.objects.has(first)).toBe(true);
+    expect(pointer().previous.objectKey).toBe(archived.at(-2).key);
+    for (const { key, sha256 } of archived) {
+      expect(bucket.objects.has(key)).toBe(true);
+      expect(await sha256Hex(bucket.objects.get(key).bytes)).toBe(sha256);
+    }
     expect(bucket.calls.some(call => call.method === 'delete')).toBe(false);
   });
 
-  it('uses actual pointer commit age after a slow staging upload, not payload creation time', async () => {
+  it('retains old generations through rapid publication and an invalid pointer upload timestamp', async () => {
     await publish(); const first = pointer().current.objectKey;
+    advance(1000); await publish();
+    bucket.objects.get(feedPointerKey('day')).uploaded = new Date('invalid');
     advance(1000);
-    const secondGeneration = generation(nextId);
-    bucket.hooks.beforePut = key => {
-      if (key === feedObjectKey('day', secondGeneration)) {
-        time += 120_000; vi.setSystemTime(time);
-      }
-    };
-    await publish();
-    const second = pointer().current;
-    expect(second.generatedAtMs).toBe(baseTime + 1000);
-    expect(bucket.objects.get(feedPointerKey('day')).uploaded.getTime()).toBe(baseTime + 121_000);
-    delete bucket.hooks.beforePut;
-    advance(1000);
-    expect(await publish()).toMatchObject({ published: true, cleanupDeferred: true });
+    expect(await publish()).toMatchObject({ published: true, snapshotSequence: 3 });
     expect(bucket.objects.has(first)).toBe(true);
     expect(bucket.calls.some(call => call.method === 'delete')).toBe(false);
-  });
-
-  it.each([undefined, new Date('invalid'), new Date(baseTime + 99_999_999)])('defers retirement when pointer commit time is unavailable or future: %s', async uploaded => {
-    await publish(); const first = pointer().current.objectKey;
-    advance(); await publish(); advance();
-    bucket.objects.get(feedPointerKey('day')).uploaded = uploaded;
-    expect(await publish()).toMatchObject({ published: true, cleanupDeferred: true });
-    expect(bucket.objects.has(first)).toBe(true);
-    expect(bucket.calls.some(call => call.method === 'delete')).toBe(false);
-  });
-
-  it('reports deferred cleanup without misreporting an already committed publication as failed', async () => {
-    await publish(); const first = pointer().current.objectKey;
-    advance(); await publish(); advance();
-    bucket.hooks.beforeDelete = () => { throw new Error('temporary deletion failure'); };
-    expect(await publish()).toMatchObject({ published: true, cleanupDeferred: true, snapshotSequence: 3 });
-    expect(pointer().current.snapshotSequence).toBe(3);
-    expect(bucket.objects.has(first)).toBe(true);
   });
 
   it('a superseded run never deletes a previously referenced object', async () => {

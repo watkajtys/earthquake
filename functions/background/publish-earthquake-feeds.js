@@ -103,23 +103,10 @@ export async function publishEarthquakeFeed(env, period, {
   });
   if (committed === null) return outcome(period, descriptor, startedAtMs, clock, { published: false, reason: 'superseded' });
   confirmedWrite(committed);
-  let cleanupDeferred = false;
-  // Only retire the previous pointer's already-retired generation after its
-  // successor pointer's actual R2 upload time (from the same get + ETag) has
-  // aged beyond the API's 10-second bounded read lifetime. Payload creation
-  // time alone cannot establish this grace after a stalled staging upload.
-  // Never delete the prior current (our fallback), list the bucket, or clean up
-  // after a lost CAS/acknowledgement. Staging orphans need separate lifecycle work.
-  if (previous?.previous) {
-    const retirementCutoffMs = clock() - 60_000;
-    if (previous.current.generatedAtMs <= retirementCutoffMs &&
-        Number.isSafeInteger(read.uploadedAtMs) && read.uploadedAtMs <= retirementCutoffMs) {
-      try { await bucket.delete(previous.previous.objectKey); }
-      catch { cleanupDeferred = true; }
-    } else cleanupDeferred = true;
-  }
+  // Immutable complete snapshots are the archive. Advancing the two-entry
+  // pointer changes discovery, not retention of older generations.
   // No full payload or source object enters logging/aggregate results.
-  return outcome(period, descriptor, startedAtMs, clock, { published: true, cleanupDeferred });
+  return outcome(period, descriptor, startedAtMs, clock, { published: true });
 }
 
 export async function publishEarthquakeFeeds(env, options = {}) {
