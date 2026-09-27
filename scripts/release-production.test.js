@@ -2,7 +2,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { unstable_readConfig } from 'wrangler';
 import { parseArgs, validateConfig, verifyBindings, verifyConfiguration, verifyIdentity, currentVersion, releaseProduction, readWranglerCredentials, verifyActivationAttestation, verifyLiveD1Readback } from './release-production.mjs';
 
 const REVISION = 'a'.repeat(40);
@@ -66,7 +65,8 @@ describe('production release controls', () => {
     expect(() => parseArgs(['--env', 'production', '--revision', REVISION], { GITHUB_SHA: 'b'.repeat(40) })).toThrow();
     expect(() => parseArgs(['--env', 'production', '--name', 'other'], {})).toThrow();
   });
-  it('parses production using installed Wrangler schema and isolates preview', () => {
+  it('parses production using installed Wrangler schema and isolates preview', async () => {
+    const { unstable_readConfig } = await import('wrangler');
     const actual = unstable_readConfig({ config: 'wrangler.toml', env: 'production' }, { hideWarnings: true });
     expect(() => validateConfig(actual)).toThrow();
     expect(() => validateConfig(actual, { allowActivation: true })).not.toThrow();
