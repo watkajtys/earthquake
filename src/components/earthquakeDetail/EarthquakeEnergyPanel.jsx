@@ -17,8 +17,9 @@ function EarthquakeEnergyPanel({
 
     return (
         <div className={`${exhibitPanelClass} border-orange-500`}>
-            <h2 className={`${exhibitTitleClass} text-orange-800 border-orange-200`}>Energy Unleashed</h2>
-            <p className="mb-3">Approx. Energy: <strong className={`${highlightClass} text-orange-600`}>{formatLargeNumber(energyJoules)} Joules</strong>.</p>
+            <h2 className={`${exhibitTitleClass} text-orange-800 border-orange-200`}>Estimated Seismic Energy</h2>
+            <p className="mb-3">Approximate radiated energy: <strong className={`${highlightClass} text-orange-600`}>{formatLargeNumber(energyJoules)} joules</strong>.</p>
+            <p className="text-xs text-slate-600 mb-3">Estimated from the reported magnitude using the <a className="text-blue-700 underline" href="https://pubs.usgs.gov/of/1998/ofr-98-0767/" target="_blank" rel="noopener noreferrer">USGS magnitude–energy relationship</a>. Actual radiated energy varies with the event and magnitude scale.</p>
             <div className="space-y-2">
                 {energyJoules > 0 && ( // Only show comparisons if energy is greater than 0
                     <>
@@ -33,7 +34,7 @@ function EarthquakeEnergyPanel({
                     </>
                 )}
             </div>
-            {energyJoules > 0 && <p className={captionClass}>Comparisons are for scale.</p>}
+            {energyJoules > 0 && <p className={captionClass}>Comparisons show approximate energy equivalents; shaking and damage depend on other factors.</p>}
         </div>
     );
 }

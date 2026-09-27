@@ -1,98 +1,109 @@
-import React, { memo } from 'react';
+import React, { memo, useId } from 'react';
 import InfoSnippet from '../InfoSnippet.jsx';
-import { isValidNumber, formatNumber } from '../../utils/utils.js';
+import { formatNumber } from '../../utils/utils.js';
+
+const radians = (degrees) => degrees * Math.PI / 180;
 
 function EarthquakeFaultParamsPanel({
     selectedFaultPlaneKey,
     selectedFaultPlane,
-    // isValidNumber, // Now imported
-    // formatNumber, // Now imported
     exhibitPanelClass,
     exhibitTitleClass
-    // highlightClass is used internally in <p> and <strong> tags, not passed directly to this component
-    // diagramContainerClass is not directly used by this panel wrapper, but by its columns if they were more complex
 }) {
-    // Conditional rendering for the entire panel
-    if (!(selectedFaultPlane && (isValidNumber(selectedFaultPlane.strike) || isValidNumber(selectedFaultPlane.dip) || isValidNumber(selectedFaultPlane.rake)))) { // isValidNumber is now imported
-        return null;
-    }
+    const markerId = useId().replace(/:/g, '');
+    const strike = selectedFaultPlane?.strike;
+    const dip = selectedFaultPlane?.dip;
+    const rake = selectedFaultPlane?.rake;
+    const hasStrike = Number.isFinite(strike) && strike >= 0 && strike <= 360;
+    const hasDip = Number.isFinite(dip) && dip >= 0 && dip <= 90;
+    const hasRake = Number.isFinite(rake) && rake >= -180 && rake <= 180;
+    if (!hasStrike && !hasDip && !hasRake) return null;
+
+    const strikeX = 38 * Math.sin(radians(strike));
+    const strikeY = -38 * Math.cos(radians(strike));
+    const dipX = 80 * Math.cos(radians(dip));
+    const dipY = 80 * Math.sin(radians(dip));
+    const rakeX = 42 * Math.cos(radians(rake));
+    const rakeY = -42 * Math.sin(radians(rake));
 
     return (
         <div className={`${exhibitPanelClass} border-green-500`}>
             <h2 className={`${exhibitTitleClass} text-green-800 border-green-200`}>Decoding the Fault Parameters</h2>
-            <p className="text-xs text-slate-600 mb-3">Parameters for <strong className="font-semibold text-indigo-600">{selectedFaultPlaneKey === 'np1' ? 'Nodal Plane 1' : 'Nodal Plane 2'}</strong>:</p>
+            <p className="text-xs text-slate-600 mb-3">
+                Parameters for <strong className="font-semibold text-indigo-600">{selectedFaultPlaneKey === 'np1' ? 'Nodal Plane 1' : 'Nodal Plane 2'}</strong>,
+                one of two possible planes. These angles alone do not identify which plane ruptured.
+            </p>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-
-                {/* Strike Parameter Column */}
-                {isValidNumber(selectedFaultPlane.strike) && (
+                {hasStrike && (
                     <div className="flex flex-col">
-                        <div className="p-2 bg-blue-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[150px] sm:min-h-[200px]">
-                            <strong className="block text-blue-700 text-sm">Strike ({formatNumber(selectedFaultPlane.strike,0)}°)</strong>
-                            <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
-                                <rect x="5" y="40" width="150" height="75" fill="#e9ecef" stroke="#adb5bd" strokeWidth="1"/>
-                                <text x="80" y="35" fontSize="10" textAnchor="middle" fill="#495057">Surface</text>
-                                <text x="15" y="15" fontSize="10" textAnchor="middle" fill="#333">N</text>
-                                <path d="M15 20 L15 30" stroke="black" strokeWidth="1" markerEnd="url(#arrow-north-strike-detail-decoder-fault-params)"/>
+                        <div className="p-2 bg-blue-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[220px]">
+                            <strong className="block text-blue-700 text-sm">Strike ({formatNumber(strike, 0)}°)</strong>
+                            <svg width="180" height="155" viewBox="0 0 180 155" className="mx-auto my-1 max-w-full" role="img" aria-label={`Strike ${strike} degrees clockwise from north, map view`}>
                                 <defs>
-                                    <marker id="arrow-north-strike-detail-decoder-fault-params" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
-                                        <path d="M 0 0 L 5 5 L 0 10 z" fill="black" />
+                                    <marker id={`${markerId}-strike`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto">
+                                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#dc3545" />
                                     </marker>
                                 </defs>
-                                {(() => {
-                                    const diagramCenterX = 80;
-                                    const diagramCenterY = 77.5;
-                                    const lineLength = 70;
-                                    return (
-                                        <line
-                                            x1={diagramCenterX - lineLength / 2} y1={diagramCenterY}
-                                            x2={diagramCenterX + lineLength / 2} y2={diagramCenterY}
-                                            stroke="#dc3545"
-                                            strokeWidth="2.5"
-                                            transform={`rotate(${selectedFaultPlane.strike}, ${diagramCenterX}, ${diagramCenterY})`}
-                                        />);
-                                })()}
+                                <circle cx="90" cy="75" r="46" fill="#eff6ff" stroke="#94a3b8" />
+                                <path d="M90 29 V121 M44 75 H136" stroke="#cbd5e1" strokeDasharray="3 3" />
+                                <g fontSize="12" fill="#334155" textAnchor="middle">
+                                    <text x="90" y="19">N</text><text x="149" y="79">E</text>
+                                    <text x="90" y="137">S</text><text x="31" y="79">W</text>
+                                </g>
+                                <line data-testid="strike-line" x1={90 - strikeX} y1={75 - strikeY} x2={90 + strikeX} y2={75 + strikeY} stroke="#dc3545" strokeWidth="3" markerEnd={`url(#${markerId}-strike)`} />
+                                {hasDip && dip > 0 && dip < 90 && (
+                                    <line data-testid="dip-side-tick" x1="90" y1="75" x2={90 + 18 * Math.cos(radians(strike))} y2={75 + 18 * Math.sin(radians(strike))} stroke="#475569" strokeWidth="2" />
+                                )}
+                                <text x="90" y="153" fontSize="10" textAnchor="middle" fill="#475569">Map view · north is up</text>
                             </svg>
-                            <p className="text-xs text-slate-600 mt-1">Compass direction of the fault's intersection... (full text here)</p>
+                            <p className="text-xs text-slate-600 mt-1">
+                                Red arrow: horizontal direction along the plane, clockwise from north.
+                                {hasDip && dip > 0 && dip < 90 && ` Short tick: dip side (${formatNumber((strike + 90) % 360, 0)}°).`}
+                            </p>
                         </div>
                         <InfoSnippet topic="strike" />
                     </div>
                 )}
-
-                {/* Dip Parameter Column */}
-                {isValidNumber(selectedFaultPlane.dip) && (
+                {hasDip && (
                     <div className="flex flex-col">
-                        <div className="p-2 bg-red-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[150px] sm:min-h-[200px]">
-                            <strong className="block text-red-700 text-sm">Dip ({formatNumber(selectedFaultPlane.dip,0)}°)</strong>
-                            <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
-                                <line x1="10" y1="40" x2="150" y2="40" stroke="#adb5bd" strokeWidth="1.5" />
-                                <text x="80" y="30" fontSize="10" textAnchor="middle" fill="#495057">Surface</text>
-                                <line x1="40" y1="40" x2="120" y2="100" stroke="#495057" strokeWidth="2" />
-                                <path d="M 40 40 C 55 40, 60 48, 65 55" fill="none" stroke="#28a745" strokeWidth="1.5" />
-                                <text x="75" y="55" fontSize="10" fill="#28a745" fontWeight="bold">{formatNumber(selectedFaultPlane.dip,0)}°</text>
+                        <div className="p-2 bg-red-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[220px]">
+                            <strong className="block text-red-700 text-sm">Dip ({formatNumber(dip, 0)}°)</strong>
+                            <svg width="180" height="155" viewBox="0 0 180 155" className="mx-auto my-1 max-w-full" role="img" aria-label={`Dip ${dip} degrees below horizontal, cross-section perpendicular to strike`}>
+                                <rect x="12" y="46" width="156" height="94" fill="#fee2e2" />
+                                <line x1="12" y1="46" x2="168" y2="46" stroke="#94a3b8" strokeWidth="1.5" />
+                                <text x="90" y="29" fontSize="11" textAnchor="middle" fill="#475569">Horizontal</text>
+                                <line data-testid="dip-line" x1="28" y1="46" x2={28 + dipX} y2={46 + dipY} stroke="#475569" strokeWidth="3" />
+                                {dip > 0 && <path d={`M54 46 A26 26 0 0 1 ${28 + 26 * Math.cos(radians(dip))} ${46 + 26 * Math.sin(radians(dip))}`} fill="none" stroke="#b91c1c" strokeWidth="1.5" />}
+                                <text x={28 + 46 * Math.cos(radians(dip / 2))} y={46 + 46 * Math.sin(radians(dip / 2)) + 4} fontSize="11" fill="#b91c1c" fontWeight="bold">{formatNumber(dip, 0)}°</text>
+                                <text x="90" y="153" fontSize="10" textAnchor="middle" fill="#475569">Section across strike</text>
                             </svg>
-                            <p className="text-xs text-slate-600 mt-1">Angle the fault plane tilts down...</p>
+                            <p className="text-xs text-slate-600 mt-1">Angle down from horizontal. 0° is horizontal; 90° is vertical.</p>
                         </div>
                         <InfoSnippet topic="dip" />
                     </div>
                 )}
-
-                {/* Rake Parameter Column */}
-                {isValidNumber(selectedFaultPlane.rake) && (
+                {hasRake && (
                     <div className="flex flex-col">
-                        <div className="p-2 bg-emerald-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[150px] sm:min-h-[200px]">
-                            <strong className="block text-emerald-700 text-sm">Rake ({formatNumber(selectedFaultPlane.rake,0)}°)</strong>
-                            <svg width="100" height="75" viewBox="0 0 160 120" className="mx-auto my-1">
-                                <rect x="25" y="10" width="110" height="100" fill="#e0e7ff" stroke="#6d28d9" strokeWidth="1.5" />
-                                <line x1="25" y1="60" x2="135" y2="60" stroke="#4f46e5" strokeWidth="1" strokeDasharray="2,2" />
+                        <div className="p-2 bg-emerald-50 rounded-lg shadow text-center flex flex-col justify-between min-h-[220px]">
+                            <strong className="block text-emerald-700 text-sm">Rake ({formatNumber(rake, 0)}°)</strong>
+                            <svg width="180" height="155" viewBox="0 0 180 155" className="mx-auto my-1 max-w-full" role="img" aria-label={`Rake ${rake} degrees on the fault plane, measured from strike toward up-dip`}>
                                 <defs>
-                                    <marker id="arrow-rake-detail-diag-decoder-fault-params" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="strokeWidth" markerWidth="4" markerHeight="3" orient="auto">
-                                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/>
+                                    <marker id={`${markerId}-rake`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto">
+                                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#15803d" />
                                     </marker>
                                 </defs>
-                                <line x1="80" y1="60" x2="50" y2="80" stroke="#16a34a" strokeWidth="2.5" markerEnd="url(#arrow-rake-detail-diag-decoder-fault-params)" transform={`rotate(${selectedFaultPlane.rake} 80 60)`} />
-                                <text x="70" y="95" fontSize="10" fill="#16a34a" fontWeight="bold">{formatNumber(selectedFaultPlane.rake,0)}°</text>
+                                <rect x="18" y="24" width="144" height="104" fill="#dcfce7" stroke="#86b49a" />
+                                <path d="M30 76 H150 M90 30 V122" stroke="#94a3b8" strokeDasharray="3 3" />
+                                <g fontSize="10" fill="#475569">
+                                    <text x="90" y="15" textAnchor="middle">Up-dip (+90°)</text>
+                                    <text x="90" y="144" textAnchor="middle">Down-dip (−90°)</text>
+                                    <text x="157" y="66" textAnchor="end">Strike (0°)</text>
+                                    <text x="23" y="66">±180°</text>
+                                </g>
+                                <line data-testid="rake-arrow" x1="90" y1="76" x2={90 + rakeX} y2={76 + rakeY} stroke="#15803d" strokeWidth="3" markerEnd={`url(#${markerId}-rake)`} />
+                                <circle cx="90" cy="76" r="2.5" fill="#15803d" />
                             </svg>
-                            <p className="text-xs text-slate-600 mt-1">Direction of slip along the fault plane...</p>
+                            <p className="text-xs text-slate-600 mt-1">Relative slip viewed on the plane. Positive rake turns from strike toward up-dip; negative toward down-dip.</p>
                         </div>
                         <InfoSnippet topic="rake" />
                     </div>

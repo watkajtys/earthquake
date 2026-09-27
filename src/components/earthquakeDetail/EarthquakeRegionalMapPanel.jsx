@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import EarthquakeMap from '../EarthquakeMap';
 import { isValidNumber } from '../../utils/utils.js';
+import { FAULT_MAP_CATEGORIES } from '../../utils/faultMapUtils.js';
 
 function EarthquakeRegionalMapPanel({
     geometry,
@@ -99,6 +100,16 @@ function EarthquakeRegionalMapPanel({
             <div className="h-[250px] sm:h-[300px] md:h-[400px] lg:h-[450px] rounded-md overflow-hidden relative mt-2">
                 <EarthquakeMap {...finalMapProps} />
             </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-xs text-slate-600" aria-label="Mapped fault and structure legend">
+                {Object.entries(FAULT_MAP_CATEGORIES).map(([key, category]) => (
+                    <span key={key} className="inline-flex items-center gap-1">
+                        <span aria-hidden="true" className="inline-block w-4 border-t-[3px]" style={{ borderColor: category.color }} />
+                        {category.label}
+                    </span>
+                ))}
+            </div>
+            <p className="text-xs text-slate-600 mt-2">Thicker lines show catalogued faults and other mapped structures; thin lines show plate boundaries. Nearby traces provide regional context. Proximity alone does not identify the fault that ruptured, and the mapped catalogue is incomplete.</p>
+            <p className="text-xs mt-1"><a className="text-blue-700 underline" href="https://github.com/GEMScienceTools/gem-global-active-faults" target="_blank" rel="noopener noreferrer">GEM Global Active Faults Database</a></p>
         </div>
     );
 }

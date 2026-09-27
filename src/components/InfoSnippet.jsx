@@ -31,27 +31,27 @@ const infoData = {
     },
     strike: { // NEW or Refined
         title: "What is Fault Strike?",
-        content: "Strike is the compass direction of a fault line as it intersects the Earth's surface. Imagine a tilted bed of rock that breaks; the strike is the direction of a horizontal line drawn on that tilted surface. It's measured in degrees clockwise from North (e.g., 0° is North, 90° is East, 180° is South, 270° is West).",
+        content: "Strike is the direction of a horizontal line on the fault plane, measured clockwise from north: 0° north, 90° east, 180° south, 270° west. The right-hand rule chooses the strike direction so the plane dips to your right (strike + 90°). A buried fault need not intersect the ground surface. A nodal-plane strike describes a possible fault orientation, not a confirmed surface trace.",
         icon: "🧭" // Compass
     },
     dip: { // NEW or Refined
         title: "What is Fault Dip?",
-        content: "Dip is the angle at which a fault plane or rock layer is tilted downwards from a horizontal surface. A dip of 0° means the fault is horizontal, while a dip of 90° means it's vertical. The dip direction is perpendicular to the strike.",
+        content: "Dip is the angle of the fault plane below horizontal, measured in a vertical section perpendicular to strike. A dip of 0° is horizontal and 90° is vertical. For a dipping plane, the right-hand rule places the downward dip direction 90° clockwise from strike. Dip describes the plane's tilt, not the direction of slip.",
         icon: "📐" // Triangle ruler
     },
     rake: { // NEW or Refined
         title: "What is Fault Rake?",
-        content: "Rake (or slip angle) describes the direction one side of a fault moved relative to the other, *measured on the fault plane itself*. A rake of 0° means horizontal slip (left-lateral), ±180° is also horizontal (right-lateral), +90° is pure upward slip (reverse/thrust fault), and -90° is pure downward slip (normal fault). Other values indicate oblique slip (a mix of horizontal and vertical).",
+        content: "Rake is the slip angle on the fault plane, measured from the strike direction toward up-dip for positive angles. It describes motion of the hanging wall relative to the footwall on a dipping fault. 0° is left-lateral slip along strike; ±180° is right-lateral slip opposite strike; +90° is up-dip reverse slip; −90° is down-dip normal slip. Intermediate angles combine strike-slip and dip-slip. These are relative motions, not absolute movement of either block.",
         icon: "↯" // Downwards zigzag arrow or similar for slip
     },
     stressAxes: {
-        title: "Understanding Earthquake Forces: P and T Axes",
-        content: "Earthquakes happen when rocks break under stress. Seismologists describe this stress using principal axes: the P-axis (Pressure) shows the main direction of squeezing/compression, and the T-axis (Tension) shows the main direction of stretching/extension. Their orientations help determine the faulting type.",
+        title: "Understanding P and T Axes",
+        content: "The P and T axes describe the compressional and extensional directions of the earthquake source mechanism. They help describe faulting style, but a single earthquake does not directly determine the regional stress field. An axis is an unoriented line, not a slip arrow. Its azimuth is clockwise from north and its plunge is measured below horizontal; the projection shows its downward end.",
         icon: "⇆" // Left right arrow
     },
     beachball: {
         title: "What's a 'Beach Ball' Diagram?",
-        content: "A focal mechanism or 'beach ball' diagram is a 2D map of 3D faulting. It shows two possible fault planes (nodal planes). The shaded areas usually indicate where the ground first squeezed outwards (compression, often where the T-axis lies in standard projections), and white areas where it first pulled inwards (tension, often where the P-axis lies). The pattern reveals the fault type: strike-slip, normal, or reverse/thrust.",
+        content: "A focal mechanism or beachball projects earthquake source directions onto a circle. In this lower-hemisphere view, shaded regions represent compressional P-wave first motions and white regions dilatational first motions. The curves are two alternative nodal planes; independent evidence is needed to identify the ruptured fault. Our diagram shows the double-couple model from strike, dip and rake.",
         icon: "⚽"
     },
     stationsUsed: {

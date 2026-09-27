@@ -19,13 +19,13 @@ function EarthquakeMwwPanel({
 
     return (
         <div className={`${exhibitPanelClass} border-pink-500`}>
-            <h2 className={`${exhibitTitleClass} text-pink-800 border-pink-200`}>Mww: The Modern Measure</h2>
-            <p>This earthquake was <strong className={highlightClass}>{properties.magType.toUpperCase()} {formatNumber(properties.mag,1)}</strong>.</p>
+            <h2 className={`${exhibitTitleClass} text-pink-800 border-pink-200`}>Seismic Moment and Magnitude</h2>
+            <p>Reported magnitude: <strong className={highlightClass}>{properties.magType.toUpperCase()} {formatNumber(properties.mag,1)}</strong>.</p>
             <ul className="list-disc list-inside text-xs md:text-sm text-slate-600 mt-2 space-y-1">
-                <li>Moment Magnitude (Mww) is standard for moderate to large quakes.</li>
-                <li>Based on Seismic Moment: <strong className={highlightClass}>{formatLargeNumber(scalarMomentValue)} N-m</strong> for this event.</li>
-                <li>Seismic Moment considers: fault area, slip amount, and rock rigidity.</li>
-                <li>Mww accurately represents energy differences, unlike older scales.</li>
+                <li>Reported scalar seismic moment: <strong className={highlightClass}>{formatLargeNumber(scalarMomentValue)} N·m</strong>.</li>
+                <li>Seismic moment describes the size of the source in terms of fault area, average slip, and rock rigidity.</li>
+                <li>Moment magnitude (Mw) is calculated from seismic moment. Mww is the W-phase method of estimating moment magnitude.</li>
+                <li>Radiated seismic energy is a separate physical quantity and can differ between earthquakes with the same moment.</li>
             </ul>
         </div>
     );

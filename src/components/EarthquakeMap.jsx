@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 // import tectonicPlatesData from '../assets/TectonicPlateBoundaries.json'; // Removed for dynamic import
 import { getMagnitudeColor, formatTimeAgo } from '../utils/utils.js';
+import { describeFaultMotion, formatFaultSlipRate, getFaultMapCategory } from '../utils/faultMapUtils.js';
 import { 
   calculateBoundingBoxFromPoints, 
   filterGeoJSONByBoundingBox
@@ -133,13 +134,7 @@ const getTectonicPlateStyle = (feature) => {
  * @returns {Object} A Leaflet path style options object for the feature.
  */
 const getActiveFaultStyle = (feature) => {
-  let color = 'rgba(255, 255, 255, 0.9)'; // Default white for unknown fault types
-  const slipType = feature?.properties?.slip_type;
-  if (slipType === 'Normal') color = 'rgba(255, 20, 147, 0.9)'; // Deep pink for Normal faults
-  else if (slipType === 'Reverse') color = 'rgba(50, 205, 50, 0.9)'; // Lime green for Reverse faults
-  else if (slipType === 'Dextral') color = 'rgba(0, 191, 255, 0.9)'; // Deep sky blue for Dextral (right-lateral)
-  else if (slipType === 'Sinistral') color = 'rgba(138, 43, 226, 0.9)'; // Blue violet for Sinistral (left-lateral)
-  else if (slipType === 'Dextral-Normal') color = 'rgba(255, 140, 0, 0.9)'; // Orange for combined Dextral-Normal
+  const { color } = getFaultMapCategory(feature?.properties?.slip_type);
   return { color, weight: 2.5, opacity: 0.9 };
 };
 
@@ -443,28 +438,25 @@ const EarthquakeMap = ({
           onEachFeature={(feature, layer) => {
             if (feature.properties) {
               const slipType = feature.properties.slip_type;
-              let slipDescription = slipType || 'Unknown';
-              
-              if (slipType === 'Normal') {
-                slipDescription = 'Normal (pulls apart)';
-              } else if (slipType === 'Reverse') {
-                slipDescription = 'Reverse (pushes together)';
-              } else if (slipType === 'Dextral') {
-                slipDescription = 'Dextral (slides right)';
-              } else if (slipType === 'Sinistral') {
-                slipDescription = 'Sinistral (slides left)';
-              } else if (slipType === 'Dextral-Normal') {
-                slipDescription = 'Dextral-Normal (slides right + pulls apart)';
-              }
-              
-              const popupContent = `
-                <div>
-                  <strong>${feature.properties.name || 'Unknown Fault'}</strong><br/>
-                  <strong>Fault Type:</strong> ${slipDescription}<br/>
-                  <strong>Net Slip Rate:</strong> ${feature.properties.net_slip_rate || 'Unknown'}<br/>
-                  <strong>Data Source:</strong> ${feature.properties.catalog_name || 'Unknown'}
-                </div>
-              `;
+              const slipRate = formatFaultSlipRate(feature.properties.net_slip_rate);
+              const popupContent = document.createElement('div');
+              const title = document.createElement('strong');
+              title.textContent = feature.properties.name || 'Unnamed mapped structure';
+              popupContent.append(title);
+              const addRow = (label, value) => {
+                const row = document.createElement('div');
+                const heading = document.createElement('strong');
+                heading.textContent = `${label}: `;
+                row.append(heading, document.createTextNode(value));
+                popupContent.append(row);
+              };
+              addRow('Mapped type', slipType?.replaceAll('_', ' ') || 'Unspecified');
+              addRow('Motion', describeFaultMotion(slipType));
+              if (slipRate) addRow('Long-term net slip rate', slipRate);
+              addRow('Source catalog', feature.properties.catalog_name || 'Unknown');
+              const note = document.createElement('p');
+              note.textContent = 'Regional geological context. Proximity does not establish which fault ruptured in a plotted earthquake.';
+              popupContent.append(note);
               layer.bindPopup(popupContent);
             }
           }}

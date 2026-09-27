@@ -6,13 +6,13 @@ import SimplifiedDepthProfile from './SimplifiedDepthProfile';
 import InfoSnippet                                          from "./InfoSnippet.jsx";
 import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap component
 import { calculateDistance } from '../../common/mathUtils.js'; // isValidNumber import removed, calculateDistance moved
-// getBeachballPathsAndType is imported by EarthquakeBeachballPanel directly
+import { finiteNumber, isCompleteNodalPlane, readAxis, readNodalPlane, selectFocalMechanism } from '../utils/focalMechanismUtils.js';
+import { estimateRadiatedEnergyJoules } from '../utils/earthquakeEnergy.js';
 
 // Define REGIONAL_RADIUS_KM
 const REGIONAL_RADIUS_KM = 804.672; // 500 miles
 
 // Helper Functions
-// MOVED to src/utils/detailViewUtils.js
 import SkeletonText from './skeletons/SkeletonText.jsx';
 import SkeletonBlock from './skeletons/SkeletonBlock.jsx';
 
@@ -76,7 +76,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, onDetail
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(!!detailUrl);
     const [error, setError] = useState(null);
-    const [selectedFaultPlaneKey, setSelectedFaultPlaneKey] = useState('np1');
+    const [faultPlaneSelection, setFaultPlaneSelection] = useState({ detailUrl: null, key: 'np1' });
     const modalContentRef = React.useRef(null); // Ref for the modal content div
     const closeButtonRef = React.useRef(null); // Ref for the close button
 
@@ -232,48 +232,29 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, onDetail
         });
     }, [broaderEarthquakeData, mainQuakeLat, mainQuakeLon, mainQuakeId]);
 
-    // These values can be NaN if source data is missing/invalid. This is expected.
-    // Conditional rendering will handle whether to display them or not.
-    const np1Data = useMemo(() => ({
-        strike: parseFloat(momentTensorProductProps?.['nodal-plane-1-strike']),
-        dip: parseFloat(momentTensorProductProps?.['nodal-plane-1-dip']),
-        rake: parseFloat(momentTensorProductProps?.['nodal-plane-1-rake']),
-        description: momentTensorProductProps?.['nodal-plane-1-description'] || `Nodal Plane 1 (NP1) suggests a fault orientation and slip.` // Assuming description can be a string
-    }), [momentTensorProductProps]);
-
-    const np2Data = useMemo(() => ({
-        strike: parseFloat(momentTensorProductProps?.['nodal-plane-2-strike']),
-        dip: parseFloat(momentTensorProductProps?.['nodal-plane-2-dip']),
-        rake: parseFloat(momentTensorProductProps?.['nodal-plane-2-rake']),
-        description: momentTensorProductProps?.['nodal-plane-2-description'] || `Nodal Plane 2 (NP2) is the alternative fault orientation and slip.`
-    }), [momentTensorProductProps]);
-
-    const selectedFaultPlane = useMemo(() => {
-        const data = selectedFaultPlaneKey === 'np1' ? np1Data : np2Data;
-        // Ensure selectedFaultPlane has valid numbers or they remain NaN for checks later
-        return {
-            strike: data.strike,
-            dip: data.dip,
-            rake: data.rake,
-            description: data.description
-        };
-    }, [selectedFaultPlaneKey, np1Data, np2Data]);
-
-
-    const pAxis = useMemo(() => ({
-        azimuth: parseFloat(momentTensorProductProps?.['p-axis-azimuth']),
-        plunge: parseFloat(momentTensorProductProps?.['p-axis-plunge'])
-    }), [momentTensorProductProps]);
-    const tAxis = useMemo(() => ({
-        azimuth: parseFloat(momentTensorProductProps?.['t-axis-azimuth']),
-        plunge: parseFloat(momentTensorProductProps?.['t-axis-plunge'])
-    }), [momentTensorProductProps]);
+    const mechanismProduct = useMemo(() => selectFocalMechanism(products), [products]);
+    const mechanismProperties = mechanismProduct?.properties;
+    const mechanismSourceLabel = mechanismProduct
+        ? `${mechanismProduct.type === 'moment-tensor' ? 'moment tensor' : 'focal mechanism'}${mechanismProduct.source ? `, ${mechanismProduct.source.toUpperCase()}` : ''}`
+        : undefined;
+    const np1Data = useMemo(() => readNodalPlane(mechanismProperties, 1), [mechanismProperties]);
+    const np2Data = useMemo(() => readNodalPlane(mechanismProperties, 2), [mechanismProperties]);
+    const hasExplicitPlaneSelection = faultPlaneSelection.detailUrl === detailUrl;
+    const requestedPlaneKey = hasExplicitPlaneSelection ? faultPlaneSelection.key : 'np1';
+    const requestedPlane = requestedPlaneKey === 'np1' ? np1Data : np2Data;
+    const alternatePlane = requestedPlaneKey === 'np1' ? np2Data : np1Data;
+    const useAlternate = !hasExplicitPlaneSelection && !isCompleteNodalPlane(requestedPlane) &&
+        (isCompleteNodalPlane(alternatePlane) || (!Number.isFinite(requestedPlane.strike) && Number.isFinite(alternatePlane.strike)));
+    const selectedFaultPlaneKey = useAlternate ? (requestedPlaneKey === 'np1' ? 'np2' : 'np1') : requestedPlaneKey;
+    const selectedFaultPlane = selectedFaultPlaneKey === 'np1' ? np1Data : np2Data;
+    const setSelectedFaultPlaneKey = key => setFaultPlaneSelection({ detailUrl, key });
+    const pAxis = useMemo(() => readAxis(mechanismProperties, 'p'), [mechanismProperties]);
+    const tAxis = useMemo(() => readAxis(mechanismProperties, 't'), [mechanismProperties]);
 
     const shakemapIntensityImageUrl = useMemo(() => shakemapProduct?.contents?.['download/intensity.jpg']?.url, [shakemapProduct]);
 
-    const scalarMomentValue = useMemo(() => parseFloat(momentTensorProductProps?.['scalar-moment']), [momentTensorProductProps]);
-    // energyJoules will be NaN if scalarMomentValue is NaN.
-    const energyJoules = scalarMomentValue;
+    const scalarMomentValue = useMemo(() => finiteNumber(momentTensorProductProps?.['scalar-moment']), [momentTensorProductProps]);
+    const energyJoules = useMemo(() => estimateRadiatedEnergyJoules(properties?.mag), [properties?.mag]);
 
     // MOVED: InteractiveFaultDiagram component definition was here
 
@@ -478,13 +459,12 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, onDetail
                     />
 
                     <EarthquakeBeachballPanel
-                        momentTensorProductProps={momentTensorProductProps}
+                        mechanismSourceLabel={mechanismSourceLabel}
                         np1Data={np1Data}
                         np2Data={np2Data}
                         selectedFaultPlaneKey={selectedFaultPlaneKey}
                         pAxis={pAxis}
                         tAxis={tAxis}
-                        // isValidNumber, getBeachballPathsAndType are now imported by child
                         exhibitPanelClass={exhibitPanelClass}
                         exhibitTitleClass={exhibitTitleClass}
                         diagramContainerClass={diagramContainerClass}

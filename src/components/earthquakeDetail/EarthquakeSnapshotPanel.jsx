@@ -14,7 +14,7 @@ function EarthquakeSnapshotPanel({
     geometry,
     originProductProps,
     momentTensorProductProps, // For 'percent-double-couple'
-    energyJoules,             // Derived in parent: scalarMomentValue from momentTensorProductProps
+    energyJoules,             // Approximate radiated energy derived from reported magnitude
     mmiValue,                 // Derived in parent: from shakemapProductProps or properties.mmi
     pagerAlertValue,          // Derived in parent: from losspagerProductProps or properties.alert
     // Helper functions below are now imported
@@ -60,7 +60,7 @@ function EarthquakeSnapshotPanel({
                 <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600 w-2/5 md:w-1/3">Event Name</td><td className="py-1.5">{properties.title}</td></tr>
             )}
             {isValuePresent(properties.time) && (
-                <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Date & Time (UTC)</td><td className="py-1.5">{formatDate(properties.time)}</td></tr>
+                <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Date &amp; Time</td><td className="py-1.5">{formatDate(properties.time)}</td></tr>
             )}
             {geometry?.coordinates && isValidNumber(geometry.coordinates[1]) && isValidNumber(geometry.coordinates[0]) && (
                 <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Location</td><td className="py-1.5">{formatNumber(geometry.coordinates[1], 3)}°, {formatNumber(geometry.coordinates[0], 3)}°</td></tr>
@@ -71,8 +71,8 @@ function EarthquakeSnapshotPanel({
             {geometry?.coordinates && isValidNumber(geometry.coordinates[2]) && ( // Depth can be 0
                 <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Depth</td><td className="py-1.5">{formatNumber(geometry.coordinates[2], 1)} km</td></tr>
             )}
-            {isValidNumber(energyJoules) && ( // energyJoules (scalarMoment) can be 0
-                <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Energy (Seismic Moment)</td><td className="py-1.5">{formatLargeNumber(energyJoules)} N-m</td></tr>
+            {isValidNumber(energyJoules) && (
+                <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Estimated Radiated Energy</td><td className="py-1.5">~{formatLargeNumber(energyJoules)} J <span className="text-slate-500">(from magnitude)</span></td></tr>
             )}
             {momentTensorProductProps && isValidNumber(momentTensorProductProps['percent-double-couple']) && (
                 <tr className="border-b border-gray-200"><td className="py-1.5 pr-2 font-semibold text-slate-600">Percent Double Couple</td><td className="py-1.5">{formatNumber(parseFloat(momentTensorProductProps['percent-double-couple']) * 100, 0)}%</td></tr>

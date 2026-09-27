@@ -1,94 +1,102 @@
-import React from 'react';
-import { isValidNumber } from '../../utils/utils.js';
+import React, { useId } from 'react';
+import { getFaultDiagramGeometry } from './faultDiagramGeometry.js';
 
-// Temporarily defined here. Will be moved to a utils file later.
-// const isValidNumber = (num) => { // Now imported
-//     const parsedNum = parseFloat(num);
-//     return typeof parsedNum === 'number' && !isNaN(parsedNum);
-// };
+const SLIP_COLOR = '#0369a1';
+const SIDE_A_COLOR = '#ffedd5';
+const SIDE_B_COLOR = '#e2e8f0';
+
+function SlipArrow({ center, vector, markerId, testId }) {
+    const magnitude = Math.hypot(vector.x, vector.y);
+    if (magnitude < 1e-10) return null;
+    return <line
+        data-testid={testId}
+        x1={center.x - 30 * vector.x} y1={center.y - 30 * vector.y}
+        x2={center.x + 30 * vector.x} y2={center.y + 30 * vector.y}
+        stroke={SLIP_COLOR} strokeWidth={3 * magnitude} markerEnd={`url(#${markerId})`}
+    />;
+}
 
 function InteractiveFaultDiagram({ planeData, planeKey }) {
-    // Guard against rendering if essential data is NaN (strike is key for rotation)
-    if (!planeData || !isValidNumber(planeData.strike)) { // isValidNumber is now imported
-        return null;
+    const uniqueId = useId().replace(/:/g, '');
+    const geometry = getFaultDiagramGeometry(planeData);
+    if (!geometry) {
+        return <p className="p-3 text-sm text-slate-600">Slip diagram unavailable: valid strike, dip (0–90°), and rake are required.</p>;
     }
-    const faultStrikeRotation = planeData.strike;
-    const blockFill = planeKey === 'np1' ? "#ffe0b2" : "#ede7f6";
-    const blockStroke = planeKey === 'np1' ? "#5d4037" : "#4527a0";
 
-    // Define arrow paths based on rake
-    let arrowPath1 = ""; // Arrow on the left block (conceptually)
-    let arrowPath2 = ""; // Arrow on the right block (conceptually)
-    const rake = parseFloat(planeData.rake);
-
-    // Define simplified arrow representations for diagram clarity
-    // Coordinates are relative to the blocks' positions in the unrotated diagram
-    // Left block roughly centered at x=95, right block at x=255, fault between 165-185
-    const L_strike_right = "M 140 140 L 160 140"; // Left block, conceptual "rightward" slip component
-    const L_strike_left  = "M 160 140 L 140 140"; // Left block, conceptual "leftward" slip component
-    const R_strike_left  = "M 210 140 L 190 140"; // Right block, conceptual "leftward" slip component
-    const R_strike_right = "M 190 140 L 210 140"; // Right block, conceptual "rightward" slip component
-
-    const L_dip_up   = "M 95 155 L 95 125";   // Left block, conceptual "upward" on diagram
-    const L_dip_down = "M 95 125 L 95 155";   // Left block, conceptual "downward" on diagram
-    const R_dip_down = "M 255 125 L 255 155"; // Right block, conceptual "downward" on diagram
-    const R_dip_up   = "M 255 155 L 255 125";   // Right block, conceptual "upward" on diagram
-
-    const L_oblique_up_right = "M 140 150 L 160 130"; 
-    const L_oblique_up_left = "M 160 150 L 140 130";  
-    const L_oblique_down_right = "M 140 130 L 160 150"; 
-    const L_oblique_down_left = "M 160 130 L 140 150";  
-    
-    const R_oblique_down_left = "M 210 130 L 190 150"; 
-    const R_oblique_down_right = "M 190 130 L 210 150"; 
-    const R_oblique_up_left = "M 210 150 L 190 130";   
-    const R_oblique_up_right = "M 190 150 L 210 130";  
-
-    if (isValidNumber(rake)) {
-        if (rake >= -22.5 && rake <= 22.5) { // Pure Left-Lateral Strike-Slip
-            arrowPath1 = L_strike_right; arrowPath2 = R_strike_left;
-        } else if (rake >= 157.5 || rake <= -157.5) { // Pure Right-Lateral Strike-Slip
-            arrowPath1 = L_strike_left; arrowPath2 = R_strike_right;
-        } else if (rake >= 67.5 && rake <= 112.5) { // Pure Reverse/Thrust
-            arrowPath1 = L_dip_up; arrowPath2 = R_dip_down;
-        } else if (rake <= -67.5 && rake >= -112.5) { // Pure Normal
-            arrowPath1 = L_dip_down; arrowPath2 = R_dip_up;
-        } else if (rake > 22.5 && rake < 67.5) { // Oblique: Left-Lateral component + Reverse component
-            arrowPath1 = L_oblique_up_right; arrowPath2 = R_oblique_down_left;
-        } else if (rake > 112.5 && rake < 157.5) { // Oblique: Right-Lateral component + Reverse component
-            arrowPath1 = L_oblique_up_left; arrowPath2 = R_oblique_down_right;
-        } else if (rake < -22.5 && rake > -67.5) { // Oblique: Left-Lateral component + Normal component
-            arrowPath1 = L_oblique_down_right; arrowPath2 = R_oblique_up_left;
-        } else if (rake < -112.5 && rake > -157.5) { // Oblique: Right-Lateral component + Normal component
-            arrowPath1 = L_oblique_down_left; arrowPath2 = R_oblique_up_right;
-        } else { 
-            arrowPath1 = L_strike_right; arrowPath2 = R_strike_left; // Fallback
-        }
-    } else {
-        arrowPath1 = L_strike_right; // Default if rake is not valid
-        arrowPath2 = R_strike_left;
-    }
+    const { strike, dip, dipDirection, mapSlip, sectionSlip, mapDownDip, sectionDownDip } = geometry;
+    const markerId = `fault-slip-arrow-${uniqueId}`;
+    const mapClipId = `fault-map-clip-${uniqueId}`;
+    const sectionClipId = `fault-section-clip-${uniqueId}`;
+    const mapCenter = { x: 150, y: 135 };
+    const mapArrow = { x: 150 + 44 * mapDownDip.x, y: 135 + 44 * mapDownDip.y };
+    const sectionCenter = { x: 150, y: 137 };
+    const sectionNormal = { x: sectionDownDip.y, y: -sectionDownDip.x };
+    const sectionArrow = { x: 150 + 42 * sectionNormal.x, y: 137 + 42 * sectionNormal.y };
+    const hasMapSlip = Math.hypot(mapSlip.x, mapSlip.y) > 1e-10;
+    const hasSectionSlip = Math.hypot(sectionSlip.x, sectionSlip.y) > 1e-10;
+    const planeLabel = planeKey === 'np2' ? 'Nodal plane 2' : 'Nodal plane 1';
 
     return (
-        <svg className="w-full max-w-xs md:max-w-sm mx-auto" height="250" viewBox="0 0 350 280" xmlns="http://www.w3.org/2000/svg">
-            <rect x="10" y="50" width="330" height="180" fill="#e0e7ff" stroke="#adb5bd" strokeWidth="1"/>
-            {isValidNumber(faultStrikeRotation) &&
-                <line x1="175" y1="50" x2="175" y2="230" stroke={blockStroke} strokeWidth="3" strokeDasharray="6,3" transform={`rotate(${faultStrikeRotation} 175 140)`}/>
-            }
-            <g transform={`rotate(${isValidNumber(faultStrikeRotation) ? faultStrikeRotation : 0} 175 140)`}>
-                <rect x="25" y="70" width="140" height="140" fill={blockFill} stroke={blockStroke} strokeWidth="1.5" />
-                {arrowPath1 && <path d={arrowPath1} stroke="black" strokeWidth="2.5" markerEnd="url(#arrowhead-detail-fault)" />}
-                <rect x="185" y="70" width="140" height="140" fill={blockFill} stroke={blockStroke} strokeWidth="1.5" />
-                {arrowPath2 && <path d={arrowPath2} stroke="black" strokeWidth="2.5" markerEnd="url(#arrowhead-detail-fault)" />}
-            </g>
-            <defs>
-                <marker id="arrowhead-detail-fault" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
-                    <polygon points="0 0, 8 3, 0 6" fill="black"/>
-                </marker>
-            </defs>
-            <text x="175" y="30" textAnchor="middle" className="text-sm font-semibold text-indigo-700">Fault View ({planeKey.toUpperCase()})</text>
-            <text x="175" y="265" textAnchor="middle" className="text-xs text-slate-600">Illustrative Diagram (Top View)</text>
-        </svg>
+        <figure className="w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <svg className="w-full max-w-xs mx-auto" viewBox="0 0 300 270" role="img" aria-labelledby={`fault-map-title-${uniqueId} fault-map-desc-${uniqueId}`}>
+                    <title id={`fault-map-title-${uniqueId}`}>{planeLabel}: horizontal slip, north-up map view</title>
+                    <desc id={`fault-map-desc-${uniqueId}`}>Strike {strike} degrees. Blue arrow is the horizontal component of side A relative to side B. Up and down motion appears in the cross-section.</desc>
+                    <defs>
+                        <marker id={markerId} markerWidth="7" markerHeight="6" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+                            <path d="M0 0 L7 3 L0 6 Z" fill={SLIP_COLOR}/>
+                        </marker>
+                        <clipPath id={mapClipId}><circle cx="150" cy="135" r="89"/></clipPath>
+                    </defs>
+                    <text x="150" y="18" textAnchor="middle" fontSize="14" fontWeight="600" fill="#334155">Map view · horizontal motion</text>
+                    <text x="150" y="38" textAnchor="middle" fontSize="12" fill="#475569">N</text>
+                    <text x="252" y="140" fontSize="12" fill="#475569">E</text>
+                    <g clipPath={`url(#${mapClipId})`}>
+                        <circle cx="150" cy="135" r="89" fill={SIDE_A_COLOR}/>
+                        {dip > 0 && <g transform={`rotate(${strike} 150 135)`}>
+                            <rect x="61" y="46" width="89" height="178" fill={SIDE_B_COLOR}/>
+                            <line data-testid="fault-map-trace" x1="150" y1="46" x2="150" y2="224" stroke="#475569" strokeWidth="2" strokeDasharray="6 4"/>
+                        </g>}
+                    </g>
+                    <circle cx="150" cy="135" r="89" fill="none" stroke="#94a3b8"/>
+                    <text x={mapArrow.x} y={mapArrow.y - 36} textAnchor="middle" fontSize="12" fontWeight="600" fill="#7c2d12">A</text>
+                    {dip > 0 && <text x={mapCenter.x - 48 * mapDownDip.x} y={mapCenter.y - 48 * mapDownDip.y + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#475569">B</text>}
+                    <SlipArrow center={mapArrow} vector={mapSlip} markerId={markerId} testId="fault-map-slip"/>
+                    <text x="150" y="244" textAnchor="middle" fontSize="11" fill="#475569">
+                        {dip === 0 ? 'Horizontal plane: no unique map trace' : 'Dashed line: plane orientation'}
+                    </text>
+                    {!hasMapSlip && <text x="150" y="262" textAnchor="middle" fontSize="11" fill={SLIP_COLOR}>No horizontal slip component</text>}
+                </svg>
+
+                <svg className="w-full max-w-xs mx-auto" viewBox="0 0 300 270" role="img" aria-labelledby={`fault-section-title-${uniqueId} fault-section-desc-${uniqueId}`}>
+                    <title id={`fault-section-title-${uniqueId}`}>{planeLabel}: dip and slip in vertical cross-section</title>
+                    <desc id={`fault-section-desc-${uniqueId}`}>Dip {dip} degrees. Depth increases downward; right points toward azimuth {dipDirection} degrees. Blue arrow shows the dip-slip component of A relative to B.</desc>
+                    <defs><clipPath id={sectionClipId}><rect x="35" y="48" width="230" height="178" rx="4"/></clipPath></defs>
+                    <text x="150" y="18" textAnchor="middle" fontSize="14" fontWeight="600" fill="#334155">Cross-section · dip motion</text>
+                    <text x="150" y="37" textAnchor="middle" fontSize="11" fill="#475569">Right = dip direction ({Math.round(dipDirection)}°)</text>
+                    <g clipPath={`url(#${sectionClipId})`}>
+                        <g transform={`rotate(${dip} ${sectionCenter.x} ${sectionCenter.y})`}>
+                            <rect x="-150" y="-163" width="600" height="300" fill={SIDE_A_COLOR}/>
+                            <rect x="-150" y="137" width="600" height="300" fill={SIDE_B_COLOR}/>
+                            <line data-testid="fault-section-plane" x1="-150" y1="137" x2="450" y2="137" stroke="#475569" strokeWidth="2" strokeDasharray="6 4"/>
+                        </g>
+                        <line x1="150" y1="137" x2="205" y2="137" stroke="#94a3b8" strokeDasharray="3 3"/>
+                        {dip > 0 && <path d={`M190 137 A40 40 0 0 1 ${150 + 40 * sectionDownDip.x} ${137 + 40 * sectionDownDip.y}`} fill="none" stroke="#64748b"/>}
+                    </g>
+                    <rect x="35" y="48" width="230" height="178" rx="4" fill="none" stroke="#94a3b8"/>
+                    <text x={150 + 72 * sectionNormal.x} y={137 + 72 * sectionNormal.y + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#7c2d12">A</text>
+                    <text x={150 - 52 * sectionNormal.x} y={137 - 52 * sectionNormal.y + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#475569">B</text>
+                    <SlipArrow center={sectionArrow} vector={sectionSlip} markerId={markerId} testId="fault-section-slip"/>
+                    <text x="150" y="244" textAnchor="middle" fontSize="11" fill="#475569">Dip {Math.round(dip)}° · depth increases downward</text>
+                    {!hasSectionSlip && <text x="150" y="262" textAnchor="middle" fontSize="11" fill={SLIP_COLOR}>Slip is along strike, out of this section</text>}
+                </svg>
+            </div>
+            <figcaption className="mt-2 text-xs leading-relaxed text-slate-600">
+                Blue arrows show A’s slip relative to B; each view shows one projection of that motion.
+                {' '}{dip === 90 ? 'A is the side to the right when facing along strike.' : 'A is the hanging wall (above the plane); B is the footwall (below).'}
+                {' '}Orientation and direction only: this is not a mapped surface rupture, displacement estimate, or wave direction.
+            </figcaption>
+        </figure>
     );
 }
 

@@ -1,5 +1,6 @@
 import React from 'react';
-import InteractiveFaultDiagram from './InteractiveFaultDiagram'; // Import the previously moved component
+import InteractiveFaultDiagram from './InteractiveFaultDiagram';
+import FaultBlock3D from './FaultBlock3D.jsx';
 import { isValidNumber, formatNumber, isValidString } from '../../utils/utils.js';
 
 function EarthquakeFaultDiagramPanel({
@@ -8,35 +9,33 @@ function EarthquakeFaultDiagramPanel({
     np1Data,
     np2Data,
     selectedFaultPlane,
-    // isValidNumber, // Passed from parent - Now imported
-    // formatNumber,  // Passed from parent - Now imported
-    // isValidString, // Passed from parent - Now imported
     exhibitPanelClass,
     exhibitTitleClass,
     diagramContainerClass,
     highlightClass
 }) {
-    // Conditional rendering for the entire panel based on selectedFaultPlane.strike
-    if (!selectedFaultPlane || !isValidNumber(selectedFaultPlane.strike)) { // isValidNumber is now imported
+    if (!selectedFaultPlane || !isValidNumber(selectedFaultPlane.strike)) {
         return null;
     }
 
     return (
         <div className={`${exhibitPanelClass} border-purple-500`}>
-            <h2 className={`${exhibitTitleClass} text-purple-800 border-purple-200`}>How Did the Ground Break?</h2>
+            <h2 className={`${exhibitTitleClass} text-purple-800 border-purple-200`}>Possible Fault Orientation &amp; Slip</h2>
+            <p className="mb-3 text-xs md:text-sm text-slate-600">
+                A focal mechanism has two possible nodal planes. These are alternative fault orientations,
+                not two confirmed faults. Additional evidence is needed to identify which plane slipped.
+            </p>
             <div className="text-center mb-3 space-x-2">
-                {/* Conditional rendering for NP1 button */}
                 {np1Data && isValidNumber(np1Data.strike) && (
-                    <button 
+                    <button type="button" aria-pressed={selectedFaultPlaneKey === 'np1'}
                         onClick={() => setSelectedFaultPlaneKey('np1')} 
                         className={`px-3 py-1.5 rounded text-xs sm:text-sm font-medium transition-colors ${selectedFaultPlaneKey === 'np1' ? 'bg-purple-600 text-white shadow-md' : 'bg-purple-100 text-purple-800 hover:bg-purple-200'}`}
                     >
                         Nodal Plane 1
                     </button>
                 )}
-                {/* Conditional rendering for NP2 button */}
                 {np2Data && isValidNumber(np2Data.strike) && (
-                    <button 
+                    <button type="button" aria-pressed={selectedFaultPlaneKey === 'np2'}
                         onClick={() => setSelectedFaultPlaneKey('np2')} 
                         className={`px-3 py-1.5 rounded text-xs sm:text-sm font-medium transition-colors ${selectedFaultPlaneKey === 'np2' ? 'bg-purple-600 text-white shadow-md' : 'bg-purple-100 text-purple-800 hover:bg-purple-200'}`}
                     >
@@ -45,12 +44,12 @@ function EarthquakeFaultDiagramPanel({
                 )}
             </div>
             <div className={`${diagramContainerClass} bg-indigo-50`} style={{minHeight: '280px'}}>
-                <InteractiveFaultDiagram 
-                    planeData={selectedFaultPlane} 
-                    planeKey={selectedFaultPlaneKey} 
-                    // isValidNumber is defined within InteractiveFaultDiagram itself for now
-                />
+                <FaultBlock3D key={selectedFaultPlaneKey} planeData={selectedFaultPlane} planeKey={selectedFaultPlaneKey}/>
             </div>
+            <details className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                <summary className="cursor-pointer text-sm font-medium text-slate-700">Compare horizontal and vertical slip components</summary>
+                <div className="mt-3"><InteractiveFaultDiagram planeData={selectedFaultPlane} planeKey={selectedFaultPlaneKey}/></div>
+            </details>
             {/* Display Strike, Dip, Rake only if they are valid numbers */}
             {(isValidNumber(selectedFaultPlane.strike) || isValidNumber(selectedFaultPlane.dip) || isValidNumber(selectedFaultPlane.rake)) && (
                 <div className="mt-3 text-xs md:text-sm text-slate-700 bg-purple-50 p-3 rounded-md">

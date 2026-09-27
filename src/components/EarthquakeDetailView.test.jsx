@@ -284,7 +284,7 @@ describe('EarthquakeDetailView - Data Fetching, Loading, and Error States', () =
 
     render(<EarthquakeDetailView {...mockDefaultPropsGlobal} detailUrl={mockDetailUrlNullTime} />);
     await screen.findAllByText(currentMockData.properties.title);
-    expect(screen.queryByText("Date & Time (UTC)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Date & Time")).not.toBeInTheDocument();
   });
 });
 
