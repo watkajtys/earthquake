@@ -221,7 +221,10 @@ describe('ClusterDetailModal bounded event list', () => {
     await user.click(screen.getByRole('button', { name: 'Select map overlap' }));
     expect(screen.getByText(/1217 plotted earthquakes selected/)).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Cluster earthquake pages' }).querySelector('[role="status"]')).toHaveTextContent('1–50 of 1217');
-    for (let page = 1; page < 25; page++) await user.click(screen.getByRole('button', { name: 'Next page' }));
+    // These controls stay mounted while the event rows change.
+    const nextPage = within(screen.getByRole('navigation', { name: 'Cluster earthquake pages' }))
+      .getByRole('button', { name: 'Next page' });
+    for (let page = 1; page < 25; page++) await user.click(nextPage);
     expect(container.querySelectorAll('button[title^="Click to view details"]')).toHaveLength(17);
     expect(screen.getByTitle('Click to view details for M 2.5 - Place 1216')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Clear selection' }));
