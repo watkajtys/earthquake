@@ -1,6 +1,6 @@
 # Deployment runbook
 
-This runbook describes the reconciled repository as of September 21, 2026. It is a procedure, not a record that a release or its checks have completed.
+This runbook describes the reconciled repository as of October 9, 2026. It is a procedure, not a record that a release or its checks have completed.
 
 ## Runtime and resources
 
@@ -15,20 +15,21 @@ Use Node.js **22.13.0 or later**, install with `npm ci`, and use the project's p
 | `USGS_LAST_RESPONSE_KV` namespace | `earthquake-reconcile-preview-usgs` | Existing production namespace |
 | R2 | `earthquake-reconcile-preview` | `geojson-bucket` |
 | Queue | `earthquake-reconcile-preview` | `geojson-queue` |
-| Cron triggers | None | Every 5, 10, and 30 minutes; daily at 00:00 UTC |
+| Cron triggers | None | Every 5, 10, and 30 minutes; month coverage at minutes 2–59/5; daily at 00:00 UTC |
 
 Exact resource IDs are in `wrangler.toml`. Production retains the original `STATIC_KV` binding and old asset contents for already-open clients and rollback. `src/legacyStaticAssets.js` serves only the known August hashed JS/CSS URLs from that namespace; new HTML and new assets use `ASSETS`. Do not delete the legacy namespace or its contents during this transition.
 
 This release uses the existing production data schema and does not apply production migrations. Preview seeding applies repository migrations only to the dedicated preview database, or its local simulation. The seed script refuses production targets and checks remote resource names before writing.
 
-The durable-ingestion integration is staged with `LIST_PUBLICATION_PAUSED=true`
-and no `DURABLE_INGESTION_ENABLED` binding. The production release wrapper
-checks both conditions in the reviewed config and uploaded version. During the
-paused stage, the five-minute cron continues hourly D1 ingestion and complete
-period-feed publication; the three legacy list arrays retain their last
-published values. The pause is intentional while old unconditional list
-invocations drain. Missing or malformed activation bindings stop production
-list writes.
+The reviewed production configuration enables durable ingestion with
+`DURABLE_INGESTION_ENABLED=true` and permits list publication with
+`LIST_PUBLICATION_PAUSED=false`. The release wrapper checks these activation
+bindings in the reviewed config and uploaded version. Monthly D1 coverage runs
+on `2-59/5 * * * *` when `MONTH_COVERAGE_ENABLED=true`, independently of the
+five-minute ingestion and complete period-feed publication. Missing or malformed
+activation bindings stop production list writes. The paused writer-transition
+procedure below describes the historical activation gate, not the current
+runtime state.
 
 The frontend accepts R2 summaries only when every record includes complete alert, tsunami, felt-report, and significance metadata refreshed within ten minutes. Sparse or older caches retain the existing USGS fallback. The hourly ingestion scope is unchanged; retaining richer new records does not guarantee a complete fresh snapshot for every period. This prevents cached summaries from silently removing alert information.
 
@@ -52,7 +53,13 @@ npm run smoke -- http://localhost:8787 --preview
 
 The smoke script uses GET requests to check HTML routes, built and lazy-loaded assets, R2 feeds, cluster APIs, sitemaps, and JSON errors for unknown APIs. `--preview` also requires synthetic fixture data and exercises quake/cluster detail routes. It does not render WebGL or prove browser interaction: check globe rendering, earthquake and cluster clicks, period changes, direct-link reloads, and mobile layout in a browser.
 
+`npm test` requires Node 22.13.0 or later, lints tracked and non-ignored new test files, then runs the full suite once with `CI=true` and shuffling. It prints the seed (default `20261011`). Set `TEST_SHUFFLE_SEED=<uint32>` to reproduce or vary ordering; a successful seed is evidence for that run, not a guarantee against every order-dependent failure. GitHub CI uses the latest available Node 22 security patch and the same command.
+
 `npm run check:deploy` builds and performs a production packaging dry run without uploading. `npm run dev:ui` starts Vite alone and has no API proxy. Record actual test failures or exclusions in the release report; these commands do not imply the complete historical suite is passing.
+
+`npm run rehearse:preview` invokes actual feed publishers and handlers backed by a unique temporary local workerd R2 bucket, then disposes it. It performs 25 bounded handler calls: a concurrency-four burst, transient internal storage failure, slow storage, a 10-second stalled read and recovery, and overlapping publishers. Assertions require honest unchanged source timestamps on recovery and the winning publication to remain visible. Sources are small synthetic complete feeds; this does not measure HTTP transport, remote storage latency, production capacity, or browser behavior. It never uses the existing local state or remote bindings. Its JSON summary records local latency and freshness outcomes.
+
+`npm run check:usgs:live` is an optional read-only contract check against official USGS, outside CI. It calls the existing transport for known redirect event `us6000sfvh` and deleted event `us7000s9fi`, with a shared 10-second deadline and at most two live GETs per event. It prints capture time, observed statuses and sanitized transport outcome; exit 2 means drift or an unverified contract requiring review. Current results cannot prove historical cause. It makes no application requests or writes.
 
 ## Remote preview
 
@@ -78,18 +85,18 @@ The routine release command is:
 npm run release:production -- --revision <full-reviewed-commit-sha>
 ```
 
-`npm run deploy` also invokes this gate. In Workers Builds, set the production deploy command to `npm run release:production`; `WORKERS_CI_COMMIT_SHA` supplies the expected SHA. GitHub CI can supply `GITHUB_SHA`. Local releases must pass `--revision`. Conflicting CI SHAs, a dirty checkout (including untracked source), an unexpected account/Worker, or missing readback access fail before upload. The npm entrypoint selects `--env production`; the script rejects missing or other environments and arbitrary Worker-name overrides.
+`npm run deploy` and `npm run deploy:production` also invoke this gate. In Workers Builds, set the production deploy command to `npm run release:production`; `WORKERS_CI_COMMIT_SHA` supplies the expected SHA. GitHub CI can supply `GITHUB_SHA`. Local releases must pass `--revision`. Conflicting CI SHAs, a dirty checkout (including untracked source), an unexpected account/Worker, or missing readback access fail before upload. The npm entrypoint selects `--env production`; the script rejects missing or other environments and arbitrary Worker-name overrides.
 
 Authenticate through Wrangler OAuth or a scoped `CLOUDFLARE_API_TOKEN`. The same identity needs permission to deploy and to read Worker deployments, version/settings/bindings, schedules, subdomain, custom domains and Queue consumers. The wrapper uses the pinned Wrangler's official `auth token --json` command to refresh/retrieve credentials privately; token stdout is captured in memory and its debug log discarded. Missing permissions are a failed preflight, never a skipped successful check. Do not put tokens in shell arguments, source, evidence files or release reports.
 
 The wrapper performs these gates:
 
 1. Read the current single 100% deployment and compare existing production bindings, resource IDs, domain, crons and Queue consumer settings with Wrangler's schema-normalized config.
-2. Run `npm test`, explicitly build the frontend, and dry-run the production package. Wrangler's existing custom build hook also runs Vite during packaging and deployment. These repeated builds are intentional for this first release control; removing them requires proof the same tested asset manifest is published.
+2. Run `npm test` (test lint and one shuffled full-suite execution), explicitly build the frontend, and dry-run the production package. Wrangler's existing custom build hook also runs Vite during packaging and deployment. These repeated builds are intentional for this first release control; removing them requires proof the same tested asset manifest is published.
 3. Recheck the clean revision and unchanged current deployment, then run pinned local Wrangler with explicit production environment, full revision tag and release identity variable.
 4. Capture the new version from Wrangler's machine-readable output, read back its bindings/revision and live configuration, and check release identity plus the bounded GET smoke on **both public hosts**. Recheck identity and live version after each smoke so a concurrent replacement fails the release.
 
-For the paused durable-integration release, read back the version at 100% and
+Historical activation procedure: for the paused durable-integration release, read back the version at 100% and
 confirm a five-minute scheduled log milestone, "List publication paused during
 writer transition," with the same revision and version ID. Keep the exact
 time of that observation. Do not activate the revisioned writer until every
@@ -131,9 +138,11 @@ Smoke follows a real emitted cluster sitemap URL, checks browser/crawler canonic
 
 A redacted JSON result is written to `.reconciliation.local/releases/<revision>-<timestamp>.json` (override with `--report <path>`). It records UTC timestamps, revision, Worker/environment, previous/new version and each check, including identity attempt counts and allowlisted failure codes/HTTP status when available. It never records response bodies or arbitrary error messages. Save that report with actual preview/browser evidence and the automatic build run in `docs/remediation/RELEASE-LEDGER.md`; do not commit raw cloud API responses. A failed post-upload gate exits nonzero but **does not undo publication**. Upload failures can also occur after publication; read back the live state before deciding recovery.
 
-Before first publishing this wrapper, contain the existing automatic trigger or save/read back the temporary command `npm test && npm run deploy:production` with explicit frontend build. Once the wrapper is on the intended branch, switch the existing trigger to `npm run release:production`, read back the setting, and execute one controlled automatic build. Keep feature-branch production Builds disabled; use the dedicated preview Worker for isolated resources. An uploaded preview version attached to the production Worker is not a data sandbox. Dashboard state and a real automatic run are external validation gates, not established by this file.
+Before first publishing this wrapper, contain the existing automatic trigger or save/read back the temporary command `npm test && npm run deploy:production:emergency` with explicit frontend build. Once the wrapper is on the intended branch, switch the existing trigger to `npm run release:production`, read back the setting, and execute one controlled automatic build. Keep feature-branch production Builds disabled; use the dedicated preview Worker for isolated resources. An uploaded preview version attached to the production Worker is not a data sandbox. Dashboard state and a real automatic run are external validation gates, not established by this file.
 
-`npm run deploy:production` remains an explicit emergency primitive (`wrangler deploy --env production`) and bypasses the wrapper. Use it only after equivalent manual tests/build/packaging and a reviewed recovery decision; pass `--tag <sha> --var RELEASE_REVISION:<sha> --var DEPLOYMENT_ENVIRONMENT:production` so identity is meaningful. Manually verify configuration, both hosts and current version afterward. This escape hatch can repair configuration drift that the routine wrapper deliberately refuses to publish over.
+`npm run deploy:production:emergency` is the explicitly named emergency primitive (`wrangler deploy --env production`) and bypasses the wrapper. Use it only after equivalent manual tests/build/packaging and a reviewed recovery decision; pass `--tag <sha> --var RELEASE_REVISION:<sha> --var DEPLOYMENT_ENVIRONMENT:production` so identity is meaningful. Manually verify configuration, both hosts and current version afterward. This escape hatch can repair configuration drift that the routine wrapper deliberately refuses to publish over.
+
+The five-minute scheduled task emits one structured `feed-serving-metadata-freshness` log per day/week/month after both producers settle. In Workers Logs, filter that event and the deployed `revision`/`versionId`; inspect `state` (`fresh`, `stale`, `degraded`, `unavailable`), `sourceAgeMs`, and `observationAgeMs`. Each period observation is bounded to three seconds and uses only a small pointer GET plus immutable-object HEAD. `integrity=metadata-only` does not establish snapshot-body integrity or API fallback success; `degraded` means eligible retained metadata, not a verified served response. Producer failures remain failures even when monitoring completes. This monitor only writes logs and sends no email or chat notification. The daily `earthquake_stats` KV value is a D1 snapshot with `queryStartedAtMs`/`queryCompletedAtMs`; it is not an exact continuously updated counter, and overlapping daily writes may finish out of order.
 
 After release, observe actual scheduled executions at the next 5/10/30-minute intervals. Record the next daily job separately. An inferred health/log endpoint is not execution evidence. Local tests, a dry run or a manual deployment do not close OPS-1; the existing automatic trigger must deploy the reviewed SHA and pass these checks.
 

@@ -18,7 +18,6 @@ beforeEach(() => {
   kv = {
     get: vi.fn(async (key) => stored.get(key) ?? null),
     put: vi.fn(async (key, value) => { stored.set(key, value); }),
-    getWithMetadata: vi.fn().mockResolvedValue({ value: { total_earthquakes: 0 }, metadata: null }),
   };
   context = { env: { DB: db, USGS_LAST_RESPONSE_KV: kv }, executionContext: { waitUntil: vi.fn() } };
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json(usgsCollection())));
@@ -34,6 +33,7 @@ describe('trusted scheduled USGS ingestion', () => {
     expect(await response.json()).toMatchObject({ newOrUpdatedFeatures: usgsCollection().features, fullGeoJson: usgsCollection(), ingestion: { complete: true } });
     expect(db.batch).toHaveBeenCalledTimes(1);
     expect(JSON.parse(stored.get(checkpoint))).toEqual(usgsCollection().features);
+    expect(kv.put).toHaveBeenCalledExactlyOnceWith(checkpoint, JSON.stringify(usgsCollection().features));
     expect(caches.default.match).not.toHaveBeenCalled();
     expect(caches.default.put).not.toHaveBeenCalled();
   });
@@ -140,7 +140,7 @@ describe('trusted scheduled USGS ingestion', () => {
     expect(failed.status).toBe(503);
     expect((await failed.json()).ingestion).toMatchObject({ successCount: 1, errorCount: 90, complete: false });
     expect(stored.has(checkpoint)).toBe(false);
-    expect(kv.getWithMetadata).not.toHaveBeenCalled();
+    expect(kv.put.mock.calls.some(([key]) => key === 'earthquake_stats')).toBe(false);
     const retried = await handleTrustedUsgsIngestion(context);
     expect(retried.status).toBe(200);
     expect(db.batch).toHaveBeenCalledTimes(4);
@@ -152,7 +152,7 @@ describe('trusted scheduled USGS ingestion', () => {
     const response = await handleTrustedUsgsIngestion(context);
     expect(response.status).toBe(503);
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(kv.getWithMetadata).not.toHaveBeenCalled();
+    expect(kv.put.mock.calls.some(([key]) => key === 'earthquake_stats')).toBe(false);
   });
 
   it('rejects malformed upstream data before any persistent side effect', async () => {

@@ -139,6 +139,7 @@ describe('backfill and shared detail persistence against the migrated schema', (
 
   it('records a job before R2 and commits the pointer and flags only after the object exists', async () => {
     seed();
+    env.USGS_LAST_RESPONSE_KV = { put: vi.fn().mockRejectedValue(new Error('statistics storage unavailable')) };
     env.GEOJSON_BUCKET.hooks.beforePut = async () => {
       expect(row().detail_fetched).toBe(0);
       expect(row().detail_fetch_time).toBeNull();
@@ -156,6 +157,7 @@ describe('backfill and shared detail persistence against the migrated schema', (
     expect(env.GEOJSON_BUCKET.readJson(row().detail_archive_key)).toEqual(feature());
     expect(database.prepare('SELECT status FROM EarthquakeDetailJobs WHERE event_id = ?').get('quake1').status).toBe('completed');
     expect(env.GEOJSON_QUEUE.send).not.toHaveBeenCalled();
+    expect(env.USGS_LAST_RESPONSE_KV.put).not.toHaveBeenCalled();
   });
 
   it('keeps an archive failure pending even on the last upstream attempt and retries successfully', async () => {

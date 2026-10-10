@@ -1,5 +1,4 @@
 import { upsertEarthquakeFeaturesToD1 } from '../../src/utils/d1Utils.js';
-import { updateStatsInKV } from '../utils/kv-stats-updater.js';
 import { fetchUsgsSummary, USGS_SUMMARY_URLS, UsgsTransportError, usgsDetailUrl, validateUsgsSummary } from '../utils/usgs-transport.js';
 import { handleDurableUsgsIngestion } from './durable-usgs-ingestion.js';
 
@@ -18,7 +17,7 @@ function samePersistedSummary(left, right) {
 }
 
 // Only scheduled/administrative code imports this function. No request field can select this path.
-export async function handleTrustedUsgsIngestion({ env, executionContext, logger, feedKey = 'hour' }) {
+export async function handleTrustedUsgsIngestion({ env, logger, feedKey = 'hour' }) {
   if (!Object.hasOwn(USGS_SUMMARY_URLS, feedKey)) return jsonResponse({ message: 'Unsupported trusted feed' }, 400);
   if (!env.DB) return jsonResponse({ message: 'Earthquake database is unavailable' }, 503);
   // Release gate: the additive 0022 schema and R2 source prefix must exist
@@ -78,19 +77,6 @@ export async function handleTrustedUsgsIngestion({ env, executionContext, logger
       return feature;
     });
 
-    // Retain the existing approximate statistic, but never increment it for a failed write.
-    const existingIds = new Set();
-    let canUpdateStats = Boolean(kv);
-    if (canUpdateStats && candidates.length) {
-      try {
-        for (let offset = 0; offset < candidates.length; offset += 90) {
-          const ids = candidates.slice(offset, offset + 90).map((feature) => feature.id);
-          const result = await env.DB.prepare(`SELECT id FROM EarthquakeEvents WHERE id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all();
-          if (!Array.isArray(result.results)) throw new Error('Invalid existing-event query result');
-          for (const row of result.results) existingIds.add(row.id);
-        }
-      } catch { canUpdateStats = false; }
-    }
     const outcome = await upsertEarthquakeFeaturesToD1(env.DB, candidates);
     if (outcome.complete !== true) {
       logger?.logError?.('D1_INGESTION_INCOMPLETE', 'USGS persistence was incomplete', { successCount: outcome.successCount, errorCount: outcome.errorCount }, true);
@@ -98,15 +84,6 @@ export async function handleTrustedUsgsIngestion({ env, executionContext, logger
     }
     // Await the checkpoint write; rejection must remain visible to the scheduler.
     if (kv) await kv.put(checkpointKey, JSON.stringify(listFeatures));
-    if (canUpdateStats) {
-      const insertedCount = (outcome.persistedIds || []).filter((id) => !existingIds.has(id)).length;
-      if (insertedCount) {
-        const stats = updateStatsInKV({ env }, 'USGS_LAST_RESPONSE_KV', 'earthquake_stats', { total_earthquakes: insertedCount })
-          .catch(() => logger?.logError?.('STATS_UPDATE_FAILED', 'Derived earthquake statistics could not be updated', {}, false));
-        if (executionContext?.waitUntil) executionContext.waitUntil(stats);
-        else await stats;
-      }
-    }
     // Legacy lists consume every source feature, retaining a newer cached
     // revision where an overlapping source response is delayed.
     return jsonResponse({ newOrUpdatedFeatures: listFeatures, fullGeoJson, ingestion: outcome });

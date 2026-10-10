@@ -17,8 +17,10 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      - name: Test
+      - name: Lint tests and run the seeded shuffled suite
         run: npm test
+        env:
+          TEST_SHUFFLE_SEED: '20261011'
       - name: Build frontend and validate production Worker packaging
         run: npm run check:deploy
         env:

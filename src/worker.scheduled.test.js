@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './worker.js';
+import { monitorEarthquakeFeeds } from '../functions/background/monitor-earthquake-feeds.js';
 import { handleTrustedUsgsIngestion } from '../functions/background/ingest-usgs-feed.js';
 import { handleGenerateLists } from '../functions/background/generate-lists.js';
 import { publishEarthquakeFeeds } from '../functions/background/publish-earthquake-feeds.js';
@@ -10,6 +11,7 @@ import { clusterInput, clusterNow, createClusterSqliteFixture } from '../functio
 import { createMemorySummaryBucket } from '../functions/utils/clusterSummarySnapshot.test-support.js';
 import { SUMMARY_POINTER_KEY, generationObservationKey } from '../shared/clusterSummaryContract.js';
 
+vi.mock('../functions/background/monitor-earthquake-feeds.js', () => ({ monitorEarthquakeFeeds: vi.fn() }));
 vi.mock('../functions/background/ingest-usgs-feed.js', () => ({ handleTrustedUsgsIngestion: vi.fn() }));
 vi.mock('../functions/background/generate-lists.js', () => ({ handleGenerateLists: vi.fn() }));
 vi.mock('../functions/background/publish-earthquake-feeds.js', () => ({ publishEarthquakeFeeds: vi.fn() }));
@@ -36,6 +38,7 @@ beforeEach(() => {
   handleTrustedUsgsIngestion.mockResolvedValue(Response.json({ newOrUpdatedFeatures: features }));
   handleGenerateLists.mockResolvedValue(undefined);
   publishEarthquakeFeeds.mockResolvedValue([]);
+  monitorEarthquakeFeeds.mockResolvedValue([]);
   backfill.mockResolvedValue(Response.json({ success: true, processed: 1, errors: 0 }));
 });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -253,4 +256,16 @@ describe('exported Worker ten-minute cluster lifetime with migrated SQLite', () 
     expect(detail.quakes.map(quake => quake.properties.mag).sort((a, b) => a - b)).toEqual([-0.5, 0, 1.1, 5]);
     expect(detail.quakes).toHaveLength(4);
   });
+});
+
+it('runs advisory monitoring after producers settle and preserves original failure', async () => {
+  const failure = new Error('original publication failure');
+  publishEarthquakeFeeds.mockRejectedValue(failure);
+  monitorEarthquakeFeeds.mockImplementation(async () => {
+    expect(handleGenerateLists).toHaveBeenCalled();
+    throw new Error('monitor failure');
+  });
+  const { results } = await runScheduled('*/5 * * * *');
+  expect(results[0]).toEqual({ status: 'rejected', reason: failure });
+  expect(monitorEarthquakeFeeds).toHaveBeenCalledWith(env);
 });

@@ -1,3 +1,4 @@
+import { monitorEarthquakeFeeds } from '../functions/background/monitor-earthquake-feeds.js';
 import { failureDiagnostics, releaseDiagnostics } from '../functions/utils/failureDiagnostics.js';
 // Backend restored from the live deployed Worker bundle (2026-08).
 // Frontend assets are built and deployed with this Worker through the ASSETS binding.
@@ -846,7 +847,14 @@ var worker_default = {
             console.error('[period-feeds] Publication failed.', error.results ?? { status: 'failed' });
             throw error;
           }),
-          ]).then(results => {
+          ]).then(async results => {
+            // Observe metadata only after both producers settle. Monitoring is
+            // advisory and must never replace an original producer failure.
+            try { await monitorEarthquakeFeeds(env); }
+            catch (error) {
+              console.log(JSON.stringify({ event: 'feed-serving-monitor-failed',
+                ...failureDiagnostics(error, { code: 'FEED_MONITOR_FAILED', stage: 'monitor' }), ...releaseDiagnostics(env) }));
+            }
             // Both independent jobs finish before the platform sees failure.
             // A D1 failure cannot suppress complete USGS feed publication.
             const failure = results.find(result => result.status === 'rejected');

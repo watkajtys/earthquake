@@ -1,5 +1,4 @@
 import { failureDiagnostics, releaseDiagnostics } from '../utils/failureDiagnostics.js';
-import { updateStatsInKV } from '../utils/kv-stats-updater.js';
 import { fetchValidatedDetail } from '../utils/usgs-transport.js';
 import { persistEarthquakeDetail, recoverDueDetailJobs } from '../utils/earthquakeDetailPersistence.js';
 import { readBoundedJson, RequestPolicyError, policyError } from '../../src/utils/workerRequestPolicy.js';
@@ -80,15 +79,6 @@ async function onRequestGet(context) {
         const { flags, archiveDisposition } = await persistEarthquakeDetail({
           env, detailData, requestedId: earthquake.id, previousAttempts: earthquake.detail_fetch_attempts || 0,
         });
-        // These legacy counters remain approximate until the D1 statistics
-        // migration. Their failure must not undo a completed detail operation.
-        if (env.USGS_LAST_RESPONSE_KV) {
-          const update = updateStatsInKV(context, 'USGS_LAST_RESPONSE_KV', 'earthquake_stats', {
-            fetched: 1, with_shakemap: Number(flags.has_shakemap), with_moment_tensor: Number(flags.has_moment_tensor),
-          }).catch(error => console.error('[backfill] Approximate statistics update failed.', { ...failureDiagnostics(error, { stage: 'statistics-update', code: 'STATISTICS_FAILED' }), ...releaseDiagnostics(env) }));
-          if (context.ctx?.waitUntil) context.ctx.waitUntil(update);
-          else await update;
-        }
         processed.push({
           id: earthquake.id, magnitude: earthquake.magnitude, archive_disposition: archiveDisposition,
           products_found: {

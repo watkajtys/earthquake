@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import reconcileStats from './reconcile-stats.js';
+import worker from '../../src/worker.js';
 
 describe('reconcile-stats', () => {
   let mockEnv;
@@ -37,10 +38,11 @@ describe('reconcile-stats', () => {
 
       await reconcileStats.scheduled(null, mockEnv, null);
 
-      expect(mockEnv.USGS_LAST_RESPONSE_KV.put).toHaveBeenCalledExactlyOnceWith(
-        'earthquake_stats',
-        JSON.stringify({ total_earthquakes: 4, fetched: 2, with_shakemap: 1, with_moment_tensor: 3 }),
-      );
+      expect(mockEnv.USGS_LAST_RESPONSE_KV.put).toHaveBeenCalledOnce();
+      const [key, value] = mockEnv.USGS_LAST_RESPONSE_KV.put.mock.lastCall;
+      expect(key).toBe('earthquake_stats');
+      expect(JSON.parse(value)).toEqual({ total_earthquakes: 4, fetched: 2, with_shakemap: 1, with_moment_tensor: 3,
+        source: 'd1-earthquake-events', consistency: 'snapshot', queryStartedAtMs: expect.any(Number), queryCompletedAtMs: expect.any(Number) });
     } finally {
       database.close();
     }
@@ -77,9 +79,9 @@ describe('reconcile-stats', () => {
 
     await expect(reconcileStats.scheduled(null, mockEnv, null)).rejects.toThrow();
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      `[reconcile-stats] Error during reconciliation: ${dbError.message}`
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[reconcile-stats] Snapshot publication failed.',
+      expect.objectContaining({ code: 'STATISTICS_FAILED', stage: 'statistics-query' }));
+    expect(JSON.stringify(consoleErrorSpy.mock.calls)).not.toContain(dbError.message);
     consoleErrorSpy.mockRestore();
   });
   it('does not publish a null or malformed statistics result', async () => {
@@ -92,12 +94,16 @@ describe('reconcile-stats', () => {
   it('normalizes SQLite empty-table SUM values to zero', async () => {
     mockEnv.DB.first.mockResolvedValue({ total_earthquakes: 0, fetched: null, with_shakemap: null, with_moment_tensor: null });
     await reconcileStats.scheduled(null, mockEnv, null);
-    expect(JSON.parse(mockEnv.USGS_LAST_RESPONSE_KV.put.mock.calls[0][1])).toEqual({ total_earthquakes: 0, fetched: 0, with_shakemap: 0, with_moment_tensor: 0 });
+    expect(JSON.parse(mockEnv.USGS_LAST_RESPONSE_KV.put.mock.calls[0][1])).toMatchObject({ total_earthquakes: 0, fetched: 0, with_shakemap: 0, with_moment_tensor: 0, source: 'd1-earthquake-events', consistency: 'snapshot' });
   });
-  it('propagates a failed KV publication', async () => {
+  it('propagates a failed daily KV snapshot publication through the actual scheduled Worker', async () => {
     mockEnv.DB.first.mockResolvedValue({ total_earthquakes: 1, fetched: 0, with_shakemap: 0, with_moment_tensor: 0 });
     const error = new Error('KV unavailable'); mockEnv.USGS_LAST_RESPONSE_KV.put.mockRejectedValue(error);
-    await expect(reconcileStats.scheduled(null, mockEnv, null)).rejects.toBe(error);
+    const tasks = [];
+    const ctx = { waitUntil: vi.fn(promise => tasks.push(Promise.resolve(promise).catch(cause => cause))) };
+    await worker.scheduled({ cron: '0 0 * * *', scheduledTime: Date.now() }, mockEnv, ctx);
+    expect(ctx.waitUntil).toHaveBeenCalledOnce();
+    expect(await Promise.all(tasks)).toEqual([error]);
   });
 
 });
