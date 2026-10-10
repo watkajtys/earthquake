@@ -52,6 +52,21 @@ export function validateUsgsDetailUrl(value) {
   return url.href;
 }
 
+// Older feed details move to the catalog. Validate the Location as data, then
+// construct the only permitted second request ourselves; never follow it blindly.
+function detailCatalogRedirect(location, id) {
+  if (typeof location !== 'string' || location.length > 2048 || /[\s\\#]/u.test(location) ||
+      !/^(?:https:\/\/earthquake\.usgs\.gov)?\/fdsnws\/event\/1\/query\?/u.test(location)) return null;
+  let target;
+  try { target = new URL(location, USGS_ORIGIN); } catch { return null; }
+  if (target.origin !== USGS_ORIGIN || target.username || target.password || target.port || target.hash ||
+      target.pathname !== '/fdsnws/event/1/query' || target.searchParams.size !== 2 ||
+      target.searchParams.get('eventid') !== id || target.searchParams.get('format') !== 'geojson') return null;
+  const canonical = new URL('/fdsnws/event/1/query', USGS_ORIGIN);
+  canonical.search = new URLSearchParams({ eventid: id, format: 'geojson' }).toString();
+  return canonical.href;
+}
+
 function invalidPayload() {
   return new UsgsTransportError('USGS returned invalid earthquake data', { code: 'INVALID_USGS_PAYLOAD' });
 }
@@ -135,7 +150,7 @@ export async function readBoundedJsonResponse(response, maxBytes, signal, { incl
   }
 }
 
-async function fetchBoundedJson(url, { maxBytes, timeoutMs = USGS_LIMITS.timeoutMs, detail = false, allowEmpty = false }) {
+async function fetchBoundedJson(url, { maxBytes, timeoutMs = USGS_LIMITS.timeoutMs, detail = false, detailId, allowEmpty = false }) {
   const controller = new AbortController();
   const timeoutError = new UsgsTransportError('USGS request timed out', { status: 504, code: 'USGS_TIMEOUT' });
   let timer;
@@ -145,10 +160,20 @@ async function fetchBoundedJson(url, { maxBytes, timeoutMs = USGS_LIMITS.timeout
   try {
     return await Promise.race([
       (async () => {
-        const response = await fetch(url, {
+        const requestOptions = {
           redirect: 'manual', signal: controller.signal,
           headers: { Accept: 'application/geo+json, application/json', 'User-Agent': 'EarthquakesLive/1.0 (+https://earthquakeslive.com)' },
-        });
+        };
+        let response = await fetch(url, requestOptions);
+        if (detail && detailId && url === usgsDetailUrl(detailId) && response.status === 302 && !response.redirected) {
+          const target = detailCatalogRedirect(response.headers.get('Location'), detailId);
+          if (target) {
+            await response.body?.cancel().catch(() => {});
+            controller.signal.throwIfAborted();
+            // Both requests and the final bounded body share the original timer.
+            response = await fetch(target, requestOptions);
+          }
+        }
         if (!response.ok || response.redirected) {
           await response.body?.cancel().catch(() => {});
           throw new UsgsTransportError('USGS request failed', {
@@ -176,7 +201,7 @@ export async function fetchUsgsSummary(urlOrFeedKey, options = {}) {
 }
 
 export async function fetchValidatedDetail(id, options = {}) {
-  const data = await fetchBoundedJson(usgsDetailUrl(id), { maxBytes: USGS_LIMITS.detailBytes, ...options, detail: true });
+  const data = await fetchBoundedJson(usgsDetailUrl(id), { maxBytes: USGS_LIMITS.detailBytes, ...options, detail: true, detailId: id });
   return validateUsgsDetail(data, id);
 }
 

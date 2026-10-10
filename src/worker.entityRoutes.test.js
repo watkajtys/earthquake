@@ -237,6 +237,22 @@ describe('exported Worker entity routes', () => {
     expect(response.headers.get('X-Data-Source')).toBe('USGS-API');
     expect(fetch).toHaveBeenCalledOnce();
   });
+  it('serves a legitimate historical detail catalog redirect after an archive miss', async () => {
+    env.GEOJSON_BUCKET = { get: vi.fn().mockResolvedValue(null) };
+    delete env.DB;
+    const detail = usgsFeature('us6000rhs0', { detail: undefined });
+    fetch.mockResolvedValueOnce(new Response(null, { status: 302, headers: {
+      Location: '/fdsnws/event/1/query?eventid=us6000rhs0&format=geojson',
+    } })).mockResolvedValueOnce(Response.json(detail));
+    const response = await worker.fetch(new Request('https://example.test/api/earthquake/us6000rhs0', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    }), env, { waitUntil: vi.fn() });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Data-Source')).toBe('USGS-API');
+    expect(await response.json()).toEqual(detail);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][0]).toBe('https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=us6000rhs0&format=geojson');
+  });
   it('returns 404 for a missing archived and stored earthquake without an upstream request', async () => {
     env.GEOJSON_BUCKET = { get: vi.fn().mockResolvedValue(null) };
     earthquakeRow = () => null;

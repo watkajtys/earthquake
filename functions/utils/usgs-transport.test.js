@@ -107,6 +107,106 @@ describe('bounded USGS transport', () => {
     await expect(fetchValidatedDetail('missing')).rejects.toMatchObject({ status: 404 });
   });
 
+  it.each([
+    '/fdsnws/event/1/query?eventid=us6000rhs0&format=geojson',
+    'https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=us6000rhs0',
+  ])('follows the official detail302 shape once: %s', async location => {
+    const cancel = vi.fn();
+    const payload = usgsFeature('us6000rhs0', { detail: undefined });
+    fetch.mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), { status: 302, headers: { Location: location } }))
+      .mockResolvedValueOnce(Response.json(payload));
+    expect(await fetchValidatedDetail('us6000rhs0')).toEqual(payload);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[1][0]).toBe('https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=us6000rhs0&format=geojson');
+    expect(fetch.mock.calls[1][1].redirect).toBe('manual');
+    expect(fetch.mock.calls[1][1].signal).toBe(fetch.mock.calls[0][1].signal);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    null, 'https://attacker.example/fdsnws/event/1/query?eventid=event&format=geojson',
+    '//earthquake.usgs.gov/fdsnws/event/1/query?eventid=event&format=geojson',
+    'http://earthquake.usgs.gov/fdsnws/event/1/query?eventid=event&format=geojson',
+    'https://user:password@earthquake.usgs.gov/fdsnws/event/1/query?eventid=event&format=geojson',
+    'https://earthquake.usgs.gov:443/fdsnws/event/1/query?eventid=event&format=geojson',
+    'https://earthquake.usgs.gov:444/fdsnws/event/1/query?eventid=event&format=geojson',
+    '/fdsnws/event/1/query?eventid=other&format=geojson',
+    '/fdsnws/event/1/query?eventid=event&format=geojson#',
+    '/fdsnws/event/1/query?eventid=event&format=geojson&extra=1',
+    '/fdsnws/event/1/query?eventid=event&eventid=event',
+    '/fdsnws/event/1/query?eventid=event&format=geojson&format=geojson',
+    '/fdsnws/event/1/query?eventid=event&format=xml',
+    '/fdsnws/event/1/query/?eventid=event&format=geojson',
+    '/fdsnws/event/1/other?eventid=event&format=geojson',
+    '/fdsnws/event/1/query?eventid=event&format=geojson\\unsafe',
+  ])('rejects unsafe detail redirect without a second request: %s', async location => {
+    const cancel = vi.fn();
+    fetch.mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), {
+      status: 302, headers: location === null ? {} : { Location: location },
+    }));
+    await expect(fetchValidatedDetail('event')).rejects.toMatchObject({ code: 'USGS_REDIRECT_REJECTED', upstreamStatus: 302 });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it.each([301, 303, 307, 308])('rejects unapproved detail redirect status%s', async status => {
+    fetch.mockResolvedValueOnce(new Response(null, { status, headers: { Location: '/fdsnws/event/1/query?eventid=event&format=geojson' } }));
+    await expect(fetchValidatedDetail('event')).rejects.toMatchObject({ code: 'USGS_REDIRECT_REJECTED' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a second redirect and cancels its body', async () => {
+    const cancel = vi.fn();
+    const headers = { Location: '/fdsnws/event/1/query?eventid=event&format=geojson' };
+    fetch.mockResolvedValueOnce(new Response(null, { status: 302, headers }))
+      .mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), { status: 302, headers }));
+    await expect(fetchValidatedDetail('event')).rejects.toMatchObject({ code: 'USGS_REDIRECT_REJECTED' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it.each(['headers', 'body'])('shares the initial deadline across the catalog hop and stalled%s', async stalled => {
+    vi.useFakeTimers();
+    const cancel = vi.fn();
+    fetch.mockImplementationOnce(() => new Promise(resolve => setTimeout(() => resolve(new Response(null, {
+      status: 302, headers: { Location: '/fdsnws/event/1/query?eventid=event&format=geojson' },
+    })), 30))).mockImplementationOnce(() => stalled === 'headers' ? new Promise(() => {}) : Promise.resolve(new Response(new ReadableStream({ cancel }))));
+    const result = fetchValidatedDetail('event', { timeoutMs: 50 }).catch(error => error);
+    await vi.advanceTimersByTimeAsync(49);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][1].signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await result).toMatchObject({ code: 'USGS_TIMEOUT', status: 504 });
+    expect(fetch.mock.calls[1][1].signal.aborted).toBe(true);
+    if (stalled === 'body') expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it.each(['malformed', 'mismatched ID', 'oversized', '404'])('preserves bounded validation for redirected detail: %s', async failure => {
+    const cancel = vi.fn();
+    fetch.mockResolvedValueOnce(new Response(null, { status: 302, headers: { Location: '/fdsnws/event/1/query?eventid=event&format=geojson' } }))
+      .mockResolvedValueOnce(failure === '404' ? new Response(null, { status: 404 })
+        : failure === 'malformed' ? new Response('not JSON')
+          : failure === 'mismatched ID' ? Response.json(usgsFeature('other'))
+            : new Response(new ReadableStream({ start(c) { c.enqueue(new Uint8Array(65)); }, cancel })));
+    await expect(fetchValidatedDetail('event', { maxBytes: failure === 'oversized' ? 64 : 10000 })).rejects.toMatchObject(
+      failure === '404' ? { status: 404, upstreamStatus: 404 } : { code: failure === 'oversized' ? 'USGS_RESPONSE_TOO_LARGE' : 'INVALID_USGS_PAYLOAD' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    if (failure === 'oversized') expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('validates aliases after the catalog hop without accepting unrelated payloads', async () => {
+    fetch.mockResolvedValueOnce(new Response(null, { status: 302, headers: { Location: '/fdsnws/event/1/query?eventid=alias&format=geojson' } }))
+      .mockResolvedValueOnce(Response.json(usgsFeature('canonical', { ids: ',canonical,alias,' })));
+    expect((await fetchValidatedDetail('alias')).id).toBe('canonical');
+  });
+
+  it.each(['summary', 'catalog'])('never follows a legitimate-looking redirect for%s requests', async kind => {
+    fetch.mockResolvedValueOnce(new Response(null, { status: 302, headers: { Location: '/fdsnws/event/1/query?eventid=event&format=geojson' } }));
+    await expect(kind === 'summary' ? fetchUsgsSummary('hour')
+      : fetchUsgsCatalogPage({ startDate: '2026-01-01', endDate: '2026-01-02' })).rejects.toMatchObject({ code: 'USGS_REDIRECT_REJECTED' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('constructs catalog URLs from bounded dates/pages and accepts empty204', async () => {
     fetch.mockResolvedValue(new Response(null, { status: 204 }));
     expect(await fetchUsgsCatalogPage({ startDate: '2026-01-01', endDate: '2026-01-08', offset: 1001 })).toEqual({ type: 'FeatureCollection', features: [] });
