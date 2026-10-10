@@ -143,6 +143,38 @@ describe('cluster writes against migrations and both production timestamp trigge
     expect(await write({ id: 'next-id', slug: 'next-slug' })).toMatchObject({ success: true, id: 'candidate-id' });
   });
 
+  it.each(['beforeExecute', 'afterExecute'])('recovers a transient %s failure with one canonical row', async hook => {
+    let failed = false;
+    fixture.hooks[hook] = ({ result }) => {
+      if (!failed) { failed = true; throw new Error('D1_ERROR: Network connection lost.'); }
+      return result;
+    };
+    const pending = write();
+    await vi.runAllTimersAsync();
+    expect(await pending).toMatchObject({ success: true, id: 'candidate-id', slug: 'candidate-slug' });
+    expect(readRows()).toHaveLength(1);
+    expect(readRows()[0]).toMatchObject({ version: '1', createdAt: clusterNow, updatedAt: clusterNow });
+    const writes = fixture.queries.filter(query => query.method === 'all');
+    expect(writes).toHaveLength(2);
+    expect(writes[1].values).toEqual(writes[0].values);
+  });
+
+  it('exhausts transient retries without claiming persistence or changing identities', async () => {
+    fixture.hooks.beforeExecute = () => { throw new Error('D1_ERROR: Network connection lost.'); };
+    const pending = write();
+    await vi.runAllTimersAsync();
+    expect(await pending).toMatchObject({ success: false, error: expect.stringContaining('Network connection lost') });
+    expect(fixture.queries).toHaveLength(3);
+    expect(readRows()).toEqual([]);
+  });
+
+  it('does not retry a legacy write without an idempotent stable key', async () => {
+    fixture.hooks.afterExecute = () => { throw new Error('D1_ERROR: Network connection lost.'); };
+    expect(await write({ stableKey: null })).toMatchObject({ success: false });
+    expect(fixture.queries).toHaveLength(1);
+    expect(readRows()).toHaveLength(1);
+  });
+
   it('fails visibly if the stableKey uniqueness prerequisite is missing', async () => {
     fixture.database.exec('DROP INDEX uidx_clusterdefinitions_stablekey');
     expect(await write()).toMatchObject({ success: false });

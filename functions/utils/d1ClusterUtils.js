@@ -1,3 +1,5 @@
+import { retryTransientD1 } from './d1Retry.js';
+
 async function storeClusterDefinition(db, clusterData) {
   if (!db || !db.prepare) {
     return { success: false, error: "Invalid D1 database binding provided." };
@@ -120,13 +122,15 @@ async function storeClusterDefinition(db, clusterData) {
          AND (${columns.map(column => `ClusterDefinitions.${column} IS NOT excluded.${column}`).join(' OR ')})
        RETURNING id, stableKey, slug, createdAt
     `;
-    const stmt = db.prepare(sqlQuery);
     const params = [
       id, stableKey ?? null, slug, ...storedFields.map(([, value]) => value), "1", now, now,
     ];
     // RETURNING is deliberately limited to immutable identity fields. The
     // historical AFTER UPDATE triggers can still change updatedAt after it.
-    const result = await stmt.bind(...params).all();
+    // Keep the same proposed identity, payload and timestamp across retries.
+    // Legacy NULL stable keys have no idempotent conflict target: do not retry.
+    const result = await retryTransientD1(() => db.prepare(sqlQuery).bind(...params).all(),
+      { enabled: typeof stableKey === 'string' && stableKey.length > 0 });
     if (result?.success !== true) throw new Error("D1 did not confirm cluster persistence");
     if (!Array.isArray(result.results) || result.results.length > 1) {
       throw new Error("Cluster persistence did not return one canonical identity; possible id or slug conflict");

@@ -48,18 +48,19 @@ function makeD1(database) {
       db.batches.push(operations);
       await db.hooks.beforeBatch?.(operations);
       database.exec('BEGIN');
+      const results = [];
       try {
-        const results = [];
         for (const [index, operation] of operations.entries()) {
           results.push(operation.execute());
           db.hooks.afterStatement?.(operations, index);
         }
         database.exec('COMMIT');
-        return results;
       } catch (error) {
         database.exec('ROLLBACK');
         throw error;
       }
+      await db.hooks.afterCommit?.(operations);
+      return results;
     },
   };
   return db;
@@ -188,6 +189,60 @@ describe('complete month ID reconciliation against migrated SQLite', () => {
     delete db.hooks.beforeBatch;
     expect(await reconcileMonthCoverage(env)).toMatchObject({ status: 'completed', runId, inserted: 1 });
     expect(runs()).toMatchObject([{ status: 'completed', attempts: 0, cursor: 1 }]);
+  });
+
+  it('recovers a transient D1 failure before commit within the same invocation', async () => {
+    await publish(features(601));
+    let failed = false;
+    db.hooks.beforeBatch = operations => {
+      if (eventBatch(operations) && !failed) { failed = true; throw new Error('D1_ERROR: Network connection lost.'); }
+    };
+    expect(await reconcileMonthCoverage(env)).toMatchObject({ status: 'completed', inserted: 601, cursor: 601 });
+    expect(eventCount()).toBe(601);
+    expect(runs()).toMatchObject([{ status: 'completed', cursor: 601, attempts: 0 }]);
+    expect(db.batches.filter(eventBatch)).toHaveLength(3);
+  });
+
+  it('recognizes a committed batch after a lost response without advancing its cursor twice', async () => {
+    await publish(features(601));
+    let failed = false;
+    db.hooks.afterCommit = operations => {
+      if (eventBatch(operations) && !failed) { failed = true; throw new Error('D1_ERROR: Network connection lost.'); }
+    };
+    expect(await reconcileMonthCoverage(env)).toMatchObject({ status: 'completed', inserted: null,
+      confirmedInserted: 1, recoveredBatches: 1, cursor: 601, batches: 2 });
+    expect(eventCount()).toBe(601);
+    expect(runs()).toMatchObject([{ status: 'completed', cursor: 601, attempts: 0 }]);
+    expect(db.batches.filter(eventBatch)).toHaveLength(2);
+  });
+
+  it('retains durable retry state after bounded transient retries are exhausted', async () => {
+    await publish([feature('later')]);
+    db.hooks.beforeBatch = operations => {
+      if (eventBatch(operations)) throw new Error('D1_ERROR: Network connection lost.');
+    };
+    await expect(reconcileMonthCoverage(env)).rejects.toThrow('Network connection lost');
+    expect(db.batches.filter(eventBatch)).toHaveLength(3);
+    expect(eventCount()).toBe(0);
+    expect(runs()).toMatchObject([{ cursor: 0, status: 'retry', attempts: 1 }]);
+    delete db.hooks.beforeBatch;
+    retryWhenDue();
+    expect(await reconcileMonthCoverage(env)).toMatchObject({ status: 'completed', inserted: 1 });
+  });
+
+  it('does not retry through lease takeover after a transient failure', async () => {
+    await publish([feature('fenced-retry')]);
+    db.hooks.beforeBatch = operations => {
+      if (eventBatch(operations)) {
+        database.prepare("UPDATE UsgsIngestionState SET fence = fence + 1, lease_owner = 'new-owner' WHERE feed_key = 'month'").run();
+        throw new Error('D1_ERROR: Network connection lost.');
+      }
+    };
+    await expect(reconcileMonthCoverage(env)).rejects.toMatchObject({ code: 'COVERAGE_LEASE_LOST' });
+    expect(db.batches.filter(eventBatch)).toHaveLength(1);
+    expect(eventCount()).toBe(0);
+    expect(state().lease_owner).toBe('new-owner');
+    expect(runs()).toMatchObject([{ status: 'pending', cursor: 0, attempts: 0 }]);
   });
 
   it('finishes the old pinned source after live pointer rollover, then admits the newer source next invocation', async () => {

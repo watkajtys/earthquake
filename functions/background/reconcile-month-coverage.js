@@ -1,5 +1,6 @@
 import { feedEnvelopeMetadata, feedPointerKey, MAX_FEED_BYTES, MAX_FEED_POINTER_BYTES,
   validateFeedDescriptor, validateFeedEnvelope, validateFeedPointer } from '../../shared/earthquakeFeedContract.js';
+import { retryTransientD1 } from '../utils/d1Retry.js';
 
 // This repairs ID coverage only. Existing summaries, revisions, detail metadata,
 // and archives are never changed. The hourly writer owns scientific updates.
@@ -128,25 +129,40 @@ export function coverageBatch(features, cursor) {
 }
 
 async function persist(db, lease, descriptor, batch) {
-  await renew(db, lease);
-  const now = Date.now();
-  const result = await db.batch([
-    db.prepare(`INSERT INTO EarthquakeEvents
-      (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url,
-       source_updated_at_ms, retrieved_at, next_detail_fetch_attempt)
-      SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
-        json_extract(value, '$[3]'), json_extract(value, '$[4]'), json_extract(value, '$[5]'),
-        json_extract(value, '$[6]'),
-        'https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/' || json_extract(value, '$[0]') || '.geojson',
-        json_extract(value, '$[7]'), ?, ? FROM json_each(?) WHERE ${authority}
-      ON CONFLICT(id) DO NOTHING`)
-      .bind(now, now + 45 * 60_000, batch.json, ...owned(lease, descriptor, now)),
-    db.prepare(`UPDATE UsgsIngestionRuns SET cursor = cursor + ?, status = 'pending', attempts = 0,
-      updated_at_ms = ?, last_error = NULL WHERE run_id = ? AND ${authority}`)
-      .bind(batch.count, now, descriptor.run_id, ...owned(lease, descriptor, now)),
-  ]);
-  check(result.length === 2 && changes(result[1]) === 1, 'COVERAGE_CURSOR_FENCED');
-  return changes(result[0]);
+  return retryTransientD1(async attempt => {
+    await renew(db, lease);
+    const now = Date.now();
+    if (attempt > 1) {
+      // A rejected batch may already have committed. Confirm progress under the
+      // same owner/fence before retrying; never increment a committed cursor twice.
+      const [progress] = await rows(db, `SELECT r.cursor FROM UsgsIngestionRuns r
+        JOIN UsgsIngestionState s ON s.active_run_id = r.run_id
+        WHERE s.feed_key = 'month' AND s.fence = ? AND s.lease_owner = ? AND s.lease_until_ms > ?
+          AND r.run_id = ? AND r.status IN ('pending', 'retry')`,
+      lease.fence, lease.owner, now, descriptor.run_id);
+      check(progress && [descriptor.cursor, descriptor.cursor + batch.count].includes(progress.cursor),
+        'COVERAGE_CURSOR_FENCED');
+      // The lost response also lost the inserted-row count. Do not invent it.
+      if (progress.cursor === descriptor.cursor + batch.count) return null;
+    }
+    const result = await db.batch([
+      db.prepare(`INSERT INTO EarthquakeEvents
+        (id, event_time, latitude, longitude, depth, magnitude, place, usgs_detail_url,
+         source_updated_at_ms, retrieved_at, next_detail_fetch_attempt)
+        SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'),
+          json_extract(value, '$[3]'), json_extract(value, '$[4]'), json_extract(value, '$[5]'),
+          json_extract(value, '$[6]'),
+          'https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/' || json_extract(value, '$[0]') || '.geojson',
+          json_extract(value, '$[7]'), ?, ? FROM json_each(?) WHERE ${authority}
+        ON CONFLICT(id) DO NOTHING`)
+        .bind(now, now + 45 * 60_000, batch.json, ...owned(lease, descriptor, now)),
+      db.prepare(`UPDATE UsgsIngestionRuns SET cursor = cursor + ?, status = 'pending', attempts = 0,
+        updated_at_ms = ?, last_error = NULL WHERE run_id = ? AND ${authority}`)
+        .bind(batch.count, now, descriptor.run_id, ...owned(lease, descriptor, now)),
+    ]);
+    check(result.length === 2 && changes(result[1]) === 1, 'COVERAGE_CURSOR_FENCED');
+    return changes(result[0]);
+  });
 }
 
 async function complete(db, lease, descriptor) {
@@ -201,12 +217,15 @@ export async function reconcileMonthCoverage(env) {
       descriptor = await admit(env, lease, pointer.current);
     }
     let inserted = 0;
+    let recoveredBatches = 0;
     let batches = 0;
     // One pinned source per invocation; a changing live pointer cannot starve
     // its tail. Both payload size and query count stay bounded.
     while (descriptor.cursor < source.features.length && batches < COVERAGE_MAX_BATCHES) {
       const batch = coverageBatch(source.features, descriptor.cursor);
-      inserted += await persist(env.DB, lease, descriptor, batch);
+      const batchInserted = await persist(env.DB, lease, descriptor, batch);
+      if (batchInserted === null) recoveredBatches++;
+      else inserted += batchInserted;
       descriptor.cursor += batch.count;
       descriptor.attempts = 0;
       batches++;
@@ -215,7 +234,9 @@ export async function reconcileMonthCoverage(env) {
     if (finished) await complete(env.DB, lease, descriptor);
     return { status: finished ? 'completed' : 'continuing', runId: descriptor.run_id,
       sourceGeneratedAtMs: descriptor.source_generated_at_ms, sourceAgeMs: Date.now() - descriptor.source_generated_at_ms,
-      cursor: descriptor.cursor, featureCount: descriptor.feature_count, inserted, batches };
+      cursor: descriptor.cursor, featureCount: descriptor.feature_count,
+      inserted: recoveredBatches ? null : inserted, batches,
+      ...(recoveredBatches ? { confirmedInserted: inserted, recoveredBatches } : {}) };
   } catch (error) {
     if (descriptor && ['pending', 'retry'].includes(descriptor.status)) {
       const now = Date.now();
