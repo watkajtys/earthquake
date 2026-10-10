@@ -1,4 +1,4 @@
-import { FEED_PERIOD_DAYS, FEED_FRESHNESS_MS, feedSourceUrl, validateFeedEnvelope,
+import { FEED_PERIOD_DAYS, FEED_FRESHNESS_MS, FEED_FALLBACK_MAX_AGE_MS, feedSourceUrl, validateFeedEnvelope,
   validateCompleteUsgsFeed, readBoundedFeedJson, isFeedStale } from '../../shared/earthquakeFeedContract.js';
 
 export const FEED_REQUEST_TIMEOUT_MS = 30_000;
@@ -46,7 +46,7 @@ function checkHeaders(response, envelope, expectedEtag) {
   const etag = response.headers.get('ETag');
   if (!etagPattern.test(etag || '') || (expectedEtag && normalizeEtag(etag) !== normalizeEtag(expectedEtag)) ||
       Object.entries(headerFields).some(([header, field]) => response.headers.get(header) !== String(envelope[field])) ||
-      response.headers.get('X-Feed-Stale') !== 'false') throw new Error('Earthquake snapshot metadata does not match its response.');
+      response.headers.get('X-Feed-Stale') !== String(isFeedStale(envelope) || response.headers.get('X-Feed-Fallback') === 'true')) throw new Error('Earthquake snapshot metadata does not match its response.');
   return etag;
 }
 function checkSourceOrder(generated, previousData, period) {
@@ -71,15 +71,18 @@ async function internalFeed(period, signal, previousData) {
   let etag;
   if (response.status === 304) {
     if (!cache || !headers['If-None-Match']) throw new Error('Earthquake snapshot returned 304 without matching cached data.');
-    envelope = validateFeedEnvelope(cache.envelope, { period });
+    envelope = validateFeedEnvelope(cache.envelope, { period, requireFresh: false });
     etag = checkHeaders(response, envelope, cache.etag);
   } else {
     if (!response.ok) {
       void response.body?.cancel().catch(() => {});
       throw new Error(`Earthquake snapshot request failed (HTTP ${response.status}).`);
     }
-    envelope = validateFeedEnvelope(await readBoundedFeedJson(response, signal), { period });
+    envelope = validateFeedEnvelope(await readBoundedFeedJson(response, signal), { period, requireFresh: false });
     etag = checkHeaders(response, envelope);
+  }
+  if (Date.now() - Math.min(envelope.upstreamGeneratedAtMs, envelope.sourceObservedAtMs) > FEED_FALLBACK_MAX_AGE_MS) {
+    throw new Error('Earthquake snapshot is too old to use.');
   }
   checkSnapshotOrder(envelope, cache);
   checkSourceOrder(envelope.upstreamGeneratedAtMs, previousData, period);
@@ -88,6 +91,7 @@ async function internalFeed(period, signal, previousData) {
     fetchTime: Date.now(), dataSource: 'USGS snapshot', sourceGeneratedAtMs: envelope.upstreamGeneratedAtMs,
     sourceObservedAtMs: envelope.sourceObservedAtMs, snapshotGeneratedAtMs: envelope.generatedAtMs,
     coverage: { complete: true, asOfMs: envelope.upstreamGeneratedAtMs, startTimeMs: envelope.coverageStartMs, endTimeMs: envelope.coverageEndMs },
+    degraded: response.headers.get('X-Feed-Stale') === 'true',
     snapshotCache: { envelope, etag } };
 }
 
@@ -95,30 +99,38 @@ export async function fetchEarthquakeFeed(period, { signal, previousData } = {})
   const url = feedSourceUrl(period);
   return withinBudget(signal, FEED_REQUEST_TIMEOUT_MS, async chainSignal => {
     let primaryError;
+    let retained;
     try {
-      return await withinBudget(chainSignal, FEED_PRIMARY_TIMEOUT_MS, primarySignal => internalFeed(period, primarySignal, previousData));
+      const primary = await withinBudget(chainSignal, FEED_PRIMARY_TIMEOUT_MS, primarySignal => internalFeed(period, primarySignal, previousData));
+      if (!primary.degraded) return primary;
+      retained = primary;
+      primaryError = 'Stored snapshot is degraded.';
     } catch (error) {
       chainSignal.throwIfAborted();
       primaryError = error.message;
     }
     try {
-      const response = await request(`/api/usgs-proxy?apiUrl=${encodeURIComponent(url)}`, chainSignal);
-      if (!response.ok) {
-        void response.body?.cancel().catch(() => {});
-        throw new Error(`USGS proxy request failed (HTTP ${response.status}).`);
-      }
-      const feed = validateCompleteUsgsFeed(await readBoundedFeedJson(response, chainSignal), period);
-      checkSourceOrder(feed.metadata.generated, previousData, period);
-      chainSignal.throwIfAborted();
-      const now = Date.now();
-      return { period, features: feed.features, metadata: feed.metadata, fetchTime: now, dataSource: 'USGS',
-        sourceGeneratedAtMs: feed.metadata.generated, sourceObservedAtMs: now, snapshotGeneratedAtMs: null,
-        coverage: { complete: true, asOfMs: feed.metadata.generated,
-          startTimeMs: feed.metadata.generated - FEED_PERIOD_DAYS[period] * 86400_000, endTimeMs: feed.metadata.generated },
-        snapshotCache: previousData?.period === period ? previousData.snapshotCache : null };
+      return await withinBudget(chainSignal, 15_000, async fallbackSignal => {
+        const response = await request(`/api/usgs-proxy?apiUrl=${encodeURIComponent(url)}`, fallbackSignal);
+        if (!response.ok) {
+          void response.body?.cancel().catch(() => {});
+          throw Object.assign(new Error(`USGS proxy request failed (HTTP ${response.status}).`), { status: response.status });
+        }
+        const feed = validateCompleteUsgsFeed(await readBoundedFeedJson(response, fallbackSignal), period);
+        checkSourceOrder(feed.metadata.generated, retained ?? previousData, period);
+        fallbackSignal.throwIfAborted();
+        const now = Date.now();
+        return { period, features: feed.features, metadata: feed.metadata, fetchTime: now, dataSource: 'USGS',
+          sourceGeneratedAtMs: feed.metadata.generated, sourceObservedAtMs: now, snapshotGeneratedAtMs: null,
+          coverage: { complete: true, asOfMs: feed.metadata.generated,
+            startTimeMs: feed.metadata.generated - FEED_PERIOD_DAYS[period] * 86400_000, endTimeMs: feed.metadata.generated },
+          snapshotCache: previousData?.period === period ? previousData.snapshotCache : null };
+      });
     } catch (error) {
       chainSignal.throwIfAborted();
-      throw new Error(`Unable to refresh ${period} earthquakes: ${primaryError} USGS fallback: ${error.message}`);
+      if (retained && Date.now() - Math.min(retained.sourceGeneratedAtMs, retained.sourceObservedAtMs) <= FEED_FALLBACK_MAX_AGE_MS) return retained;
+      if (error.name === 'TimeoutError') throw error;
+      throw Object.assign(new Error(`Unable to refresh ${period} earthquakes: ${primaryError} USGS fallback: ${error.message}`), { status: error.status });
     }
   });
 }
@@ -126,6 +138,7 @@ export async function fetchEarthquakeFeed(period, { signal, previousData } = {})
 // Called while rendering status, independently of receipt/304 success time.
 export function isEarthquakeFeedStale(payload, now = Date.now()) {
   if (!payload || !Number.isFinite(payload.sourceGeneratedAtMs) || !Number.isFinite(payload.sourceObservedAtMs)) return true;
+  if (payload.degraded) return true;
   return payload.snapshotGeneratedAtMs !== null && payload.snapshotCache?.envelope
     ? isFeedStale(payload.snapshotCache.envelope, now)
     : now - payload.sourceGeneratedAtMs > FEED_FRESHNESS_MS || now - payload.sourceObservedAtMs > FEED_FRESHNESS_MS;

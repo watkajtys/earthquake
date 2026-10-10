@@ -176,7 +176,7 @@ export async function fetchActiveClusters({ signal, cursor } = {}) {
       try { data = JSON.parse(new TextDecoder().decode(buffer)); }
       catch { throw new Error(`Invalid cluster summary response (HTTP ${response.status}).`); }
       if (!response.ok) {
-        const error = new Error(`Cluster summaries request failed (HTTP ${response.status}).`);
+        const error = Object.assign(new Error(`Cluster summaries request failed (HTTP ${response.status}).`), { status: response.status });
         if (response.status === 410 && data?.code === 'GENERATION_EXPIRED') error.code = 'GENERATION_EXPIRED';
         throw error;
       }

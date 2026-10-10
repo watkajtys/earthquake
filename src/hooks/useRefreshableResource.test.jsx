@@ -78,3 +78,64 @@ describe('bounded resource lifecycle', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+describe('automatic request containment', () => {
+  it('pauses hidden/offline polling and resumes stale data on return', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const load = vi.fn().mockResolvedValue('data');
+    renderHook(() => useRefreshableResource(load, { intervalMs: 60_000 }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+    expect(load).not.toHaveBeenCalled();
+    visibility.mockReturnValue('visible');
+    act(() => document.dispatchEvent(new Event('visibilitychange'))); await flush();
+    expect(load).toHaveBeenCalledOnce();
+    online.mockReturnValue(false); act(() => window.dispatchEvent(new Event('offline')));
+    await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+    expect(load).toHaveBeenCalledOnce();
+    online.mockReturnValue(true); act(() => window.dispatchEvent(new Event('online'))); await flush();
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+  it('backs off repeated failures, retains data and lets manual retry recover immediately', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const load = vi.fn().mockResolvedValueOnce('good').mockRejectedValue(new Error('Unavailable'));
+    const { result } = renderHook(() => useRefreshableResource(load, { intervalMs: 60_000 })); await flush();
+    await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+    expect(load).toHaveBeenCalledTimes(3);
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(load).toHaveBeenCalledTimes(3); expect(result.current.data).toBe('good');
+    load.mockResolvedValue('recovered');
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.data).toBe('recovered');
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(load).toHaveBeenCalledTimes(5);
+  });
+  it('stops automatic requests after a terminal denial but supports manual recovery', async () => {
+    const load = vi.fn().mockRejectedValue(Object.assign(new Error('Unauthorized'), { status: 401 }));
+    const { result } = renderHook(() => useRefreshableResource(load, { intervalMs: 60_000 })); await flush();
+    await act(async () => { await vi.advanceTimersByTimeAsync(60 * 60_000); });
+    act(() => document.dispatchEvent(new Event('visibilitychange'))); await flush();
+    expect(load).toHaveBeenCalledOnce();
+    load.mockResolvedValue('recovered');
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.data).toBe('recovered');
+  });
+  it('does not carry terminal errors into a replacement resource', async () => {
+    const denied = vi.fn().mockRejectedValue(Object.assign(new Error('Unauthorized'), { status: 401 }));
+    const healthy = vi.fn().mockResolvedValue('new resource');
+    const { result, rerender } = renderHook(({ load }) => useRefreshableResource(load, { intervalMs: 60_000 }),
+      { initialProps: { load: denied } }); await flush();
+    rerender({ load: healthy }); await flush();
+    expect(healthy).toHaveBeenCalledOnce();
+    expect(result.current).toMatchObject({ data: 'new resource', error: null });
+  });
+  it('aborts an active request when hidden without accepting its late result', async () => {
+    const pending = deferred(); const load = vi.fn(() => pending.promise);
+    const { result } = renderHook(() => useRefreshableResource(load, { intervalMs: 60_000 }));
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    act(() => document.dispatchEvent(new Event('visibilitychange'))); await flush();
+    expect(load.mock.calls[0][0].signal.aborted).toBe(true);
+    pending.resolve('late'); await flush();
+    expect(result.current).toMatchObject({ data: null, loading: false, error: null });
+  });
+});

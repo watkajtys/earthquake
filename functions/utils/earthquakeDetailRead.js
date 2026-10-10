@@ -2,20 +2,30 @@ import { isValidUsgsEventId, readBoundedJsonResponse, USGS_LIMITS, UsgsTransport
 
 // Shared read-only archive boundary for JSON detail responses and crawler HTML.
 // A corrupt archive is an error, not a miss or an instruction to overwrite it.
-export async function readArchivedEarthquakeDetail(bucket, eventId, { db, timeoutMs = USGS_LIMITS.timeoutMs } = {}) {
+export async function readArchivedEarthquakeDetail(bucket, eventId, { db, timeoutMs = USGS_LIMITS.timeoutMs, signal, onStage = () => {} } = {}) {
   if (!isValidUsgsEventId(eventId)) throw new UsgsTransportError('Invalid earthquake event ID', { status: 400 });
   if (!bucket) return null;
   const controller = new AbortController();
   const timeoutError = new UsgsTransportError('Archived earthquake read timed out', { status: 504, code: 'ARCHIVE_TIMEOUT' });
   let timer;
+  let abortParent;
   const deadline = new Promise((_, reject) => {
+    abortParent = () => {
+      const error = signal.reason instanceof UsgsTransportError ? signal.reason
+        : new UsgsTransportError('Archived earthquake read aborted', { status: 504, code: 'ARCHIVE_ABORTED' });
+      controller.abort(error); reject(error);
+    };
+    if (signal?.aborted) abortParent();
+    else signal?.addEventListener('abort', abortParent, { once: true });
     timer = setTimeout(() => { controller.abort(timeoutError); reject(timeoutError); }, timeoutMs);
   });
   try {
     return await Promise.race([
       (async () => {
+        controller.signal.throwIfAborted();
         let row = null;
         if (db) {
+          onStage('archive-pointer-read');
           try {
             row = await db.prepare(`SELECT id, place, magnitude, has_moment_tensor,
               has_focal_mechanism, source_updated_at_ms, detail_archive_key,
@@ -25,12 +35,20 @@ export async function readArchivedEarthquakeDetail(bucket, eventId, { db, timeou
               status: 503, code: 'ARCHIVE_DB_UNAVAILABLE',
             });
           }
+          controller.signal.throwIfAborted();
         }
         const pointer = row?.detail_archive_key;
+        if (row?.source_updated_at_ms != null && !Number.isSafeInteger(row.source_updated_at_ms)) {
+          throw new UsgsTransportError('Stored earthquake source revision is invalid', {
+            status: 503, code: 'ARCHIVE_SOURCE_REVISION_INVALID',
+          });
+        }
         if (pointer != null) {
-          if (!Number.isSafeInteger(row.detail_archive_revision_ms) ||
-              (Number.isSafeInteger(row.source_updated_at_ms) &&
-                row.detail_archive_revision_ms < row.source_updated_at_ms)) return null;
+          if (!Number.isSafeInteger(row.detail_archive_revision_ms)) {
+            throw new UsgsTransportError('Stored earthquake archive revision is invalid', {
+              code: 'ARCHIVE_POINTER_INVALID',
+            });
+          }
           const prefix = `details/v1/${eventId}/${row.detail_archive_revision_ms}/`;
           if (typeof pointer !== 'string' || !pointer.startsWith(prefix) ||
               !/^[a-f0-9]{64}\.json$/.test(pointer.slice(prefix.length))) {
@@ -38,13 +56,16 @@ export async function readArchivedEarthquakeDetail(bucket, eventId, { db, timeou
               code: 'ARCHIVE_POINTER_INVALID',
             });
           }
+          if (Number.isSafeInteger(row.source_updated_at_ms) && row.detail_archive_revision_ms < row.source_updated_at_ms) return null;
         }
+        onStage('archive-get');
         const object = await bucket.get(pointer ?? `${eventId}.json`);
         if (controller.signal.aborted) {
           await object?.body?.cancel().catch(() => {});
           throw timeoutError;
         }
         if (object === null) return null;
+        onStage('archive-body');
         const headers = new Headers();
         object.writeHttpMetadata?.(headers);
         if (Number.isSafeInteger(object.size) && object.size >= 0) headers.set('Content-Length', String(object.size));
@@ -70,5 +91,6 @@ export async function readArchivedEarthquakeDetail(bucket, eventId, { db, timeou
     throw new UsgsTransportError('Archived earthquake detail is unavailable', { code: 'ARCHIVE_READ_FAILED' });
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', abortParent);
   }
 }

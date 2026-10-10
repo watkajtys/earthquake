@@ -177,3 +177,79 @@ All four immediate workstreams are implemented and independently reviewed. Combi
 Implementation commits: `d1085b0` (USGS redirects), `46f80d9` (D1 recovery), `7755830` (safe diagnostics), `95d6337` (public R2 read recovery). Validation artifacts are saved in `.reconciliation.local/resilience-fixes-20261009/`. The initial publisher outage trigger is still unproven; the new codes make future validation, source-fetch, pointer-read and storage-write failures distinguishable.
 
 The D1 retry policy follows the [Cloudflare D1 retry guidance](https://developers.cloudflare.com/d1/best-practices/retry-queries/). The R2 retry classifier recognizes the documented Workers API internal-error and unavailable codes, while terminal authentication, missing-object and integrity failures remain terminal ([R2 error codes](https://developers.cloudflare.com/r2/api/error-codes/)). R2 bindings do not accept an abort signal: the application bounds response time and retry issuance, then cancels a returned body if the binding resolves late.
+
+## Expanded investigation and remediation
+
+The subsequent request to investigate and fix every finding expanded the work beyond the first four workstreams. All changes below are local on the production-based `codex/resilience-fixes` branch. Production remains on the previously recorded admin-response release; no production or remote preview deployment was made during this follow-up.
+
+### Closing the unclassified detail and backfill evidence
+
+At October 10, 02:25:05–02:26:06 UTC, a bounded, two-request-concurrency read-only USGS check covered all 243 previously unclassified detail paths. Of these, 242 paths representing 262 estimated historical requests now return a legitimate official catalog redirect followed by a validated matching or aliased event. Combined with the five previously reproduced paths (13 requests), 247 paths representing 275 of the 276 historical detail 502s currently reproduce the redirect compatibility defect. This is stronger coverage of the suspected mechanism; it is not proof that every historical request failed for the same reason.
+
+The remaining path, `us7000s9fi`, redirects to a catalog response with HTTP 409 and an explicit deleted-event message. The [USGS catalog documentation](https://earthquake.usgs.gov/fdsnws/event/1/#includedeleted) documents this conflict response for deleted events when they are not requested explicitly.
+
+A fresh retained-log query over the original window, `contains($metadata.message, "[backfill]") AND $metadata.level = "error"`, completed after Load More with nine individual records and no incomplete-results warning:
+
+| Event ID | Underlying failure timestamps, MDT | Count |
+|---|---|---:|
+| `nn00925484` | Oct 8, 16:30:59.367; 18:01:33.318; 22:30:36.874 | 3 |
+| `nn00925488` | Oct 8, 17:01:29.259; 18:30:39.425; 23:00:37.815 | 3 |
+| `nn00925542` | Oct 9, 13:30:38.117; 15:01:29.896 | 2 |
+| `nn00925554` | Oct 9, 18:00:46.762 | 1 |
+
+All records identify the detail transport stack. The inspected raw record for `nn00925542`, request `83e47085b32b16089e838fa90aad7b07`, was not truncated but contained no serialized error code or upstream status. Exact compiled-line attribution was not established. Direct USGS checks subsequently found all four IDs returning HTTP 409 with the explicit deleted-event response directly from the official feed-detail endpoint. This strongly supports deletion as the common retry trigger, while the missing historical response information limits per-request attribution.
+
+The transport now recognizes only a bounded plaintext response containing the specific USGS deletion statement from the fixed official detail endpoint or its validated catalog hop. It returns application HTTP 410 and `USGS_EVENT_DELETED`, retaining upstream status 409 separately. Other conflict bodies remain errors. Backfill ends legacy attempts or parks a durable job for this terminal condition; it preserves archived bytes and allows a future corrected source revision to follow the existing revision rules.
+
+### Disposition of every finding
+
+| Finding | Implemented response | Remaining limit |
+|---|---|---|
+| Historical detail 502s | Validated single catalog hop; precise deleted-event classification; one bounded retry for transient detail fetch errors; safe stage/code/status logs | Current provider behavior cannot reconstruct every historical response |
+| Detail requests could outlive staged deadlines | One ten-second server deadline across archive/D1/upstream/revision reads; late bodies cancelled and late results prevented from starting persistence; browser navigation cancellation, fifteen-second limit and explicit retry | An already-issued binding operation cannot be forcibly cancelled |
+| Three confirmed D1 connection interruptions | Previously implemented idempotent retry, same cluster identity, fenced coverage cursor and lost-acknowledgement recovery | Persistent service failure still fails and retains durable recovery state |
+| Three public feed and one summary 503 | Bounded read retries plus verified retained-generation fallback; six seconds reserved for the primary generation inside the original ten-second request budget | A missing/unreadable pointer or storage failure affecting both generations still returns 503 |
+| Six publisher exceptions and the thirty-minute publication gap | Thirty-second per-period budget, bounded R2/source operations, classified retries, exact conditional-write fence, acknowledgement read-back, and per-period freshness diagnostics | The original trigger remains unknown because the failed payloads and individual causes were not retained; deterministic invalid input remains rejected |
+| Nine backfill exceptions | Four deleted-event reproductions investigated; terminal handling, partial-success counts and individual recovery dispositions implemented | Original upstream status was omitted by the deployed logger |
+| Legacy admin 503 amplification | Earlier 401 classification remains deployed; new-client polling now pauses hidden/offline work, backs off repeated failures and stops automatic terminal-error retries | Already-running immutable legacy JavaScript continues until its tab reloads or closes |
+| Traffic cliffs and scanner activity | Request-path, status and user-agent evidence identifies ended automated bursts; no coincident service-failure or capacity spike found | Operator identity and why a crawler stopped are not established; no capacity increase is justified by these observations |
+| Five client-disconnected outcomes | Explicit cancellation and late-result containment now cover detail loading and current polling | These outcomes alone do not establish server failure or its historical cause |
+
+Feed fallback accepts only the validated pointer's previous generation, checks metadata, exact byte length and SHA-256, and caps both source and observation age at thirty minutes, including a check after reading. It marks the response stale/degraded without changing source clocks. Conditional fallback responses also verify bytes. The browser tries fresh USGS data first and can retain the verified degraded snapshot if that fails; source time and snapshot sequence cannot roll back relative to displayed data.
+
+Summary fallback is limited to a first-page request and a committed retained generation whose source observation and publication are within two hours. Manifest and page identity, bounds and hashes still apply. Signed continuation requests remain pinned to their original generation, offset and issue time and cannot switch generations after a failed page. Retained responses are explicitly stale.
+
+Publisher retries preserve the original comparison ETag. They never rebase an older observation onto a newer pointer, never start a pointer write after a timed-out immutable write, and validate immutable size/hash/content type after a lost acknowledgement. A superseded publication reports unknown freshness rather than attributing the older comparison base's age to the winner.
+
+The existing scheduled publisher now emits `feed-publication-freshness` with actual observed age, threshold, release and fresh/stale/unknown/superseded state. `node scripts/check-period-feeds.mjs <origin> --monitor` checks all periods, reports fresh/stale/degraded/unavailable, and exits nonzero for unhealthy results. This implements detection; no external notification destination or recurring automation was configured.
+
+### Verification and deployment state
+
+The combined implementation was reviewed by both Sol agents and the primary agent. Review found and corrected fallback 304 body-length metadata, retry state leaking across replacement loaders, missing content-type validation after an acknowledged-lost immutable write, and a pre-existing malformed archive revision being treated as an archive miss.
+
+The final combined local suite passed 2,021 tests with three existing skips across 151 files. Scoped lint, the frontend build, and pinned Wrangler production packaging passed. The existing large-chunk build warning remains. These counts describe executed checks, not production-health evidence.
+
+The built Worker ran with local-only preview D1/R2/KV bindings and synthetic fixtures. Its initial smoke run exposed missing retained assets in the local fixture setup; seeding the existing 314 verified retained assets corrected that setup. The complete smoke then passed 366 GET checks across 334 asset paths. Separate real local R2-binding probes staged a missing current feed object and missing current summary manifest, verified retained-generation responses, confirmed the freshness monitor rejected degraded state, and restored the exact original pointers with conditional writes. No production data or archive was changed.
+
+A read-only production check at approximately 02:35 UTC found all three complete feeds fresh, with source ages approximately 267–282 seconds. That demonstrates the existing production deployment was publishing at that observation time; it does not verify these undeployed changes.
+
+Evidence is in `.reconciliation.local/resilience-complete-20261009/` (full tests, lint/build/package logs, local preview smoke/binding probes, production freshness check and all-nine retained backfill records) and `.reconciliation.local/resilience-detail/` (current USGS classifications and deletion reproductions). Rollout remains pending and must preserve the current production asset graph through the existing release process.
+
+### Test usefulness audit, prompted by the user's concern
+
+The audit assessed the deployed baseline `4ee2165`; it did not infer quality from the number of passing tests. The conclusion is mixed: meaningful data-integrity coverage coexists with weak external-contract and production-failure coverage. No defensible percentage of the whole suite has been classified as low value.
+
+Concrete gaps:
+
+- `functions/utils/usgs-transport.test.js` covered direct detail 200s, aliases and 404s with synthetic responses. Its redirect security case correctly rejected an attacker redirect for a summary request; it did **not** assert that legitimate detail redirects should fail. The real official catalog redirect and deleted-event plaintext 409 contracts were missing.
+- The archive-miss integration case in `src/worker.entityRoutes.test.js` deleted `env.DB` before returning a mocked upstream 200. That bypassed the real post-upstream revision-read dependency and could not reveal an end-to-end timeout gap.
+- `src/worker.scheduled.test.js` mocked the background handlers and accepted any rejection for partial backfill failure. Losing the individual cause and six successful results behind an unhelpful aggregate error did not fail that test.
+- Publisher tests checked aggregate rejection/results without requiring useful individual causes. They exercised source timeouts but omitted stalled R2 pointer/body/head/write operations.
+- The backfill 409 fixture lacked the provider's deleted-event response body and expected a retry. The fixture did not represent the external contract observed in this incident.
+- Generic failure-propagation assertions in the mocked scheduled suite overlap with actual-Worker publisher failure coverage. This is a candidate for consolidation, not evidence that every test at two layers is redundant.
+
+Examples worth retaining include competing-writer CAS fencing, immutable-generation retention, rejection of corrupt archived data without overwrite, recovery across newer source revisions, and preventing an expired client response from replacing accepted data. These protect specific user-visible integrity guarantees, even though they cannot establish availability or provider compatibility.
+
+A controlled comparison, already running when the user clarified that they did not want more tests, executed the same 17 selected incident regression cases against the deployed baseline and the fixed implementation. All 17 failed behaviorally on the baseline and passed on the fixed code; no application files were changed in the baseline and no network access was needed. This establishes sensitivity of those selected regressions to these defects. It does **not** validate the other roughly two thousand tests or establish general suite quality. The temporary baseline checkout was removed; results are recorded in `regression-proof-summary.json` and the two raw result files.
+
+The user explicitly clarified that test usefulness was the question, not a request to increase the test count. Extra audit-only fixture/test-writing work was stopped. The implemented incident regressions remain; further suite cleanup, consolidation or a broader quality audit has not been performed or claimed.

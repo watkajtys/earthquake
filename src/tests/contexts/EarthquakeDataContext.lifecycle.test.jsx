@@ -14,6 +14,7 @@ let failing;
 let fetchMock;
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(now);
+  vi.spyOn(Math, 'random').mockReturnValue(0); // Deterministic retry cadence.
   calls = { day: 0, week: 0, month: 0 };
   failing = new Set();
   fetchMock = vi.fn(async (url) => {

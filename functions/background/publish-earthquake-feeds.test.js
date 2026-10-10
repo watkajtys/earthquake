@@ -68,7 +68,7 @@ describe('independent immutable complete period publication', () => {
 
   it.each(['day', 'week', 'month'])('uses the correct independent %s period source and coverage', async period => {
     await publish(period);
-    expect(fetchFeed).toHaveBeenCalledWith(period);
+    expect(fetchFeed).toHaveBeenCalledWith(period, expect.objectContaining({ signal: expect.any(AbortSignal), timeoutMs: expect.any(Number) }));
     expect(snapshot(period).period).toBe(period);
     expect(snapshot(period).coverageStartMs).toBe(baseTime - ({ day: 1, week: 7, month: 30 }[period]) * 86400_000);
   });
@@ -189,14 +189,14 @@ describe('validation and failure boundaries', () => {
     expect(bucket.calls.some(call => call.method === 'delete')).toBe(false);
   });
 
-  it('keeps the existing upstream ten-second source deadline', async () => {
+  it('bounds each source attempt at ten seconds and permits only one timeout retry', async () => {
     vi.useFakeTimers(); vi.setSystemTime(baseTime);
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
     const result = publish('day', { fetchFeed: undefined });
     const settled = result.then(() => ({ fulfilled: true }), error => ({ error }));
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(20_200);
     expect((await settled).error).toMatchObject({ code: 'USGS_TIMEOUT', status: 504 });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(bucket.calls.some(call => call.method === 'put')).toBe(false);
   });
 });
@@ -321,7 +321,7 @@ describe('sequential independent period orchestration', () => {
     try { await publishEarthquakeFeeds(env, options); } catch (error) { aggregate = error; }
     expect(aggregate.errors).toEqual([upstream]);
     expect(log).toHaveBeenCalledWith('[period-feeds] Period publication failed.', { period: 'week', stage: 'source-fetch',
-      code: 'USGS_HTTP_ERROR', upstreamStatus: 503, elapsedMs: 0, versionId: 'test-version', revision: 'b'.repeat(40) });
+      code: 'USGS_HTTP_ERROR', upstreamStatus: 503, attempt: 1, elapsedMs: 0, versionId: 'test-version', revision: 'b'.repeat(40) });
     expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret.invalid|hidden|features/);
     log.mockClear(); bucket.hooks.beforeGet = () => { throw new Error('raw credentials hidden'); };
     await expect(publishEarthquakeFeeds(env, options)).rejects.toBeInstanceOf(globalThis.AggregateError);
@@ -336,5 +336,119 @@ describe('sequential independent period orchestration', () => {
     expect(first.every(result => result.published)).toBe(true);
     const second = await publishEarthquakeFeeds(env, options);
     expect(second.every(result => !result.published && result.reason === 'unchanged')).toBe(true);
+  });
+});
+
+describe('publisher recovery and operational freshness', () => {
+  const reset = () => new Error('put: storage service failure (10001)');
+  it('recovers one transient pointer read and one source failure without replacing the comparison base', async () => {
+    let reads = 0;
+    bucket.hooks.beforeGet = () => { if (++reads === 1) throw new Error('get: storage service failure (10043)'); };
+    fetchFeed.mockRejectedValueOnce(Object.assign(new Error('upstream unavailable'), { code: 'USGS_UPSTREAM_ERROR', upstreamStatus: 503 }));
+    const pending = publish();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await pending).toMatchObject({ published: true });
+    expect(fetchFeed).toHaveBeenCalledTimes(2);
+    expect(reads).toBe(2);
+    expect(pointer().current.snapshotSequence).toBe(1);
+  });
+  it.each(['object', 'pointer'])('recognizes a committed %s write after a transient lost acknowledgement', async write => {
+    let lost = false; const lostReady = deferred();
+    bucket.hooks.afterPut = (key, result) => {
+      if (!lost && ((key === feedPointerKey('day')) === (write === 'pointer'))) { lost = true; lostReady.resolve(); throw reset(); }
+      return result;
+    };
+    const pending = publish(); await lostReady.promise; await vi.advanceTimersByTimeAsync(200);
+    expect(await pending).toMatchObject({ published: true, snapshotSequence: 1 });
+    expect(pointer().current.snapshotSequence).toBe(1);
+    expect(fetchFeed).toHaveBeenCalledOnce();
+    expect(bucket.calls.filter(call => call.method === 'delete')).toHaveLength(0);
+  });
+  it('rejects corrupt metadata after an immutable write acknowledgement is lost', async () => {
+    let lost = false; const lostReady = deferred();
+    bucket.hooks.afterPut = (key, result) => {
+      if (!lost && key !== feedPointerKey('day')) {
+        lost = true; bucket.objects.get(key).httpMetadata.contentType = 'text/html';
+        lostReady.resolve(); throw reset();
+      }
+      return result;
+    };
+    const pending = publish().catch(error => error); await lostReady.promise; await vi.advanceTimersByTimeAsync(200);
+    expect(await pending).toMatchObject({ code: 'FEED_WRITE_UNCONFIRMED' });
+    expect(pointer()).toBeNull();
+  });
+
+  it('does not rebase the original pointer condition after a failed write and a concurrent winner', async () => {
+    await publish(); advance();
+    const base = bucket.objects.get(feedPointerKey('day')).etag;
+    const failedGeneration = generation(nextId);
+    let blocked = false; const blockedReady = deferred();
+    bucket.hooks.beforePut = key => {
+      if (key === feedPointerKey('day') && !blocked) { blocked = true; blockedReady.resolve(); throw reset(); }
+    };
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const loser = publish();
+    await blockedReady.promise;
+    advance(1000); const winner = await publish();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(await loser).toMatchObject({ reason: 'superseded', generationId: failedGeneration });
+    expect(pointer().current.generationId).toBe(winner.generationId);
+    expect(log).toHaveBeenCalledWith('[period-feeds] Freshness check.', expect.objectContaining({ state: 'superseded', stale: null, sourceAgeMs: null }));
+    const writes = bucket.calls.filter(call => call.method === 'put' && call.key === feedPointerKey('day'));
+    expect(writes.at(-1).options.onlyIf.etagMatches).toBe(base);
+  });
+  it('bounds a stalled initial get, cancels its late body and never fetches or writes afterwards', async () => {
+    const cancel = vi.fn(); let resolve;
+    bucket.get = vi.fn(() => new Promise(done => { resolve = done; }));
+    const pending = publish().catch(error => error);
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(await pending).toMatchObject({ code: 'FEED_OPERATION_TIMEOUT' });
+    resolve({ body: new ReadableStream({ cancel }) }); await vi.advanceTimersByTimeAsync(0);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(fetchFeed).not.toHaveBeenCalled();
+    expect(bucket.calls.filter(call => call.method === 'put')).toHaveLength(0);
+  });
+  it('cancels a stalled pointer body within its read budget', async () => {
+    const cancel = vi.fn(); bucket.get = vi.fn(async () => ({ size: 2, etag: 'etag', body: new ReadableStream({ cancel }) }));
+    const pending = publish().catch(error => error); await vi.advanceTimersByTimeAsync(8000);
+    expect(await pending).toMatchObject({ code: 'FEED_OPERATION_TIMEOUT' });
+    expect(cancel).toHaveBeenCalledOnce(); expect(fetchFeed).not.toHaveBeenCalled();
+  });
+  it('never retries or starts a pointer write after a timed-out immutable put resolves late', async () => {
+    let release; const putReady = deferred(); bucket.hooks.beforePut = () => new Promise(resolve => { release = resolve; putReady.resolve(); });
+    const pending = publish().catch(error => error); await putReady.promise; await vi.advanceTimersByTimeAsync(8000);
+    expect(await pending).toMatchObject({ code: 'FEED_OPERATION_TIMEOUT' });
+    delete bucket.hooks.beforePut; release(); await vi.advanceTimersByTimeAsync(0);
+    expect(bucket.calls.filter(call => call.method === 'put')).toHaveLength(1);
+    expect(pointer()).toBeNull();
+  });
+  it('continues healthy periods after a stalled first-period operation expires', async () => {
+    bucket.hooks.beforeGet = key => key === feedPointerKey('day') ? new Promise(() => {}) : undefined;
+    const pending = publishEarthquakeFeeds(env, { now: () => Date.now(), fetchFeed: async () => feed(), randomUUID: () => generation(nextId++) }).catch(error => error);
+    await vi.advanceTimersByTimeAsync(8000);
+    const error = await pending;
+    expect(error.results.map(value => [value.period, value.published])).toEqual([['day', false], ['week', true], ['month', true]]);
+    expect(error.errors[0].code).toBe('FEED_OPERATION_TIMEOUT');
+  });
+
+  it('enforces a total period budget and does not issue later writes after expiry', async () => {
+    const putReady = deferred(); let release;
+    bucket.hooks.beforePut = () => new Promise(resolve => { release = resolve; putReady.resolve(); });
+    const pending = publish('day', { timeoutMs: 1000 }).catch(error => error); await putReady.promise;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await pending).toMatchObject({ code: 'FEED_PUBLICATION_TIMEOUT' });
+    delete bucket.hooks.beforePut; release(); await vi.advanceTimersByTimeAsync(0);
+    expect(bucket.calls.filter(call => call.method === 'put')).toHaveLength(1); expect(pointer()).toBeNull();
+  });
+
+  it('reports last observed committed freshness during source validation failure without renewing it', async () => {
+    await publish(); const committed = pointer().current;
+    time += FEED_FRESHNESS_MS + 1; vi.setSystemTime(time);
+    source = feed(time); source.features[0].properties.felt = 'bad';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(publish()).rejects.toMatchObject({ code: 'INVALID_FEED_ALERT_METADATA' });
+    expect(warn).toHaveBeenCalledWith('[period-feeds] Freshness check.', expect.objectContaining({ period: 'day',
+      state: 'stale', stale: true, sourceAgeMs: FEED_FRESHNESS_MS + 1, publicationAgeMs: FEED_FRESHNESS_MS + 1 }));
+    expect(pointer().current).toEqual(committed);
   });
 });

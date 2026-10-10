@@ -235,3 +235,70 @@ describe('bounded USGS transport', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe('USGS detail transient recovery and caller lifetime', () => {
+  it('retries a transient catalog failure at the validated target without a second redirect', async () => {
+    vi.useFakeTimers();
+    fetch.mockResolvedValueOnce(new Response(null, { status: 302, headers: { Location: '/fdsnws/event/1/query?eventid=event&format=geojson' } }))
+      .mockResolvedValueOnce(new Response(null, { status: 503 })).mockResolvedValueOnce(Response.json(usgsFeature('event')));
+    const result = fetchValidatedDetail('event');
+    await vi.advanceTimersByTimeAsync(100);
+    expect((await result).id).toBe('event');
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls[2][0]).toBe(fetch.mock.calls[1][0]);
+  });
+  it('classifies a network error separately and exhausts only one retry', async () => {
+    vi.useFakeTimers(); fetch.mockRejectedValue(new TypeError('private network details'));
+    const result = fetchValidatedDetail('event').catch(error => error);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await result).toMatchObject({ code: 'USGS_NETWORK_ERROR', status: 502 });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('keeps the retry wait inside the original deadline', async () => {
+    vi.useFakeTimers(); fetch.mockResolvedValue(new Response(null, { status: 503 }));
+    const result = fetchValidatedDetail('event', { timeoutMs: 50 }).catch(error => error);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(await result).toMatchObject({ code: 'USGS_TIMEOUT' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it.each([404, 409])('does not retry upstream%s', async status => {
+    fetch.mockResolvedValue(new Response(null, { status }));
+    await expect(fetchValidatedDetail('event')).rejects.toMatchObject({ upstreamStatus: status });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it('never fetches for an already cancelled caller', async () => {
+    const controller = new AbortController(); controller.abort();
+    await expect(fetchValidatedDetail('event', { signal: controller.signal })).rejects.toMatchObject({ code: 'USGS_ABORTED' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('cancels a response arriving after caller cancellation', async () => {
+    const controller = new AbortController(); const cancel = vi.fn(); let resolveFetch;
+    fetch.mockImplementation(() => new Promise(resolve => { resolveFetch = resolve; }));
+    const result = fetchValidatedDetail('event', { signal: controller.signal }).catch(error => error);
+    controller.abort(); expect(await result).toMatchObject({ code: 'USGS_ABORTED' });
+    resolveFetch(new Response(new ReadableStream({ cancel })));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it('classifies only the explicit official catalog deleted event as410', async () => {
+    fetch.mockResolvedValueOnce(new Response(null, { status: 302, headers: { Location: '/fdsnws/event/1/query?eventid=event&format=geojson' } }))
+      .mockResolvedValueOnce(new Response('Error 409: Conflict\nThe requested event has been deleted. To see information for deleted events, perform a search.', { status: 409, headers: { 'Content-Type': 'text/plain' } }));
+    await expect(fetchValidatedDetail('event')).rejects.toMatchObject({ status: 410, code: 'USGS_EVENT_DELETED', upstreamStatus: 409 });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('recognizes the same explicit deleted response directly from the official feed detail', async () => {
+    fetch.mockResolvedValueOnce(new Response('Error 409: Conflict\nThe requested event has been deleted. To see information for deleted events, perform a search.', {
+      status: 409, headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+    }));
+    await expect(fetchValidatedDetail('event')).rejects.toMatchObject({ status: 410, code: 'USGS_EVENT_DELETED', upstreamStatus: 409 });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it.each(['unrelated conflict', 'x'.repeat(4097), '{malformed'])('does not reinterpret unrelated/bounded catalog409 bodies', async body => {
+    fetch.mockResolvedValueOnce(new Response(null, { status: 302, headers: { Location: '/fdsnws/event/1/query?eventid=event&format=geojson' } }))
+      .mockResolvedValueOnce(new Response(body, { status: 409, headers: { 'Content-Type': 'text/plain' } }));
+    await expect(fetchValidatedDetail('event')).rejects.toMatchObject({ status: 502, code: 'USGS_UPSTREAM_ERROR', upstreamStatus: 409 });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});

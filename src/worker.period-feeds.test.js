@@ -181,10 +181,16 @@ describe('actual five-minute Worker publication with real publisher', () => {
   });
   it('publishes healthy periods and surfaces one upstream period failure after legacy work', async () => {
     upstream('week');
-    const result = await scheduled(); expect(result[0].status).toBe('rejected');
+    let observedFailure; const failureReady = new Promise(resolve => { observedFailure = resolve; });
+    const original = fetch.getMockImplementation();
+    fetch.mockImplementation(async url => {
+      const response = await original(url); if (response.status === 502) observedFailure(); return response;
+    });
+    const pending = scheduled(); await failureReady; await vi.advanceTimersByTimeAsync(200);
+    const result = await pending; expect(result[0].status).toBe('rejected');
     expect(bucket.readJson(feedPointerKey('day')).current.complete).toBe(true);
     expect(bucket.readJson(feedPointerKey('month')).current.complete).toBe(true);
     expect(bucket.readJson(feedPointerKey('week'))).toBeNull();
-    expect(handleGenerateLists).toHaveBeenCalled(); expect(fetch).toHaveBeenCalledTimes(3);
+    expect(handleGenerateLists).toHaveBeenCalled(); expect(fetch).toHaveBeenCalledTimes(4);
   });
 });

@@ -1,8 +1,9 @@
 import {
   FEED_PERIODS, MAX_FEED_POINTER_BYTES, feedPointerKey, validateFeedPointer,
-  isFeedStale, readBoundedFeedJson,
+  isFeedStale, readBoundedFeedJson, FEED_FALLBACK_MAX_AGE_MS,
 } from '../../shared/earthquakeFeedContract.js';
 import { sha256Hex } from '../../shared/clusterSummaryContract.js';
+import { snapshotReadBudget } from '../utils/snapshotReadBudget.js';
 import { readR2 } from '../utils/r2ReadRetry.js';
 import { failureDiagnostics, releaseDiagnostics } from '../utils/failureDiagnostics.js';
 
@@ -12,7 +13,7 @@ function objectMatches(object, descriptor) {
   return object && object.size === descriptor.byteLength && object.customMetadata?.sha256 === descriptor.sha256 &&
     object.httpMetadata?.contentType === 'application/json';
 }
-function feedHeaders(descriptor, now) {
+function feedHeaders(descriptor, now, fallback = false) {
   return new Headers({
     'Content-Type': 'application/json', 'Cache-Control': 'private, no-cache, max-age=0, must-revalidate',
     'X-Content-Type-Options': 'nosniff', ETag: `"feed-${descriptor.sha256}"`,
@@ -21,7 +22,8 @@ function feedHeaders(descriptor, now) {
     'X-Feed-Source-Observed-At': String(descriptor.sourceObservedAtMs),
     'X-Feed-Upstream-Generated-At': String(descriptor.upstreamGeneratedAtMs),
     'X-Feed-Coverage-Start': String(descriptor.coverageStartMs), 'X-Feed-Coverage-End': String(descriptor.coverageEndMs),
-    'X-Feed-Complete': 'true', 'X-Feed-Stale': String(isFeedStale(descriptor, now)),
+    'X-Feed-Complete': 'true', 'X-Feed-Stale': String(fallback || isFeedStale(descriptor, now)),
+    'X-Feed-Fallback': String(fallback),
   });
 }
 function matchesEtag(value, etag) {
@@ -92,27 +94,51 @@ export async function onRequestGet({ request, env }) {
       const pointerValue = await readBoundedFeedJson(new Response(pointerObject.body), controller.signal, MAX_FEED_POINTER_BYTES);
       beginStage('pointer-validate');
       const pointer = validateFeedPointer(pointerValue, { period });
-      const descriptor = pointer.current;
-      const headers = feedHeaders(descriptor, Date.now());
-      // Conditional requests verify the immutable object's existence/metadata,
-      // without rereading a multi-megabyte body. Publisher supplies its checksum.
-      if (request.method === 'HEAD' || matchesEtag(request.headers.get('If-None-Match'), headers.get('ETag'))) {
-        beginStage('object-head');
-        const object = await readR2(bucket, 'head', descriptor.objectKey, controller.signal);
+      const previous = pointer.previous;
+      const eligible = previous && Date.now() - Math.min(previous.upstreamGeneratedAtMs,
+        previous.sourceObservedAtMs) <= FEED_FALLBACK_MAX_AGE_MS;
+      const serve = async (descriptor, signal, fallback = false) => {
+        const headers = feedHeaders(descriptor, Date.now(), fallback);
+        const conditional = matchesEtag(request.headers.get('If-None-Match'), headers.get('ETag'));
+        // A fallback is always byte/hash verified, including HEAD and 304.
+        if (!fallback && (request.method === 'HEAD' || conditional)) {
+          beginStage('object-head');
+          const object = await readR2(bucket, 'head', descriptor.objectKey, signal);
+          signal.throwIfAborted();
+          if (!objectMatches(object, descriptor)) throw new Error('Feed object unavailable');
+          if (conditional) return new Response(null, { status: 304, headers });
+          headers.set('Content-Length', String(descriptor.byteLength));
+          return new Response(null, { headers });
+        }
+        beginStage(fallback ? 'fallback-get' : 'object-get');
+        const object = await readR2(bucket, 'get', descriptor.objectKey, signal);
+        signal.throwIfAborted();
+        beginStage(fallback ? 'fallback-read' : 'object-read');
+        const bytes = await readVerifiedBytes(object, descriptor, signal,
+          () => { if (!signal.aborted) beginStage(fallback ? 'fallback-hash' : 'object-hash'); });
+        signal.throwIfAborted();
+        if (fallback && Date.now() - Math.min(descriptor.upstreamGeneratedAtMs, descriptor.sourceObservedAtMs) > FEED_FALLBACK_MAX_AGE_MS) {
+          throw new Error('Retained feed expired during read');
+        }
+        if (!conditional) headers.set('Content-Length', String(bytes.byteLength));
+        return new Response(request.method === 'HEAD' || conditional ? null : bytes,
+          { status: conditional ? 304 : 200, headers });
+      };
+      try {
+        return await snapshotReadBudget(controller.signal, eligible ? Math.max(1, 6000 - (Date.now() - startedAt)) : 10_000,
+          signal => serve(pointer.current, signal));
+      } catch (error) {
         controller.signal.throwIfAborted();
-        if (!objectMatches(object, descriptor)) throw new Error('Feed object unavailable');
-        if (matchesEtag(request.headers.get('If-None-Match'), headers.get('ETag'))) return new Response(null, { status: 304, headers });
-        headers.set('Content-Length', String(descriptor.byteLength));
-        return new Response(null, { headers });
+        if (!eligible || Date.now() - Math.min(previous.upstreamGeneratedAtMs,
+          previous.sourceObservedAtMs) > FEED_FALLBACK_MAX_AGE_MS) throw error;
+        const failedStage = stage;
+        const response = await serve(previous, controller.signal, true);
+        console.warn(JSON.stringify({ event: 'earthquake-feed-fallback', period,
+          ...failureDiagnostics(error, { stage: failedStage, code: 'FEED_READ_FAILED' }),
+          snapshotSequence: previous.snapshotSequence, sourceAgeMs: Date.now() - previous.upstreamGeneratedAtMs,
+          elapsedMs: Date.now() - startedAt, ...releaseDiagnostics(env) }));
+        return response;
       }
-      beginStage('object-get');
-      const object = await readR2(bucket, 'get', descriptor.objectKey, controller.signal);
-      if (controller.signal.aborted) void object?.body?.cancel().catch(() => {});
-      controller.signal.throwIfAborted();
-      beginStage('object-read');
-      const bytes = await readVerifiedBytes(object, descriptor, controller.signal, () => beginStage('object-hash'));
-      headers.set('Content-Length', String(bytes.byteLength));
-      return new Response(bytes, { headers });
     })()]);
   } catch (error) {
     const endedAt = Date.now();

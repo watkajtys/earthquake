@@ -1,10 +1,10 @@
 import { failureDiagnostics, releaseDiagnostics } from '../utils/failureDiagnostics.js';
 import { fetchUsgsSummary } from '../utils/usgs-transport.js';
-import { readSummaryJsonObject } from '../utils/clusterSummarySnapshot.js';
+import { publicationBudget, publicationOperation, readPublicationPointer } from '../utils/publisherIO.js';
 import { sha256Hex } from '../../shared/clusterSummaryContract.js';
 import {
   FEED_SCHEMA_VERSION, FEED_SOURCE, FEED_PERIODS, FEED_PERIOD_DAYS,
-  MAX_FEED_BYTES, MAX_FEED_POINTER_BYTES, feedPointerKey, feedObjectKey,
+  MAX_FEED_BYTES, MAX_FEED_POINTER_BYTES, FEED_FRESHNESS_MS, feedPointerKey, feedObjectKey,
   feedEnvelopeMetadata, validateCompleteUsgsFeed, validateFeedEnvelope,
   validateFeedDescriptor, validateFeedPointer,
 } from '../../shared/earthquakeFeedContract.js';
@@ -44,11 +44,28 @@ async function sourceHash(features) {
 }
 
 export async function publishEarthquakeFeed(env, period, {
-  now, fetchFeed = fetchUsgsSummary, randomUUID = () => crypto.randomUUID(),
+  now, fetchFeed = fetchUsgsSummary, randomUUID = () => crypto.randomUUID(), timeoutMs = 30_000,
 } = {}) {
   const clock = clockFor(now);
   const startedAtMs = clock();
   let stage = 'binding';
+  let attempt = 1;
+  let observedDescriptor = null;
+  let superseded = false;
+  const budget = publicationBudget(timeoutMs);
+  const io = (operation, options = {}) => publicationOperation(operation, budget, { ...options, onAttempt: value => { attempt = value; } });
+  const freshness = () => {
+    const observedAtMs = clock();
+    const sourceAgeMs = observedDescriptor ? Math.max(0, observedAtMs - observedDescriptor.upstreamGeneratedAtMs) : null;
+    const publicationAgeMs = observedDescriptor ? Math.max(0, observedAtMs - observedDescriptor.generatedAtMs) : null;
+    const stale = observedDescriptor ? sourceAgeMs > FEED_FRESHNESS_MS || observedAtMs - observedDescriptor.sourceObservedAtMs > FEED_FRESHNESS_MS : null;
+    const diagnostic = { event: 'feed-publication-freshness', period: FEED_PERIODS.includes(period) ? period : 'unknown',
+      observedAtMs, sourceAgeMs, publicationAgeMs, stale, state: superseded ? 'superseded' : stale === null ? 'unknown' : stale ? 'stale' : 'fresh',
+      observation: 'last-observed-committed',
+      thresholdMs: FEED_FRESHNESS_MS, ...releaseDiagnostics(env) };
+    if (stale !== false && !superseded) console.warn('[period-feeds] Freshness check.', diagnostic);
+    else console.log('[period-feeds] Freshness check.', diagnostic);
+  };
   try {
     const key = feedPointerKey(period);
     const bucket = env?.GEOJSON_BUCKET;
@@ -56,12 +73,13 @@ export async function publishEarthquakeFeed(env, period, {
     stage = 'pointer-read';
     // Take the comparison base before the source fetch. A conditional loser must
     // discard its staged observation; it must never rebase old data on a new ETag.
-    const read = await readSummaryJsonObject(bucket, key, MAX_FEED_POINTER_BYTES);
+    const read = await readPublicationPointer(bucket, key, MAX_FEED_POINTER_BYTES, budget);
     stage = 'pointer-validation';
     const previous = read ? validateFeedPointer(read.value, { period, now: startedAtMs }) : null;
+    observedDescriptor = previous?.current ?? null;
     if (previous && startedAtMs < previous.current.generatedAtMs) throw publicationError('FEED_CLOCK_ROLLBACK', 'Clock moved backwards before feed observation');
     stage = 'source-fetch';
-    const source = await fetchFeed(period);
+    const source = await io(signal => fetchFeed(period, { signal, timeoutMs: Math.min(10_000, budget.remaining()) }), { kind: 'source', maximumMs: 10_000 });
     const sourceObservedAtMs = clock();
     stage = 'source-validation';
     validateCompleteUsgsFeed(source, period, { now: sourceObservedAtMs });
@@ -76,7 +94,7 @@ export async function publishEarthquakeFeed(env, period, {
       // Verify its canonical content through immutable object metadata, avoiding a
       // second large GeoJSON parse while the newly fetched source is in memory.
       stage = 'snapshot-head';
-      const object = await bucket.head(previous.current.objectKey);
+      const object = await io(() => bucket.head(previous.current.objectKey));
       if (!object || object.size !== previous.current.byteLength ||
           object.customMetadata?.sha256 !== previous.current.sha256 ||
           !HASH.test(object.customMetadata?.sourceSha256 ?? '') ||
@@ -102,32 +120,55 @@ export async function publishEarthquakeFeed(env, period, {
       ...feedEnvelopeMetadata(envelope), objectKey: feedObjectKey(period, generationId), byteLength: bytes.byteLength, sha256,
     }, { period, now: clock() });
     stage = 'snapshot-write';
-    const objectWrite = await bucket.put(descriptor.objectKey, bytes, {
+    budget.signal.throwIfAborted();
+    let objectAttempts = 1;
+    const objectWrite = await publicationOperation(() => bucket.put(descriptor.objectKey, bytes, {
       onlyIf: { etagDoesNotMatch: '*' }, sha256,
       customMetadata: { sha256, sourceSha256 },
       httpMetadata: { contentType: 'application/json', cacheControl: 'private, no-store' },
-    });
-    confirmedWrite(objectWrite);
+    }), budget, { onAttempt: value => { attempt = objectAttempts = value; } });
+    if (objectWrite === null && objectAttempts > 1) {
+      const stored = await io(() => bucket.head(descriptor.objectKey));
+      if (!stored || stored.size !== descriptor.byteLength || stored.customMetadata?.sha256 !== sha256 ||
+          stored.customMetadata?.sourceSha256 !== sourceSha256 || stored.httpMetadata?.contentType !== 'application/json') throw publicationError('FEED_WRITE_UNCONFIRMED', 'R2 did not confirm earthquake feed write');
+    } else confirmedWrite(objectWrite);
     stage = 'pointer-validation';
     const pointer = validateFeedPointer({ schemaVersion: FEED_SCHEMA_VERSION, period, current: descriptor, previous: previous?.current ?? null }, { period, now: clock() });
     stage = 'pointer-write';
-    const committed = await bucket.put(key, encodeBounded(pointer, MAX_FEED_POINTER_BYTES), {
+    budget.signal.throwIfAborted();
+    let pointerAttempts = 1;
+    let committed = await publicationOperation(() => bucket.put(key, encodeBounded(pointer, MAX_FEED_POINTER_BYTES), {
       onlyIf: read ? { etagMatches: read.etag } : { etagDoesNotMatch: '*' },
       httpMetadata: { contentType: 'application/json', cacheControl: 'private, no-store' },
-    });
-    if (committed === null) return outcome(period, descriptor, startedAtMs, clock, { published: false, reason: 'superseded' });
+    }), budget, { onAttempt: value => { attempt = pointerAttempts = value; } });
+    if (committed === null && pointerAttempts > 1) {
+      const receipt = await readPublicationPointer(bucket, key, MAX_FEED_POINTER_BYTES, budget);
+      const current = receipt ? validateFeedPointer(receipt.value, { period, now: clock() }).current : null;
+      // Read-back confirms an acknowledgement only. Never change the comparison
+      // ETag or retry old source data against a newer pointer.
+      if (current?.generationId === descriptor.generationId && current.sha256 === descriptor.sha256 &&
+          current.snapshotSequence === descriptor.snapshotSequence) committed = { etag: receipt.etag };
+      observedDescriptor = current;
+    }
+    if (committed === null) {
+      // A winner may have advanced freshness. The old base is no longer an
+      // authoritative observation and must not trigger a false stale alert.
+      observedDescriptor = null; superseded = true;
+      return outcome(period, descriptor, startedAtMs, clock, { published: false, reason: 'superseded' });
+    }
     confirmedWrite(committed);
+    observedDescriptor = descriptor;
     // Immutable complete snapshots are the archive. Advancing the two-entry
     // pointer changes discovery, not retention of older generations.
     // No full payload or source object enters logging/aggregate results.
     return outcome(period, descriptor, startedAtMs, clock, { published: true });
   } catch (error) {
     const diagnostic = { period: FEED_PERIODS.includes(period) ? period : 'unknown', ...failureDiagnostics(error, { stage, code: 'FEED_PUBLICATION_FAILED' }),
-      elapsedMs: Math.max(0, clock() - startedAtMs), ...releaseDiagnostics(env) };
+      attempt, elapsedMs: Math.max(0, clock() - startedAtMs), ...releaseDiagnostics(env) };
     console.error('[period-feeds] Period publication failed.', diagnostic);
     // Keep the original exception identity/cause for the aggregate and caller.
     throw error;
-  }
+  } finally { budget.close(); freshness(); }
 }
 
 export async function publishEarthquakeFeeds(env, options = {}) {

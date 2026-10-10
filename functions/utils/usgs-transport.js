@@ -150,12 +150,57 @@ export async function readBoundedJsonResponse(response, maxBytes, signal, { incl
   }
 }
 
-async function fetchBoundedJson(url, { maxBytes, timeoutMs = USGS_LIMITS.timeoutMs, detail = false, detailId, allowEmpty = false }) {
+async function isDeletedEventResponse(response, signal) {
+  if (!response.headers.get('Content-Type')?.toLowerCase().startsWith('text/plain') || !response.body) return false;
+  const reader = response.body.getReader();
+  const abort = () => { void reader.cancel().catch(() => {}); };
+  signal.addEventListener('abort', abort, { once: true });
+  let text = '';
+  let bytes = 0;
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  try {
+    for (;;) {
+      signal.throwIfAborted();
+      const { done, value } = await reader.read();
+      signal.throwIfAborted();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > 4096) return false;
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+    return /^The requested event has been deleted\. To see information for deleted events,/m.test(text);
+  } catch {
+    signal.throwIfAborted();
+    return false;
+  } finally {
+    signal.removeEventListener('abort', abort);
+    void reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+
+async function fetchBoundedJson(url, { maxBytes, timeoutMs = USGS_LIMITS.timeoutMs, signal, detail = false, detailId, allowEmpty = false }) {
   const controller = new AbortController();
   const timeoutError = new UsgsTransportError('USGS request timed out', { status: 504, code: 'USGS_TIMEOUT' });
   let timer;
+  let abortParent;
   const deadline = new Promise((_, reject) => {
+    abortParent = () => {
+      const error = signal.reason instanceof UsgsTransportError ? signal.reason
+        : new UsgsTransportError('USGS request aborted', { status: 504, code: 'USGS_ABORTED' });
+      controller.abort(error); reject(error);
+    };
+    if (signal?.aborted) abortParent();
+    else signal?.addEventListener('abort', abortParent, { once: true });
     timer = setTimeout(() => { controller.abort(timeoutError); reject(timeoutError); }, timeoutMs);
+  });
+  const waitForRetry = () => new Promise((resolve, reject) => {
+    controller.signal.throwIfAborted();
+    const finish = () => { controller.signal.removeEventListener('abort', abort); resolve(); };
+    const delay = setTimeout(finish, 100);
+    const abort = () => { clearTimeout(delay); controller.signal.removeEventListener('abort', abort); reject(controller.signal.reason); };
+    controller.signal.addEventListener('abort', abort, { once: true });
   });
   try {
     return await Promise.race([
@@ -164,26 +209,59 @@ async function fetchBoundedJson(url, { maxBytes, timeoutMs = USGS_LIMITS.timeout
           redirect: 'manual', signal: controller.signal,
           headers: { Accept: 'application/geo+json, application/json', 'User-Agent': 'EarthquakesLive/1.0 (+https://earthquakeslive.com)' },
         };
-        let response = await fetch(url, requestOptions);
-        if (detail && detailId && url === usgsDetailUrl(detailId) && response.status === 302 && !response.redirected) {
-          const target = detailCatalogRedirect(response.headers.get('Location'), detailId);
-          if (target) {
-            await response.body?.cancel().catch(() => {});
+        const fetchResponse = async target => {
+          controller.signal.throwIfAborted();
+          let response;
+          try { response = await fetch(target, requestOptions); }
+          catch {
+            if (controller.signal.aborted) throw controller.signal.reason;
+            throw new UsgsTransportError('USGS network request failed', { code: 'USGS_NETWORK_ERROR' });
+          }
+          if (controller.signal.aborted) void response.body?.cancel().catch(() => {});
+          controller.signal.throwIfAborted();
+          return response;
+        };
+        let target = url;
+        let followedRedirect = false;
+        for (let attempt = 0; ; attempt++) {
+          try {
+            let response = await fetchResponse(target);
+            if (!followedRedirect && detail && detailId && target === usgsDetailUrl(detailId) && response.status === 302 && !response.redirected) {
+              const catalog = detailCatalogRedirect(response.headers.get('Location'), detailId);
+              if (catalog) {
+                await response.body?.cancel().catch(() => {});
+                controller.signal.throwIfAborted();
+                followedRedirect = true;
+                target = catalog;
+                response = await fetchResponse(target);
+              }
+            }
+            if (!response.ok || response.redirected) {
+              if (detail && detailId && response.status === 409 && !response.redirected &&
+                  await isDeletedEventResponse(response, controller.signal)) {
+                throw new UsgsTransportError('USGS event has been deleted', {
+                  status: 410, code: 'USGS_EVENT_DELETED', upstreamStatus: 409,
+                });
+              }
+              await response.body?.cancel().catch(() => {});
+              throw new UsgsTransportError('USGS request failed', {
+                status: detail && response.status === 404 ? 404 : 502,
+                code: response.status >= 300 && response.status < 400 ? 'USGS_REDIRECT_REJECTED' : 'USGS_UPSTREAM_ERROR',
+                upstreamStatus: response.status,
+              });
+            }
+            if (allowEmpty && response.status === 204) return { type: 'FeatureCollection', features: [] };
+            return await readBoundedJsonResponse(response, maxBytes, controller.signal);
+          } catch (error) {
             controller.signal.throwIfAborted();
-            // Both requests and the final bounded body share the original timer.
-            response = await fetch(target, requestOptions);
+            const transient = error.code === 'USGS_NETWORK_ERROR' ||
+              (error.code === 'USGS_UPSTREAM_ERROR' && [429, 500, 502, 503, 504].includes(error.upstreamStatus));
+            if (!detail || attempt > 0 || !transient) throw error;
+            // Retry the last validated destination, without another redirect or
+            // a new timer. Payload, ID, alias and missing-event errors are terminal.
+            await waitForRetry();
           }
         }
-        if (!response.ok || response.redirected) {
-          await response.body?.cancel().catch(() => {});
-          throw new UsgsTransportError('USGS request failed', {
-            status: detail && response.status === 404 ? 404 : 502,
-            code: response.status >= 300 && response.status < 400 ? 'USGS_REDIRECT_REJECTED' : 'USGS_UPSTREAM_ERROR',
-            upstreamStatus: response.status,
-          });
-        }
-        if (allowEmpty && response.status === 204) return { type: 'FeatureCollection', features: [] };
-        return await readBoundedJsonResponse(response, maxBytes, controller.signal);
       })(),
       deadline,
     ]);
@@ -191,7 +269,7 @@ async function fetchBoundedJson(url, { maxBytes, timeoutMs = USGS_LIMITS.timeout
     controller.abort(error);
     if (error instanceof UsgsTransportError) throw error;
     throw new UsgsTransportError('USGS request failed');
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); signal?.removeEventListener('abort', abortParent); }
 }
 
 export async function fetchUsgsSummary(urlOrFeedKey, options = {}) {

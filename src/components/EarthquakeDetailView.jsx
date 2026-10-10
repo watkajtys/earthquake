@@ -8,6 +8,8 @@ import EarthquakeMap from './EarthquakeMap'; // Import the EarthquakeMap compone
 import { calculateDistance } from '../../common/mathUtils.js'; // isValidNumber import removed, calculateDistance moved
 import { finiteNumber, isCompleteNodalPlane, readAxis, readNodalPlane, selectFocalMechanism } from '../utils/focalMechanismUtils.js';
 import { estimateRadiatedEnergyJoules } from '../utils/earthquakeEnergy.js';
+import { eventIdFromDetailUrl } from '../utils/entityRoutes.js';
+import { loadEarthquakeDetail } from '../utils/loadEarthquakeDetail.js';
 
 // Define REGIONAL_RADIUS_KM
 const REGIONAL_RADIUS_KM = 804.672; // 500 miles
@@ -76,6 +78,8 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, onDetail
     const [detailData, setDetailData] = useState(null);
     const [isLoading, setIsLoading] = useState(!!detailUrl);
     const [error, setError] = useState(null);
+    const [canRetryDetail, setCanRetryDetail] = useState(false);
+    const [detailLoadAttempt, setDetailLoadAttempt] = useState(0);
     const [faultPlaneSelection, setFaultPlaneSelection] = useState({ detailUrl: null, key: 'np1' });
     const modalContentRef = React.useRef(null); // Ref for the modal content div
     const closeButtonRef = React.useRef(null); // Ref for the close button
@@ -99,54 +103,24 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, onDetail
             return;
         }
 
-        let event_id = null;
-        try {
-            // Example detailUrl: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc73649170.geojson"
-            const urlObject = new URL(detailUrl); // Use URL constructor for robust parsing
-            const pathSegments = urlObject.pathname.split('/');
-            const fileName = pathSegments.pop(); // Get the last segment, e.g., 'nc73649170.geojson'
-
-            if (fileName && fileName.endsWith('.geojson')) {
-                event_id = fileName.substring(0, fileName.length - '.geojson'.length);
-            }
-        } catch (e) {
-            console.error('Error parsing detailUrl to get event_id:', detailUrl, e);
-            setError('Invalid earthquake detail URL format.');
-            setIsLoading(false);
-            setDetailData(null); // Clear any potentially stale data
-            return;
-        }
-
+        const event_id = eventIdFromDetailUrl(detailUrl);
         if (!event_id) {
-            console.error('Could not determine earthquake ID from URL:', detailUrl);
-            setError('Could not determine earthquake ID from URL.');
+            setError('Invalid earthquake detail URL format.');
+            setCanRetryDetail(false);
             setIsLoading(false);
-            setDetailData(null); // Clear any potentially stale data
+            setDetailData(null);
             return;
         }
 
         let isMounted = true;
+        const controller = new AbortController();
         const fetchDetail = async () => {
             setIsLoading(true);
             setError(null);
+            setCanRetryDetail(false);
             setDetailData(null);
             try {
-                // Use the new API endpoint
-                const response = await fetch(`/api/earthquake/${event_id}`);
-                if (!response.ok) {
-                    if (response.status === 404 && isMounted) onDetailNotFoundForSeo?.();
-                    // Try to parse error response from API, otherwise use statusText
-                    let errorData;
-                    try {
-                        errorData = await response.json();
-                    // eslint-disable-next-line no-unused-vars
-                    } catch (_parseError) { // Prefixed with underscore
-                        // If parsing JSON fails, use statusText
-                        errorData = { message: response.statusText };
-                    }
-                    throw new Error(`Application API error! Status: ${response.status}. Message: ${errorData.message || "Failed to fetch"}`);
-                }
-                const data = await response.json();
+                const data = await loadEarthquakeDetail(event_id, { signal: controller.signal });
                 if (isMounted) {
                     setDetailData(data);
                     if (onDataLoadedForSeo && data) {
@@ -161,8 +135,11 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, onDetail
                     }
                 }
             } catch (e) {
-                console.error("Failed to fetch detail data from application API:", e);
-                if (isMounted) setError(`Failed to load details from application API: ${e.message}`);
+                if (isMounted && !controller.signal.aborted) {
+                    if (e.status === 404) onDetailNotFoundForSeo?.();
+                    setError(`Failed to load details from application API: ${e.message}`);
+                    setCanRetryDetail(e.retryable === true);
+                }
             } finally {
                 if (isMounted) setIsLoading(false);
             }
@@ -172,8 +149,9 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, onDetail
 
         return () => {
             isMounted = false;
+            controller.abort();
         };
-    }, [detailUrl, onDataLoadedForSeo, onDetailNotFoundForSeo]);
+    }, [detailUrl, detailLoadAttempt, onDataLoadedForSeo, onDetailNotFoundForSeo]);
 
     // New useEffect for investigating phase-data
     useEffect(() => {
@@ -266,6 +244,7 @@ function EarthquakeDetailView({ detailUrl, onClose, onDataLoadedForSeo, onDetail
                     <h3 className={isLoading ? 'sr-only' : 'text-xl font-semibold text-slate-700 mb-4'}>{statusTitle}</h3>
                     {isLoading ? <div className="animate-pulse"><SkeletonText width="w-3/4" height="h-8 mb-6 mx-auto" /><SkeletonBlock height="h-40 mb-4" /><SkeletonBlock height="h-64" /></div> :
                         <p className="text-slate-700 mb-6">{error || 'Could not retrieve or parse details.'}</p>}
+                    {!isLoading && canRetryDetail && <button type="button" onClick={() => setDetailLoadAttempt(value => value + 1)} className="mr-3 px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded">Retry details</button>}
                     <button type="button" ref={closeButtonRef} onClick={onClose} aria-label="Close detail view" className="mt-4 px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700">Close</button>
                 </div>
             </div>

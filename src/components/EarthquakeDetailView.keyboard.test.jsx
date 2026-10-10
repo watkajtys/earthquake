@@ -25,7 +25,7 @@ vi.mock('./earthquakeDetail/EarthquakeFurtherInfoPanel', () => ({ default: () =>
 
 const detail = { id: 'us123', properties: { mag: 4, title: 'Test event', place: 'Test place', time: 1700000000000, products: {} }, geometry: { coordinates: [0, 0, 10] } };
 const props = { detailUrl: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us123.geojson', broaderEarthquakeData: [], hasAttemptedMonthlyLoad: true, onClose: vi.fn() };
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('EarthquakeDetailView keyboard lifecycle', () => {
   it('provides a focused, trapped close control during loading and dismisses once', async () => {
@@ -49,7 +49,7 @@ describe('EarthquakeDetailView keyboard lifecycle', () => {
     const oldClose = vi.fn();
     const newClose = vi.fn();
     const { rerender } = render(<EarthquakeDetailView {...props} onClose={oldClose} />);
-    await act(async () => resolveFetch({ ok: true, json: async () => detail }));
+    await act(async () => resolveFetch(Response.json(detail)));
     const close = screen.getByRole('button', { name: 'Close detail view' });
     const lastControl = screen.getByRole('link', { name: 'Source details' });
     expect(close).toHaveFocus();
@@ -101,4 +101,50 @@ it('requests initial monthly context once even if the callback identity changes,
   expect(replacement).not.toHaveBeenCalled();
   rerender(<EarthquakeDetailView {...props} hasAttemptedMonthlyLoad isLoadingMonthly={false} monthlyError="Unavailable" handleLoadMonthlyData={replacement} />);
   expect(replacement).not.toHaveBeenCalled();
+});
+
+describe('detail navigation and retry controls', () => {
+  it('aborts the previous event and suppresses its late SEO update', async () => {
+    const resolveRequests = [];
+    const fetchMock = vi.fn(() => new Promise(resolve => { resolveRequests.push(resolve); }));
+    vi.stubGlobal('fetch', fetchMock);
+    const seo = vi.fn();
+    const { rerender } = render(<EarthquakeDetailView {...props} onDataLoadedForSeo={seo} />);
+    rerender(<EarthquakeDetailView {...props} detailUrl="https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us456.geojson" onDataLoadedForSeo={seo} />);
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+    await act(async () => resolveRequests[0](Response.json(detail)));
+    expect(seo).not.toHaveBeenCalled();
+    await act(async () => resolveRequests[1](Response.json({ ...detail, id: 'us456' })));
+    expect(seo).toHaveBeenCalledOnce(); expect(seo.mock.calls[0][0].id).toBe('us456');
+  });
+  it('aborts an active detail request when the view unmounts', () => {
+    const fetchMock = vi.fn(() => new Promise(() => {})); vi.stubGlobal('fetch', fetchMock);
+    const { unmount } = render(<EarthquakeDetailView {...props} />);
+    unmount(); expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+  });
+  it('offers manual retry after bounded transient recovery is exhausted', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ message: 'Unavailable' }, { status: 503 }))
+      .mockResolvedValueOnce(Response.json({ message: 'Unavailable' }, { status: 503 })).mockResolvedValueOnce(Response.json(detail));
+    vi.stubGlobal('fetch', fetchMock);
+    const seo = vi.fn(); render(<EarthquakeDetailView {...props} onDataLoadedForSeo={seo} />);
+    const retry = await screen.findByRole('button', { name: 'Retry details' });
+    fireEvent.click(retry);
+    await screen.findByRole('link', { name: 'Source details' });
+    expect(fetchMock).toHaveBeenCalledTimes(3); expect(seo).toHaveBeenCalledOnce();
+  });
+  it('shows deleted events as terminal without claiming a404 for SEO', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({}, { status: 410 })); vi.stubGlobal('fetch', fetchMock);
+    const notFound = vi.fn(); render(<EarthquakeDetailView {...props} onDetailNotFoundForSeo={notFound} />);
+    await screen.findByText(/removed from the USGS catalog/);
+    expect(screen.queryByRole('button', { name: 'Retry details' })).not.toBeInTheDocument();
+    expect(notFound).not.toHaveBeenCalled(); expect(fetchMock).toHaveBeenCalledOnce();
+  });
+  it('replaces an indefinitely loading request with a retry control after15seconds', async () => {
+    vi.useFakeTimers(); const fetchMock = vi.fn(() => new Promise(() => {})); vi.stubGlobal('fetch', fetchMock);
+    render(<EarthquakeDetailView {...props} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+    expect(screen.getByRole('button', { name: 'Retry details' })).toBeInTheDocument();
+    expect(screen.getByText(/detail request timed out/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+  });
 });

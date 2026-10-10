@@ -104,6 +104,39 @@ describe('backfill and shared detail persistence against the migrated schema', (
     expect(row().detail_fetch_attempts).toBe(3);
   });
 
+  it('stops terminal deleted-event fetches without removing an existing archive', async () => {
+    seed(); env.GEOJSON_BUCKET.seed('quake1.json', feature());
+    fetchValidatedDetail.mockRejectedValueOnce(new UsgsTransportError('Deleted', { code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409 }));
+    expect(await (await get()).json()).toMatchObject({ success: false, retry_disposition: 'terminal',
+      error_earthquakes: [{ id: 'quake1', code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409, retry_disposition: 'terminal' }] });
+    expect(row()).toMatchObject({ detail_fetch_attempts: 3, next_detail_fetch_attempt: null });
+    expect(env.GEOJSON_BUCKET.readJson('quake1.json')).toEqual(feature());
+    expect(await (await get()).json()).toMatchObject({ processed: 0, errors: 0 });
+  });
+
+  it('parks a deleted-event durable recovery immediately and keeps its archive', async () => {
+    seed(); env.GEOJSON_BUCKET.seed('quake1.json', feature());
+    env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));
+    await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('R2 outage');
+    vi.setSystemTime(now + hour);
+    fetchValidatedDetail.mockRejectedValueOnce(new UsgsTransportError('Deleted', { code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409 }));
+    expect(await (await get()).json()).toMatchObject({ success: false, retry_disposition: 'parked',
+      recovered_jobs: { failed: 1, failures: [{ id: 'quake1', code: 'USGS_EVENT_DELETED', retry_disposition: 'parked' }] } });
+    expect(database.prepare('SELECT status FROM EarthquakeDetailJobs').get().status).toBe('parked');
+    expect(env.GEOJSON_BUCKET.readJson('quake1.json')).toEqual(feature());
+  });
+
+  it('retains scheduled recovery when another selected event is terminal', async () => {
+    seed('quake1'); seed('quake2');
+    fetchValidatedDetail.mockImplementation(async id => { throw new UsgsTransportError('Unavailable', id === 'quake1'
+      ? { code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409 }
+      : { code: 'USGS_UPSTREAM_ERROR', status: 502, upstreamStatus: 503 }); });
+    const pending = get('batch_size=2'); await vi.runAllTimersAsync();
+    expect(await (await pending).json()).toMatchObject({ success: false, errors: 2, retry_disposition: 'mixed', retry_scheduled: true });
+    expect(row('quake1').detail_fetch_attempts).toBe(3);
+    expect(row('quake2').next_detail_fetch_attempt).toBeGreaterThan(now);
+  });
+
   it('records a job before R2 and commits the pointer and flags only after the object exists', async () => {
     seed();
     env.GEOJSON_BUCKET.hooks.beforePut = async () => {
@@ -148,7 +181,7 @@ describe('backfill and shared detail persistence against the migrated schema', (
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: false, processed: 0, errors: 0,
       recovered_jobs: { selected: 1, completed: 0, failed: 1 },
-      error: '0 details stored; 0 detail failures and 1 durable recovery failures; retry disposition: unknown.' });
+      error: '0 details stored; 0 detail failures and 1 durable recovery failures; retry disposition: scheduled.' });
     expect(database.prepare('SELECT status, next_attempt_at_ms FROM EarthquakeDetailJobs WHERE event_id = ?')
       .get('quake1')).toMatchObject({ status: 'pending', next_attempt_at_ms: now + 2 * hour });
     expect(fetchValidatedDetail).toHaveBeenCalledExactlyOnceWith('quake1');
@@ -202,7 +235,7 @@ describe('backfill and shared detail persistence against the migrated schema', (
   it('awaits a durable scheduled retry for a validated upstream failure', async () => {
     seed();
     fetchValidatedDetail.mockRejectedValueOnce(new UsgsTransportError('USGS unavailable', { upstreamStatus: 409 }));
-    expect(await (await get()).json()).toMatchObject({ success: false, errors: 1, error_earthquakes: [{ id: 'quake1', status: 409 }] });
+    expect(await (await get()).json()).toMatchObject({ success: false, errors: 1, error_earthquakes: [{ id: 'quake1', status: 502, upstreamStatus: 409 }] });
     expect(row()).toMatchObject({ detail_fetched: 0, detail_fetch_attempts: 1,
       last_detail_fetch_attempt: now, next_detail_fetch_attempt: now + hour });
     expect(env.GEOJSON_QUEUE.send).not.toHaveBeenCalled();

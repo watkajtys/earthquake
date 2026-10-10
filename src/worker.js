@@ -4,7 +4,7 @@ import { failureDiagnostics, releaseDiagnostics } from '../functions/utils/failu
 import { onRequestGet } from '../functions/api/cluster-detail-with-quakes.js';
 import { handleUsgsProxy } from '../functions/routes/api/usgs-proxy.js';
 import { handleTrustedUsgsIngestion } from '../functions/background/ingest-usgs-feed.js';
-import { fetchValidatedDetail, isValidUsgsEventId, usgsDetailUrl } from '../functions/utils/usgs-transport.js';
+import { fetchValidatedDetail, isValidUsgsEventId, UsgsTransportError } from '../functions/utils/usgs-transport.js';
 import { persistEarthquakeDetail } from '../functions/utils/earthquakeDetailPersistence.js';
 import { readArchivedEarthquakeDetail } from '../functions/utils/earthquakeDetailRead.js';
 import { createScheduledTaskLogger } from './utils/scheduledTaskLogger.js';
@@ -330,52 +330,80 @@ async function handlePrerenderCluster(request, env) {
 async function handleEarthquakeDetailRequest(request, env, ctx, event_id) {
   const sourceName = "earthquake-detail-handler";
   if (!isValidUsgsEventId(event_id)) return policyError('Invalid event ID.', 400);
+  const startedAt = Date.now();
+  let stage = 'archive';
+  const beginStage = value => { stage = value; };
+  const controller = new AbortController();
+  const timeoutError = new UsgsTransportError('Earthquake detail read timed out', { status: 504, code: 'DETAIL_TIMEOUT' });
+  let timer;
+  let abortRequest;
+  const deadline = new Promise((_, reject) => {
+    abortRequest = () => {
+      const error = new UsgsTransportError('Earthquake detail request aborted', { status: 504, code: 'DETAIL_ABORTED' });
+      controller.abort(error); reject(error);
+    };
+    if (request.signal.aborted) abortRequest();
+    else request.signal.addEventListener('abort', abortRequest, { once: true });
+    timer = setTimeout(() => { controller.abort(timeoutError); reject(timeoutError); }, 10_000);
+  });
+  const logFailure = (error, failureStage = stage) => console.error(JSON.stringify({
+    event: 'earthquake-detail-read-failed', eventId: event_id,
+    ...failureDiagnostics(error, { stage: failureStage, code: 'DETAIL_READ_FAILED' }),
+    elapsedMs: Math.max(0, Date.now() - startedAt), ...releaseDiagnostics(env),
+  }));
   try {
-    const archived = await readArchivedEarthquakeDetail(env.GEOJSON_BUCKET, event_id, { db: env.DB });
-    if (archived) return new Response(archived.body, { headers: archived.headers });
-    const usgsUrl = usgsDetailUrl(event_id);
-    console.log(
-      `[${sourceName}] Fetching event ${event_id} from USGS: ${usgsUrl}`,
-    );
-    const geojsonFeature = await fetchValidatedDetail(event_id);
-    if (env.DB) {
-      const current = await env.DB.prepare(`SELECT source_updated_at_ms, event_time, latitude,
-        longitude, depth, magnitude, place FROM EarthquakeEvents WHERE id = ?`)
-        .bind(event_id).first();
-      const coordinates = geojsonFeature.geometry.coordinates;
-      const sameScience = current?.event_time === geojsonFeature.properties.time &&
-        current.latitude === coordinates[1] && current.longitude === coordinates[0] &&
-        current.depth === coordinates[2] && current.magnitude === geojsonFeature.properties.mag &&
-        current.place === geojsonFeature.properties.place;
-      if (current?.source_updated_at_ms != null &&
-          (!Number.isSafeInteger(current.source_updated_at_ms) ||
-            current.source_updated_at_ms > geojsonFeature.properties.updated ||
-            (current.source_updated_at_ms === geojsonFeature.properties.updated && !sameScience))) {
-        return jsonErrorResponse('Earthquake detail revision is not current.', 503, sourceName);
+    return await Promise.race([deadline, (async () => {
+      controller.signal.throwIfAborted();
+      const archived = await readArchivedEarthquakeDetail(env.GEOJSON_BUCKET, event_id,
+        { db: env.DB, signal: controller.signal, onStage: beginStage });
+      controller.signal.throwIfAborted();
+      if (archived) return new Response(archived.body, { headers: archived.headers });
+      beginStage('upstream');
+      const geojsonFeature = await fetchValidatedDetail(event_id, { signal: controller.signal });
+      controller.signal.throwIfAborted();
+      if (env.DB) {
+        beginStage('revision-read');
+        const current = await env.DB.prepare(`SELECT source_updated_at_ms, event_time, latitude,
+          longitude, depth, magnitude, place FROM EarthquakeEvents WHERE id = ?`)
+          .bind(event_id).first();
+        controller.signal.throwIfAborted();
+        const coordinates = geojsonFeature.geometry.coordinates;
+        const sameScience = current?.event_time === geojsonFeature.properties.time &&
+          current.latitude === coordinates[1] && current.longitude === coordinates[0] &&
+          current.depth === coordinates[2] && current.magnitude === geojsonFeature.properties.mag &&
+          current.place === geojsonFeature.properties.place;
+        if (current?.source_updated_at_ms != null &&
+            (!Number.isSafeInteger(current.source_updated_at_ms) ||
+              current.source_updated_at_ms > geojsonFeature.properties.updated ||
+              (current.source_updated_at_ms === geojsonFeature.properties.updated && !sameScience))) {
+          logFailure(new UsgsTransportError('Earthquake detail revision is not current', { status: 503, code: 'DETAIL_REVISION_NOT_CURRENT' }));
+          return jsonErrorResponse('Earthquake detail revision is not current.', 503, sourceName);
+        }
       }
-    }
-    if (env.DB && env.GEOJSON_BUCKET) {
-      ctx.waitUntil(persistEarthquakeDetail({ env, detailData: geojsonFeature, requestedId: event_id })
-        .catch((error) => console.error(`[${sourceName}] Detail persistence failed for ${event_id}: ${error.message}`)));
-    }
-    return new Response(JSON.stringify(geojsonFeature), {
-      headers: {
-        "Content-Type": "application/json",
-        "X-Data-Source": "USGS-API",
-      },
-    });
-  } catch (usgsOrGeneralError) {
-    console.error(
-      `[${sourceName}] Error during USGS fetch/processing for event ${event_id}: ${usgsOrGeneralError.message}`,
-      usgsOrGeneralError,
-    );
-    return jsonErrorResponse(
-      'Earthquake detail is unavailable.',
-      usgsOrGeneralError.status || 502,
-      sourceName,
-    );
+      beginStage('response');
+      controller.signal.throwIfAborted();
+      const response = new Response(JSON.stringify(geojsonFeature), {
+        headers: { 'Content-Type': 'application/json', 'X-Data-Source': 'USGS-API' },
+      });
+      // A completed accepted read may archive in the background. A timed-out or
+      // disconnected read must never start persistence after its late result.
+      if (env.DB && env.GEOJSON_BUCKET) {
+        controller.signal.throwIfAborted();
+        ctx.waitUntil(persistEarthquakeDetail({ env, detailData: geojsonFeature, requestedId: event_id })
+          .catch(error => logFailure(error, 'persistence')));
+      }
+      return response;
+    })()]);
+  } catch (error) {
+    controller.abort(error);
+    logFailure(error);
+    return jsonErrorResponse('Earthquake detail is unavailable.', error.status || 502, sourceName);
+  } finally {
+    clearTimeout(timer);
+    request.signal.removeEventListener('abort', abortRequest);
   }
 }
+
 async function handleClusterDefinitionPost({ request, env }) {
   const sourceName = "cluster-definition-post-handler";
   if (!env.DB) {
@@ -967,17 +995,22 @@ var worker_default = {
       const failures = Array.isArray(result.error_earthquakes) ? result.error_earthquakes.slice(0, 100).map(item => ({
         id: typeof item.id === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(item.id) ? item.id : 'unknown',
         ...failureDiagnostics(item, { stage: 'detail-operation', code: 'DETAIL_FAILED' }),
-        retryDisposition: ['scheduled', 'exhausted'].includes(item.retry_disposition) ? item.retry_disposition : 'unknown',
+        retryDisposition: ['scheduled', 'exhausted', 'terminal', 'parked', 'mixed'].includes(item.retry_disposition) ? item.retry_disposition : 'unknown',
       })) : [];
       const data = { processed: Number.isSafeInteger(result.processed) ? result.processed : 0,
         errors: Number.isSafeInteger(result.errors) ? result.errors : failures.length,
         recoveredFailures: Number.isSafeInteger(result.recovered_jobs?.failed) ? result.recovered_jobs.failed : 0,
-        httpStatus: response.status, failures, ...releaseDiagnostics(env) };
+        httpStatus: response.status, failures,
+        recoveryFailures: Array.isArray(result.recovered_jobs?.failures) ? result.recovered_jobs.failures.slice(0, 3).map(item => ({
+          id: typeof item.id === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(item.id) ? item.id : 'unknown',
+          ...failureDiagnostics(item, { stage: 'detail-recovery', code: 'DETAIL_RECOVERY_FAILED' }),
+          retryDisposition: ['scheduled', 'parked', 'terminal'].includes(item.retry_disposition) ? item.retry_disposition : 'unknown',
+        })) : [], ...releaseDiagnostics(env) };
       if (response.ok && result.success === true) {
         logger.logMilestone("Automated backfill complete", data);
       } else {
         data.outcome = data.processed > 0 ? 'partial' : 'failed';
-        data.retryDisposition = ['scheduled', 'exhausted'].includes(result.retry_disposition) ? result.retry_disposition : 'unknown';
+        data.retryDisposition = ['scheduled', 'exhausted', 'terminal', 'parked', 'mixed'].includes(result.retry_disposition) ? result.retry_disposition : 'unknown';
         // Policy responses use message/status, whereas batch responses use counts
         // and individual failures. Preserve both contracts without logging payloads.
         const policyMessage = (!response.ok || result.status === 'error') && typeof result.message === 'string' && result.message.length <= 240 &&

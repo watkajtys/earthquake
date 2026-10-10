@@ -73,11 +73,11 @@ async function jobRow(db, id, revision) {
 async function releaseJob(db, id, revision, token, error) {
   const now = Date.now();
   const result = await db.prepare(`UPDATE EarthquakeDetailJobs SET
-    status = CASE WHEN attempts >= ? THEN 'parked' ELSE 'pending' END,
+    status = CASE WHEN ? = 1 OR attempts >= ? THEN 'parked' ELSE 'pending' END,
     next_attempt_at_ms = ?, lease_token = NULL, lease_until_ms = NULL,
     last_error = ?, updated_at_ms = ?
     WHERE event_id = ? AND target_revision_ms = ? AND status = 'leased' AND lease_token = ?`)
-    .bind(MAX_ATTEMPTS, now + RETRY_MS, String(error?.code || error?.message || 'archive failed').slice(0, 200),
+    .bind(Number(error?.code === 'USGS_EVENT_DELETED'), MAX_ATTEMPTS, now + RETRY_MS, failureDiagnostics(error, { code: 'DETAIL_ARCHIVE_FAILED' }).code,
       now, id, revision, token).run();
   checked(result, 'record detail retry');
 }
@@ -234,6 +234,7 @@ export async function recoverDueDetailJobs(env, { limit = 3 } = {}) {
   if (due?.success !== true || !Array.isArray(due.results)) throw new Error('Failed to select due detail jobs');
   let completed = 0;
   let failed = 0;
+  const failures = [];
   for (const job of due.results) {
     let token = null;
     try {
@@ -273,7 +274,14 @@ export async function recoverDueDetailJobs(env, { limit = 3 } = {}) {
       failed++;
       console.error('[detail-archive] Recovery failed.', { id: job.event_id, ...failureDiagnostics(error, { stage: 'detail-recovery', code: 'DETAIL_RECOVERY_FAILED' }), ...releaseDiagnostics(env) });
       if (token) await releaseJob(env.DB, job.event_id, job.target_revision_ms, token, error);
+      // Diagnostic lookup must not replace the original recovery failure.
+      let state = null;
+      try { state = await jobRow(env.DB, job.event_id, job.target_revision_ms); }
+      catch (lookupError) { console.error('[detail-archive] Retry status unavailable.', {
+        ...failureDiagnostics(lookupError, { stage: 'retry-status', code: 'DETAIL_RETRY_STATUS_FAILED', d1: true }), ...releaseDiagnostics(env) }); }
+      failures.push({ id: job.event_id, ...failureDiagnostics(error, { stage: 'detail-recovery', code: 'DETAIL_RECOVERY_FAILED' }),
+        retry_disposition: state?.status === 'parked' ? 'parked' : state?.status === 'pending' ? 'scheduled' : 'unknown' });
     }
   }
-  return { selected: due.results.length, completed, failed };
+  return { selected: due.results.length, completed, failed, failures };
 }

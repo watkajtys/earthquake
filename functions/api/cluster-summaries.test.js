@@ -441,3 +441,58 @@ describe('summary R2 read resilience', () => {
     expect(env.GEOJSON_BUCKET.get.mock.calls.map(([key]) => key)).toEqual([SUMMARY_POINTER_KEY, fixture.descriptor.manifestKey]);
   });
 });
+
+describe('retained summary fallback preserves generation boundaries', () => {
+  async function setup() {
+    const previous = await generation(250, { generatedAtMs: NOW - 60_000, sourceObservedAtMs: NOW - 60_000 });
+    const current = await generation(250, { generationId: GENERATION_B, snapshotSequence: 2 });
+    publish(current.descriptor, [previous.descriptor]);
+    return { previous, current };
+  }
+  it.each(['manifest', 'page', 'checksum'])('uses a verified retained generation when current %s is unavailable', async kind => {
+    const { previous, current } = await setup();
+    if (kind === 'manifest') objects.delete(current.descriptor.manifestKey);
+    if (kind === 'page') objects.delete(current.manifest.pages[0].key);
+    if (kind === 'checksum') objects.set(current.manifest.pages[0].key, '{}');
+    const { response, body } = await call();
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Summary-Fallback')).toBe('true');
+    expect(response.headers.get('X-Summary-Observed-At')).toBe(String(previous.descriptor.sourceObservedAtMs));
+    expect(body).toMatchObject({ generationId: GENERATION_A, snapshotSequence: 1, stale: true });
+    const continued = await call(withCursor(body.nextCursor));
+    expect(continued.response.status).toBe(200);
+    expect(continued.body).toMatchObject({ generationId: GENERATION_A, snapshotSequence: 1, stale: true });
+  });
+  it('does not switch generations after a cursor page fails', async () => {
+    const { current } = await setup(); const first = await call();
+    objects.delete(current.manifest.pages[1].key);
+    const second = await call(withCursor(first.body.nextCursor));
+    expect(second.response.status).toBe(200);
+    const third = await call(withCursor(second.body.nextCursor));
+    expect(third.response.status).toBe(503);
+  });
+  it('rejects corrupted previous content too', async () => {
+    const { previous, current } = await setup();
+    objects.delete(current.descriptor.manifestKey);
+    objects.set(previous.manifest.pages[0].key, '{}');
+    expect((await call()).response.status).toBe(503);
+  });
+  it('does not use previous generations outside the two-hour retention limit', async () => {
+    const { current } = await setup(); objects.delete(current.descriptor.manifestKey);
+    vi.spyOn(Date, 'now').mockReturnValue(NOW + SUMMARY_MAX_AGE_MS);
+    expect((await call()).response.status).toBe(503);
+  });
+  it('reserves time for fallback when the current manifest stalls', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(NOW);
+    try {
+      const { current } = await setup(); const original = env.GEOJSON_BUCKET.get.getMockImplementation(); const cancel = vi.fn();
+      env.GEOJSON_BUCKET.get.mockImplementation(async key => key === current.descriptor.manifestKey
+        ? { size: 10, body: new ReadableStream({ cancel }) } : original(key));
+      const pending = call(); await vi.advanceTimersByTimeAsync(6000);
+      const { response, body } = await pending;
+      expect(response.status).toBe(200); expect(body.generationId).toBe(GENERATION_A);
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+});

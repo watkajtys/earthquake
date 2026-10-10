@@ -9,6 +9,7 @@ export const MAX_FEED_BYTES = 17 * 1024 * 1024;
 export const MAX_FEED_FEATURES = 30_000;
 export const MAX_FEED_POINTER_BYTES = 8 * 1024;
 export const FEED_FRESHNESS_MS = 10 * 60_000;
+export const FEED_FALLBACK_MAX_AGE_MS = 30 * 60_000;
 export const FEED_CLOCK_SKEW_MS = 60_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const HASH = /^[0-9a-f]{64}$/u;

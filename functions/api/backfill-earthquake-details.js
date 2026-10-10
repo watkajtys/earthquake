@@ -101,6 +101,7 @@ async function onRequestGet(context) {
         const diagnostic = failureDiagnostics(error, { stage: fetchedDetail ? 'detail-persistence' : 'detail-fetch', code: 'DETAIL_FAILED' });
         console.error('[backfill] Detail operation failed.', { id: earthquake.id, ...diagnostic, ...releaseDiagnostics(env) });
         const attempts = earthquake.detail_fetch_attempts || 0;
+        const deleted = error?.code === 'USGS_EVENT_DELETED';
         // Infrastructure failures do not consume the upstream fetch budget.
         // Await scheduling so a successful HTTP response cannot hide its loss.
         const retry = await env.DB.prepare(`
@@ -109,15 +110,15 @@ async function onRequestGet(context) {
             last_detail_fetch_attempt = ?, next_detail_fetch_attempt = ?
           WHERE id = ? AND detail_fetched = FALSE
         `).bind(
-          fetchedDetail ? attempts : attempts + 1,
-          Date.now(), Date.now() + (fetchedDetail ? HOUR_MS : [HOUR_MS, 4 * HOUR_MS, 12 * HOUR_MS][attempts]),
+          deleted ? 3 : fetchedDetail ? attempts : attempts + 1,
+          Date.now(), deleted ? null : Date.now() + (fetchedDetail ? HOUR_MS : [HOUR_MS, 4 * HOUR_MS, 12 * HOUR_MS][attempts]),
           earthquake.id,
         ).run();
         if (retry?.success !== true) throw new Error('Failed to persist detail retry');
-        const retryDisposition = fetchedDetail || attempts + 1 < 3 ? 'scheduled' : 'exhausted';
+        const retryDisposition = deleted ? 'terminal' : fetchedDetail || attempts + 1 < 3 ? 'scheduled' : 'exhausted';
         errors.push({ id: earthquake.id, error: fetchedDetail ? 'Detail persistence failed.' : 'USGS detail fetch failed.',
           ...diagnostic, retry_disposition: retryDisposition,
-          ...(diagnostic.upstreamStatus ? { status: diagnostic.upstreamStatus } : {}) });
+          ...(Number.isInteger(error?.status) ? { status: error.status } : {}) });
       }
       if (index + 1 < result.results.length) await new Promise(resolve => setTimeout(resolve, 1000));
     }
@@ -125,11 +126,14 @@ async function onRequestGet(context) {
     nextUrl.searchParams.set('batch_size', String(criteria.batchSize));
     nextUrl.searchParams.set('min_magnitude', String(criteria.minMagnitude));
     nextUrl.searchParams.set('max_age_days', String(criteria.maxAgeDays));
-    const retryDisposition = recovery.failed ? 'unknown' : errors.some(item => item.retry_disposition === 'exhausted') ? 'exhausted' : errors.length ? 'scheduled' : 'none';
+    const dispositions = [...errors, ...(recovery.failures ?? [])].map(item => item.retry_disposition);
+    if (recovery.failed && !recovery.failures?.length) dispositions.push('unknown');
+    const uniqueDispositions = [...new Set(dispositions)];
+    const retryDisposition = uniqueDispositions.length > 1 ? 'mixed' : uniqueDispositions[0] ?? 'none';
     return jsonResponse({
       success: errors.length === 0 && recovery.failed === 0,
       outcome: errors.length || recovery.failed ? (processed.length ? 'partial' : 'failed') : 'completed',
-      retry_disposition: retryDisposition,
+      retry_disposition: retryDisposition, retry_scheduled: dispositions.includes('scheduled'),
       ...(errors.length || recovery.failed ? { error: `${processed.length} details stored; ${errors.length} detail failures and ${recovery.failed} durable recovery failures; retry disposition: ${retryDisposition}.` } : {}),
       processed: processed.length, errors: errors.length,
       recovered_jobs: recovery,

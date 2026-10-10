@@ -132,3 +132,39 @@ describe('complete earthquake feed transport', () => {
       fetchTime: now, snapshotGeneratedAtMs: null })).toBe(true);
   });
 });
+
+describe('degraded feed recovery', () => {
+  const retainedResponse = envelope => feedResponse(envelope, { headers: { 'X-Feed-Stale': 'true', 'X-Feed-Fallback': 'true' } });
+  it('prefers a fresh complete upstream feed over a retained snapshot', async () => {
+    fetchMock.mockResolvedValueOnce(retainedResponse(feedEnvelope())).mockResolvedValueOnce(fallback());
+    const result = await fetchEarthquakeFeed('day');
+    expect(result.dataSource).toBe('USGS'); expect(isEarthquakeFeedStale(result)).toBe(false);
+  });
+  it('uses verified retained data when upstream also fails, with unchanged clocks and a stale state', async () => {
+    fetchMock.mockResolvedValueOnce(retainedResponse(feedEnvelope())).mockResolvedValueOnce(new Response(null, { status: 503 }));
+    const result = await fetchEarthquakeFeed('day');
+    expect(result).toMatchObject({ degraded: true, sourceGeneratedAtMs: now, sourceObservedAtMs: now });
+    expect(isEarthquakeFeedStale(result)).toBe(true);
+  });
+  it('returns retained data after a bounded upstream stall', async () => {
+    fetchMock.mockResolvedValueOnce(retainedResponse(feedEnvelope())).mockImplementationOnce(() => new Promise(() => {}));
+    const pending = fetchEarthquakeFeed('day'); await vi.advanceTimersByTimeAsync(15_000);
+    expect((await pending).degraded).toBe(true);
+    expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(true);
+  });
+  it('does not return an expired retained snapshot after the upstream wait', async () => {
+    fetchMock.mockResolvedValueOnce(retainedResponse(feedEnvelope())).mockImplementationOnce(() => new Promise(() => {}));
+    vi.setSystemTime(now + 30 * 60_000 - 1000);
+    const pending = fetchEarthquakeFeed('day').catch(error => error);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(await pending).toMatchObject({ name: 'TimeoutError' });
+  });
+  it('never rolls the displayed generation back to a retained snapshot', async () => {
+    fetchMock.mockResolvedValueOnce(feedResponse(feedEnvelope('day', [earthquakeFeature()], { snapshotSequence: 2 })));
+    const previousData = await fetchEarthquakeFeed('day');
+    fetchMock.mockResolvedValueOnce(retainedResponse(feedEnvelope('day', [earthquakeFeature()], { snapshotSequence: 1 })))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }));
+    await expect(fetchEarthquakeFeed('day', { previousData })).rejects.toThrow('generation is inconsistent');
+    expect(previousData.snapshotCache.envelope.snapshotSequence).toBe(2);
+  });
+});
