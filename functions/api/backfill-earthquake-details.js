@@ -1,3 +1,4 @@
+import { failureDiagnostics, releaseDiagnostics } from '../utils/failureDiagnostics.js';
 import { updateStatsInKV } from '../utils/kv-stats-updater.js';
 import { fetchValidatedDetail } from '../utils/usgs-transport.js';
 import { persistEarthquakeDetail, recoverDueDetailJobs } from '../utils/earthquakeDetailPersistence.js';
@@ -44,9 +45,9 @@ function pendingSelection(criteria, now) {
   };
 }
 
-function safeFailure(error) {
+function safeFailure(error, env) {
   if (error instanceof RequestPolicyError) return policyError(error.message, error.status);
-  console.error('[backfill] Operation failed:', error);
+  console.error('[backfill] Operation failed.', { ...failureDiagnostics(error, { code: 'BACKFILL_FAILED' }), ...releaseDiagnostics(env) });
   return policyError('Backfill operation failed.', 500);
 }
 
@@ -84,7 +85,7 @@ async function onRequestGet(context) {
         if (env.USGS_LAST_RESPONSE_KV) {
           const update = updateStatsInKV(context, 'USGS_LAST_RESPONSE_KV', 'earthquake_stats', {
             fetched: 1, with_shakemap: Number(flags.has_shakemap), with_moment_tensor: Number(flags.has_moment_tensor),
-          }).catch(error => console.error('[backfill] Approximate statistics update failed:', error));
+          }).catch(error => console.error('[backfill] Approximate statistics update failed.', { ...failureDiagnostics(error, { stage: 'statistics-update', code: 'STATISTICS_FAILED' }), ...releaseDiagnostics(env) }));
           if (context.ctx?.waitUntil) context.ctx.waitUntil(update);
           else await update;
         }
@@ -97,7 +98,8 @@ async function onRequestGet(context) {
           },
         });
       } catch (error) {
-        console.error(`[backfill] Detail operation failed for ${earthquake.id}:`, error);
+        const diagnostic = failureDiagnostics(error, { stage: fetchedDetail ? 'detail-persistence' : 'detail-fetch', code: 'DETAIL_FAILED' });
+        console.error('[backfill] Detail operation failed.', { id: earthquake.id, ...diagnostic, ...releaseDiagnostics(env) });
         const attempts = earthquake.detail_fetch_attempts || 0;
         // Infrastructure failures do not consume the upstream fetch budget.
         // Await scheduling so a successful HTTP response cannot hide its loss.
@@ -112,8 +114,10 @@ async function onRequestGet(context) {
           earthquake.id,
         ).run();
         if (retry?.success !== true) throw new Error('Failed to persist detail retry');
-        errors.push({ id: earthquake.id, error: fetchedDetail ? 'Detail persistence failed; retry scheduled.' : 'USGS detail fetch failed; retry scheduled.',
-          ...(error.upstreamStatus ? { status: error.upstreamStatus } : {}) });
+        const retryDisposition = fetchedDetail || attempts + 1 < 3 ? 'scheduled' : 'exhausted';
+        errors.push({ id: earthquake.id, error: fetchedDetail ? 'Detail persistence failed.' : 'USGS detail fetch failed.',
+          ...diagnostic, retry_disposition: retryDisposition,
+          ...(diagnostic.upstreamStatus ? { status: diagnostic.upstreamStatus } : {}) });
       }
       if (index + 1 < result.results.length) await new Promise(resolve => setTimeout(resolve, 1000));
     }
@@ -121,9 +125,12 @@ async function onRequestGet(context) {
     nextUrl.searchParams.set('batch_size', String(criteria.batchSize));
     nextUrl.searchParams.set('min_magnitude', String(criteria.minMagnitude));
     nextUrl.searchParams.set('max_age_days', String(criteria.maxAgeDays));
+    const retryDisposition = recovery.failed ? 'unknown' : errors.some(item => item.retry_disposition === 'exhausted') ? 'exhausted' : errors.length ? 'scheduled' : 'none';
     return jsonResponse({
       success: errors.length === 0 && recovery.failed === 0,
-      ...(recovery.failed ? { error: `${recovery.failed} durable detail job recovery attempt(s) failed; retry scheduled.` } : {}),
+      outcome: errors.length || recovery.failed ? (processed.length ? 'partial' : 'failed') : 'completed',
+      retry_disposition: retryDisposition,
+      ...(errors.length || recovery.failed ? { error: `${processed.length} details stored; ${errors.length} detail failures and ${recovery.failed} durable recovery failures; retry disposition: ${retryDisposition}.` } : {}),
       processed: processed.length, errors: errors.length,
       recovered_jobs: recovery,
       elapsed_seconds: (Date.now() - startTime) / 1000,
@@ -135,7 +142,7 @@ async function onRequestGet(context) {
       ...(result.results.length ? {} : { message: 'No earthquakes to backfill' }),
     });
   } catch (error) {
-    return safeFailure(error);
+    return safeFailure(error, context.env);
   }
 }
 
@@ -166,7 +173,7 @@ async function onRequestPost(context) {
     return jsonResponse({ success: true, operation: 'status', eligible_count: result.total,
       detail_jobs: detailJobs, criteria });
   } catch (error) {
-    return safeFailure(error);
+    return safeFailure(error, context.env);
   }
 }
 

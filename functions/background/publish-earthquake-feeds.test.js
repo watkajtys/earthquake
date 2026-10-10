@@ -284,6 +284,52 @@ describe('sequential independent period orchestration', () => {
     expect(JSON.stringify(failure.results)).not.toContain('features');
   });
 
+  it.each([
+    ['old feature', value => { value.features[0].properties.time = baseTime - 31 * 86400_000; }, 'INVALID_FEED_FEATURE_TIMESTAMPS'],
+    ['alert metadata', value => { delete value.features[0].properties.alert; }, 'INVALID_FEED_ALERT_METADATA'],
+  ])('distinguishes invalid %s from transport faults without exposing feature content', async (_, corrupt, code) => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const invalid = feed(); corrupt(invalid);
+    let failure;
+    try { await publishEarthquakeFeeds(env, { now: baseTime, fetchFeed: async () => invalid }); } catch (error) { failure = error; }
+    expect(failure.errors).toHaveLength(3);
+    expect(failure.errors.every(error => error.code === code)).toBe(true);
+    expect(log.mock.calls.map(([, value]) => [value.period, value.stage, value.code]))
+      .toEqual(['day', 'week', 'month'].map(period => [period, 'source-validation', code]));
+    expect(bucket.calls.some(call => call.method === 'put')).toBe(false);
+    expect(JSON.stringify(log.mock.calls)).not.toContain('features');
+  });
+
+  it('bounds an invalid caller period before logging its validation failure', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(publishEarthquakeFeed(env, 'https://secret.invalid/?token=hidden')).rejects.toMatchObject({ code: 'INVALID_FEED_PERIOD' });
+    expect(log).toHaveBeenCalledWith('[period-feeds] Period publication failed.', expect.objectContaining({ period: 'unknown', code: 'INVALID_FEED_PERIOD' }));
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret.invalid|hidden/);
+  });
+
+  it('assigns a stable code to unconfirmed storage writes', async () => {
+    bucket.hooks.afterPut = () => null;
+    await expect(publish()).rejects.toMatchObject({ code: 'FEED_WRITE_UNCONFIRMED', message: 'R2 did not confirm earthquake feed write' });
+  });
+
+  it('logs every cause with stage, release and upstream status before retaining the aggregate', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const upstream = Object.assign(new Error('https://secret.invalid/?token=hidden'), { code: 'USGS_HTTP_ERROR', upstreamStatus: 503 });
+    env.WORKER_VERSION_METADATA = { id: 'test-version' }; env.RELEASE_REVISION = 'b'.repeat(40);
+    const options = { now: baseTime, fetchFeed: async period => { if (period === 'week') throw upstream; return feed(); }, randomUUID: () => generation(nextId++) };
+    let aggregate;
+    try { await publishEarthquakeFeeds(env, options); } catch (error) { aggregate = error; }
+    expect(aggregate.errors).toEqual([upstream]);
+    expect(log).toHaveBeenCalledWith('[period-feeds] Period publication failed.', { period: 'week', stage: 'source-fetch',
+      code: 'USGS_HTTP_ERROR', upstreamStatus: 503, elapsedMs: 0, versionId: 'test-version', revision: 'b'.repeat(40) });
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret.invalid|hidden|features/);
+    log.mockClear(); bucket.hooks.beforeGet = () => { throw new Error('raw credentials hidden'); };
+    await expect(publishEarthquakeFeeds(env, options)).rejects.toBeInstanceOf(globalThis.AggregateError);
+    expect(log).toHaveBeenCalledTimes(3);
+    expect(log.mock.calls.map(([, diagnostic]) => diagnostic.stage)).toEqual(['pointer-read', 'pointer-read', 'pointer-read']);
+    expect(JSON.stringify(log.mock.calls)).not.toContain('credentials');
+  });
+
   it('returns bounded successful and unchanged outcomes without renewing pointers', async () => {
     const options = { now: baseTime, fetchFeed: async () => feed(), randomUUID: () => generation(nextId++) };
     const first = await publishEarthquakeFeeds(env, options);

@@ -1,3 +1,4 @@
+import { failureDiagnostics, releaseDiagnostics } from './failureDiagnostics.js';
 import { fetchValidatedDetail, isValidUsgsEventId, usgsDetailUrl, USGS_LIMITS, validateUsgsDetail } from './usgs-transport.js';
 
 export const MAX_DETAIL_QUEUE_BYTES = 120_000; // Legacy Queue payload boundary.
@@ -218,7 +219,7 @@ export async function persistEarthquakeDetail({ env, detailData, previousAttempt
     return { flags, archiveDisposition: 'stored' };
   } catch (error) {
     try { await releaseJob(env.DB, requestedId, revision, token, error); }
-    catch (retryError) { console.error('[detail-archive] Could not record retry:', retryError); }
+    catch (retryError) { console.error('[detail-archive] Could not record retry.', { ...failureDiagnostics(retryError, { stage: 'retry-persistence', code: 'DETAIL_RETRY_FAILED', d1: true }), ...releaseDiagnostics(env) }); }
     throw error;
   }
 }
@@ -270,7 +271,7 @@ export async function recoverDueDetailJobs(env, { limit = 3 } = {}) {
       completed++;
     } catch (error) {
       failed++;
-      console.error(`[detail-archive] Recovery failed for ${job.event_id}:`, error);
+      console.error('[detail-archive] Recovery failed.', { id: job.event_id, ...failureDiagnostics(error, { stage: 'detail-recovery', code: 'DETAIL_RECOVERY_FAILED' }), ...releaseDiagnostics(env) });
       if (token) await releaseJob(env.DB, job.event_id, job.target_revision_ms, token, error);
     }
   }

@@ -79,6 +79,31 @@ describe('backfill and shared detail persistence against the migrated schema', (
   });
   afterEach(() => { database.close(); vi.useRealTimers(); vi.restoreAllMocks(); vi.clearAllMocks(); });
 
+  it('preserves stored details and a sanitized individual retry cause on partial success', async () => {
+    seed('quake1'); seed('nn00925554');
+    fetchValidatedDetail.mockImplementation(async id => {
+      if (id === 'nn00925554') throw new UsgsTransportError('https://secret.invalid/?token=hidden', { code: 'USGS_HTTP_ERROR', upstreamStatus: 503 });
+      return feature(id);
+    });
+    const pending = get('batch_size=2');
+    await vi.runAllTimersAsync();
+    const result = await (await pending).json();
+    expect(result).toMatchObject({ success: false, outcome: 'partial', processed: 1, errors: 1, retry_disposition: 'scheduled',
+      error_earthquakes: [{ id: 'nn00925554', code: 'USGS_HTTP_ERROR', stage: 'detail-fetch', upstreamStatus: 503, retry_disposition: 'scheduled' }] });
+    expect(row('quake1').detail_fetched).toBe(1);
+    expect(row('nn00925554').next_detail_fetch_attempt).toBeGreaterThan(now);
+    expect(JSON.stringify(result)).not.toContain('secret.invalid');
+    expect(JSON.stringify(console.error.mock.calls)).not.toContain('hidden');
+  });
+
+  it('reports an exhausted upstream budget instead of promising an eligible retry', async () => {
+    seed('quake1', { detail_fetch_attempts: 2, next_detail_fetch_attempt: now - 1 });
+    fetchValidatedDetail.mockRejectedValueOnce(new UsgsTransportError('Unavailable', { upstreamStatus: 503 }));
+    expect(await (await get()).json()).toMatchObject({ success: false, retry_disposition: 'exhausted',
+      error_earthquakes: [{ id: 'quake1', retry_disposition: 'exhausted' }] });
+    expect(row().detail_fetch_attempts).toBe(3);
+  });
+
   it('records a job before R2 and commits the pointer and flags only after the object exists', async () => {
     seed();
     env.GEOJSON_BUCKET.hooks.beforePut = async () => {
@@ -118,15 +143,17 @@ describe('backfill and shared detail persistence against the migrated schema', (
     env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));
     await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('R2 outage');
     vi.setSystemTime(now + hour);
-    fetchValidatedDetail.mockRejectedValueOnce(new Error('USGS outage'));
+    fetchValidatedDetail.mockRejectedValueOnce(Object.assign(new Error('https://secret.invalid/?token=hidden'), { code: 'USGS_HTTP_ERROR', upstreamStatus: 503 }));
     const response = await get();
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: false, processed: 0, errors: 0,
       recovered_jobs: { selected: 1, completed: 0, failed: 1 },
-      error: '1 durable detail job recovery attempt(s) failed; retry scheduled.' });
+      error: '0 details stored; 0 detail failures and 1 durable recovery failures; retry disposition: unknown.' });
     expect(database.prepare('SELECT status, next_attempt_at_ms FROM EarthquakeDetailJobs WHERE event_id = ?')
       .get('quake1')).toMatchObject({ status: 'pending', next_attempt_at_ms: now + 2 * hour });
     expect(fetchValidatedDetail).toHaveBeenCalledExactlyOnceWith('quake1');
+    expect(console.error).toHaveBeenCalledWith('[detail-archive] Recovery failed.', expect.objectContaining({ id: 'quake1', code: 'USGS_HTTP_ERROR', upstreamStatus: 503, stage: 'detail-recovery' }));
+    expect(JSON.stringify(console.error.mock.calls)).not.toMatch(/secret.invalid|hidden/);
   });
 
   it('supersedes a pending old job when recovery fetches a newer upstream revision', async () => {

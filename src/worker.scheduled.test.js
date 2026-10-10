@@ -131,6 +131,35 @@ describe('actual Worker scheduled failure propagation', () => {
     expect(results[0].status).toBe('rejected');
   });
 
+  it('reports partial counts, individual retry causes and release identity while rejecting', async () => {
+    backfill.mockResolvedValue(Response.json({ success: false, processed: 6, errors: 1, retry_disposition: 'scheduled',
+      error_earthquakes: [{ id: 'nn00925554', code: 'USGS_HTTP_ERROR', stage: 'detail-fetch', upstreamStatus: 409,
+        retry_disposition: 'scheduled', error: 'https://secret.invalid/?token=hidden' }] }));
+    const { results } = await runScheduled('*/30 * * * *', { ...env, WORKER_VERSION_METADATA: { id: 'test-version' }, RELEASE_REVISION: 'a'.repeat(40) });
+    expect(results[0].reason).toMatchObject({ code: 'BACKFILL_PARTIAL', diagnostics: { processed: 6, errors: 1,
+      outcome: 'partial', retryDisposition: 'scheduled', versionId: 'test-version', failures: [{ id: 'nn00925554',
+        code: 'USGS_HTTP_ERROR', stage: 'detail-fetch', upstreamStatus: 409, retryDisposition: 'scheduled' }] } });
+    expect(results[0].reason.message).toContain('6 details stored');
+    expect(JSON.stringify(console.error.mock.calls)).not.toContain('secret.invalid');
+    expect(JSON.stringify(console.error.mock.calls)).not.toContain('Unknown error');
+  });
+
+  it('keeps recovery failure counts despite an empty-selection advisory message', async () => {
+    backfill.mockResolvedValue(Response.json({ success: false, processed: 0, errors: 0,
+      recovered_jobs: { failed: 1 }, message: 'No earthquakes to backfill', retry_disposition: 'unknown' }));
+    const { results } = await runScheduled('*/30 * * * *');
+    expect(results[0].reason.message).toContain('1 recovery failures');
+    expect(results[0].reason.message).not.toContain('No earthquakes');
+    expect(results[0].reason.diagnostics.retryDisposition).toBe('unknown');
+  });
+
+  it('consumes a fatal policy response message and HTTP status', async () => {
+    backfill.mockResolvedValue(Response.json({ status: 'error', message: 'Database not configured.' }, { status: 500 }));
+    const { results } = await runScheduled('*/30 * * * *');
+    expect(results[0].reason.message).toBe('Database not configured.');
+    expect(results[0].reason.diagnostics).toMatchObject({ httpStatus: 500, outcome: 'failed' });
+  });
+
   it('preserves a thrown backfill failure through waitUntil', async () => {
     const failure = new Error('Detail retry persistence failed');
     backfill.mockRejectedValue(failure);

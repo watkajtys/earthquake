@@ -15,7 +15,14 @@ const HASH = /^[0-9a-f]{64}$/u;
 const ID = /^[A-Za-z0-9_-]{1,100}$/u;
 const timestamp = value => Number.isSafeInteger(value) && value >= 0 && value <= 8640000000000000;
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-function check(condition, reason) { if (!condition) throw new Error(`Invalid earthquake feed: ${reason}`); }
+function check(condition, reason) {
+  if (!condition) {
+    const error = new Error(`Invalid earthquake feed: ${reason}`);
+    // Reasons are fixed internal labels, never feature content or upstream text.
+    error.code = `INVALID_FEED_${reason.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
+    throw error;
+  }
+}
 function keys(value, required) {
   check(object(value) && required.every(key => Object.hasOwn(value, key)) &&
     Object.keys(value).every(key => required.includes(key)), 'fields');
@@ -123,7 +130,7 @@ export async function readBoundedFeedJson(response, signal, maxBytes = MAX_FEED_
   const length = response.headers.get('Content-Length');
   if (length !== null && (!/^\d+$/u.test(length) || Number(length) > maxBytes)) {
     void response.body?.cancel().catch(() => {});
-    throw new Error('Earthquake feed exceeds byte limit');
+    throw Object.assign(new Error('Earthquake feed exceeds byte limit'), { code: 'FEED_BYTE_LIMIT' });
   }
   check(response.body?.getReader, 'missing response body');
   const reader = response.body.getReader();

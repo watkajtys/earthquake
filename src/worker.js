@@ -1,3 +1,4 @@
+import { failureDiagnostics, releaseDiagnostics } from '../functions/utils/failureDiagnostics.js';
 // Backend restored from the live deployed Worker bundle (2026-08).
 // Frontend assets are built and deployed with this Worker through the ASSETS binding.
 import { onRequestGet } from '../functions/api/cluster-detail-with-quakes.js';
@@ -963,37 +964,34 @@ var worker_default = {
         ctx,
       });
       const result = await response.json();
-      if (result.success) {
-        console.log(
-          `[scheduled-backfill] Processed ${result.processed} earthquakes with ${result.errors || 0} errors.`,
-        );
-        logger.logMilestone("Automated backfill complete", {
-          processed: result.processed,
-          errors: result.errors,
-        });
+      const failures = Array.isArray(result.error_earthquakes) ? result.error_earthquakes.slice(0, 100).map(item => ({
+        id: typeof item.id === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(item.id) ? item.id : 'unknown',
+        ...failureDiagnostics(item, { stage: 'detail-operation', code: 'DETAIL_FAILED' }),
+        retryDisposition: ['scheduled', 'exhausted'].includes(item.retry_disposition) ? item.retry_disposition : 'unknown',
+      })) : [];
+      const data = { processed: Number.isSafeInteger(result.processed) ? result.processed : 0,
+        errors: Number.isSafeInteger(result.errors) ? result.errors : failures.length,
+        recoveredFailures: Number.isSafeInteger(result.recovered_jobs?.failed) ? result.recovered_jobs.failed : 0,
+        httpStatus: response.status, failures, ...releaseDiagnostics(env) };
+      if (response.ok && result.success === true) {
+        logger.logMilestone("Automated backfill complete", data);
       } else {
-        console.error("[scheduled-backfill] Backfill failed:", result.error);
-        logger.logError(
-          "BACKFILL_ERROR",
-          result.error || "Unknown error",
-          { result },
-          false,
-        );
-        throw new Error(result.error || 'Automated backfill failed');
+        data.outcome = data.processed > 0 ? 'partial' : 'failed';
+        data.retryDisposition = ['scheduled', 'exhausted'].includes(result.retry_disposition) ? result.retry_disposition : 'unknown';
+        // Policy responses use message/status, whereas batch responses use counts
+        // and individual failures. Preserve both contracts without logging payloads.
+        const policyMessage = (!response.ok || result.status === 'error') && typeof result.message === 'string' && result.message.length <= 240 &&
+          /^[A-Za-z0-9 .(),;-]+$/.test(result.message) ? result.message : null;
+        const message = policyMessage || `${data.processed} details stored; ${data.errors} detail failures; ${data.recoveredFailures} recovery failures; HTTP ${response.status}.`;
+        logger.logError("BACKFILL_ERROR", message, data, false);
+        const error = new Error(message);
+        error.code = data.outcome === 'partial' ? 'BACKFILL_PARTIAL' : 'BACKFILL_FAILED';
+        error.diagnostics = data;
+        throw error;
       }
     } catch (backfillError) {
-      console.error(
-        "[scheduled-backfill] Error during automated backfill:",
-        backfillError.message,
-      );
-      logger.logError(
-        "BACKFILL_EXECUTION_ERROR",
-        backfillError.message,
-        {
-          stack: backfillError.stack,
-        },
-        false,
-      );
+      logger.logError("BACKFILL_EXECUTION_ERROR", 'Automated backfill execution failed.',
+        backfillError.diagnostics ?? { ...failureDiagnostics(backfillError, { code: 'BACKFILL_FAILED' }), ...releaseDiagnostics(env) }, false);
       throw backfillError;
     }
   },
