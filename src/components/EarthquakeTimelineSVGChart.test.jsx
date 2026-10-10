@@ -46,12 +46,6 @@ describe('EarthquakeTimelineSVGChart', () => {
     // For this setup, we are wrapping with the Provider, so direct mocking of the hook
     // might not be strictly necessary if the component consumes context via <Context.Consumer> or useContext(Context).
     // However, it's good practice if the component *could* use the hook directly.
-    vi.spyOn(React, 'useContext').mockImplementation(context => {
-      if (context === EarthquakeDataContext) {
-        return providerProps.value;
-      }
-      return React.useContext(context); // Default to original useContext for other contexts
-    });
   });
 
   it('should render skeleton when isLoading is true', () => {

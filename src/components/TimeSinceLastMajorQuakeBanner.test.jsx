@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { vi } from 'vitest';
 import TimeSinceLastMajorQuakeBanner from './TimeSinceLastMajorQuakeBanner';
 import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils'; // Import context
@@ -8,7 +8,7 @@ import { MAJOR_QUAKE_THRESHOLD } from '../constants/appConstants';
 // --- Mocks & Constants ---
 const MOCKED_NOW = 1700000000000;
 
-vi.mock('./SkeletonText', () => ({
+vi.mock('./skeletons/SkeletonText', () => ({
     default: vi.fn(({ width, height, className, children }) => (
         <div data-testid="skeleton" className={`mock-skeleton ${width} ${height} ${className}`}>
             {children || 'Skeleton'}
@@ -46,10 +46,6 @@ const mockPreviousMajorQuake = {
 
 const mockTimeBetweenPreviousMajorQuakes = mockLastMajorQuake.properties.time - mockPreviousMajorQuake.properties.time; // 3600000
 
-// Note: Tests for dynamic data rendering (Scenarios 1, 2, 5) have been skipped
-// due to difficulties in reliably testing timer-based content and complex DOM
-// assertions with the current setup. Core data logic is tested in the
-// useEarthquakeData.test.js. Passing tests focus on static conditions.
 describe('TimeSinceLastMajorQuakeBanner', () => {
     let mockHandleQuakeClick;
 
@@ -62,7 +58,7 @@ describe('TimeSinceLastMajorQuakeBanner', () => {
     });
 
     afterEach(() => {
-        vi.runOnlyPendingTimers();
+        vi.clearAllTimers();
         vi.useRealTimers();
     });
 
@@ -75,7 +71,7 @@ describe('TimeSinceLastMajorQuakeBanner', () => {
         );
     };
 
-    it.skip('Scenario 1: Renders with all data present and handles clicks', async () => { // Re-skipping due to persistent timeout
+    it('Scenario 1: Renders with all data present and handles clicks', async () => { // Existing dynamic case restored with synchronous effect assertions.
         const mockContextValue = {
             lastMajorQuake: mockLastMajorQuake,
             previousMajorQuake: mockPreviousMajorQuake,
@@ -96,28 +92,28 @@ describe('TimeSinceLastMajorQuakeBanner', () => {
         
         const initialTimeSinceLast = MOCKED_NOW - mockLastMajorQuake.properties.time;
         // Wait for the initial time to be formatted and displayed
-        await waitFor(() => expect(screen.getByText(`formatted:${initialTimeSinceLast}`)).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: `formatted:${initialTimeSinceLast}` })).toBeInTheDocument();
         
         // LastMajorQuake details
         // Find the paragraph containing the place, then check its content
         const lastQuakeDetailsP = screen.getByText(mockLastMajorQuake.properties.place, { exact: false }).closest('p');
-        expect(lastQuakeDetailsP.textContent).toContain(`M ${mockLastMajorQuake.properties.mag.toFixed(1)}`);
+        expect(lastQuakeDetailsP.textContent).toContain(`M${mockLastMajorQuake.properties.mag.toFixed(1)}`);
         expect(lastQuakeDetailsP.textContent).toContain(mockLastMajorQuake.properties.place);
-        expect(screen.getByRole('link', { name: '(details)' })).toHaveAttribute('href', mockLastMajorQuake.properties.url);
+        expect(screen.getByRole('button', { name: 'View details for M5.0 at Test Place Last' })).toBeInTheDocument();
 
         // Click on last major quake time section
         await act(async () => {
-            fireEvent.click(screen.getByText(`formatted:${initialTimeSinceLast}`));
+            fireEvent.click(screen.getByRole('button', { name: 'View details for M5.0 at Test Place Last' }));
         });
         expect(mockHandleQuakeClick).toHaveBeenCalledWith(mockLastMajorQuake);
         mockHandleQuakeClick.mockClear();
 
         // TimeBetweenPreviousMajorQuakes display
-        expect(screen.getByText(`formatted:${mockTimeBetweenPreviousMajorQuakes}`)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'View details for the previously cited earthquake' })).toHaveTextContent(`formatted:${mockTimeBetweenPreviousMajorQuakes}`);
         
         // PreviousMajorQuake details
         const prevQuakeDetailsP = screen.getByText(mockPreviousMajorQuake.properties.place, { exact: false }).closest('p');
-        expect(prevQuakeDetailsP.textContent).toContain(`M ${mockPreviousMajorQuake.properties.mag.toFixed(1)}`);
+        expect(prevQuakeDetailsP.textContent).toContain(`M${mockPreviousMajorQuake.properties.mag.toFixed(1)}`);
         expect(prevQuakeDetailsP.textContent).toContain(mockPreviousMajorQuake.properties.place);
         expect(prevQuakeDetailsP.textContent).toMatch(/^\(M/); // Check for leading parenthesis
 
@@ -133,7 +129,7 @@ describe('TimeSinceLastMajorQuakeBanner', () => {
             vi.advanceTimersByTime(1000);
             await Promise.resolve(); // Flush microtasks
         });
-        await waitFor(() => expect(screen.getByText(`formatted:${expectedTimeAfterOneSecond}`)).toBeInTheDocument());
+        expect(screen.getByText(`formatted:${expectedTimeAfterOneSecond}`)).toBeInTheDocument();
         
         // Calls: initial useEffect, one tick for interval, initial render of timeBetween
         // The number of calls to mockFormatTimeDuration might be tricky due to strict mode double effects in dev,
@@ -148,7 +144,7 @@ describe('TimeSinceLastMajorQuakeBanner', () => {
         expect(mockFormatTimeDuration).toHaveBeenCalledWith(mockTimeBetweenPreviousMajorQuakes);
     });
 
-    it.skip('Scenario 2: Renders with lastMajorQuake, but no previousMajorQuake data', async () => { // Re-skipping due to persistent timeout
+    it('Scenario 2: Renders with lastMajorQuake, but no previousMajorQuake data', async () => { // Existing dynamic case restored with synchronous effect assertions.
         const mockContextValue = {
             lastMajorQuake: mockLastMajorQuake,
             previousMajorQuake: null,
@@ -168,10 +164,10 @@ describe('TimeSinceLastMajorQuakeBanner', () => {
         );
 
         const initialTimeSinceLast = MOCKED_NOW - mockLastMajorQuake.properties.time;
-        await waitFor(() => expect(screen.getByText(`formatted:${initialTimeSinceLast}`)).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: `formatted:${initialTimeSinceLast}` })).toBeInTheDocument();
         
         const lastQuakeDetailsP = screen.getByText(mockLastMajorQuake.properties.place, { exact: false }).closest('p');
-        expect(lastQuakeDetailsP.textContent).toContain(`M ${mockLastMajorQuake.properties.mag.toFixed(1)}`);
+        expect(lastQuakeDetailsP.textContent).toContain(`M${mockLastMajorQuake.properties.mag.toFixed(1)}`);
         expect(lastQuakeDetailsP.textContent).toContain(mockLastMajorQuake.properties.place);
         
         expect(screen.getByText(`N/A (Only one M${MAJOR_QUAKE_THRESHOLD}+ found or data pending)`, { exact: true })).toBeInTheDocument();
@@ -210,7 +206,7 @@ describe('TimeSinceLastMajorQuakeBanner', () => {
         expect(mainSkeletonContainer.querySelector('.h-8.bg-slate-600.rounded.w-1\\/3')).toBeInTheDocument();
     });
     
-    it.skip('Scenario 5: Renders partial skeleton when effectively loading monthly and lastMajorQuake exists', async () => { // Re-skipping due to persistent timeout
+    it('Scenario 5: Renders partial skeleton when effectively loading monthly and lastMajorQuake exists', async () => { // Existing dynamic case restored with synchronous effect assertions.
         const mockContextValue = {
             lastMajorQuake: mockLastMajorQuake,
             previousMajorQuake: null,
@@ -230,10 +226,10 @@ describe('TimeSinceLastMajorQuakeBanner', () => {
         );
 
         const initialTimeSinceLast = MOCKED_NOW - mockLastMajorQuake.properties.time;
-        await waitFor(() => expect(screen.getByText(`formatted:${initialTimeSinceLast}`)).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: `formatted:${initialTimeSinceLast}` })).toBeInTheDocument();
 
         const lastQuakeDetailsP = screen.getByText(mockLastMajorQuake.properties.place, { exact: false }).closest('p');
-        expect(lastQuakeDetailsP.textContent).toContain(`M ${mockLastMajorQuake.properties.mag.toFixed(1)}`);
+        expect(lastQuakeDetailsP.textContent).toContain(`M${mockLastMajorQuake.properties.mag.toFixed(1)}`);
         expect(lastQuakeDetailsP.textContent).toContain(mockLastMajorQuake.properties.place);
         
         // Get the container from the main render of the component for this test
@@ -252,6 +248,3 @@ describe('TimeSinceLastMajorQuakeBanner', () => {
         expect(mainBannerDiv.querySelector('div.h-8.bg-slate-600.rounded.w-1\\/3.mx-auto.my-2')).toBeInTheDocument();
     });
 });
-// Scenario 5 was the third skipped test. It is now unskipped by removing .skip from its 'it' block.
-// The diff tool might not show it if the content inside the it block was identical to what I provided.
-// To be sure, I will make a specific change to unskip it.

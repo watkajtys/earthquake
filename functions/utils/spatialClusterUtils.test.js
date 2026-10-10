@@ -4,12 +4,22 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { 
-  EarthquakeSpatialIndex, 
-  buildEarthquakeSpatialIndex, 
+import {
+  EarthquakeSpatialIndex,
+  buildEarthquakeSpatialIndex,
   findActiveClustersOptimized
 } from './spatialClusterUtils.js';
 import { findActiveClusters } from '../../src/utils/clusterUtils.js';
+
+// Fixed seed makes synthetic workloads reproducible across runs.
+let fixtureSeed = 0x12345678;
+const fixtureFraction = () => {
+  fixtureSeed ^= fixtureSeed << 13;
+  fixtureSeed ^= fixtureSeed >>> 17;
+  fixtureSeed ^= fixtureSeed << 5;
+  return (fixtureSeed >>> 0) / 0x100000000;
+};
+beforeEach(() => { fixtureSeed = 0x12345678; });
 
 // Test data generators
 const createMockEarthquake = (id, lat, lng, mag = 5.0) => ({
@@ -28,9 +38,9 @@ const createMockEarthquake = (id, lat, lng, mag = 5.0) => ({
 const createClusteredEarthquakes = (centerLat, centerLng, count, radius = 0.1) => {
   const earthquakes = [];
   for (let i = 0; i < count; i++) {
-    const lat = centerLat + (Math.random() - 0.5) * radius;
-    const lng = centerLng + (Math.random() - 0.5) * radius;
-    earthquakes.push(createMockEarthquake(i, lat, lng, 5.0 + Math.random()));
+    const lat = centerLat + (fixtureFraction() - 0.5) * radius;
+    const lng = centerLng + (fixtureFraction() - 0.5) * radius;
+    earthquakes.push(createMockEarthquake(i, lat, lng, 5.0 + fixtureFraction()));
   }
   return earthquakes;
 };
@@ -58,7 +68,7 @@ describe('EarthquakeSpatialIndex', () => {
     it('should insert earthquake into spatial index', () => {
       const earthquake = createMockEarthquake('test1', 34.0522, -118.2437);
       const result = spatialIndex.insert(earthquake);
-      
+
       expect(result).toBe(true);
       expect(spatialIndex.earthquakeCount).toBe(1);
       expect(spatialIndex.grid.size).toBeGreaterThan(0);
@@ -67,7 +77,7 @@ describe('EarthquakeSpatialIndex', () => {
     it('should reject earthquakes outside bounds', () => {
       const earthquake = createMockEarthquake('outside', 50, -100); // Outside test bounds
       const result = spatialIndex.insert(earthquake);
-      
+
       expect(result).toBe(false);
       expect(spatialIndex.earthquakeCount).toBe(0);
     });
@@ -81,7 +91,7 @@ describe('EarthquakeSpatialIndex', () => {
           coordinates: 'invalid'
         }
       };
-      
+
       const result = spatialIndex.insert(invalidEarthquake);
       expect(result).toBe(false);
     });
@@ -97,17 +107,17 @@ describe('EarthquakeSpatialIndex', () => {
         createMockEarthquake('sf2', 37.7849, -122.4094), // Close to SF
         createMockEarthquake('far', 35.0000, -115.0000)  // Distant
       ];
-      
+
       earthquakes.forEach(eq => spatialIndex.insert(eq));
     });
 
     it('should find earthquakes within radius', () => {
       // Query around Los Angeles
       const results = spatialIndex.findWithinRadius(34.0522, -118.2437, 50); // 50km radius
-      
+
       expect(results.length).toBeGreaterThanOrEqual(1);
       expect(results.some(r => r.id === 'eq_la1')).toBe(true);
-      
+
       // Check that distances are calculated
       results.forEach(result => {
         expect(result).toHaveProperty('distance');
@@ -118,7 +128,7 @@ describe('EarthquakeSpatialIndex', () => {
     it('should find multiple earthquakes in cluster', () => {
       // Query with larger radius to catch both LA earthquakes
       const results = spatialIndex.findWithinRadius(34.0522, -118.2437, 20);
-      
+
       const laEarthquakes = results.filter(r => r.id.includes('la'));
       expect(laEarthquakes.length).toBe(2);
     });
@@ -126,7 +136,7 @@ describe('EarthquakeSpatialIndex', () => {
     it('should not find distant earthquakes', () => {
       // Query around LA with small radius
       const results = spatialIndex.findWithinRadius(34.0522, -118.2437, 10);
-      
+
       // Should not include SF or far earthquakes
       expect(results.some(r => r.id.includes('sf'))).toBe(false);
       expect(results.some(r => r.id === 'eq_far')).toBe(false);
@@ -139,10 +149,10 @@ describe('EarthquakeSpatialIndex', () => {
         east: -117,
         west: -119
       };
-      
+
       const results = spatialIndex.query(bbox);
       expect(results.length).toBeGreaterThan(0);
-      
+
       // Should include LA earthquakes but not SF
       expect(results.some(r => r.earthquake.id.includes('la'))).toBe(true);
       expect(results.some(r => r.earthquake.id.includes('sf'))).toBe(false);
@@ -154,9 +164,9 @@ describe('EarthquakeSpatialIndex', () => {
       const earthquake = createMockEarthquake('test', 34.0, -118.0);
       spatialIndex.insert(earthquake);
       spatialIndex.findWithinRadius(34.0, -118.0, 10);
-      
+
       const stats = spatialIndex.getStats();
-      
+
       expect(stats.insertions).toBe(1);
       expect(stats.queries).toBe(1);
       expect(stats.earthquakeCount).toBe(1);
@@ -168,15 +178,15 @@ describe('EarthquakeSpatialIndex', () => {
       // Create clusters in different regions to test spatial partitioning
       for (let i = 0; i < 200; i++) {
         // Spread earthquakes across a larger geographic area
-        const lat = 30 + Math.random() * 10; // 30-40 degrees latitude  
-        const lng = -125 + Math.random() * 15; // -125 to -110 degrees longitude
+        const lat = 30 + fixtureFraction() * 10; // 30-40 degrees latitude
+        const lng = -125 + fixtureFraction() * 15; // -125 to -110 degrees longitude
         const eq = createMockEarthquake(i, lat, lng);
         spatialIndex.insert(eq);
       }
-      
+
       // Search in a small area to demonstrate spatial optimization
       spatialIndex.findWithinRadius(34.5, -118.5, 10); // Smaller radius
-      
+
       const stats = spatialIndex.getStats();
       expect(stats.distanceCalculationsSaved).toBeGreaterThan(0);
     });
@@ -186,7 +196,7 @@ describe('EarthquakeSpatialIndex', () => {
     it('should calculate optimal cell size', () => {
       const earthquakes = createClusteredEarthquakes(34.0, -118.0, 50);
       const cellSize = EarthquakeSpatialIndex.calculateOptimalCellSize(earthquakes, 100);
-      
+
       expect(cellSize).toBeGreaterThan(0);
       expect(cellSize).toBeLessThan(10); // Should be reasonable
     });
@@ -202,7 +212,7 @@ describe('buildEarthquakeSpatialIndex', () => {
   it('should build spatial index from earthquake array', () => {
     const earthquakes = createClusteredEarthquakes(34.0, -118.0, 20);
     const spatialIndex = buildEarthquakeSpatialIndex(earthquakes, 100);
-    
+
     expect(spatialIndex).toBeDefined();
     expect(spatialIndex.earthquakeCount).toBe(20);
     expect(spatialIndex.bounds).toBeDefined();
@@ -220,7 +230,7 @@ describe('buildEarthquakeSpatialIndex', () => {
       { id: 'invalid2', properties: {}, geometry: { coordinates: 'invalid' } },
       createMockEarthquake('valid2', 34.1, -118.1)
     ];
-    
+
     const spatialIndex = buildEarthquakeSpatialIndex(earthquakes, 100);
     expect(spatialIndex.earthquakeCount).toBe(2); // Only valid earthquakes
   });
@@ -230,9 +240,9 @@ describe('buildEarthquakeSpatialIndex', () => {
       createMockEarthquake('1', 34.0, -118.0),
       createMockEarthquake('2', 35.0, -117.0)
     ];
-    
+
     const spatialIndex = buildEarthquakeSpatialIndex(earthquakes, 100);
-    
+
     // Bounds should include buffer
     expect(spatialIndex.bounds.south).toBeLessThan(34.0);
     expect(spatialIndex.bounds.north).toBeGreaterThan(35.0);
@@ -246,26 +256,26 @@ describe('findActiveClustersOptimized', () => {
     // Create two distinct clusters with unique IDs
     const cluster1 = [];
     for (let i = 0; i < 5; i++) {
-      const lat = 34.0 + (Math.random() - 0.5) * 0.05;
-      const lng = -118.0 + (Math.random() - 0.5) * 0.05;
-      cluster1.push(createMockEarthquake(`cluster1-${i}`, lat, lng, 5.0 + Math.random()));
+      const lat = 34.0 + (fixtureFraction() - 0.5) * 0.05;
+      const lng = -118.0 + (fixtureFraction() - 0.5) * 0.05;
+      cluster1.push(createMockEarthquake(`cluster1-${i}`, lat, lng, 5.0 + fixtureFraction()));
     }
-    
+
     const cluster2 = [];
     for (let i = 0; i < 4; i++) {
-      const lat = 37.7 + (Math.random() - 0.5) * 0.05;
-      const lng = -122.4 + (Math.random() - 0.5) * 0.05;
-      cluster2.push(createMockEarthquake(`cluster2-${i}`, lat, lng, 5.0 + Math.random()));
+      const lat = 37.7 + (fixtureFraction() - 0.5) * 0.05;
+      const lng = -122.4 + (fixtureFraction() - 0.5) * 0.05;
+      cluster2.push(createMockEarthquake(`cluster2-${i}`, lat, lng, 5.0 + fixtureFraction()));
     }
-    
+
     const isolated = [createMockEarthquake('isolated', 35.0, -115.0, 3.0)]; // Isolated
-    
+
     const allEarthquakes = [...cluster1, ...cluster2, ...isolated];
-    
+
     const clusters = findActiveClustersOptimized(allEarthquakes, 20, 3); // 20km, min 3 quakes
-    
+
     expect(clusters.length).toBe(2); // Should find 2 clusters
-    
+
     // Verify cluster properties
     clusters.forEach(cluster => {
       expect(cluster.length).toBeGreaterThanOrEqual(3);
@@ -278,24 +288,22 @@ describe('findActiveClustersOptimized', () => {
       createMockEarthquake('high', 34.01, -118.01, 6.0),
       createMockEarthquake('medium', 34.02, -118.02, 4.5)
     ];
-    
+
     const clusters = findActiveClustersOptimized(earthquakes, 10, 2);
-    
-    if (clusters.length > 0) {
-      // First earthquake in cluster should be highest magnitude
-      const firstCluster = clusters[0];
-      expect(firstCluster[0].properties.mag).toBe(6.0);
-    }
+
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0].map(quake => quake.id).sort()).toEqual(earthquakes.map(quake => quake.id).sort());
+    expect(clusters[0][0].properties.mag).toBe(6.0);
   });
 
   it('should handle edge cases gracefully', () => {
     // Empty array
     expect(findActiveClustersOptimized([], 100, 3)).toEqual([]);
-    
+
     // Too few earthquakes
     const fewEarthquakes = [createMockEarthquake('1', 34.0, -118.0)];
     expect(findActiveClustersOptimized(fewEarthquakes, 100, 3)).toEqual([]);
-    
+
     // Invalid earthquakes
     const invalidEarthquakes = [
       { id: 'invalid', properties: {}, geometry: null }
@@ -311,14 +319,16 @@ describe('findActiveClustersOptimized', () => {
       createMockEarthquake('3', 34.02, -118.02, 5.0),
       createMockEarthquake('4', 34.03, -118.03, 4.5)
     ];
-    
+
     const clusters = findActiveClustersOptimized(earthquakes, 50, 2);
-    
+
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0].map(quake => quake.id).sort()).toEqual(earthquakes.map(quake => quake.id).sort());
     // Should not create duplicate clusters
-    const clusterQuakeIds = clusters.map(cluster => 
+    const clusterQuakeIds = clusters.map(cluster =>
       new Set(cluster.map(q => q.id))
     );
-    
+
     for (let i = 0; i < clusterQuakeIds.length; i++) {
       for (let j = i + 1; j < clusterQuakeIds.length; j++) {
         const intersection = new Set([...clusterQuakeIds[i]].filter(x => clusterQuakeIds[j].has(x)));
@@ -329,13 +339,13 @@ describe('findActiveClustersOptimized', () => {
 
   it('should handle different clustering parameters', () => {
     const earthquakes = createClusteredEarthquakes(34.0, -118.0, 10);
-    
+
     // Tight clustering
     const tightClusters = findActiveClustersOptimized(earthquakes, 5, 5);
-    
-    // Loose clustering  
+
+    // Loose clustering
     const looseClusters = findActiveClustersOptimized(earthquakes, 50, 2);
-    
+
     // Loose clustering should find more/larger clusters
     expect(looseClusters.length).toBeGreaterThanOrEqual(tightClusters.length);
   });
@@ -375,7 +385,7 @@ describe('Integration Tests', () => {
         }
       },
       {
-        id: 'us1000test2', 
+        id: 'us1000test2',
         properties: {
           mag: 4.8,
           time: 1640995260000,
@@ -388,30 +398,19 @@ describe('Integration Tests', () => {
         }
       }
     ];
-    
+
     const clusters = findActiveClustersOptimized(earthquakes, 20, 2);
-    
-    expect(clusters.length).toBeLessThanOrEqual(1);
-    if (clusters.length > 0) {
-      expect(clusters[0].length).toBe(2);
-      expect(clusters[0][0].properties.mag).toBe(5.2); // Highest magnitude first
-    }
+
+    expect(clusters).toEqual([earthquakes]);
   });
 
-  it('should handle large datasets efficiently', () => {
-    const startTime = performance.now();
-    
-    // Create larger dataset
+  it('preserves all 500 nearby members within a bounded work budget', () => {
     const earthquakes = createClusteredEarthquakes(34.0, -118.0, 500);
-    
-    const clusters = findActiveClustersOptimized(earthquakes, 50, 3);
-    
-    const endTime = performance.now();
-    const executionTime = endTime - startTime;
-    
-    // Should complete in reasonable time (much faster than O(N²))
-    expect(executionTime).toBeLessThan(1000); // Less than 1 second
-    expect(clusters).toBeDefined();
+    const clusters = findActiveClustersOptimized(earthquakes, 50, 3, { maxWork: 10_000 });
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0]).toHaveLength(500);
+    expect(new Set(clusters[0].map(quake => quake.id))).toEqual(new Set(earthquakes.map(quake => quake.id)));
+    expect(clusters[0][0].properties.mag).toBe(Math.max(...earthquakes.map(quake => quake.properties.mag)));
   });
 });
 describe('polar, wrapped and bounded clustering regressions', () => {

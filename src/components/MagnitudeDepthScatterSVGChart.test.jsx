@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, within, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import MagnitudeDepthScatterSVGChart from './MagnitudeDepthScatterSVGChart';
 import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils';
 import * as Utils from '../utils/utils'; // To mock getMagnitudeColor
@@ -17,12 +17,6 @@ vi.mock('./skeletons/MagnitudeDepthScatterSVGChartSkeleton', () => ({
   ),
 }));
 
-// Mock ResizeObserver
-global.ResizeObserver = vi.fn(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
 
 // Mock getMagnitudeColor from utils
 const mockGetMagnitudeColor = vi.spyOn(Utils, 'getMagnitudeColor');
@@ -47,7 +41,10 @@ const createMockScatterQuake = (id, mag, depth, place = "Test Place") => ({
 describe('MagnitudeDepthScatterSVGChart', () => {
   let providerProps;
 
+  afterEach(() => vi.unstubAllGlobals());
+
   beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
     vi.clearAllMocks();
     mockGetMagnitudeColor.mockImplementation(mag => `rgba(255,0,0,${mag / 10})`); // Default mock impl
 
@@ -61,13 +58,6 @@ describe('MagnitudeDepthScatterSVGChart', () => {
     };
 
     // Ensure the component receives the mocked context value
-    vi.spyOn(React, 'useContext').mockImplementation((context) => {
-      if (context === EarthquakeDataContext) {
-        return providerProps.value;
-      }
-      const actualUseContext = vi.importActual('react').useContext;
-      return actualUseContext(context);
-    });
   });
 
   it('should render skeleton when isLoading is true', () => {

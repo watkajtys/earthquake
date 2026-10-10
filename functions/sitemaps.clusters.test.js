@@ -132,27 +132,27 @@ describe('Cluster Sitemap Handler and URL Generation', () => {
             expect(xml).toContain('<lastmod>2023-01-02T00:00:00.000Z</lastmod>');
         });
 
-        // This test is no longer relevant as parsing `clusterId` and fetching USGS data is removed.
-        // The SQL query `WHERE slug IS NOT NULL AND slug <> ''` handles invalid/missing slugs at DB level.
-        it('should skip entries if D1 slug is missing or empty (handled by SQL, but defensive check in code)', async () => { // Unskipping this test
+        it('defensively excludes missing and empty slugs returned by D1', async () => {
             const mockContext = createMockContext(new Request('http://localhost/sitemap-clusters.xml'));
-            const _d1Results = [
-                { slug: null, updatedAt: "2023-01-01T00:00:00Z" }, // Will be filtered by SQL
-                { slug: "", updatedAt: "2023-01-01T00:00:00Z" },   // Will be filtered by SQL
-                { slug: "valid-slug-example", updatedAt: "2023-01-02T00:00:00Z" },
+            const invalid = [
+                { slug: null, updatedAt: '2023-01-01T00:00:00Z' },
+                { slug: '', updatedAt: '2023-01-01T00:00:00Z' },
             ];
-            mockContext.env.DB.all.mockResolvedValueOnce({ results: [{ slug: "valid-slug-example", updatedAt: "2023-01-02T00:00:00Z" }], success: true }); // Simulate only valid one returned
+            mockContext.env.DB.all.mockResolvedValueOnce({
+                results: [...invalid, { slug: 'valid-slug-example', updatedAt: '2023-01-02T00:00:00Z' }],
+                success: true,
+            });
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-            const response = await handleClustersSitemapRequest(mockContext);
-            const xml = await response.text();
-
-            expect(xml).toContain('https://earthquakeslive.com/cluster/valid-slug-example');
-            // The code's internal `!definition.slug` check might still trigger if somehow a null/empty slug passes SQL
-            // For this test, we assume SQL filters them, so the internal check might not be hit if d1Results is already filtered.
-            // If it were to be hit:
-            // expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid definition from D1 (missing slug or updatedAt)"));
-            consoleWarnSpy.mockRestore();
+            try {
+                const response = await handleClustersSitemapRequest(mockContext);
+                const xml = await response.text();
+                expect(response.status).toBe(200);
+                expect((xml.match(/<loc>/g) || [])).toHaveLength(1);
+                expect(xml).toContain('<loc>https://earthquakeslive.com/cluster/valid-slug-example</loc>');
+                for (const definition of invalid) {
+                    expect(consoleWarnSpy).toHaveBeenCalledWith('Invalid definition from D1 (missing slug or updatedAt):', definition);
+                }
+            } finally { consoleWarnSpy.mockRestore(); }
         });
 
 

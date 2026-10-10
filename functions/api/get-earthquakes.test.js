@@ -15,17 +15,17 @@ describe('API Endpoint: /api/get-earthquakes', () => {
   });
 
   describe('R2 Data Retrieval', () => {
-    test('should return 200 with data from R2 if available', async () => {
-      const mockData = [{ id: 'test1', properties: { place: 'Test Place' } }];
+    test.each(['day', 'week', 'month'])('returns the selected %s list from R2', async timeWindow => {
+      const mockData = [{ id: `selected-${timeWindow}`, properties: { place: 'Test Place' } }];
       const mockR2Object = {
         json: async () => mockData,
         writeHttpMetadata: vi.fn(),
         body: JSON.stringify(mockData),
         httpEtag: 'mock-etag',
       };
-      mockEnv.GEOJSON_BUCKET.get.mockResolvedValue(mockR2Object);
+      mockEnv.GEOJSON_BUCKET.get.mockImplementation(async key => key === `list-${timeWindow}.json` ? mockR2Object : null);
 
-      const request = new Request("http://localhost/api/get-earthquakes?timeWindow=day");
+      const request = new Request(`http://localhost/api/get-earthquakes?timeWindow=${timeWindow}`);
       const context = {
         request,
         env: mockEnv,
@@ -37,6 +37,7 @@ describe('API Endpoint: /api/get-earthquakes', () => {
       expect(response.headers.get('X-Data-Source')).toBe('R2');
       const body = await response.json();
       expect(body).toEqual(mockData);
+      expect(mockEnv.GEOJSON_BUCKET.get).toHaveBeenCalledExactlyOnceWith(`list-${timeWindow}.json`);
     });
   });
 

@@ -1,8 +1,9 @@
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import InteractiveGlobeView from './InteractiveGlobeView'; // Assuming path is correct
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext';
+import Globe from 'react-globe.gl';
+import InteractiveGlobeView from './InteractiveGlobeView';
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils';
 
 // Mock react-globe.gl
 const mockGlobeRefActions = {
@@ -33,7 +34,7 @@ vi.mock('react-globe.gl', () => ({
         <div data-testid="globe-points-count">{props.pointsData?.length || 0}</div>
         <div data-testid="globe-paths-count">{props.pathsData?.length || 0}</div>
         <div data-testid="globe-rings-count">{props.ringsData?.length || 0}</div>
-        <button onClick={() => props.onPointClick({ quakeData: { id: 'test-quake' } })}>
+        <button onClick={() => props.onPointClick(props.pointsData[0])}>
           Simulate Quake Click
         </button>
       </div>
@@ -53,12 +54,6 @@ const renderWithContext = (ui, { providerProps, ...renderOptions }) => {
   );
 };
 
-// Mock ResizeObserver
-global.ResizeObserver = vi.fn(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
 
 // Helper to create mock earthquake data
 const createMockQuake = (id, mag, lat, lon, place = "Test Place", time = Date.now()) => ({
@@ -68,12 +63,16 @@ const createMockQuake = (id, mag, lat, lon, place = "Test Place", time = Date.no
 });
 
 describe('InteractiveGlobeView', () => {
+  let resizeCallback;
   let providerProps;
   let mockGetMagnitudeColorFunc;
   let mockOnQuakeClick;
 
   beforeEach(() => {
-    vi.clearAllMocks(); // Clears all mocks including react-globe.gl and its ref actions
+    vi.clearAllMocks();
+    vi.stubGlobal('ResizeObserver', class { constructor(callback) { resizeCallback = callback; } observe() {} unobserve() {} disconnect() {} });
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 500, height: 500, top: 0, left: 0, right: 500, bottom: 500 });
+    vi.stubGlobal('IntersectionObserver', class { observe() {} unobserve() {} disconnect() {} });
 
     // Reset the controls mock for each test to ensure clean state for add/removeEventListener
      mockGlobeRefActions.controls = vi.fn(() => ({
@@ -98,32 +97,16 @@ describe('InteractiveGlobeView', () => {
       },
     };
 
-    // Mock window.load behavior - assume loaded for most tests unless specified
-    Object.defineProperty(document, 'readyState', {
-      configurable: true,
-      value: 'complete',
-    });
-    global.window.dispatchEvent(new Event('load')); // Trigger load event
   });
 
   afterEach(() => {
-    vi.restoreAllMocks(); // Restore actual implementations
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it('renders initializing message initially', () => {
-    Object.defineProperty(document, 'readyState', {
-      configurable: true,
-      value: 'loading', // Simulate document not yet loaded
-    });
-    // Prevent Jest from considering the 'load' event as "fired" too early
-    // We need a fresh window object for this test or to manage listeners carefully.
-    // For simplicity, we assume the initial state will show "Initializing"
-    // if dimensions are not set, which happens before 'load' or if ResizeObserver doesn't fire quickly.
-
-    // To properly test this, we need to ensure dimensions are null.
-    // The useEffect for resize fires based on initialLayoutComplete which depends on document.readyState or window load.
-    // We can achieve this by not providing a container ref with dimensions.
-
+  it('renders initializing message until the container has dimensions', () => {
+    HTMLElement.prototype.getBoundingClientRect.mockReturnValue({ width: 0, height: 0 });
     renderWithContext(
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
@@ -133,64 +116,48 @@ describe('InteractiveGlobeView', () => {
     expect(screen.getByText('Initializing Interactive Globe...')).toBeInTheDocument();
   });
 
-  it('renders the Globe component after layout is complete', async () => {
-    const { container } = renderWithContext(
+  it('renders the Globe with measured dimensions and updates them after an observed resize', async () => {
+    vi.useFakeTimers();
+    renderWithContext(
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
       />, { providerProps }
     );
 
-    // Simulate container having dimensions
-    // We need to use `act` because ResizeObserver callback and subsequent state updates will happen
-    await act(async () => {
-      const globeContainer = container.firstChild; // The div with ref="containerRef"
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
-      // Manually trigger what ResizeObserver would do
-      // This is tricky because ResizeObserver is mocked.
-      // The internal `updateDimensions` is called, which sets `globeDimensions`.
-      // Let's rely on the `useEffect` for `initialLayoutComplete` and `window.load`.
-      // Since `document.readyState` is 'complete' by default in beforeEach,
-      // `initialLayoutComplete` should become true, and dimensions should be set.
-      // We might need a small timeout if there are async operations.
-      await new Promise(resolve => setTimeout(resolve, 0)); // Allow microtasks to flush
-    });
-
     expect(screen.getByTestId('mock-globe')).toBeInTheDocument();
+    expect(Globe.mock.lastCall[0]).toMatchObject({ width: 500, height: 500 });
+    HTMLElement.prototype.getBoundingClientRect.mockReturnValue({ width: 640, height: 360 });
+    act(() => resizeCallback([]));
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(Globe.mock.lastCall[0]).toMatchObject({ width: 640, height: 360 });
   });
 
-  it('processes globeEarthquakes from context into pointsData for the Globe', async () => {
+  it('processes globeEarthquakes from context into pointsData for the Globe', () => {
     providerProps.value.globeEarthquakes = [
       createMockQuake('q1', 5, 10, 20),
       createMockQuake('q2', 6, 30, 40),
     ];
-    const { container } = renderWithContext(
+    renderWithContext(
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
       />, { providerProps }
     );
-    await act(async () => {
-      const globeContainer = container.firstChild;
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
-      await new Promise(resolve => setTimeout(resolve, 0));
-    });
 
     expect(screen.getByTestId('globe-points-count').textContent).toBe('2');
-    const GlobeComponent = vi.mocked(require('react-globe.gl').default);
-    const globeProps = GlobeComponent.mock.calls[0][0];
+    const GlobeComponent = vi.mocked(Globe);
+    const globeProps = GlobeComponent.mock.lastCall[0];
     expect(globeProps.pointsData.length).toBe(2);
     expect(globeProps.pointsData[0].quakeData.id).toBe('q1');
     expect(globeProps.pointsData[1].quakeData.id).toBe('q2');
   });
 
-  it('processes coastline and tectonic plates GeoJSON into pathsData', async () => {
+  it('processes coastline and tectonic plates GeoJSON into pathsData', () => {
     const coastlineData = { type: "GeometryCollection", geometries: [{ type: "LineString", coordinates: [[1,1],[2,2]] }] };
     const tectonicData = { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "LineString", coordinates: [[3,3],[4,4]] }, properties: { Boundary_Type: 'Convergent' } }] };
 
-    const { container } = renderWithContext(
+    renderWithContext(
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
@@ -198,79 +165,55 @@ describe('InteractiveGlobeView', () => {
         tectonicPlatesGeoJson={tectonicData}
       />, { providerProps }
     );
-     await act(async () => {
-      const globeContainer = container.firstChild;
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
-      await new Promise(resolve => setTimeout(resolve, 0));
-    });
 
     expect(screen.getByTestId('globe-paths-count').textContent).toBe('2');
-    const GlobeComponent = vi.mocked(require('react-globe.gl').default);
-    const globeProps = GlobeComponent.mock.calls[0][0];
+    const GlobeComponent = vi.mocked(Globe);
+    const globeProps = GlobeComponent.mock.lastCall[0];
     expect(globeProps.pathsData.length).toBe(2);
     expect(globeProps.pathsData[0].label).toBe('Coastline');
     expect(globeProps.pathsData[1].label).toContain('Convergent');
   });
 
-  it('generates ringsData for lastMajorQuake and previousMajorQuake', async () => {
+  it('generates ringsData for lastMajorQuake and previousMajorQuake', () => {
     providerProps.value.lastMajorQuake = createMockQuake('lmq1', 7, 50, 60);
     providerProps.value.previousMajorQuake = createMockQuake('pmq1', 6.5, 70, 80);
 
-    const { container } = renderWithContext(
+    renderWithContext(
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
       />, { providerProps }
     );
-    await act(async () => {
-      const globeContainer = container.firstChild;
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
-      await new Promise(resolve => setTimeout(resolve, 0));
-    });
 
     expect(screen.getByTestId('globe-rings-count').textContent).toBe('2');
-    const GlobeComponent = vi.mocked(require('react-globe.gl').default);
-    const globeProps = GlobeComponent.mock.calls[0][0];
+    const GlobeComponent = vi.mocked(Globe);
+    const globeProps = GlobeComponent.mock.lastCall[0];
     expect(globeProps.ringsData.length).toBe(2);
     expect(globeProps.ringsData.find(r => r.id.startsWith('major_quake_ring_latest_lmq1'))).toBeDefined();
     expect(globeProps.ringsData.find(r => r.id.startsWith('major_quake_ring_prev_pmq1'))).toBeDefined();
   });
 
-  it('calls onQuakeClick when a point is clicked on the mock globe', async () => {
+  it('calls onQuakeClick when a point is clicked on the mock globe', () => {
     providerProps.value.globeEarthquakes = [createMockQuake('q1', 5, 10, 20)];
-    const { container } = renderWithContext(
+    renderWithContext(
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
       />, { providerProps }
     );
-    await act(async () => {
-      const globeContainer = container.firstChild;
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
-      await new Promise(resolve => setTimeout(resolve, 0));
-    });
 
     fireEvent.click(screen.getByText('Simulate Quake Click'));
-    expect(mockOnQuakeClick).toHaveBeenCalledWith({ id: 'test-quake' });
+    expect(mockOnQuakeClick).toHaveBeenCalledWith(providerProps.value.globeEarthquakes[0]);
   });
 
-  it('updates globe pointOfView when defaultFocus props change', async () => {
-    const { rerender, container } = renderWithContext(
+  it('updates globe pointOfView when defaultFocus props change', () => {
+    const { rerender } = renderWithContext(
       <InteractiveGlobeView
         onQuakeClick={mockOnQuakeClick}
         getMagnitudeColorFunc={mockGetMagnitudeColorFunc}
         defaultFocusLat={10} defaultFocusLng={20} defaultFocusAltitude={2.0}
       />, { providerProps }
     );
-    await act(async () => {
-      const globeContainer = container.firstChild;
-      Object.defineProperty(globeContainer, 'offsetWidth', { configurable: true, value: 500 });
-      Object.defineProperty(globeContainer, 'offsetHeight', { configurable: true, value: 500 });
-      await new Promise(resolve => setTimeout(resolve, 0));
-    });
     expect(mockGlobeRefActions.pointOfView).toHaveBeenCalledWith({ lat: 10, lng: 20, altitude: 2.0 }, 0);
 
     rerender(
@@ -282,9 +225,6 @@ describe('InteractiveGlobeView', () => {
           />
        </EarthquakeDataContext.Provider>
     );
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0)); // Allow effects to run
-    });
     expect(mockGlobeRefActions.pointOfView).toHaveBeenCalledWith({ lat: 30, lng: 40, altitude: 1.5 }, 0);
   });
 });

@@ -1,6 +1,9 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { vi } from 'vitest';
+import { vi, beforeEach, afterEach } from 'vitest';
+const fixtureNow = Date.UTC(2026, 9, 9);
+beforeEach(() => vi.setSystemTime(fixtureNow));
+afterEach(() => vi.useRealTimers());
 import ActivityList from './ActivityList';
 
 const mockQuake = {
@@ -8,7 +11,7 @@ const mockQuake = {
   properties: {
     mag: 5.5,
     place: 'Test Location 1',
-    time: Date.now() - 1000 * 60 * 5, // 5 minutes ago
+    time: fixtureNow - 1000 * 60 * 5, // 5 minutes ago
   },
 };
 
@@ -17,7 +20,7 @@ const mockQuake2 = {
   properties: {
     mag: 4.0,
     place: 'Test Location 2',
-    time: Date.now() - 1000 * 60 * 60, // 1 hour ago
+    time: fixtureNow - 1000 * 60 * 60, // 1 hour ago
   },
 };
 

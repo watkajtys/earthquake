@@ -1,3 +1,5 @@
+import { isCrawler as sharedIsCrawler } from './utils/crawler-utils.js';
+import { escapeXml as sharedEscapeXml } from './utils/xml-utils.js';
 // import { onRequest, isCrawler, escapeXml, handleClustersSitemapRequest, handlePrerenderCluster } from './[[catchall]]';
 // The main [[catchall]].js exports `onRequest` as the default export if it's a module, or named if not.
 // Assuming `onRequest` is the primary handler for routing.
@@ -33,31 +35,11 @@ const createMockContext = (request, env = {}, cf = {}) => {
   };
 };
 
-// --- Tests for Helper Functions ---
-describe('Helper Functions from [[catchall]].js', () => {
-  describe('isCrawler', () => {
-    it('should return true for Googlebot', () => {
-      const req = new Request('/', { headers: { 'User-Agent': 'Googlebot/2.1' } });
-      expect(isCrawler(req)).toBe(true);
-    });
-    it('should return false for a normal browser', () => {
-      const req = new Request('/', { headers: { 'User-Agent': 'Mozilla/5.0' } });
-      expect(isCrawler(req)).toBe(false);
-    });
-  });
-
-  describe('escapeXml', () => {
-    it('should escape XML special characters', () => {
-      expect(escapeXml('<>&"\'')).toBe('&lt;&gt;&amp;&quot;&apos;');
-    });
-    it('should return empty string for non-string input', () => {
-      expect(escapeXml(null)).toBe('');
-      expect(escapeXml(undefined)).toBe('');
-      expect(escapeXml(123)).toBe('');
-    });
-  });
+// Keep the public re-export boundary; detailed helper behavior lives in utility suites.
+it('re-exports the shared crawler and XML helpers', () => {
+  expect(isCrawler).toBe(sharedIsCrawler);
+  expect(escapeXml).toBe(sharedEscapeXml);
 });
-
 
 // --- Tests for Main Request Handler (Routing) ---
 describe('onRequest (Main Router Remaining Tests)', () => {

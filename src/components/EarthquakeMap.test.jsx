@@ -45,7 +45,7 @@ vi.mock('react-leaflet', async () => {
       </div>
     ),
     Popup: ({ children }) => <div data-testid="popup">{children}</div>,
-    GeoJSON: ({ data, style }) => <div data-testid="geojson-layer" data-style-function={style ? style.toString() : ''} data-features={data?.features?.length || 0} data-passed-style-type={typeof style}></div>,
+    GeoJSON: ({ data, style, onEachFeature }) => <div data-testid={onEachFeature ? "fault-geojson-layer" : "tectonic-geojson-layer"} data-style-function={style ? style.toString() : ''} data-features={data?.features?.length || 0} data-passed-style-type={typeof style}></div>,
   };
 });
 
@@ -84,9 +84,11 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     console.warn.mockRestore();
   });
 
-  it('renders the map container', () => {
+  it('renders the map container', async () => {
     render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
     expect(screen.getByTestId('map-container')).toBeInTheDocument();
+    await screen.findByTestId('tectonic-geojson-layer');
+    await screen.findByTestId('fault-geojson-layer');
   });
 
   it('renders map with correct initial center and zoom from props', async () => {
@@ -147,10 +149,15 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     expect(shakeMapLink).toHaveAttribute('href', "https://shakemap.example.com");
   });
 
-  it('renders TileLayer and GeoJSON layer', async () => {
+  it('renders tiles and independently loads tectonic and fault layers', async () => {
     render(<MemoryRouter><EarthquakeMap {...baseProps} /></MemoryRouter>);
     expect(screen.getByTestId('tile-layer')).toBeInTheDocument();
-    expect(await screen.findByTestId('geojson-layer')).toBeInTheDocument();
+    const tectonicLayer = await screen.findByTestId('tectonic-geojson-layer');
+    expect(tectonicLayer).toHaveAttribute('data-features', '1');
+    expect(tectonicLayer).toHaveAttribute('data-passed-style-type', 'function');
+    const faultLayer = await screen.findByTestId('fault-geojson-layer');
+    expect(Number(faultLayer.getAttribute('data-features'))).toBeGreaterThan(0);
+    expect(faultLayer).toHaveAttribute('data-passed-style-type', 'function');
   });
 
   it('renders markers for nearby quakes', async () => {
@@ -212,7 +219,7 @@ describe('EarthquakeMap Component - Core Rendering', () => {
     /></MemoryRouter>);
     expect(screen.getAllByTestId('canvas-quake')).toHaveLength(661);
     expect(screen.getAllByTestId('marker')).toHaveLength(1);
-    await screen.findAllByTestId('geojson-layer');
+    await screen.findByTestId('tectonic-geojson-layer');
   });
 
   it('selects every overlapping member from a canvas point or highlighted marker', async () => {
@@ -228,7 +235,7 @@ describe('EarthquakeMap Component - Core Rendering', () => {
       highlightQuakeId="dense-0" highlightQuakeLatitude={34} highlightQuakeLongitude={-118}
       nearbyQuakes={[...dense, outlier]} individualNearbyQuakes onPlotSelection={onPlotSelection}
     /></MemoryRouter>);
-    await screen.findAllByTestId('geojson-layer');
+    await screen.findByTestId('tectonic-geojson-layer');
 
     fireEvent.click(screen.getAllByTestId('canvas-quake')[1]);
     expect(onPlotSelection).toHaveBeenLastCalledWith(dense.map(quake => quake.id));

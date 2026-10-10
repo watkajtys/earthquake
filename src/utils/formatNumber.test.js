@@ -20,7 +20,4 @@ describe('formatNumber', () => {
     expect(formatNumber(null)).toBe("N/A");
   });
 
-  it('should handle null by returning "N/A" as it is not a parseable number', () => {
-    expect(formatNumber(null)).toBe("N/A");
-  });
 });

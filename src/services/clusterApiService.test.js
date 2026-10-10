@@ -62,7 +62,7 @@ describe('clusterApiService', () => {
     it('should return false and log error on network error', async () => {
       server.use(
         http.post('/api/cluster-definition', () => {
-          return HttpResponse.networkError('Network failure');
+          return HttpResponse.error();
         })
       );
       const result = await registerClusterDefinition(validClusterData);
@@ -116,12 +116,10 @@ describe('clusterApiService', () => {
     it('should re-throw error and log on network error', async () => {
       server.use(
         http.get('/api/cluster-definition', () => {
-          // Simulate a specific server error status for network-like failures
-          return new HttpResponse(null, { status: 503, statusText: 'Service Unavailable' });
+          return HttpResponse.error();
         })
       );
-       // The service formats this as "Failed to fetch cluster definition. Status: 503"
-       await expect(fetchClusterDefinition(clusterId)).rejects.toThrow('Failed to fetch cluster definition. Status: 503');
+      await expect(fetchClusterDefinition(clusterId)).rejects.toThrow(TypeError);
       expect(consoleErrorSpy).toHaveBeenCalled();
     });
 

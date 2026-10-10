@@ -62,29 +62,17 @@ describe('Prerendering Handler: /cluster/:id', () => {
         // MSW will handle fetch lifecycle, server.resetHandlers() is in setupTests.js or called by vi.clearAllMocks()
     });
 
-    // Test for old /cluster/:id format (may be removed if not supported)
-    it('/cluster/some-cluster-id (old format) should return 404 because [[catchall]].js regex will not match', async () => {
-        const clusterIdOldFormat = "test-cluster-d1-old"; // This does not match the new regex in [[catchall]].js
-        const request = new Request(`http://localhost/cluster/${clusterIdOldFormat}`, { headers: { 'User-Agent': 'Googlebot' }});
-        const context = createMockContext(request);
-        context.env.DB.first.mockResolvedValueOnce(null); // If it somehow reaches handlePrerenderCluster
-
-        const response = await onRequest(context); // Uses main router
-
-        // This slug should ideally be caught by the router's regex if it's strict enough.
-        // If the router regex is too permissive and passes it to handlePrerenderCluster,
-        // then handlePrerenderCluster will try to query D1 with "test-cluster-d1-old" as slug.
-        const text = await response.text();
+    it('routes a syntactically valid legacy slug to the stored lookup and returns its missing-cluster404', async () => {
+        const slug = 'test-cluster-d1-old';
+        const context = createMockContext(new Request(`http://localhost/cluster/${slug}`, { headers: { 'User-Agent': 'Googlebot' } }));
+        context.env.DB.first.mockResolvedValueOnce(null);
+        const response = await onRequest(context);
         expect(response.status).toBe(404);
-
-        // Check if it was "Invalid cluster URL format" (from router) or "Cluster not found" (from handler)
-        if (text.includes("Invalid cluster URL format.")) {
-            expect(context.env.DB.prepare).not.toHaveBeenCalled();
-        } else {
-            expect(text).toContain("Cluster not found");
-            expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("FROM ClusterDefinitions WHERE slug = ?"));
-            expect(context.env.DB.bind).toHaveBeenCalledWith(clusterIdOldFormat);
-        }
+        expect(await response.text()).toContain('Cluster not found');
+        expect(context.env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining('FROM ClusterDefinitions WHERE slug = ?'));
+        expect(context.env.DB.bind).toHaveBeenCalledWith(slug);
+        expect(context.next).not.toHaveBeenCalled();
+        expect(context.env.ASSETS.fetch).not.toHaveBeenCalled();
     });
 
     // These tests call handlePrerenderCluster directly, bypassing [[catchall]].js's initial regex.

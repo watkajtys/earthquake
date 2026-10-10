@@ -98,17 +98,6 @@ describe('SimplifiedDepthProfile - Dynamic Contextual Insights', () => {
 
 
 describe('getDynamicContextualComparisons direct tests (New Simplified Messages)', () => {
-  const expectAbsenceOfOldPhrasing = (message) => {
-    expect(message).not.toContain('Shallow-focus event');
-    expect(message).not.toContain('Intermediate-focus earthquake');
-    expect(message).not.toContain('Deep-focus earthquake');
-    expect(message).not.toContain('originated within the Earth');
-    expect(message).not.toContain('subduction zones');
-    expect(message).not.toContain('oceanic slabs');
-    expect(message).not.toContain('beyond our deepest listed benchmark');
-    expect(message).not.toContain('deeper than the');
-    expect(message).not.toContain('shallower than the');
-  };
 
   test('should return a single message string in an array', () => {
     // Input: 30km.
@@ -120,24 +109,20 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
     expect(result).toHaveLength(1);
     expect(typeof result[0]).toBe('string');
     expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Kola Superdeep Borehole (deepest artificial point) (12.3 km)!');
-    expectAbsenceOfOldPhrasing(result[0]);
   });
 
   describe('"Very Close" Comparisons', () => {
     test('depth 10.9 km (Challenger Deep 10.935 km)', () => {
       const result = getDynamicContextualComparisons(10.9, actualDepthComparisons);
       expect(result[0]).toBe('10.9 km is nearly as deep as the Challenger Deep (ocean deepest) (10.9 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
     test('depth 0.8 km (Burj Khalifa 0.828 km)', () => {
       const result = getDynamicContextualComparisons(0.8, actualDepthComparisons);
       expect(result[0]).toBe('0.8 km is nearly as deep as the Burj Khalifa (0.8 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
      test('depth 12.3 km (Kola Superdeep Borehole 12.262 km)', () => {
       const result = getDynamicContextualComparisons(12.3, actualDepthComparisons);
       expect(result[0]).toBe('12.3 km is nearly as deep as the Kola Superdeep Borehole (deepest artificial point) (12.3 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
   });
 
@@ -146,13 +131,11 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // Input: 40km. "even further": Avg Continental Crust (35km). 40 > 35 && 40 < 35*3 (105). True.
       const result = getDynamicContextualComparisons(40, actualDepthComparisons);
       expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Average Continental Crust (35.0 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
     test('depth 15 km (vs Kola Superdeep Borehole 12.262 km)', () => {
       // Input: 15km. "even further": Kola (12.262km). 15 > 12.262 && 15 < 12.262*3 (36.786). True.
       const result = getDynamicContextualComparisons(15, actualDepthComparisons);
       expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Kola Superdeep Borehole (deepest artificial point) (12.3 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
      test('depth 3.95 km (vs Deepest Gold Mine 4.0 km) - "nearly as deep" to Avg Ocean Depth', () => {
       // Input 3.95km.
@@ -161,7 +144,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // So, "nearly as deep as Avg Ocean Depth" is chosen.
       const result = getDynamicContextualComparisons(3.95, actualDepthComparisons);
       expect(result[0]).toBe('4.0 km is nearly as deep as the Average Ocean Depth (3.7 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
   });
 
@@ -170,7 +152,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // Input: 0.7km. Not "very close". Not "even further". Analogy: Eiffel (depth > 0.5km). 0.7/0.3 = ~2.
       const result = getDynamicContextualComparisons(0.7, actualDepthComparisons);
       expect(result[0]).toBe('That\'s pretty deep! 0.7 km is like stacking 2 Eiffel Towers!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
      test('depth 0.3 km (Eiffel Tower, single) - now fallback', () => {
       // Input 0.3km. Not "very close". Not "even further".
@@ -178,7 +159,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // Fallback: not 0, not <0.1. Final fallback message.
       const result = getDynamicContextualComparisons(0.3, actualDepthComparisons);
       expect(result[0]).toBe('That\'s an earthquake at 0.3 km deep.');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
     test('depth 5 km (Burj Khalifa) - now "nearly as deep" to Molloy Deep', () => {
       // Input 5km.
@@ -186,7 +166,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // This "very close" rule takes precedence over Burj Khalifa analogy.
       const result = getDynamicContextualComparisons(5, actualDepthComparisons);
       expect(result[0]).toBe('5.0 km is nearly as deep as the Deepest Point in the Arctic Ocean (Molloy Deep) (5.5 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
     test('depth 57 km (Mount Everest) - now "even further down than" Avg Continental Crust', () => {
       // Input 57km. Not "very close".
@@ -194,7 +173,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // This takes precedence over Mount Everest analogy.
       const result = getDynamicContextualComparisons(57, actualDepthComparisons);
       expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Average Continental Crust (35.0 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
     test('depth 100 km (Mount Everest) - now "even further down than" Avg Continental Crust', () => {
       // Input 100km. Not "very close".
@@ -202,7 +180,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // This takes precedence over Mount Everest analogy.
       const result = getDynamicContextualComparisons(100, actualDepthComparisons);
       expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Average Continental Crust (35.0 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
      test('depth 8.8 km (Mount Everest, single) - now "nearly as deep" to Puerto Rico Trench', () => {
       // Input 8.8km.
@@ -210,7 +187,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // This takes precedence over the single Mount Everest analogy.
       const result = getDynamicContextualComparisons(8.8, actualDepthComparisons);
       expect(result[0]).toBe('8.8 km is nearly as deep as the Deepest Point in the Atlantic Ocean (Puerto Rico Trench) (8.4 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
   });
 
@@ -221,7 +197,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // This takes precedence over the "depth === 0" fallback.
       const result = getDynamicContextualComparisons(0, actualDepthComparisons);
       expect(result[0]).toBe('0.0 km is nearly as deep as the Panama Canal Max Depth (0.0 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
     test('depth 0.05 km (Very shallow) - now "nearly as deep" to Panama Canal', () => {
       // Input 0.05km.
@@ -230,7 +205,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // Output message uses .toFixed(1) for depth, so 0.05 becomes 0.1 in the message.
       const result = getDynamicContextualComparisons(0.05, actualDepthComparisons);
       expect(result[0]).toBe('0.1 km is nearly as deep as the Panama Canal Max Depth (0.0 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
     test('depth 80 km (Deep fallback) - now "even further down than" Avg Continental Crust', () => {
       // Input 80km. Not "very close".
@@ -238,7 +212,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // This takes precedence over Everest analogy or ">70km" fallback.
       const result = getDynamicContextualComparisons(80, actualDepthComparisons);
       expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Average Continental Crust (35.0 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
 
     test('depth 750 km (Exceptionally Deep fallback) - now Everest analogy', () => {
@@ -247,7 +220,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // This takes precedence over the ">700km" fallback.
       const result = getDynamicContextualComparisons(750, actualDepthComparisons);
       expect(result[0]).toBe('Wow, 750.0 km is a long way down – that\'s like stacking about 85 Mount Everests on top of each other!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
 
     test('depth 450 km (Very Deep fallback) - now Everest analogy', () => {
@@ -256,7 +228,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // This takes precedence over the ">300km" fallback.
       const result = getDynamicContextualComparisons(450, actualDepthComparisons);
       expect(result[0]).toBe('Wow, 450.0 km is a long way down – that\'s like stacking about 51 Mount Everests on top of each other!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
 
     test('depth 75 km (Deep fallback, if no analogy/comparison fits) - now "even further down than" Avg Continental Crust', () => {
@@ -265,7 +236,6 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // This takes precedence over Everest analogy or ">70km" fallback.
       const result = getDynamicContextualComparisons(75, actualDepthComparisons);
        expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Average Continental Crust (35.0 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
 
     test('depth 25 km (Generic fallback - still "even further down than Kola")', () => {
@@ -274,14 +244,12 @@ describe('getDynamicContextualComparisons direct tests (New Simplified Messages)
       // This was already correctly predicted and takes precedence over Everest analogy.
       const result = getDynamicContextualComparisons(25, actualDepthComparisons);
       expect(result[0]).toBe('That\'s incredibly deep! It\'s even further down than the Kola Superdeep Borehole (deepest artificial point) (12.3 km)!');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
      test('depth 0.2 km (Generic fallback for very shallow, no analogy)', () => {
       // Input 0.2km. Not "very close". Not "even further". No analogy (Eiffel > 0.5km).
       // Fallback: not 0, not <0.1. Final fallback message.
       const result = getDynamicContextualComparisons(0.2, actualDepthComparisons);
       expect(result[0]).toBe('That\'s an earthquake at 0.2 km deep.');
-      expectAbsenceOfOldPhrasing(result[0]);
     });
   });
 });

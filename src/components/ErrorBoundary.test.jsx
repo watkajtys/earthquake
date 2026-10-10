@@ -13,8 +13,10 @@ const ProblemChild = ({ shouldThrow = false }) => {
 
 describe('ErrorBoundary', () => {
   let consoleErrorSpy;
+  let originalNodeEnv;
 
   beforeEach(() => {
+    originalNodeEnv = process.env.NODE_ENV;
     // Spy on console.error before each test
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Mock to silence error during test
   });
@@ -22,6 +24,7 @@ describe('ErrorBoundary', () => {
   afterEach(() => {
     // Restore console.error
     consoleErrorSpy.mockRestore();
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
   it('renders children when there is no error', () => {
@@ -69,36 +72,11 @@ describe('ErrorBoundary', () => {
     );
   });
 
-  it('state contains error and errorInfo after an error is caught', () => {
-    // This test is more about internal state, which RTL doesn't encourage testing directly.
-    // However, ErrorBoundary stores error/errorInfo in state, which is a key part of its design.
-    // We can't directly check state with RTL, but we can infer it if the component
-    // were to display parts of this.state.error or this.state.errorInfo.
-    // Since it doesn't (except in a commented-out dev block), we'll rely on componentDidCatch logging.
-    // For this test, we simply re-verify the console logging as an indirect sign state was set.
-    const expectedError = new Error('Test error from ProblemChild');
-    render(
-      <ErrorBoundary>
-        <ProblemChild shouldThrow={true} />
-      </ErrorBoundary>
-    );
-    // Verify our specific log call is present
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "ErrorBoundary caught an error:",
-      expect.objectContaining({ message: expectedError.message }),
-      expect.objectContaining({ componentStack: expect.any(String) })
-    );
-    // If we could access instance state:
-    // const instance = ... ; // No easy way with RTL to get class component instance
-    // expect(instance.state.error).toEqual(expectedError);
-    // expect(instance.state.errorInfo).toHaveProperty('componentStack');
-  });
 
   // Test for the commented-out development error details block (optional, depends on env)
   // To test this, one would need to set process.env.NODE_ENV = 'development'
   // For now, this test is skipped or adapted based on how NODE_ENV is handled in test setup.
   it('displays error details in development mode if error occurs', () => { // Unskipped
-    const originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development'; // Temporarily set for this test
 
     render(
@@ -122,6 +100,5 @@ describe('ErrorBoundary', () => {
     expect(detailsElement).toHaveTextContent(expectedErrorMessage); // e.g., "Error: Test error from ProblemChild"
     expect(detailsElement.textContent).toMatch(/ProblemChild/); // Check if "ProblemChild" is mentioned in the component stack part
 
-    process.env.NODE_ENV = originalNodeEnv; // Restore original NODE_ENV
   });
 });

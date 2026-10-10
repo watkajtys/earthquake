@@ -5,7 +5,6 @@ describe('kvUtils.js', () => {
   let mockKvNamespace;
   let consoleLogSpy;
   let consoleErrorSpy;
-  let consoleWarnSpy; // Though not used by current kvUtils, good practice
 
   beforeEach(() => {
     mockKvNamespace = {
@@ -14,7 +13,6 @@ describe('kvUtils.js', () => {
     };
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {

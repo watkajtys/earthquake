@@ -1,15 +1,8 @@
-import React from 'react'; // Though not directly used in reducer tests, often kept for consistency or if helper components were used.
 import { earthquakeReducer, initialState, actionTypes } from '../../contexts/earthquakeDataContextUtils.js';
-import { MAJOR_QUAKE_THRESHOLD } from '../../constants/appConstants'; // Used in consolidateMajorQuakesLogic, which is used by a reducer case.
+import { afterEach, vi } from 'vitest';
 
-// --- Helper Function Definitions (copied from EarthquakeDataContext.jsx for isolated testing of reducer logic if they are directly involved) ---
-// Only include helpers directly used or affecting the reducer's pure logic.
-// For this reducer, consolidateMajorQuakesLogic is used. Others like filterByTime are used internally by action creators or within the reducer but might not need to be tested *here* again if tested with the reducer.
-const filterByTime = (data, hoursAgoStart, hoursAgoEnd = 0, now = Date.now()) => { if (!Array.isArray(data)) return []; const startTime = now - hoursAgoStart * 36e5; const endTime = now - hoursAgoEnd * 36e5; return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);};
-const filterMonthlyByTime = (data, daysAgoStart, daysAgoEnd = 0, now = Date.now()) => { if (!Array.isArray(data)) return []; const startTime = now - (daysAgoStart * 24 * 36e5); const endTime = now - (daysAgoEnd * 24 * 36e5); return data.filter(q => q.properties.time >= startTime && q.properties.time < endTime);};
-const consolidateMajorQuakesLogic = (currentLastMajor, currentPreviousMajor, newMajors) => { let potentialQuakes = [...newMajors]; if (currentLastMajor) potentialQuakes.push(currentLastMajor); if (currentPreviousMajor) potentialQuakes.push(currentPreviousMajor); const consolidated = potentialQuakes.sort((a, b) => b.properties.time - a.properties.time).filter((quake, index, self) => index === self.findIndex(q => q.id === quake.id)); const newLastMajor = consolidated.length > 0 ? consolidated[0] : null; const newPreviousMajor = consolidated.length > 1 ? consolidated[1] : null; const newTimeBetween = newLastMajor && newPreviousMajor ? newLastMajor.properties.time - newPreviousMajor.properties.time : null; return { lastMajorQuake: newLastMajor, previousMajorQuake: newPreviousMajor, timeBetweenPreviousMajorQuakes: newTimeBetween };};
-const MAGNITUDE_RANGES = [ {name: '<1', min: -Infinity, max: 0.99}, {name : '1-1.9', min : 1, max : 1.99}, {name: '2-2.9', min: 2, max: 2.99}, {name : '3-3.9', min : 3, max : 3.99}, {name: '4-4.9', min: 4, max: 4.99}, {name : '5-5.9', min : 5, max : 5.99}, {name: '6-6.9', min: 6, max: 6.99}, {name : '7+', min : 7, max : Infinity}, ];
-
+const fetchTime = new Date(2026, 8, 21, 12).getTime();
+afterEach(() => vi.restoreAllMocks());
 
 // --- Reducer Tests ---
 describe('EarthquakeDataContext Reducer', () => {
@@ -69,7 +62,7 @@ describe('EarthquakeDataContext Reducer', () => {
   it('should handle SET_LOADING_MESSAGES', () => { const m = ['New']; expect(earthquakeReducer(initialState,{type:actionTypes.SET_LOADING_MESSAGES,payload:m})).toEqual({...initialState,currentLoadingMessages:m,loadingMessageIndex:0});});
 
   describe('DAILY_DATA_PROCESSED action', () => {
-    const mockFetchTime = Date.now(); const mockMetadata = {generated:mockFetchTime-1000};
+    const mockFetchTime = fetchTime; const mockMetadata = {generated:mockFetchTime-1000};
     const createMockQuake = (id,offset,mag,alert='green',tsunami=0) => ({id,properties:{mag,time:mockFetchTime-offset*36e5,alert,tsunami}});
     const mockFeatures = [createMockQuake('q1',0.5,2.5),createMockQuake('q2',1.5,3.0),createMockQuake('q3',10,4.5),createMockQuake('q4',30,5.5,'yellow'),createMockQuake('major1',2,6.0,'red',1)];
     const action = {type:actionTypes.DAILY_DATA_PROCESSED,payload:{features:mockFeatures,metadata:mockMetadata,fetchTime:mockFetchTime}};
@@ -97,7 +90,7 @@ describe('EarthquakeDataContext Reducer', () => {
   });
 
   describe('WEEKLY_DATA_PROCESSED action', () => {
-    const mockFetchTime = Date.now();
+    const mockFetchTime = fetchTime;
     const createMockQuake = (id, timeOffsetHours, mag) => ({ id, properties: { mag, time: mockFetchTime - timeOffsetHours * 36e5 } });
     // Modified mockFeaturesWeekly with duplicate IDs
     const mockFeaturesWeekly = [
@@ -105,11 +98,11 @@ describe('EarthquakeDataContext Reducer', () => {
       createMockQuake('w_quake2', 50, 3.0),
       createMockQuake('w_quake3', 80, 4.5), // This one is > 72h, will be filtered out by filterByTime
       createMockQuake('w_quakeMajor', 60, 5.8), // Original major quake
-      createMockQuake('w_quakeMajor', 61, 5.7), // Duplicate ID, slightly different time & mag, within 72h
+      createMockQuake('w_quakeMajor', 60, 5.8), // Duplicate observation
       createMockQuake('w_anotherMajor', 30, 5.9),
-      createMockQuake('w_anotherMajor', 31, 5.85), // Duplicate ID for another major quake, within 72h
+      createMockQuake('w_anotherMajor', 30, 5.9), // Duplicate observation
       createMockQuake('w_highMagDup', 20, 6.0), // High magnitude quake
-      createMockQuake('w_highMagDup', 22, 5.9), // Duplicate ID for high magnitude quake
+      createMockQuake('w_highMagDup', 20, 6.0), // Duplicate observation
       ...Array.from({ length: 5 }, (_, i) => createMockQuake(`w_extra${i}`, 24 * (i + 1) , 3.0 + i * 0.1)) // Keep some other quakes (some > 72h)
     ];
     const action = { type: actionTypes.WEEKLY_DATA_PROCESSED, payload: { features: mockFeaturesWeekly, fetchTime: mockFetchTime } };
@@ -118,55 +111,57 @@ describe('EarthquakeDataContext Reducer', () => {
     it('should set isLoadingWeekly to false', () => expect(updatedState.isLoadingWeekly).toBe(false));
 
     it('should filter earthquakes for last 72 hours (deduplicated) and last 7 days', () => {
-      // Test earthquakesLast72Hours (which should be deduplicated by the reducer)
-      const expectedIn72HoursRaw = mockFeaturesWeekly.filter(q => (mockFetchTime - q.properties.time) <= 72 * 36e5);
-      const uniqueIds72h = new Set();
-      const expectedDeduplicatedIn72Hours = expectedIn72HoursRaw.filter(quake => {
-          if (!uniqueIds72h.has(quake.id)) {
-              uniqueIds72h.add(quake.id);
-              return true;
-          }
-          return false;
-      });
-      expect(updatedState.earthquakesLast72Hours.map(q=>q.id).sort()).toEqual(expectedDeduplicatedIn72Hours.map(q=>q.id).sort());
-      expect(updatedState.earthquakesLast72Hours.length).toEqual(expectedDeduplicatedIn72Hours.length);
-      // Test earthquakesLast7Days (no deduplication applied here in the reducer)
-      // This assertion was previously checking against mockFeaturesWeekly.length which includes quakes beyond 7 days.
-      // It should filter to the actual 7-day window.
-      const expectedLast7Days = mockFeaturesWeekly.filter(q => (mockFetchTime - q.properties.time) <= 7 * 24 * 36e5);
-      expect(updatedState.earthquakesLast7Days.map(q=>q.id).sort()).toEqual(expectedLast7Days.map(q=>q.id).sort());
+      expect(updatedState.earthquakesLast72Hours.map(q => q.id)).toEqual([
+        'w_quake1', 'w_quake2', 'w_quakeMajor', 'w_anotherMajor', 'w_highMagDup',
+        'w_extra0', 'w_extra1', 'w_extra2',
+      ]);
+      expect(updatedState.earthquakesLast7Days).toEqual(mockFeaturesWeekly);
     });
     it('should populate globeEarthquakes (sorted subset of last 72 hours, deduplicated)', () => {
-        const last72HoursData = filterByTime(mockFeaturesWeekly, 72, 0, mockFetchTime);
-
-        // Deduplication step for the test's expectation
-        const uniqueEarthquakeIds = new Set();
-        const deduplicatedLast72HoursData = last72HoursData.filter(quake => {
-            if (!uniqueEarthquakeIds.has(quake.id)) {
-                uniqueEarthquakeIds.add(quake.id);
-                return true;
-            }
-            return false;
-        });
-
-        const expectedGlobeQuakes = [...deduplicatedLast72HoursData].sort((a,b) => (b.properties.mag || 0) - (a.properties.mag || 0)).slice(0, 900);
-        expect(updatedState.globeEarthquakes.map(q=>q.id).sort()).toEqual(expectedGlobeQuakes.map(q=>q.id).sort());
-        // Also check that the count is as expected after deduplication
-        expect(updatedState.globeEarthquakes.length).toEqual(expectedGlobeQuakes.length);
+        expect(updatedState.globeEarthquakes.map(q => q.id)).toEqual([
+          'w_highMagDup', 'w_anotherMajor', 'w_quakeMajor', 'w_extra2',
+          'w_extra1', 'w_quake2', 'w_extra0', 'w_quake1',
+        ]);
+        const crowded = Array.from({ length: 902 }, (_, i) => createMockQuake(`rank-${i}`, 1, i / 100));
+        crowded.push(createMockQuake('rank-901', 1, 9.01), createMockQuake('too-old', 73, 10));
+        const capped = earthquakeReducer(initialState, { ...action, payload: { ...action.payload, features: crowded } });
+        expect(capped.globeEarthquakes.map(q => q.id)).toEqual(
+          Array.from({ length: 900 }, (_, i) => `rank-${901 - i}`),
+        );
+        expect(capped.globeEarthquakes[0].properties.mag).toBe(9.01);
     });
     it('should filter prev24HourData (48h to 24h ago)', () => {
-        const expectedPrev24 = filterByTime(mockFeaturesWeekly, 48, 24, mockFetchTime);
-        expect(updatedState.prev24HourData.map(q=>q.id).sort()).toEqual(expectedPrev24.map(q=>q.id).sort());
+        expect(updatedState.prev24HourData.map(q => q.id)).toEqual([
+          'w_anotherMajor', 'w_anotherMajor', 'w_extra1',
+        ]);
     });
     it('should consolidate major quakes from weekly data', () => {
-        const weeklyMajors = mockFeaturesWeekly.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
-        const mjUpdates = consolidateMajorQuakesLogic(initialState.lastMajorQuake, initialState.previousMajorQuake, weeklyMajors);
-        expect(updatedState.lastMajorQuake?.id).toBe(mjUpdates.lastMajorQuake?.id);
+        expect(updatedState.lastMajorQuake.id).toBe('w_highMagDup');
+        expect(updatedState.previousMajorQuake.id).toBe('w_anotherMajor');
+        expect(updatedState.timeBetweenPreviousMajorQuakes).toBe(10 * 36e5);
     });
-    it('should calculate dailyCounts7Days, sampledEarthquakesLast7Days, and magnitudeDistribution7Days', () => {
-        expect(updatedState.dailyCounts7Days.length).toBe(7);
-        expect(updatedState.sampledEarthquakesLast7Days).toBeInstanceOf(Array);
-        expect(updatedState.magnitudeDistribution7Days.length).toBe(MAGNITUDE_RANGES.length);
+    it('should calculate daily counts, magnitude bins and priority sampling for seven days', () => {
+        expect(updatedState.dailyCounts7Days).toEqual([
+          { dateString: 'Sep 15', count: 0 }, { dateString: 'Sep 16', count: 1 },
+          { dateString: 'Sep 17', count: 1 }, { dateString: 'Sep 18', count: 2 },
+          { dateString: 'Sep 19', count: 4 }, { dateString: 'Sep 20', count: 5 },
+          { dateString: 'Sep 21', count: 1 },
+        ]);
+        expect(updatedState.magnitudeDistribution7Days.map(({ name, count }) => [name, count])).toEqual([
+          ['<1', 0], ['1-1.9', 0], ['2-2.9', 1], ['3-3.9', 6],
+          ['4-4.9', 1], ['5-5.9', 4], ['6-6.9', 2], ['7+', 0],
+        ]);
+        expect(updatedState.sampledEarthquakesLast7Days.map(q => q.id).sort())
+          .toEqual(mockFeaturesWeekly.map(q => q.id).sort());
+        vi.spyOn(Math, 'random').mockReturnValue(0.314);
+        const crowded = Array.from({ length: 450 }, (_, i) => createMockQuake(`minor-${i}`, 1, 2));
+        crowded.push(createMockQuake('priority-1', 1, 4.5), createMockQuake('priority-2', 1, 7));
+        const sampled = earthquakeReducer(initialState, { ...action, payload: { ...action.payload, features: crowded } })
+          .sampledEarthquakesLast7Days;
+        expect(sampled).toHaveLength(300);
+        expect(new Set(sampled.map(q => q.id)).size).toBe(300);
+        expect(sampled.map(q => q.id)).toEqual(expect.arrayContaining(['priority-1', 'priority-2']));
+        expect(sampled.every(q => crowded.includes(q))).toBe(true);
     });
 
     it('should handle empty features for weekly processing', () => {
@@ -184,7 +179,7 @@ describe('EarthquakeDataContext Reducer', () => {
   });
 
   describe('MONTHLY_DATA_PROCESSED action', () => {
-    const mockFetchTime = Date.now();
+    const mockFetchTime = fetchTime;
     const createMockQuake = (id, timeOffsetDays, mag) => ({ id, properties: { mag, time: mockFetchTime - timeOffsetDays * 24 * 36e5 } });
     const mockFeaturesMonthly = [
       createMockQuake('m_quake1', 5, 2.5), createMockQuake('m_quakeMajor', 15, 6.2),
@@ -199,27 +194,53 @@ describe('EarthquakeDataContext Reducer', () => {
     });
     it('should populate allEarthquakes, earthquakesLast14Days, and earthquakesLast30Days', () => {
         expect(updatedState.allEarthquakes.length).toBe(mockFeaturesMonthly.length);
-        const expected14day = filterMonthlyByTime(mockFeaturesMonthly, 14, 0, mockFetchTime);
-        expect(updatedState.earthquakesLast14Days.map(q=>q.id).sort()).toEqual(expected14day.map(q=>q.id).sort());
+        expect(updatedState.earthquakesLast14Days.map(q => q.id)).toEqual([
+          'm_quake1', 'm_extra0', 'm_extra1', 'm_extra2', 'm_extra3', 'm_extra4',
+          'm_extra5', 'm_extra6', 'm_extra7', 'm_extra8', 'm_extra9',
+        ]);
+        expect(updatedState.earthquakesLast30Days).toEqual(mockFeaturesMonthly);
     });
     it('should filter prev7DayData and prev14DayData', () => {
-        const expectedP7 = filterMonthlyByTime(mockFeaturesMonthly, 14, 7, mockFetchTime);
-        const expectedP14 = filterMonthlyByTime(mockFeaturesMonthly, 28, 14, mockFetchTime);
-        expect(updatedState.prev7DayData.map(q=>q.id).sort()).toEqual(expectedP7.map(q=>q.id).sort());
-        expect(updatedState.prev14DayData.map(q=>q.id).sort()).toEqual(expectedP14.map(q=>q.id).sort());
+        expect(updatedState.prev7DayData.map(q => q.id)).toEqual(['m_extra7', 'm_extra8', 'm_extra9']);
+        expect(updatedState.prev14DayData.map(q => q.id)).toEqual(['m_quakeMajor']);
     });
     it('should consolidate major quakes from monthly data', () => {
-        const monthlyMajors = mockFeaturesMonthly.filter(q => q.properties.mag !== null && q.properties.mag >= MAJOR_QUAKE_THRESHOLD);
-        const mjUpdates = consolidateMajorQuakesLogic(initialState.lastMajorQuake, initialState.previousMajorQuake, monthlyMajors);
-        expect(updatedState.lastMajorQuake?.id).toBe(mjUpdates.lastMajorQuake?.id);
+        expect(updatedState.lastMajorQuake.id).toBe('m_quakeMajor');
+        expect(updatedState.previousMajorQuake).toBeNull();
     });
-    it('should calculate dailyCounts, sampledEarthquakes, and magnitudeDistribution for 14/30 days', () => {
-        expect(updatedState.dailyCounts14Days.length).toBe(14);
-        expect(updatedState.dailyCounts30Days.length).toBe(30);
-        expect(updatedState.sampledEarthquakesLast14Days).toBeInstanceOf(Array);
-        expect(updatedState.sampledEarthquakesLast30Days).toBeInstanceOf(Array);
-        expect(updatedState.magnitudeDistribution14Days.length).toBe(MAGNITUDE_RANGES.length);
-        expect(updatedState.magnitudeDistribution30Days.length).toBe(MAGNITUDE_RANGES.length);
+    it('should calculate daily counts, magnitude bins and priority sampling for 14/30 days', () => {
+        expect(updatedState.dailyCounts14Days.map(d => d.count)).toEqual([0, 0, 0, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 0]);
+        expect(updatedState.dailyCounts14Days[0].dateString).toBe('Sep 8');
+        expect(updatedState.dailyCounts14Days.at(-1).dateString).toBe('Sep 21');
+        expect(updatedState.dailyCounts30Days).toHaveLength(30);
+        expect(updatedState.dailyCounts30Days[0].dateString).toBe('Aug 23');
+        expect(updatedState.dailyCounts30Days.filter(d => d.count)).toEqual([
+          { dateString: 'Sep 6', count: 1 }, { dateString: 'Sep 11', count: 1 },
+          { dateString: 'Sep 12', count: 1 }, { dateString: 'Sep 13', count: 1 },
+          { dateString: 'Sep 14', count: 1 }, { dateString: 'Sep 15', count: 1 },
+          { dateString: 'Sep 16', count: 2 }, { dateString: 'Sep 17', count: 1 },
+          { dateString: 'Sep 18', count: 1 }, { dateString: 'Sep 19', count: 1 },
+          { dateString: 'Sep 20', count: 1 },
+        ]);
+        expect(updatedState.magnitudeDistribution14Days.map(({ name, count }) => [name, count])).toEqual([
+          ['<1', 0], ['1-1.9', 0], ['2-2.9', 6], ['3-3.9', 5],
+          ['4-4.9', 0], ['5-5.9', 0], ['6-6.9', 0], ['7+', 0],
+        ]);
+        expect(updatedState.magnitudeDistribution30Days.map(d => d.count)).toEqual([0, 0, 6, 5, 0, 0, 1, 0]);
+        expect(updatedState.sampledEarthquakesLast14Days.map(q => q.id).sort())
+          .toEqual(updatedState.earthquakesLast14Days.map(q => q.id).sort());
+        expect(updatedState.sampledEarthquakesLast30Days.map(q => q.id).sort())
+          .toEqual(mockFeaturesMonthly.map(q => q.id).sort());
+        vi.spyOn(Math, 'random').mockReturnValue(0.314);
+        const crowded = Array.from({ length: 750 }, (_, i) => createMockQuake(`minor-${i}`, 2, 2));
+        crowded.push(createMockQuake('priority-1', 5, 4.5), createMockQuake('priority-2', 5, 7));
+        const sampled = earthquakeReducer(initialState, { ...action, payload: { ...action.payload, features: crowded } });
+        for (const [quakes, cap] of [[sampled.sampledEarthquakesLast14Days, 500], [sampled.sampledEarthquakesLast30Days, 700]]) {
+          expect(quakes).toHaveLength(cap);
+          expect(new Set(quakes.map(q => q.id)).size).toBe(cap);
+          expect(quakes.map(q => q.id)).toEqual(expect.arrayContaining(['priority-1', 'priority-2']));
+          expect(quakes.every(q => crowded.includes(q))).toBe(true);
+        }
     });
 
     it('should handle empty features for monthly processing', () => {

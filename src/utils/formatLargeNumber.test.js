@@ -1,5 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { formatLargeNumber } from './utils.js';
+
+// Preserve native rounding/grouping while making the fixture's English locale explicit.
+const nativeFormat = Number.prototype.toLocaleString;
+beforeEach(() => {
+  vi.spyOn(Number.prototype, 'toLocaleString').mockImplementation(function (locales, options) {
+    expect(locales).toBeUndefined();
+    return nativeFormat.call(this, 'en-US', options);
+  });
+});
+afterEach(() => vi.restoreAllMocks());
 
 describe('formatLargeNumber', () => {
   it('should return "N/A" for invalid number inputs', () => {

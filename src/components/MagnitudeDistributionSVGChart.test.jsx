@@ -60,13 +60,6 @@ describe('MagnitudeDistributionSVGChart', () => {
       },
     };
 
-    vi.spyOn(React, 'useContext').mockImplementation((context) => {
-      if (context === EarthquakeDataContext) {
-        return providerProps.value;
-      }
-      const actualUseContext = vi.importActual('react').useContext;
-      return actualUseContext(context);
-    });
   });
 
   it('should render skeleton when isLoading is true', () => {

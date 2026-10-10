@@ -230,7 +230,7 @@ describe('EarthquakeSequenceChart', () => {
             originalError(...args);
         };
         // Mock getBoundingClientRect for stable chart rendering dimensions in tests
-        Element.prototype.getBoundingClientRect = vi.fn(() => ({ // Changed to vi.fn()
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => ({ // Changed to vi.fn()
             width: 800, // Standard width used in component
             height: 350, // Standard height
             top: 0, left: 0, bottom: 0, right: 0, x: 0, y: 0, toJSON: () => ""

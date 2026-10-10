@@ -68,6 +68,8 @@ const makeColorDuller = (colorString, opacityFactor) => {
     }
 };
 
+const EMPTY_ACTIVE_CLUSTERS = [];
+
 /**
  * Renders an interactive 3D globe using `react-globe.gl` to display earthquake data.
  * It visualizes recent earthquakes, highlighted significant quakes, and optionally coastlines
@@ -100,7 +102,7 @@ const InteractiveGlobeView = ({
     coastlineGeoJson,
     tectonicPlatesGeoJson,
     highlightedQuakeId,
-    activeClusters = [],
+    activeClusters = EMPTY_ACTIVE_CLUSTERS,
     atmosphereColor = "rgb(100,100,255)",
     defaultFocusLat = 20,
     defaultFocusLng = 0,

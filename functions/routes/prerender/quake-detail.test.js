@@ -66,14 +66,19 @@ describe('handleQuakeDetailPrerender', () => {
   describe('Successful Render', () => {
     it('should render correctly when properties.title is provided', async () => {
       const eventId = 'usTest1';
-      const _mockData = {
+      const mockData = {
         ...baseMockGeoJson,
         id: eventId,
         properties: {
           ...baseMockGeoJson.properties,
           title: 'M 5.8 - Párga, Greece Region', // Pre-existing title
+          url: `https://earthquake.usgs.gov/earthquakes/eventpage/${eventId}`,
+          detail: `https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=${eventId}&format=geojson`,
         },
       };
+      server.use(http.get('https://earthquake.usgs.gov/fdsnws/event/1/query', ({ request }) => {
+        if (new URL(request.url).searchParams.get('eventid') === eventId) return HttpResponse.json(mockData);
+      }));
       const context = createMockContext();
 
       const response = await handleQuakeDetailPrerender(context, eventId);
@@ -98,7 +103,12 @@ describe('handleQuakeDetailPrerender', () => {
       const mockData = JSON.parse(JSON.stringify(baseMockGeoJson));
       delete mockData.properties.title;
       mockData.id = eventId;
+      mockData.properties.url = `https://earthquake.usgs.gov/earthquakes/eventpage/${eventId}`;
+      mockData.properties.detail = `https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=${eventId}&format=geojson`;
 
+      server.use(http.get('https://earthquake.usgs.gov/fdsnws/event/1/query', ({ request }) => {
+        if (new URL(request.url).searchParams.get('eventid') === eventId) return HttpResponse.json(mockData);
+      }));
       const context = createMockContext();
 
       const response = await handleQuakeDetailPrerender(context, eventId);

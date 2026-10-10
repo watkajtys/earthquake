@@ -71,26 +71,26 @@ describe('FeedsPageLayout', () => {
     render(<EarthquakeDataContext.Provider value={mockEarthquakeDataContextValue}>
       <UIStateContext.Provider value={mockUIStateContextValue}><FeedsPageLayout {...mockProps} /></UIStateContext.Provider>
     </EarthquakeDataContext.Provider>);
-    expect(SeoMetadata).toHaveBeenCalledWith(expect.objectContaining({
+    expect(SeoMetadata.mock.lastCall?.[0]).toEqual(expect.objectContaining({
       pageUrl: 'https://earthquakeslive.com/feeds?activeFeedPeriod=last_24_hours',
       canonicalUrl: 'https://earthquakeslive.com/feeds?activeFeedPeriod=last_24_hours',
-    }), undefined);
+    }));
   });
 
   it('keeps weekly coverage labels after a failed first monthly attempt and exposes retry state', () => {
     render(<EarthquakeDataContext.Provider value={{ ...mockEarthquakeDataContextValue, hasAttemptedMonthlyLoad: true, monthlyHasLoaded: false, monthlyError: 'Unavailable' }}>
       <UIStateContext.Provider value={{ ...mockUIStateContextValue, activeFeedPeriod: 'feelable_quakes' }}><FeedsPageLayout {...mockProps} /></UIStateContext.Provider>
     </EarthquakeDataContext.Provider>);
-    expect(PaginatedEarthquakeTable).toHaveBeenLastCalledWith(expect.objectContaining({ title: expect.stringContaining('Last 7 Days'), paginationKey: 'feelable_quakes' }), undefined);
-    expect(LoadMoreDataButton).toHaveBeenLastCalledWith(expect.objectContaining({ monthlyHasLoaded: false, monthlyError: 'Unavailable' }), undefined);
+    expect(PaginatedEarthquakeTable.mock.lastCall?.[0]).toEqual(expect.objectContaining({ title: expect.stringContaining('Last 7 Days'), paginationKey: 'feelable_quakes' }));
+    expect(LoadMoreDataButton.mock.lastCall?.[0]).toEqual(expect.objectContaining({ monthlyHasLoaded: false, monthlyError: 'Unavailable' }));
   });
 
   it('treats a successful empty month as loaded coverage', () => {
     render(<EarthquakeDataContext.Provider value={{ ...mockEarthquakeDataContextValue, hasAttemptedMonthlyLoad: true, monthlyHasLoaded: true }}>
       <UIStateContext.Provider value={{ ...mockUIStateContextValue, activeFeedPeriod: 'feelable_quakes' }}><FeedsPageLayout {...mockProps} /></UIStateContext.Provider>
     </EarthquakeDataContext.Provider>);
-    expect(PaginatedEarthquakeTable).toHaveBeenLastCalledWith(expect.objectContaining({ title: expect.stringContaining('Last 30 Days'), earthquakes: [] }), undefined);
-    expect(FeedSelector).toHaveBeenLastCalledWith(expect.objectContaining({ monthlyHasLoaded: true }), undefined);
+    expect(PaginatedEarthquakeTable.mock.lastCall?.[0]).toEqual(expect.objectContaining({ title: expect.stringContaining('Last 30 Days'), earthquakes: [] }));
+    expect(FeedSelector.mock.lastCall?.[0]).toEqual(expect.objectContaining({ monthlyHasLoaded: true }));
   });
 
   it('shows unavailable rather than zero statistics after an initial extended-period failure', () => {
@@ -109,7 +109,7 @@ describe('FeedsPageLayout', () => {
     </EarthquakeDataContext.Provider>);
     fireEvent.click(screen.getByRole('button', { name: 'Retry feed' }));
     expect(retry).toHaveBeenCalledOnce();
-    expect(PaginatedEarthquakeTable).toHaveBeenLastCalledWith(expect.objectContaining({ isLoading: false }), undefined);
+    expect(PaginatedEarthquakeTable.mock.lastCall?.[0]).toEqual(expect.objectContaining({ isLoading: false }));
   });
 
   it('offers an explicit retry for a failed selected feed', () => {
@@ -149,7 +149,7 @@ describe('FeedsPageLayout', () => {
     );
     // Check props for FeedSelector
     const feedSelectorMock = vi.mocked(FeedSelector);
-    expect(feedSelectorMock).toHaveBeenCalledWith(
+    expect(feedSelectorMock.mock.lastCall?.[0]).toEqual(
       expect.objectContaining({
         activeFeedPeriod: 'last_24_hours',
         setActiveFeedPeriod: mockUIStateContextValue.setActiveFeedPeriod,
@@ -157,9 +157,7 @@ describe('FeedsPageLayout', () => {
         allEarthquakes: [], // This refers to the prop passed to FeedSelector, which is derived from context
         FEELABLE_QUAKE_THRESHOLD: 2.5, // Assuming this is passed from FeedsPageLayout
         MAJOR_QUAKE_THRESHOLD: 4.5,    // Assuming this is passed from FeedsPageLayout
-      }),
-      undefined // Explicitly expect undefined for the second argument if that's what it receives
-    );
+      }));
   });
 
   it('passes correct props to SummaryStatisticsCard', () => {
@@ -176,16 +174,14 @@ describe('FeedsPageLayout', () => {
 
     // Check props for SummaryStatisticsCard
     const summaryStatsCardMock = vi.mocked(SummaryStatisticsCard);
-    expect(summaryStatsCardMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
+    expect(summaryStatsCardMock.mock.lastCall?.[0]).toEqual(
       expect.objectContaining({
         title: 'Statistics for (Last 24 Hours)', // Corrected title based on component logic
         currentPeriodData: currentQuakes,
         previousPeriodData: mockEarthquakeDataContextValue.prev24HourData,
         isLoading: false,
         calculateStats: calculateStatsMock, // FeedsPageLayout passes its own prop calculateStats directly
-      }),
-      undefined
-    );
+      }));
   });
 
   it('passes correct props to PaginatedEarthquakeTable', () => {
@@ -199,7 +195,7 @@ describe('FeedsPageLayout', () => {
     );
     // Check props for PaginatedEarthquakeTable
     const paginatedTableMock = vi.mocked(PaginatedEarthquakeTable);
-    expect(paginatedTableMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
+    expect(paginatedTableMock.mock.lastCall?.[0]).toEqual(
       expect.objectContaining({
         title: 'Earthquakes (Last 24 Hours)',
         earthquakes: currentQuakes,
@@ -210,9 +206,7 @@ describe('FeedsPageLayout', () => {
         getMagnitudeColorStyle: mockProps.getMagnitudeColorStyle,
         formatTimeAgo: mockProps.formatTimeAgo, // from FeedsPageLayout props
         formatDate: mockProps.formatDate, // from FeedsPageLayout props
-      }),
-      undefined
-    );
+      }));
   });
 
   it('passes correct props to LoadMoreDataButton', () => {
@@ -225,14 +219,12 @@ describe('FeedsPageLayout', () => {
     );
     // Check props for LoadMoreDataButton
     const loadMoreButtonMock = vi.mocked(LoadMoreDataButton);
-    expect(loadMoreButtonMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
+    expect(loadMoreButtonMock.mock.lastCall?.[0]).toEqual(
       expect.objectContaining({
         hasAttemptedMonthlyLoad: mockEarthquakeDataContextValue.hasAttemptedMonthlyLoad,
         isLoadingMonthly: mockEarthquakeDataContextValue.isLoadingMonthly,
         loadMonthlyData: mockEarthquakeDataContextValue.loadMonthlyData,
-      }),
-      undefined
-    );
+      }));
   });
 
   it('updates title and data when activeFeedPeriod changes to "last_hour"', () => {
@@ -251,17 +243,14 @@ describe('FeedsPageLayout', () => {
 
     // Check title for SummaryStatisticsCard
     const summaryStatsCardMock = vi.mocked(SummaryStatisticsCard);
-    expect(summaryStatsCardMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
-      expect.objectContaining({ title: 'Statistics for (Last Hour)' }), // Corrected title
-      undefined
+    expect(summaryStatsCardMock.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ title: 'Statistics for (Last Hour)' })
     );
 
     // Check title for PaginatedEarthquakeTable
     const paginatedTableMock = vi.mocked(PaginatedEarthquakeTable);
-    expect(paginatedTableMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
-      expect.objectContaining({ title: 'Earthquakes (Last Hour)', earthquakes: hourlyQuakes }),
-      undefined
-    );
+    expect(paginatedTableMock.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ title: 'Earthquakes (Last Hour)', earthquakes: hourlyQuakes }));
   });
 
   it('shows loading state correctly for daily data (last_24_hours)', () => {
@@ -275,15 +264,11 @@ describe('FeedsPageLayout', () => {
     );
 
     const summaryStatsCardMock = vi.mocked(SummaryStatisticsCard);
-    expect(summaryStatsCardMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
-      expect.objectContaining({ isLoading: true }),
-      undefined
-    );
+    expect(summaryStatsCardMock.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ isLoading: true }));
     const paginatedTableMock = vi.mocked(PaginatedEarthquakeTable);
-    expect(paginatedTableMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
-      expect.objectContaining({ isLoading: true }),
-      undefined
-    );
+    expect(paginatedTableMock.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ isLoading: true }));
   });
 
   it('shows loading state correctly for weekly data (last_7_days)', () => {
@@ -298,15 +283,11 @@ describe('FeedsPageLayout', () => {
     );
 
     const summaryStatsCardMock = vi.mocked(SummaryStatisticsCard);
-    expect(summaryStatsCardMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
-      expect.objectContaining({ isLoading: true }),
-      undefined
-    );
+    expect(summaryStatsCardMock.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ isLoading: true }));
     const paginatedTableMock = vi.mocked(PaginatedEarthquakeTable);
-    expect(paginatedTableMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
-      expect.objectContaining({ isLoading: true }),
-      undefined
-    );
+    expect(paginatedTableMock.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ isLoading: true }));
   });
 
    it('shows loading state correctly for monthly data (last_30_days)', () => {
@@ -321,15 +302,11 @@ describe('FeedsPageLayout', () => {
     );
 
     const summaryStatsCardMock = vi.mocked(SummaryStatisticsCard);
-    expect(summaryStatsCardMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
-      expect.objectContaining({ isLoading: true }),
-      undefined
-    );
+    expect(summaryStatsCardMock.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ isLoading: true }));
     const paginatedTableMock = vi.mocked(PaginatedEarthquakeTable);
-    expect(paginatedTableMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
-      expect.objectContaining({ isLoading: true }),
-      undefined
-    );
+    expect(paginatedTableMock.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({ isLoading: true }));
   });
 
   it('calls getFeedPageSeoInfo with correct parameters', () => {
@@ -340,7 +317,7 @@ describe('FeedsPageLayout', () => {
         </UIStateContext.Provider>
       </EarthquakeDataContext.Provider>
     );
-    expect(mockProps.getFeedPageSeoInfo).toHaveBeenLastCalledWith('Earthquakes (Last 24 Hours)', 'last_24_hours'); // Changed to assertLastCalledWith
+    expect(mockProps.getFeedPageSeoInfo).toHaveBeenLastCalledWith('Earthquakes (Last 24 Hours)', 'last_24_hours');
   });
 
   it('uses feelable_quakes feed correctly', () => {
@@ -364,13 +341,11 @@ describe('FeedsPageLayout', () => {
     );
 
     const paginatedTableMock = vi.mocked(PaginatedEarthquakeTable);
-    expect(paginatedTableMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
+    expect(paginatedTableMock.mock.lastCall?.[0]).toEqual(
       expect.objectContaining({
         title: 'Feelable Quakes (M2.5+) (Last 7 Days)', // Adjusted based on likely constant
         earthquakes: [feelableQuakesData[0]],
-      }),
-      undefined
-    );
+      }));
   });
 
   it('uses significant_quakes feed correctly with monthly data', () => {
@@ -393,13 +368,11 @@ describe('FeedsPageLayout', () => {
     );
 
     const paginatedTableMock = vi.mocked(PaginatedEarthquakeTable);
-    expect(paginatedTableMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
+    expect(paginatedTableMock.mock.lastCall?.[0]).toEqual(
       expect.objectContaining({
         title: 'Significant Quakes (M4.5+) (Last 30 Days)',
         earthquakes: [significantQuakesData[0]],
-      }),
-      undefined
-    );
+      }));
   });
 
   // Test for last_14_days when monthly data is not yet loaded (should be null or empty)
@@ -414,14 +387,12 @@ describe('FeedsPageLayout', () => {
       </EarthquakeDataContext.Provider>
     );
     const paginatedTableMock = vi.mocked(PaginatedEarthquakeTable);
-    expect(paginatedTableMock).toHaveBeenLastCalledWith( // Changed to assertLastCalledWith
+    expect(paginatedTableMock.mock.lastCall?.[0]).toEqual(
       expect.objectContaining({
         title: 'Earthquakes (Last 14 Days)',
         earthquakes: [],
         isLoading: true,
-      }),
-      undefined
-    );
+      }));
     expect(mockEarthquakeDataContextValue.loadMonthlyData).toHaveBeenCalledOnce();
   });
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import NotableQuakeFeature from './NotableQuakeFeature';
-import { EarthquakeDataContext } from '../contexts/EarthquakeDataContext';
+import { EarthquakeDataContext } from '../contexts/earthquakeDataContextUtils';
 import * as Utils from '../utils/utils'; // Original import
 
 // Mock the EarthquakeDataContext
@@ -64,17 +64,11 @@ describe('NotableQuakeFeature', () => {
       },
     };
 
-    vi.spyOn(React, 'useContext').mockImplementation((context) => {
-      if (context === EarthquakeDataContext) {
-        return providerProps.value;
-      }
-      const actualUseContext = vi.importActual('react').useContext;
-      return actualUseContext(context);
-    });
+
   });
 
   afterEach(() => {
-    vi.runOnlyPendingTimers(); // Run any remaining timers to avoid them bleeding if not cleared
+    vi.clearAllTimers();
     vi.useRealTimers();      // Restore real timers
     vi.clearAllTimers();     // Explicitly clear any and all timers
     vi.restoreAllMocks();
@@ -86,7 +80,7 @@ describe('NotableQuakeFeature', () => {
     const { container } = renderWithContext(<NotableQuakeFeature onNotableQuakeSelect={mockOnNotableQuakeSelect} />, { providerProps });
     // The loading state is mostly CSS based, check for its presence after initial render.
     // useEffect might not even run if it returns early due to isLoading.
-    await screen.findByRole('generic', {}, { timeout: 2000 }); // Wait for a generic div, then check class
+    // Loading state is rendered synchronously.
     expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
   });
 
@@ -97,7 +91,7 @@ describe('NotableQuakeFeature', () => {
 
     const firstHistoricalForAssertion = componentInternalHistoricalQuakes_forAssertion[0];
     // Wait for the component to settle and display the historical quake name
-    await screen.findByText(new RegExp(`${firstHistoricalForAssertion.name}.*${firstHistoricalForAssertion.year}`));
+    screen.getByText(new RegExp(`${firstHistoricalForAssertion.name}.*${firstHistoricalForAssertion.year}`));
 
     // Now check other elements
     expect(screen.getByText('Featured Historical Quake')).toBeInTheDocument();
@@ -116,7 +110,7 @@ describe('NotableQuakeFeature', () => {
     it('displays dynamic featured quake details', async () => {
       renderWithContext(<NotableQuakeFeature onNotableQuakeSelect={mockOnNotableQuakeSelect} />, { providerProps });
       // Try to find a stable element first
-      const viewDetailsButton = await screen.findByRole('button', { name: /View Details/i });
+      const viewDetailsButton = screen.getByRole('button', { name: /View Details/i });
       expect(viewDetailsButton).toBeInTheDocument();
 
       // Now check for other elements that depend on displayQuake state
@@ -130,7 +124,7 @@ describe('NotableQuakeFeature', () => {
 
     it('calls onNotableQuakeSelect with original dynamic quake data on button click', async () => {
       renderWithContext(<NotableQuakeFeature onNotableQuakeSelect={mockOnNotableQuakeSelect} />, { providerProps });
-      await screen.findByText('Latest Significant Quake'); // Wait for displayQuake to be set
+      screen.getByText('Latest Significant Quake'); // Wait for displayQuake to be set
 
       fireEvent.click(screen.getByRole('button', { name: /View Details/i }));
       expect(mockOnNotableQuakeSelect).toHaveBeenCalledWith(dynamicQuake);
@@ -139,7 +133,7 @@ describe('NotableQuakeFeature', () => {
     it('uses getMagnitudeColorFunc prop if provided for dynamic quake', async () => {
         const customColorFunc = vi.fn(mag => `custom-color-${mag}`);
         renderWithContext(<NotableQuakeFeature onNotableQuakeSelect={mockOnNotableQuakeSelect} getMagnitudeColorFunc={customColorFunc} />, { providerProps });
-        await screen.findByText('Latest Significant Quake'); // Wait for displayQuake
+        screen.getByText('Latest Significant Quake'); // Wait for displayQuake
 
         expect(customColorFunc).toHaveBeenCalledWith(dynamicQuake.properties.mag);
         // Utils.getMagnitudeColor is the mocked module's function.
@@ -166,7 +160,7 @@ describe('NotableQuakeFeature', () => {
 
     it('displays the first historical quake initially', async () => {
       renderWithContext(<NotableQuakeFeature onNotableQuakeSelect={mockOnNotableQuakeSelect} />, { providerProps });
-      await screen.findByText('Featured Historical Quake'); // Wait for effect
+      screen.getByText('Featured Historical Quake'); // Wait for effect
 
       expect(screen.getByText(new RegExp(`${firstInternalHistorical.name}.*${firstInternalHistorical.year}`))).toBeInTheDocument();
       expect(screen.getByText(`M ${firstInternalHistorical.mag.toFixed(1)}`)).toBeInTheDocument();
@@ -176,13 +170,13 @@ describe('NotableQuakeFeature', () => {
 
     it('cycles through historical quakes', async () => {
       renderWithContext(<NotableQuakeFeature onNotableQuakeSelect={mockOnNotableQuakeSelect} />, { providerProps });
-      await screen.findByText(new RegExp(firstInternalHistorical.name)); // Ensure first is displayed
+      screen.getByText(new RegExp(firstInternalHistorical.name)); // Ensure first is displayed
 
       await act(async () => { // Act for advancing timers
         vi.advanceTimersByTime(15000);
       });
       // After timer, wait for the second quake's name to ensure UI updated
-      await screen.findByText(new RegExp(secondInternalHistorical.name));
+      screen.getByText(new RegExp(secondInternalHistorical.name));
 
       expect(screen.getByText(`M ${secondInternalHistorical.mag.toFixed(1)}`)).toBeInTheDocument();
       expect(Utils.getMagnitudeColor).toHaveBeenCalledWith(secondInternalHistorical.mag);
@@ -191,7 +185,7 @@ describe('NotableQuakeFeature', () => {
     it('calls onNotableQuakeSelect with historical quake data on button click', async () => {
       renderWithContext(<NotableQuakeFeature onNotableQuakeSelect={mockOnNotableQuakeSelect} />, { providerProps });
       // Wait for the first historical item to be fully rendered and stable
-      await screen.findByText(new RegExp(firstInternalHistorical.description));
+      screen.getByText(new RegExp(firstInternalHistorical.description));
 
       fireEvent.click(screen.getByRole('button', { name: /View Details/i }));
 
@@ -199,12 +193,13 @@ describe('NotableQuakeFeature', () => {
       expect(mockOnNotableQuakeSelect).toHaveBeenCalledWith(expectedData);
     });
 
-    it('button says "More Info" if historical quake has no URL (test with a modified item)', async () => {
+    it('offers More Info and preserves selection when a recent event has no detail URL', () => {
+      const event = createDynamicQuake('no-url', 7.2, 'Unlinked event', Date.now(), undefined);
+      providerProps.value.lastMajorQuake = event;
       renderWithContext(<NotableQuakeFeature onNotableQuakeSelect={mockOnNotableQuakeSelect} />, { providerProps });
-      // Wait for the component to settle (e.g., display first historical quake)
-      await screen.findByText('Featured Historical Quake');
-      // All current historical quakes have URLs, so button should be "View Details"
-      expect(screen.getByRole('button', { name: /View Details/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'View Details' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'More Info' }));
+      expect(mockOnNotableQuakeSelect).toHaveBeenCalledWith(event);
     });
   });
 });

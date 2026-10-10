@@ -8,7 +8,7 @@ import { REFRESH_INTERVAL_MS } from '../../constants/appConstants';
 
 const wrapper = ({ children }) => <EarthquakeDataProvider>{children}</EarthquakeDataProvider>;
 const now = Date.UTC(2026, 8, 21);
-const flush = async () => { await act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); }); };
+const flush = async () => { await act(async () => { await vi.advanceTimersByTimeAsync(0); }); };
 let calls;
 let failing;
 let fetchMock;

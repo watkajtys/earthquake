@@ -16,15 +16,28 @@ async function loadAll() {
 function respond(period, features) { const e = feedEnvelope(period, features); return HttpResponse.json(e, { headers: feedHeaders(e) }); }
 
 describe('complete provider feed contract', () => {
-  it('accepts complete day/week/month snapshots and preserves alert/revision/detail fields without a second fetch', async () => {
+  it('preserves complete feed fields and exposes real period selectors without a second fetch', async () => {
     const feature = earthquakeFeature('alert-quake', { alert: 'orange', tsunami: 1, felt: 240, sig: 900 });
-    const primary = vi.fn(({ request }) => respond(new URL(request.url).searchParams.get('period'), [feature]));
+    const recent = [feature, earthquakeFeature('feelable-boundary', { mag: 2.5 }),
+      earthquakeFeature('below-feelable', { mag: 2.49 }), earthquakeFeature('below-major', { mag: 4.49 }),
+      earthquakeFeature('major-boundary', { mag: 4.5 }), earthquakeFeature('unknown-magnitude', { mag: null })];
+    const older = earthquakeFeature('month-only-major', { mag: 4.5, time: Date.now() - 15 * 86400_000 });
+    const primary = vi.fn(({ request }) => {
+      const period = new URL(request.url).searchParams.get('period');
+      return respond(period, period === 'month' ? [...recent, older] : recent);
+    });
     const fallback = vi.fn(() => HttpResponse.json(completeUsgsFeed()));
     server.use(http.get('/api/earthquake-feeds', primary), http.get('/api/usgs-proxy', fallback));
     const result = await loadAll();
     expect(primary).toHaveBeenCalledTimes(3);
     expect(fallback).not.toHaveBeenCalled();
-    for (const events of [result.current.earthquakesLast24Hours, result.current.earthquakesLast7Days, result.current.allEarthquakes]) expect(events).toEqual([feature]);
+    expect(result.current.earthquakesLast24Hours).toEqual(recent);
+    expect(result.current.earthquakesLast7Days).toEqual(recent);
+    expect(result.current.allEarthquakes).toEqual([...recent, older]);
+    expect(result.current.feelableQuakes7Days_ctx.map(q => q.id)).toEqual(['alert-quake', 'feelable-boundary', 'below-major', 'major-boundary']);
+    expect(result.current.significantQuakes7Days_ctx.map(q => q.id)).toEqual(['alert-quake', 'major-boundary']);
+    expect(result.current.feelableQuakes30Days_ctx.map(q => q.id)).toEqual(['alert-quake', 'feelable-boundary', 'below-major', 'major-boundary', 'month-only-major']);
+    expect(result.current.significantQuakes30Days_ctx.map(q => q.id)).toEqual(['alert-quake', 'major-boundary', 'month-only-major']);
     expect(result.current.highestRecentAlert).toBe('orange');
     expect(result.current.hasRecentTsunamiWarning).toBe(true);
     expect(result.current.dailyFeedStatus).toMatchObject({ dataSource: 'USGS snapshot', hasLoaded: true, stale: false, coverage: { complete: true } });

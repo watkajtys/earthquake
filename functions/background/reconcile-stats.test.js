@@ -1,3 +1,7 @@
+// @vitest-environment node
+import { DatabaseSync } from 'node:sqlite';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import reconcileStats from './reconcile-stats.js';
 
@@ -16,22 +20,30 @@ describe('reconcile-stats', () => {
     };
   });
 
-  it('should fetch stats from D1 and update KV', async () => {
-    const mockStats = {
-      total_earthquakes: 100,
-      fetched: 50,
-      with_shakemap: 20,
-      with_moment_tensor: 10,
-    };
-    mockEnv.DB.first.mockResolvedValue(mockStats);
+  it('aggregates migrated event rows before publishing statistics to KV', async () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const migrations = resolve('migrations');
+      for (const name of readdirSync(migrations).filter(name => name.endsWith('.sql')).sort()) {
+        database.exec(readFileSync(resolve(migrations, name), 'utf8'));
+      }
+      const insert = database.prepare(`INSERT INTO EarthquakeEvents
+        (id, detail_fetched, has_shakemap, has_moment_tensor) VALUES (?, ?, ?, ?)`);
+      insert.run('unfetched', 0, 0, 0);
+      insert.run('tensor', 1, 0, 1);
+      insert.run('both-products', 1, 1, 1);
+      insert.run('tensor-summary', 0, 0, 1);
+      mockEnv.DB = { prepare: sql => ({ first: async () => database.prepare(sql).get() }) };
 
-    await reconcileStats.scheduled(null, mockEnv, null);
+      await reconcileStats.scheduled(null, mockEnv, null);
 
-    expect(mockEnv.DB.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT'));
-    expect(mockEnv.USGS_LAST_RESPONSE_KV.put).toHaveBeenCalledWith(
-      'earthquake_stats',
-      JSON.stringify(mockStats)
-    );
+      expect(mockEnv.USGS_LAST_RESPONSE_KV.put).toHaveBeenCalledExactlyOnceWith(
+        'earthquake_stats',
+        JSON.stringify({ total_earthquakes: 4, fetched: 2, with_shakemap: 1, with_moment_tensor: 3 }),
+      );
+    } finally {
+      database.close();
+    }
   });
 
   it('should log an error if DB is not configured', async () => {

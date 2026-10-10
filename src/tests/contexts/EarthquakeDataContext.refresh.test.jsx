@@ -6,7 +6,7 @@ import { earthquakeFeature, feedEnvelope, feedResponse } from '../../test-utils/
 import { REFRESH_INTERVAL_MS } from '../../constants/appConstants.js';
 const now = Date.UTC(2026, 8, 21);
 const wrapper = ({ children }) => <EarthquakeDataProvider>{children}</EarthquakeDataProvider>;
-const flush = async () => { await act(async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); }); };
+const flush = async () => { await act(async () => { await vi.advanceTimersByTimeAsync(0); }); };
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
