@@ -660,6 +660,20 @@ Status: production deployed at 20:55:41 MDT; all 22 routine release gates passed
 - Evidence: `.reconciliation.local/resilience-release-20261009/production-release.json` and adjacent preview/production receipts. Audit evidence: `.reconciliation.local/test-quality-20261009/`. Detailed investigation, confidence, test decisions and runtime limits: [INCIDENT-RESILIENCE-2026-10-09.md](INCIDENT-RESILIENCE-2026-10-09.md).
 - Recovery: inspect current version and restore the exact compatible predecessor only after reviewing live state; preserve all immutable assets/snapshots and current bindings. Code rollback does not revert D1/R2 data. No database restoration or archive deletion is part of this release.
 
+## Test-health and resilience follow-up — 2026-10-09 MDT
+
+Status: production deployed at 22:00:51 MDT; all 22 routine release gates passed at 22:02:37 MDT (2026-10-10 04:02:37 UTC).
+
+- Source: `20dd5bd4bf69e9d30a9c7da6644a844515d0f140`, branch `codex/resilience-fixes`. Worker version: `884ca150-359d-474c-bcdd-ac4fccc60fd9` at 100%. Compatible predecessor: `2603234c-a0c9-4d21-a2a6-3f3fef817b95` / `f1f6c7eed4d45575730964256fa000166a03cfc8`.
+- Included: stable default globe dependency from the repaired test suite; D1-authoritative daily statistics replacing unsupported KV increments; three bounded log-only period metadata observations per five-minute run; test lint and recorded shuffle seed in the routine test/release command; explicit emergency deployment alias; repeatable local storage/overlap rehearsal and optional live USGS contract check. No production schema/resource/secret/schedule change.
+- Validation: 152 files / 2,037 tests, no skips, test lint passed on Node 22 and the Node 24 release gate. Build/package and runtime lint passed. Independent Sol review found no blockers. Local actual-handler/workerd rehearsal passed transient/slow/hung storage and competing publishers with honest recovery timestamps.
+- Preview `e164976b-7319-4f55-9255-6c8f2f59e239`: 386 GET checks / 354 assets; 60-request HTTP burst at concurrency six with zero failures, p50 200 ms / p95 421 ms / max 656 ms. Real preview statistics publication and metadata observations passed. Globe, detail/map, monthly selection and reload worked in the browser; deliberate null-magnitude fixture produced map skip warnings, no console errors.
+- Retention: exact predecessor contributes 20 paths to the prior 314; all 334 retained paths / 48,246,551 bytes verified in preview and production. Asset count cap reviewed at 360; byte bounds unchanged. Archive writes were create-only; nothing deleted.
+- Production: all 22 gates passed, including 386 GET checks / 354 asset paths on each hostname and exact configuration/identity readback. Five-minute job completed at 04:01:24.842 UTC with all three new monitor states fresh and source ages 32.8–46.7 seconds. Half-hour job succeeded. Bounded tail: 129 new-version invocations, all successful, zero exceptions.
+- Limits: monitoring writes Cloudflare logs only, as requested; metadata observations do not establish full-body integrity and cannot detect a missing cron without external observation. Daily production statistics job awaits its normal schedule; actual remote-preview equivalent passed. No sustained capacity claim, suite-wide mutation score, or historical root-cause certainty. GitHub workflow changes are committed locally; no push or remote GitHub build was run.
+- Evidence: `.reconciliation.local/resilience-followups-20261010/production-release.json` and adjacent archive, browser, preview, rehearsal, freshness and scheduled receipts. Detail: [INCIDENT-RESILIENCE-2026-10-09.md](INCIDENT-RESILIENCE-2026-10-09.md).
+- Recovery: inspect current deployment before choosing the exact compatible predecessor; preserve all immutable assets/snapshots and current resource configuration. Code rollback does not revert D1/KV/R2 data.
+
 ## Subrelease record template
 
 Copy this section for each focused release. Replace placeholders with observed facts or explicit `not run` / `not applicable`, never assumed success.
