@@ -362,3 +362,82 @@ describe('summary storage validation', () => {
     expect((await call(withCursor(first.body.nextCursor))).response.status).toBe(503);
   });
 });
+
+describe('summary R2 read resilience', () => {
+  afterEach(() => vi.useRealTimers());
+  const timers = () => { Date.now.mockRestore(); vi.useFakeTimers(); vi.setSystemTime(NOW); };
+  it('recovers a transient pointer read without changing freshness or provenance', async () => {
+    const fixture = await generation(1); publish(fixture.descriptor);
+    timers();
+    env.GEOJSON_BUCKET.get.mockRejectedValueOnce(new Error('R2 GET failed: (500) Internal Server Error'));
+    const result = call();
+    await vi.advanceTimersByTimeAsync(100);
+    const { response, body } = await result;
+    expect(response.status).toBe(200);
+    expect(body.sourceObservedAtMs).toBe(NOW - 1000);
+    expect(body.generatedAtMs).toBe(NOW);
+    expect(body.stale).toBe(false);
+    expect(env.GEOJSON_BUCKET.get.mock.calls.filter(([key]) => key === SUMMARY_POINTER_KEY)).toHaveLength(2);
+  });
+  it('exhausts the read retry and logs safe stage/release data', async () => {
+    timers();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    env.RELEASE_REVISION = 'abc123'; env.WORKER_VERSION_METADATA = { id: 'release-1' };
+    env.GEOJSON_BUCKET.get.mockRejectedValue(new Error('R2 GET failed: (500) Internal Server Error secret-key'));
+    const result = call(); await vi.advanceTimersByTimeAsync(100);
+    expect((await result).response.status).toBe(503);
+    expect(env.GEOJSON_BUCKET.get).toHaveBeenCalledTimes(2);
+    const value = JSON.parse(log.mock.calls.at(-1)[0]);
+    expect(value).toMatchObject({ stage: 'pointer-get', code: 'R2_INTERNAL_ERROR', upstreamStatus: 500, elapsedMs: 100, revision: 'abc123', versionId: 'release-1' });
+    expect(JSON.stringify(log.mock.calls)).not.toContain('secret-key');
+  });
+  it('does not retry malformed pointer data', async () => {
+    objects.set(SUMMARY_POINTER_KEY, '{');
+    expect((await call()).response.status).toBe(503);
+    expect(env.GEOJSON_BUCKET.get).toHaveBeenCalledOnce();
+  });
+  it.each(['get', 'body'])('bounds a stalled pointer%s and cancels late or stalled bodies', async stall => {
+    timers();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const cancel = vi.fn(); let resolveRead;
+    const object = { size: 2, body: new ReadableStream({ cancel }) };
+    env.GEOJSON_BUCKET.get.mockImplementation(() => stall === 'get' ? new Promise(resolve => { resolveRead = resolve; }) : Promise.resolve(object));
+    const result = call();
+    await vi.advanceTimersByTimeAsync(10_000);
+    const { response, body } = await result;
+    expect(response.status).toBe(503); expect(body.code).toBe('SUMMARY_UNAVAILABLE');
+    expect(JSON.parse(log.mock.calls.at(-1)[0])).toMatchObject({ code: 'R2_READ_TIMEOUT', stage: `pointer-${stall === 'get' ? 'get' : 'read'}`, elapsedMs: 10_000 });
+    if (resolveRead) { resolveRead(object); await vi.advanceTimersByTimeAsync(0); }
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(env.GEOJSON_BUCKET.get).toHaveBeenCalledOnce();
+  });
+  it('keeps cursor/query/signing secrets out of operational logs', async () => {
+    const fixture = await generation(); publish(fixture.descriptor);
+    const first = await call('?limit=100');
+    const cursor = first.body.nextCursor;
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    env.GEOJSON_BUCKET.get.mockRejectedValueOnce(new Error(`unexpected failure ${cursor} ${fixture.manifest.cursorSecret}`));
+    expect((await call(withCursor(cursor))).response.status).toBe(503);
+    const text = JSON.stringify(log.mock.calls);
+    expect(text).not.toContain(cursor);
+    expect(text).not.toContain(fixture.manifest.cursorSecret);
+    expect(text).not.toContain('?cursor=');
+    expect(env.GEOJSON_BUCKET.get.mock.calls.at(-1)[0]).toBe(SUMMARY_POINTER_KEY);
+  });
+  it('shares the deadline across a slow pointer and stalled manifest body', async () => {
+    const fixture = await generation(1); publish(fixture.descriptor);
+    timers();
+    const cancel = vi.fn();
+    const original = env.GEOJSON_BUCKET.get.getMockImplementation();
+    env.GEOJSON_BUCKET.get.mockImplementation(key => key === SUMMARY_POINTER_KEY
+      ? new Promise(resolve => setTimeout(() => resolve(original(key)), 8000))
+      : Promise.resolve({ size: 2, body: new ReadableStream({ cancel }) }));
+    const result = call();
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(cancel).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect((await result).response.status).toBe(503);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(env.GEOJSON_BUCKET.get.mock.calls.map(([key]) => key)).toEqual([SUMMARY_POINTER_KEY, fixture.descriptor.manifestKey]);
+  });
+});

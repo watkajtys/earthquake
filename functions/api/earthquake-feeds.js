@@ -3,6 +3,8 @@ import {
   isFeedStale, readBoundedFeedJson,
 } from '../../shared/earthquakeFeedContract.js';
 import { sha256Hex } from '../../shared/clusterSummaryContract.js';
+import { readR2 } from '../utils/r2ReadRetry.js';
+import { failureDiagnostics, releaseDiagnostics } from '../utils/failureDiagnostics.js';
 
 const unavailable = () => Response.json({ error: { code: 'FEED_UNAVAILABLE', message: 'Earthquake feed unavailable.' } },
   { status: 503, headers: { 'Cache-Control': 'no-store' } });
@@ -79,7 +81,7 @@ export async function onRequestGet({ request, env }) {
   try {
     return await Promise.race([deadline, (async () => {
       const bucket = env.GEOJSON_BUCKET;
-      const pointerObject = await bucket.get(feedPointerKey(period));
+      const pointerObject = await readR2(bucket, 'get', feedPointerKey(period), controller.signal);
       if (controller.signal.aborted) void pointerObject?.body?.cancel().catch(() => {});
       controller.signal.throwIfAborted();
       if (!pointerObject?.body || !Number.isSafeInteger(pointerObject.size) || pointerObject.size < 1 || pointerObject.size > MAX_FEED_POINTER_BYTES) {
@@ -96,7 +98,7 @@ export async function onRequestGet({ request, env }) {
       // without rereading a multi-megabyte body. Publisher supplies its checksum.
       if (request.method === 'HEAD' || matchesEtag(request.headers.get('If-None-Match'), headers.get('ETag'))) {
         beginStage('object-head');
-        const object = await bucket.head(descriptor.objectKey);
+        const object = await readR2(bucket, 'head', descriptor.objectKey, controller.signal);
         controller.signal.throwIfAborted();
         if (!objectMatches(object, descriptor)) throw new Error('Feed object unavailable');
         if (matchesEtag(request.headers.get('If-None-Match'), headers.get('ETag'))) return new Response(null, { status: 304, headers });
@@ -104,7 +106,7 @@ export async function onRequestGet({ request, env }) {
         return new Response(null, { headers });
       }
       beginStage('object-get');
-      const object = await bucket.get(descriptor.objectKey);
+      const object = await readR2(bucket, 'get', descriptor.objectKey, controller.signal);
       if (controller.signal.aborted) void object?.body?.cancel().catch(() => {});
       controller.signal.throwIfAborted();
       beginStage('object-read');
@@ -117,6 +119,8 @@ export async function onRequestGet({ request, env }) {
     console.error(JSON.stringify({
       event: 'earthquake-feed-read-failed', period, method: request.method, stage,
       reason: error === controller.signal.reason ? 'deadline' : 'read-failed',
+      ...failureDiagnostics(error, { stage, code: controller.signal.aborted ? 'R2_READ_TIMEOUT' : 'FEED_READ_FAILED' }),
+      ...releaseDiagnostics(env),
       elapsedMs: Math.max(0, endedAt - startedAt), stageElapsedMs: Math.max(0, endedAt - stageStartedAt),
     }));
     return unavailable();

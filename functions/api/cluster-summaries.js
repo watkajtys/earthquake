@@ -7,6 +7,9 @@ import {
   validateSummaryEnvelope, isSummaryGenerationId, summaryEnvelopeMetadata, sha256Hex,
 } from '../../shared/clusterSummaryContract.js';
 
+import { readR2 } from '../utils/r2ReadRetry.js';
+import { failureDiagnostics, releaseDiagnostics } from '../utils/failureDiagnostics.js';
+
 const MAX_CURSOR_LENGTH = 256;
 const CLOCK_SKEW_MS = 60_000;
 const SNAPSHOT_CLOCK_SKEW_MS = 5 * 60_000;
@@ -73,18 +76,24 @@ function readRequest(request, now) {
 
 // R2 metadata bounds the expected allocation; the stream bound also protects
 // against malformed objects or a dishonest test/storage adapter's size field.
-async function readObject(bucket, key, maxBytes, allowMissing = false) {
-  const object = await bucket.get(key);
+async function readObject(bucket, key, maxBytes, allowMissing, signal, onRead) {
+  const object = await readR2(bucket, 'get', key, signal);
   if (allowMissing && object === null) return null;
   if (!object || !Number.isSafeInteger(object.size) || object.size < 0 || object.size > maxBytes || !object.body) {
+    void object?.body?.cancel().catch(() => {});
     throw unavailable();
   }
+  onRead();
   const reader = object.body.getReader();
+  const abort = () => { void reader.cancel().catch(() => {}); };
+  signal.addEventListener('abort', abort, { once: true });
   const chunks = [];
   let length = 0;
   try {
     for (;;) {
+      signal.throwIfAborted();
       const { value, done } = await reader.read();
+      signal.throwIfAborted();
       if (done) break;
       length += value.byteLength;
       if (length > maxBytes || length > object.size) {
@@ -93,7 +102,10 @@ async function readObject(bucket, key, maxBytes, allowMissing = false) {
       }
       chunks.push(value);
     }
-  } finally { reader.releaseLock(); }
+  } catch (error) {
+    void reader.cancel().catch(() => {});
+    throw error;
+  } finally { signal.removeEventListener('abort', abort); reader.releaseLock(); }
   if (length !== object.size) throw unavailable();
   const bytes = new Uint8Array(length);
   let offset = 0;
@@ -132,61 +144,92 @@ function json(value, status = 200, headers = {}) {
 }
 
 export async function onRequestGet({ request, env }) {
+  const startedAt = Date.now();
+  let stage = 'request-validate';
+  const beginStage = name => { stage = name; };
+  const controller = new AbortController();
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new RequestFailure(503, 'R2_READ_TIMEOUT');
+      controller.abort(error); reject(error);
+    }, 10_000);
+  });
+  const read = (bucket, key, maxBytes, name, allowMissing = false) => {
+    beginStage(`${name}-get`);
+    return readObject(bucket, key, maxBytes, allowMissing, controller.signal, () => beginStage(`${name}-read`));
+  };
   try {
-    const now = Date.now();
-    const query = readRequest(request, now);
-    const bucket = env.GEOJSON_BUCKET;
-    if (!bucket?.get) throw unavailable();
-    const pointerObject = await readObject(bucket, SUMMARY_POINTER_KEY, MAX_SUMMARY_POINTER_BYTES);
-    const pointer = validateSummaryPointer(pointerObject.value);
-    const descriptor = query.generationId === null || query.generationId === pointer.current.generationId
-      ? pointer.current : pointer.history.find(item => item.generationId === query.generationId);
-    if (!descriptor || (descriptor !== pointer.current && now - descriptor.generatedAtMs > SUMMARY_MAX_AGE_MS)) {
-      throw new RequestFailure(410, 'GENERATION_EXPIRED');
-    }
-    if (descriptor.generatedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS || descriptor.sourceObservedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS) throw unavailable();
-    let lastObservedAtMs = descriptor.sourceObservedAtMs;
-    if (descriptor === pointer.current) {
-      const projectionHash = summaryProjectionHash(pointerObject.customMetadata, descriptor.generationId);
-      if (projectionHash !== null) {
-        const observation = await readObject(bucket, generationObservationKey(descriptor.generationId),
-          MAX_SUMMARY_OBSERVATION_BYTES, true);
-        if (observation !== null) {
-          lastObservedAtMs = validateSummaryObservation(observation.value, descriptor, projectionHash).observedAtMs;
-          if (lastObservedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS) throw unavailable();
+    return await Promise.race([deadline, (async () => {
+        const now = Date.now();
+        const query = readRequest(request, now);
+        const bucket = env.GEOJSON_BUCKET;
+        if (!bucket?.get) throw unavailable();
+        const pointerObject = await read(bucket, SUMMARY_POINTER_KEY, MAX_SUMMARY_POINTER_BYTES, 'pointer');
+        beginStage('pointer-validate');
+        const pointer = validateSummaryPointer(pointerObject.value);
+        const descriptor = query.generationId === null || query.generationId === pointer.current.generationId
+          ? pointer.current : pointer.history.find(item => item.generationId === query.generationId);
+        if (!descriptor || (descriptor !== pointer.current && now - descriptor.generatedAtMs > SUMMARY_MAX_AGE_MS)) {
+          throw new RequestFailure(410, 'GENERATION_EXPIRED');
         }
-      }
-    }
-    const manifest = validateSummaryManifest((await readObject(bucket, descriptor.manifestKey, MAX_SUMMARY_MANIFEST_BYTES)).value, descriptor);
-    if (!sameSnapshot(manifest, descriptor) || manifest.pageCount !== descriptor.pageCount || manifest.manifestKey !== descriptor.manifestKey) {
-      throw unavailable();
-    }
-    const key = await cursorKey(manifest.cursorSecret);
-    if (query.signature && !await crypto.subtle.verify('HMAC', key, query.signature, query.payload)) throw invalidCursor();
-    if (query.offset > 0 && query.offset >= descriptor.totalCount) throw invalidCursor();
-    const end = Math.min(query.offset + query.limit, descriptor.totalCount);
-    const items = [];
-    if (end > query.offset || descriptor.totalCount === 0) {
-      const firstPage = Math.floor(query.offset / SUMMARY_PAGE_SIZE);
-      const lastPage = descriptor.totalCount === 0 ? 0 : Math.floor((end - 1) / SUMMARY_PAGE_SIZE);
-      for (let index = firstPage; index <= lastPage; index++) {
-        const entry = manifest.pages[index];
-        const stored = await readObject(bucket, entry.key, MAX_SUMMARY_PAGE_BYTES);
-        if (stored.byteLength !== entry.byteLength || await sha256Hex(stored.text) !== entry.sha256) throw unavailable();
-        const page = validateSummaryPage(stored.value, manifest, index);
-        if (!sameSnapshot(page, descriptor) || page.pageIndex !== index || page.items.length !== entry.count) throw unavailable();
-        const from = Math.max(0, query.offset - index * SUMMARY_PAGE_SIZE);
-        const to = Math.min(page.items.length, end - index * SUMMARY_PAGE_SIZE);
-        items.push(...page.items.slice(from, to));
-      }
-    }
-    if (items.length !== end - query.offset) throw unavailable();
-    return json(validateSummaryEnvelope({ ...summaryEnvelopeMetadata(descriptor), items,
-      nextCursor: end < descriptor.totalCount ? await nextCursor(descriptor, end, query, key) : null,
-      stale: now - lastObservedAtMs > SUMMARY_STALE_AFTER_MS,
-    }), 200, { 'X-Summary-Observed-At': String(lastObservedAtMs) });
+        if (descriptor.generatedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS || descriptor.sourceObservedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS) throw unavailable();
+        let lastObservedAtMs = descriptor.sourceObservedAtMs;
+        if (descriptor === pointer.current) {
+          const projectionHash = summaryProjectionHash(pointerObject.customMetadata, descriptor.generationId);
+          if (projectionHash !== null) {
+            const observation = await read(bucket, generationObservationKey(descriptor.generationId),
+              MAX_SUMMARY_OBSERVATION_BYTES, 'observation', true);
+            if (observation !== null) {
+              beginStage('observation-validate');
+              lastObservedAtMs = validateSummaryObservation(observation.value, descriptor, projectionHash).observedAtMs;
+              if (lastObservedAtMs > now + SNAPSHOT_CLOCK_SKEW_MS) throw unavailable();
+            }
+          }
+        }
+        const manifestObject = await read(bucket, descriptor.manifestKey, MAX_SUMMARY_MANIFEST_BYTES, 'manifest');
+        beginStage('manifest-validate');
+        const manifest = validateSummaryManifest(manifestObject.value, descriptor);
+        if (!sameSnapshot(manifest, descriptor) || manifest.pageCount !== descriptor.pageCount || manifest.manifestKey !== descriptor.manifestKey) {
+          throw unavailable();
+        }
+        beginStage('cursor-validate');
+        const key = await cursorKey(manifest.cursorSecret);
+        if (query.signature && !await crypto.subtle.verify('HMAC', key, query.signature, query.payload)) throw invalidCursor();
+        if (query.offset > 0 && query.offset >= descriptor.totalCount) throw invalidCursor();
+        const end = Math.min(query.offset + query.limit, descriptor.totalCount);
+        const items = [];
+        if (end > query.offset || descriptor.totalCount === 0) {
+          const firstPage = Math.floor(query.offset / SUMMARY_PAGE_SIZE);
+          const lastPage = descriptor.totalCount === 0 ? 0 : Math.floor((end - 1) / SUMMARY_PAGE_SIZE);
+          for (let index = firstPage; index <= lastPage; index++) {
+            const entry = manifest.pages[index];
+            const stored = await read(bucket, entry.key, MAX_SUMMARY_PAGE_BYTES, 'page');
+            beginStage('page-validate');
+            if (stored.byteLength !== entry.byteLength || await sha256Hex(stored.text) !== entry.sha256) throw unavailable();
+            const page = validateSummaryPage(stored.value, manifest, index);
+            if (!sameSnapshot(page, descriptor) || page.pageIndex !== index || page.items.length !== entry.count) throw unavailable();
+            const from = Math.max(0, query.offset - index * SUMMARY_PAGE_SIZE);
+            const to = Math.min(page.items.length, end - index * SUMMARY_PAGE_SIZE);
+            items.push(...page.items.slice(from, to));
+          }
+        }
+        beginStage('envelope-validate');
+        controller.signal.throwIfAborted();
+        if (items.length !== end - query.offset) throw unavailable();
+        return json(validateSummaryEnvelope({ ...summaryEnvelopeMetadata(descriptor), items,
+          nextCursor: end < descriptor.totalCount ? await nextCursor(descriptor, end, query, key) : null,
+          stale: now - lastObservedAtMs > SUMMARY_STALE_AFTER_MS,
+        }), 200, { 'X-Summary-Observed-At': String(lastObservedAtMs) });
+    })()]);
   } catch (error) {
-    return json({ code: error instanceof RequestFailure ? error.code : 'SUMMARY_UNAVAILABLE' },
+    if (!(error instanceof RequestFailure) || error.status >= 500) {
+      console.error(JSON.stringify({ event: 'cluster-summary-read-failed',
+        ...failureDiagnostics(error, { stage, code: 'SUMMARY_READ_FAILED' }),
+        elapsedMs: Math.max(0, Date.now() - startedAt), ...releaseDiagnostics(env),
+      }));
+    }
+    return json({ code: error instanceof RequestFailure && error.code !== 'R2_READ_TIMEOUT' ? error.code : 'SUMMARY_UNAVAILABLE' },
       error instanceof RequestFailure ? error.status : 503);
-  }
+  } finally { clearTimeout(timer); }
 }
