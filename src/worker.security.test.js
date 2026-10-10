@@ -28,11 +28,29 @@ describe('deployed Worker trust boundaries', () => {
 
   it.each([...mutations, '/api/cluster-definition', '/api/calculate-clusters', '/api/cache-stats'])('requires a configured server credential for %s', async path => {
     const prepare = vi.fn();
-    const req = path.endsWith('cache-stats') ? request(path, { method: 'DELETE' }) : post(path, {});
+    const req = path.endsWith('cache-stats')
+      ? request(path, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+      : post(path, {});
     const response = await worker.fetch(req, { DB: { prepare } }, ctx);
     expect(response.status).toBe(503);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it.each([...mutations, '/api/cluster-definition', '/api/calculate-clusters', '/api/cache-stats'])('rejects anonymous requests with 401 even when admin is unconfigured: %s', async path => {
+    const bodyRead = vi.fn(() => { throw new Error('body must not be read'); });
+    const prepare = vi.fn();
+    const send = vi.fn();
+    const spatialWork = vi.spyOn(spatial, 'findActiveClustersOptimized');
+    const req = { url: `https://earthquakeslive.com${path}`,
+      method: path.endsWith('cache-stats') ? 'DELETE' : 'POST',
+      headers: new Headers({ 'User-Agent': 'Worker-Security-Test/1.0', 'Content-Type': 'application/json' }),
+      get body() { return bodyRead(); } };
+    const response = await worker.fetch(req, { DB: { prepare }, GEOJSON_QUEUE: { send } }, ctx);
+    expect(response.status).toBe(401);
+    expect(response.headers.get('WWW-Authenticate')).toBe('Bearer');
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    for (const operation of [bodyRead, prepare, send, spatialWork]) expect(operation).not.toHaveBeenCalled();
   });
 
   it.each(['wrong', '', `${token}-wrong`])('rejects a bad admin credential before touching storage', async credential => {
@@ -44,7 +62,15 @@ describe('deployed Worker trust boundaries', () => {
 
   it.each([
     ['missing server secret', undefined, `Bearer ${token}`, 503],
+    ['short server secret', 'short', `Bearer ${token}`, 503],
+    ['non-string server secret', 123, `Bearer ${token}`, 503],
+    ['missing credential and server secret', undefined, undefined, 401],
+    ['malformed credential and server secret', undefined, 'Basic invalid', 401],
+    ['empty bearer and server secret', undefined, 'Bearer ', 401],
+    ['oversized credential and server secret', undefined, `Bearer ${'x'.repeat(4096)}`, 401],
+    ['missing credential with short server secret', 'short', undefined, 401],
     ['missing credential', token, undefined, 401],
+    ['malformed credential', token, 'Bearer token with whitespace', 401],
     ['wrong credential', token, 'Bearer wrong', 401],
   ])('rejects legacy cluster calculation before reading its body or running spatial work: %s', async (_name, secret, authorization, status) => {
     const bodyRead = vi.fn(() => { throw new Error('body must not be read'); });
@@ -57,6 +83,7 @@ describe('deployed Worker trust boundaries', () => {
     const response = await worker.fetch(req, { ...(secret ? { ADMIN_API_TOKEN: secret } : {}) }, ctx);
     expect(response.status).toBe(status);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('WWW-Authenticate')).toBe(status === 401 ? 'Bearer' : null);
     expect(bodyRead).not.toHaveBeenCalled();
     expect(spatialWork).not.toHaveBeenCalled();
   });

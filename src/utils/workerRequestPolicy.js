@@ -15,12 +15,12 @@ export function policyError(message, status, headers = {}) {
 }
 
 export async function requireAdmin(request, env) {
-  if (typeof env.ADMIN_API_TOKEN !== 'string' || env.ADMIN_API_TOKEN.length < 32) {
-    return policyError('Administrative API is not configured.', 503);
-  }
   const authorization = request.headers.get('Authorization') || '';
   const match = authorization.length <= 4096 && /^Bearer ([^\s]+)$/.exec(authorization);
   if (!match) return policyError('Authorization required.', 401, { 'WWW-Authenticate': 'Bearer' });
+  if (typeof env.ADMIN_API_TOKEN !== 'string' || env.ADMIN_API_TOKEN.length < 32) {
+    return policyError('Administrative API is not configured.', 503);
+  }
   // Hash to equal-length inputs before the runtime's constant-time comparison.
   const encode = new TextEncoder();
   const [expected, supplied] = await Promise.all([
