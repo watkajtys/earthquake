@@ -1,6 +1,8 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { updateStatsInKV } from './kv-stats-updater.js';
 
+// These mocked arithmetic/error tests provide no concurrent-write guarantee.
+// Workers KV returns value + metadata and does not support conditional CAS puts.
 describe('kv-stats-updater', () => {
   let mockContext;
   let mockKvNamespace;
@@ -22,7 +24,7 @@ describe('kv-stats-updater', () => {
   });
 
   it('should initialize and update stats if key does not exist', async () => {
-    mockKvNamespace.getWithMetadata.mockResolvedValue({ value: null, cas: null });
+    mockKvNamespace.getWithMetadata.mockResolvedValue({ value: null, metadata: null });
     mockKvNamespace.put.mockResolvedValue(undefined);
 
 
@@ -31,14 +33,14 @@ describe('kv-stats-updater', () => {
     expect(mockKvNamespace.put).toHaveBeenCalledWith(
       'test_stats',
       JSON.stringify({ count: 1 }),
-      { cas: undefined }
+      expect.any(Object)
     );
   });
 
   it('should correctly increment existing stats', async () => {
     mockKvNamespace.getWithMetadata.mockResolvedValue({
       value: { count: 10, anotherStat: 5 },
-      cas: 'mock-cas-123',
+      metadata: null,
     });
     mockKvNamespace.put.mockResolvedValue(undefined);
 
@@ -48,18 +50,18 @@ describe('kv-stats-updater', () => {
     expect(mockKvNamespace.put).toHaveBeenCalledWith(
       'test_stats',
       JSON.stringify({ count: 12, anotherStat: 5, newStat: 1 }),
-      { cas: 'mock-cas-123' }
+      expect.any(Object)
     );
   });
 
-  it('should retry on conflict and eventually succeed', async () => {
+  it('should retry a generic write failure and eventually succeed', async () => {
     // First call fails, second succeeds
     mockKvNamespace.getWithMetadata
-      .mockResolvedValueOnce({ value: { count: 1 }, cas: 'cas-1' })
-      .mockResolvedValueOnce({ value: { count: 2 }, cas: 'cas-2' });
+      .mockResolvedValueOnce({ value: { count: 1 }, metadata: null })
+      .mockResolvedValueOnce({ value: { count: 2 }, metadata: null });
 
     mockKvNamespace.put
-        .mockRejectedValueOnce(new Error('CAS mismatch')) // Simulate CAS failure
+        .mockRejectedValueOnce(new Error('KV write failed')) // Simulate a generic binding failure
         .mockResolvedValueOnce(undefined); // Simulate success on retry
 
 
@@ -70,18 +72,18 @@ describe('kv-stats-updater', () => {
     expect(mockKvNamespace.put).toHaveBeenCalledWith(
       'test_stats',
       JSON.stringify({ count: 2 }),
-      { cas: 'cas-1' }
+      expect.any(Object)
     );
     expect(mockKvNamespace.put).toHaveBeenLastCalledWith(
       'test_stats',
       JSON.stringify({ count: 3 }),
-      { cas: 'cas-2' }
+      expect.any(Object)
     );
   });
 
   it('should throw an error after all retries fail', async () => {
-    mockKvNamespace.getWithMetadata.mockResolvedValue({ value: { count: 1 }, cas: 'cas-1' });
-    mockKvNamespace.put.mockRejectedValue(new Error('CAS mismatch'));
+    mockKvNamespace.getWithMetadata.mockResolvedValue({ value: { count: 1 }, metadata: null });
+    mockKvNamespace.put.mockRejectedValue(new Error('KV write failed'));
 
     await expect(
       updateStatsInKV(mockContext, 'USGS_LAST_RESPONSE_KV', 'test_stats', { count: 1 }, 3)

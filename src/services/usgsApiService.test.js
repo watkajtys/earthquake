@@ -44,11 +44,10 @@ describe('fetchUsgsData', () => {
     });
   });
 
-  it('should handle network errors (fetch rejects)', async () => {
-    const _networkErrorMessage = 'Simulated network failure'; // This won't be the actual message from service
+  it('reports an HTTP 503 response from the proxy', async () => {
     server.use(
       http.get('/api/usgs-proxy', () => {
-        // Simulate a server error that might represent a network issue from proxy's perspective
+        // This is an HTTP response, not a rejected fetch.
         return new HttpResponse(null, { status: 503, statusText: 'Service Unavailable' });
       })
     );

@@ -70,15 +70,6 @@ describe('EarthquakeDetailModalComponent Common/Rendering', () => {
     );
   };
 
-  test('renders EarthquakeDetailView when a detailUrlParam is provided', () => {
-    // This is a basic render test ensuring the core child component is rendered
-    // when parameters are as expected by default mocks.
-    renderComponent();
-    expect(EarthquakeDetailView).toHaveBeenCalled();
-    // SeoMetadata is also rendered by default
-    expect(SeoMetadata).toHaveBeenCalled();
-  });
-
   test('does not render EarthquakeDetailView if detailUrlParam is missing', () => {
     mockUseParamsGlobal.mockReturnValueOnce({ '*': undefined }); // Override for this test
     renderComponent(undefined, ['/quake/']); // Ensure route matches a state where param is missing

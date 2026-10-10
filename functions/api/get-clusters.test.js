@@ -37,6 +37,7 @@ describe('get-clusters API endpoint', () => {
     expect(response.headers.get('Content-Type')).toBe('application/json');
     expect(response.headers.get('X-Cache-Status')).toBe('Hit');
     expect(body).toEqual(mockClusters);
+    expect(context.env.CLUSTER_KV.get).toHaveBeenCalledWith('active_clusters', 'json');
   });
 
   it('should return an empty array when no clusters are cached', async () => {
@@ -49,6 +50,7 @@ describe('get-clusters API endpoint', () => {
     expect(response.headers.get('Content-Type')).toBe('application/json');
     expect(response.headers.get('X-Cache-Status')).toBe('Miss');
     expect(body).toEqual([]);
+    expect(context.env.CLUSTER_KV.get).toHaveBeenCalledWith('active_clusters', 'json');
   });
 
   it('should return a 500 error if there is a problem fetching from KV', async () => {
@@ -60,7 +62,9 @@ describe('get-clusters API endpoint', () => {
     const body = await response.json();
 
     expect(response.status).toBe(500);
-    expect(body.error).toBe('Internal Server Error');
+    expect(response.headers.get('Content-Type')).toBe('application/json');
+    expect(body).toEqual({ error: 'Internal Server Error' });
+    expect(context.env.CLUSTER_KV.get).toHaveBeenCalledWith('active_clusters', 'json');
     expect(consoleErrorSpy).toHaveBeenCalledWith('Error fetching clusters from KV:', error.message, expect.any(String));
     consoleErrorSpy.mockRestore();
   });

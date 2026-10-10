@@ -602,6 +602,64 @@ does not revert database writes; never overwrite active D1 with the old export.
 Historical reconciliation, stale existing revisions, legacy-list replacement,
 historical cluster repair and SEO/performance measurement remain separate.
 
+## Administrative denial status correction — 2026-10-09 MDT
+
+Status: production deployed and verified at 19:58:59 MDT (2026-10-10
+01:58:59 UTC). The user authorized this narrow change and its deployment.
+
+- Missing, malformed, or oversized bearer headers now return 401 with
+  `WWW-Authenticate: Bearer` before the server-secret configuration check.
+  A syntactically valid bearer header still returns 503 if the server secret is
+  absent or invalid. Wrong credentials against a configured secret remain 401.
+  Existing constant-time comparison and authorization requirements are intact.
+- Production source: `4ee2165910fe7228b9444684ba2449b8a9707458` on
+  `codex/admin-auth-response`, based on the live `e8734e0` revision.
+  Worker version: `06b2014a-a1ef-48a7-be5e-58360df71a96`.
+  Previous compatible version: `547be86c-2144-4fd6-b9e4-f3120d9ff040`.
+- The required asset-retention preparation appended 21 verified paths to the
+  retained manifest. All 314 retained assets (45,775,833 bytes) passed byte and
+  metadata verification in preview and production. Archive writes were
+  create-only; no older asset or earthquake archive was overwritten or deleted.
+- Targeted security tests: 46 passed. Full production-gate suite: 144 files,
+  1,855 tests passed, 3 skipped. Build and production packaging passed.
+  Independent review found no actionable issues.
+- Isolated preview version: `04193cc3-d5c8-4c85-a2ed-87b07e3d9bd4`.
+  Six HTTP checks verified anonymous/malformed 401 and unconfigured-admin 503
+  behavior on the two affected cluster POST endpoints. The same six checks
+  passed on each production hostname with the expected challenge and no-store
+  headers.
+- The routine `release:production` wrapper passed all 22 gates, including
+  unchanged resource configuration, deployment identity, predecessor retention,
+  and 346 GET checks / 314 assets on each public hostname. No secret,
+  earthquake-data, schema, scheduled-handler, or schedule change was made.
+  No additional background-run observation was required for this HTTP-only fix.
+- Equivalent source/asset commits were brought into the original working branch
+  as `3ab07aa` and `a9f99b3`; unrelated pending UI and region work was preserved
+  and was not included in production.
+
+Private release, preview, archive, and HTTP verification evidence is preserved
+under `.reconciliation.local/admin-auth-response-20261009/`. The release receipt
+is `release-production.json`. Recovery is a reviewed code rollback to the exact
+compatible predecessor, followed by configuration/identity and site checks;
+retain all newly archived assets. This fixes error classification and does not
+stop already-running legacy clients from retrying.
+
+## Incident resilience release — 2026-10-09 MDT
+
+Status: production deployed at 20:55:41 MDT; all 22 routine release gates passed at 20:57:21 MDT (2026-10-10 02:57:21 UTC).
+
+- Source revision: `f1f6c7eed4d45575730964256fa000166a03cfc8`, branch `codex/resilience-fixes` in the production-based managed worktree. Worker version: `2603234c-a0c9-4d21-a2a6-3f3fef817b95` at 100%. Compatible predecessor: `06b2014a-a1ef-48a7-be5e-58360df71a96` / `4ee2165910fe7228b9444684ba2449b8a9707458`.
+- Fixes: validated USGS detail redirects/deleted events, end-to-end detail deadlines and client recovery, bounded transient D1/R2 recovery, verified retained-snapshot fallbacks, bounded publisher IO, safe per-cause diagnostics, source freshness records, and client polling controls. No schema/resource/secret/schedule change.
+- Preview version `08bf1e44-cb06-40d0-8ab2-8a288f111fac`: isolated resources and synthetic fixtures, 366 GET checks / 334 assets, fresh feeds, admin denial checks, upstream detail contracts and two browser detail states passed.
+- Production gate: full tests/build/package passed; exact predecessor graph and 314 retained assets verified; 366 GET checks / 334 assets per public host passed; exact identity/configuration verified. Known redirect event returned 200 and deleted event 410 on both hosts. Existing admin denial classification passed six checks per host.
+- First new-version five-minute job at 02:55:40.703 UTC succeeded with all three source-freshness records fresh. Month reconciliation at 02:57:48.908 UTC succeeded for 10,593 events / 18 batches / zero inserts.
+- The 03:00:48.299 UTC half-hour backfill completed two items with zero errors, and the concurrent five-minute publisher committed three new fresh generations.
+- Ten-minute clustering at 03:00:48.393 UTC processed 173 significant clusters with zero errors (50.656 seconds wall time). The bounded tail observed 605 successful new-version invocations and zero exception records through 03:01:46 UTC. Final public day/week/month sources remained fresh.
+- Test-quality cleanup happened after deployment and changes only tests/docs: five low-value cases removed, useful assertions retained, unsupported mock contracts corrected; 2,016 tests passed, three skipped, scoped lint clean. No new cases added. Runtime source is unchanged from the deployed SHA.
+- Remaining limits: unknown historical publisher-gap trigger; already-running legacy bundles need reload; separate approximate KV-counter correctness issue and excluded/weak test coverage recorded by the audit. No external freshness notification destination was configured. The daily scheduled job has not been observed in this short release window.
+- Evidence: `.reconciliation.local/resilience-release-20261009/production-release.json` and adjacent preview/production receipts. Audit evidence: `.reconciliation.local/test-quality-20261009/`. Detailed investigation, confidence, test decisions and runtime limits: [INCIDENT-RESILIENCE-2026-10-09.md](INCIDENT-RESILIENCE-2026-10-09.md).
+- Recovery: inspect current version and restore the exact compatible predecessor only after reviewing live state; preserve all immutable assets/snapshots and current bindings. Code rollback does not revert D1/R2 data. No database restoration or archive deletion is part of this release.
+
 ## Subrelease record template
 
 Copy this section for each focused release. Replace placeholders with observed facts or explicit `not run` / `not applicable`, never assumed success.
