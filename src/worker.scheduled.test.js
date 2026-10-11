@@ -134,6 +134,33 @@ describe('actual Worker scheduled failure propagation', () => {
     expect(results[0].status).toBe('rejected');
   });
 
+  it('completes the actual backfill route for a deleted event and never selects it again', async () => {
+    const fixture = createClusterSqliteFixture({ withProductionTriggers: false });
+    const { onRequestGet } = await vi.importActual('../functions/api/backfill-earthquake-details.js');
+    backfill.mockImplementation(onRequestGet);
+    fixture.database.exec('DELETE FROM EarthquakeEvents');
+    fixture.database.prepare('INSERT INTO EarthquakeEvents (id, magnitude, event_time) VALUES (?, ?, ?)')
+      .run('nn00925554', 3, Date.now() - 2 * 60 * 60 * 1000);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+      'Error 409: Conflict\nThe requested event has been deleted. To see information for deleted events, perform a search.',
+      { status: 409, headers: { 'Content-Type': 'text/plain' } },
+    ));
+    try {
+      const bindings = { ...env, DB: fixture.db, GEOJSON_BUCKET: createMemorySummaryBucket() };
+      const first = await runScheduled('*/30 * * * *', bindings);
+      expect(first.results).toEqual([{ status: 'fulfilled', value: undefined }]);
+      expect(console.log).toHaveBeenCalledWith('[scheduled-worker] MILESTONE', expect.objectContaining({
+        milestone: 'Automated backfill complete', data: expect.objectContaining({ processed: 0, skipped: 1, errors: 0, recoveredFailures: 0 }),
+      }));
+      expect(fixture.database.prepare('SELECT detail_fetch_attempts, next_detail_fetch_attempt FROM EarthquakeEvents').get())
+        .toEqual({ detail_fetch_attempts: 3, next_detail_fetch_attempt: null });
+      const second = await runScheduled('*/30 * * * *', bindings);
+      expect(second.results).toEqual([{ status: 'fulfilled', value: undefined }]);
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(console.error).not.toHaveBeenCalled();
+    } finally { fixture.database.close(); }
+  });
+
   it('reports partial counts, individual retry causes and release identity while rejecting', async () => {
     backfill.mockResolvedValue(Response.json({ success: false, processed: 6, errors: 1, retry_disposition: 'scheduled',
       error_earthquakes: [{ id: 'nn00925554', code: 'USGS_HTTP_ERROR', stage: 'detail-fetch', upstreamStatus: 409,

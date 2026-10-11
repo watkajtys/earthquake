@@ -235,6 +235,7 @@ export async function recoverDueDetailJobs(env, { limit = 3 } = {}) {
   let completed = 0;
   let failed = 0;
   const failures = [];
+  const skips = [];
   for (const job of due.results) {
     let token = null;
     try {
@@ -271,17 +272,24 @@ export async function recoverDueDetailJobs(env, { limit = 3 } = {}) {
       }
       completed++;
     } catch (error) {
-      failed++;
-      console.error('[detail-archive] Recovery failed.', { id: job.event_id, ...failureDiagnostics(error, { stage: 'detail-recovery', code: 'DETAIL_RECOVERY_FAILED' }), ...releaseDiagnostics(env) });
       if (token) await releaseJob(env.DB, job.event_id, job.target_revision_ms, token, error);
       // Diagnostic lookup must not replace the original recovery failure.
       let state = null;
       try { state = await jobRow(env.DB, job.event_id, job.target_revision_ms); }
       catch (lookupError) { console.error('[detail-archive] Retry status unavailable.', {
         ...failureDiagnostics(lookupError, { stage: 'retry-status', code: 'DETAIL_RETRY_STATUS_FAILED', d1: true }), ...releaseDiagnostics(env) }); }
+      if (token && error?.code === 'USGS_EVENT_DELETED' && state?.status === 'parked') {
+        const skip = { id: job.event_id, reason: 'event-deleted',
+          ...failureDiagnostics(error, { stage: 'detail-recovery', code: 'DETAIL_RECOVERY_FAILED' }), retry_disposition: 'parked' };
+        skips.push(skip);
+        console.info('[detail-archive] Deleted event recovery skipped.', { ...skip, ...releaseDiagnostics(env) });
+        continue;
+      }
+      failed++;
+      console.error('[detail-archive] Recovery failed.', { id: job.event_id, ...failureDiagnostics(error, { stage: 'detail-recovery', code: 'DETAIL_RECOVERY_FAILED' }), ...releaseDiagnostics(env) });
       failures.push({ id: job.event_id, ...failureDiagnostics(error, { stage: 'detail-recovery', code: 'DETAIL_RECOVERY_FAILED' }),
         retry_disposition: state?.status === 'parked' ? 'parked' : state?.status === 'pending' ? 'scheduled' : 'unknown' });
     }
   }
-  return { selected: due.results.length, completed, failed, failures };
+  return { selected: due.results.length, completed, failed, failures, skipped: skips.length, skips };
 }

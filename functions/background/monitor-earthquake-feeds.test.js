@@ -34,11 +34,11 @@ it('labels eligible retained metadata degraded without claiming body verificatio
   vi.setSystemTime(NOW + 31 * 60_000);
   expect((await monitorEarthquakeFeeds(env)).map(result => result.state)).toEqual(['unavailable', 'unavailable', 'unavailable']);
 });
-it('bounds hung binding reads and logs sanitized unavailable observations without late followup', async () => {
+it('bounds hung binding reads and logs inconclusive observations without late followup', async () => {
   let resolve; const get = vi.spyOn(bucket, 'get').mockImplementation(() => new Promise(r => { resolve = r; }));
   const head = vi.spyOn(bucket, 'head');
   const pending = monitorEarthquakeFeeds(env); await vi.advanceTimersByTimeAsync(3000);
-  expect((await pending).map(result => result.state)).toEqual(['unavailable', 'unavailable', 'unavailable']);
+  expect(await pending).toEqual(FEED_PERIODS.map(period => expect.objectContaining({ period, state: 'inconclusive', code: 'R2_READ_TIMEOUT', stage: 'pointer-get', elapsedMs: 3000 })));
   resolve(null); await Promise.resolve(); expect(head).not.toHaveBeenCalled(); expect(get).toHaveBeenCalledTimes(3);
   expect(JSON.stringify(console.log.mock.calls)).not.toContain('Snapshot read timed out');
 });
@@ -55,4 +55,40 @@ it('rejects invalid pointer and mismatched object metadata without logging store
   expect(logs).toHaveLength(3);
   expect(JSON.stringify(logs)).not.toContain('stored-sensitive');
   expect(logs[0]).toMatchObject({ period: 'day', code: 'INVALID_FEED_FIELDS' });
+});
+
+it('recovers one classified transport failure within the original budget, and reports exhaustion inconclusive', async () => {
+  const original = bucket.get.bind(bucket);
+  const attempts = new Map();
+  const get = vi.spyOn(bucket, 'get').mockImplementation(async key => {
+    const count = attempts.get(key) ?? 0; attempts.set(key, count + 1);
+    if (!count) throw new Error('get: Internal error (10001)');
+    return original(key);
+  });
+  const recovery = monitorEarthquakeFeeds(env); await vi.advanceTimersByTimeAsync(100);
+  expect((await recovery).map(result => result.state)).toEqual(['fresh', 'fresh', 'fresh']);
+  expect(get).toHaveBeenCalledTimes(6);
+  get.mockClear().mockRejectedValue(new Error('get: Service unavailable (10043)'));
+  const exhausted = monitorEarthquakeFeeds(env); await vi.advanceTimersByTimeAsync(100);
+  expect(await exhausted).toEqual(FEED_PERIODS.map(period => expect.objectContaining({ period, state: 'inconclusive', code: 'R2_SERVICE_UNAVAILABLE', upstreamStatus: 503, elapsedMs: 100 })));
+  expect(get).toHaveBeenCalledTimes(6);
+});
+it('keeps confirmed missing pointers unavailable but does not mistake failed HEAD reads for missing snapshots', async () => {
+  bucket.objects.delete(feedPointerKey('day'));
+  vi.spyOn(bucket, 'head').mockRejectedValue(new Error('head: Internal error (10001)'));
+  const pending = monitorEarthquakeFeeds(env); await vi.advanceTimersByTimeAsync(100);
+  expect((await pending).map(result => result.state)).toEqual(['unavailable', 'inconclusive', 'inconclusive']);
+});
+
+it('reports inconclusive when current metadata is missing and eligible retained metadata cannot be read', async () => {
+  vi.setSystemTime(NOW + 60_000); await publish(NOW + 60_000);
+  for (const period of FEED_PERIODS) bucket.objects.delete(bucket.readJson(feedPointerKey(period)).current.objectKey);
+  const original = bucket.head.bind(bucket);
+  const head = vi.spyOn(bucket, 'head').mockImplementation(async key => {
+    if (bucket.objects.has(key)) throw new Error('head: Service unavailable (10043)');
+    return original(key);
+  });
+  const pending = monitorEarthquakeFeeds(env); await vi.advanceTimersByTimeAsync(100);
+  expect(await pending).toEqual(FEED_PERIODS.map(period => expect.objectContaining({ period, state: 'inconclusive', code: 'R2_SERVICE_UNAVAILABLE', stage: 'previous-head' })));
+  expect(head).toHaveBeenCalledTimes(9);
 });

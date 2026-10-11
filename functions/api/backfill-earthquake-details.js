@@ -60,6 +60,7 @@ async function onRequestGet(context) {
     if (!env.DB) return policyError('Database not configured.', 500);
     const startTime = Date.now();
     const recovery = await recoverDueDetailJobs(env, { limit: 3 });
+    const recoveredSkips = recovery.skips ?? [];
     const selection = pendingSelection(criteria, startTime);
     const result = await env.DB.prepare(`
       SELECT id, magnitude, detail_fetch_attempts FROM EarthquakeEvents
@@ -69,6 +70,7 @@ async function onRequestGet(context) {
     if (result?.success !== true || !Array.isArray(result.results)) throw new Error('Failed to select pending earthquake details');
     const processed = [];
     const errors = [];
+    const skipped = [];
     for (const [index, earthquake] of result.results.entries()) {
       let fetchedDetail = false;
       try {
@@ -89,7 +91,6 @@ async function onRequestGet(context) {
         });
       } catch (error) {
         const diagnostic = failureDiagnostics(error, { stage: fetchedDetail ? 'detail-persistence' : 'detail-fetch', code: 'DETAIL_FAILED' });
-        console.error('[backfill] Detail operation failed.', { id: earthquake.id, ...diagnostic, ...releaseDiagnostics(env) });
         const attempts = earthquake.detail_fetch_attempts || 0;
         const deleted = error?.code === 'USGS_EVENT_DELETED';
         // Infrastructure failures do not consume the upstream fetch budget.
@@ -106,9 +107,17 @@ async function onRequestGet(context) {
         ).run();
         if (retry?.success !== true) throw new Error('Failed to persist detail retry');
         const retryDisposition = deleted ? 'terminal' : fetchedDetail || attempts + 1 < 3 ? 'scheduled' : 'exhausted';
-        errors.push({ id: earthquake.id, error: fetchedDetail ? 'Detail persistence failed.' : 'USGS detail fetch failed.',
+        if (deleted) {
+          const skip = { id: earthquake.id, reason: 'event-deleted', ...diagnostic,
+            retry_disposition: retryDisposition, ...(Number.isInteger(error?.status) ? { status: error.status } : {}) };
+          skipped.push(skip);
+          console.info('[backfill] Deleted event skipped.', { ...skip, ...releaseDiagnostics(env) });
+        } else {
+          console.error('[backfill] Detail operation failed.', { id: earthquake.id, ...diagnostic, ...releaseDiagnostics(env) });
+          errors.push({ id: earthquake.id, error: fetchedDetail ? 'Detail persistence failed.' : 'USGS detail fetch failed.',
           ...diagnostic, retry_disposition: retryDisposition,
           ...(Number.isInteger(error?.status) ? { status: error.status } : {}) });
+        }
       }
       if (index + 1 < result.results.length) await new Promise(resolve => setTimeout(resolve, 1000));
     }
@@ -116,7 +125,7 @@ async function onRequestGet(context) {
     nextUrl.searchParams.set('batch_size', String(criteria.batchSize));
     nextUrl.searchParams.set('min_magnitude', String(criteria.minMagnitude));
     nextUrl.searchParams.set('max_age_days', String(criteria.maxAgeDays));
-    const dispositions = [...errors, ...(recovery.failures ?? [])].map(item => item.retry_disposition);
+    const dispositions = [...errors, ...skipped, ...recoveredSkips, ...(recovery.failures ?? [])].map(item => item.retry_disposition);
     if (recovery.failed && !recovery.failures?.length) dispositions.push('unknown');
     const uniqueDispositions = [...new Set(dispositions)];
     const retryDisposition = uniqueDispositions.length > 1 ? 'mixed' : uniqueDispositions[0] ?? 'none';
@@ -126,6 +135,8 @@ async function onRequestGet(context) {
       retry_disposition: retryDisposition, retry_scheduled: dispositions.includes('scheduled'),
       ...(errors.length || recovery.failed ? { error: `${processed.length} details stored; ${errors.length} detail failures and ${recovery.failed} durable recovery failures; retry disposition: ${retryDisposition}.` } : {}),
       processed: processed.length, errors: errors.length,
+      skipped: skipped.length + recoveredSkips.length,
+      skipped_earthquakes: [...skipped, ...recoveredSkips],
       recovered_jobs: recovery,
       elapsed_seconds: (Date.now() - startTime) / 1000,
       last_processed_id: processed.at(-1)?.id || null,

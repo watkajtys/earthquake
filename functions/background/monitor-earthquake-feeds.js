@@ -12,6 +12,9 @@ export async function monitorEarthquakeFeeds(env) {
     let descriptor;
     let state = 'unavailable';
     let diagnostic;
+    let stage = 'pointer-get';
+    let uncertain = false;
+    const startedAtMs = Date.now();
     try {
       await snapshotReadBudget(parent.signal, 3000, async signal => {
         const bucket = env.GEOJSON_BUCKET;
@@ -19,9 +22,12 @@ export async function monitorEarthquakeFeeds(env) {
         signal.throwIfAborted();
         if (!object?.body || !Number.isSafeInteger(object.size) || object.size < 1 || object.size > MAX_FEED_POINTER_BYTES) {
           void object?.body?.cancel().catch(() => {});
-          throw new Error('Pointer unavailable');
+          throw Object.assign(new Error('Pointer unavailable'), { code: 'FEED_POINTER_UNAVAILABLE' });
         }
-        const pointer = validateFeedPointer(await readBoundedFeedJson(new Response(object.body), signal, MAX_FEED_POINTER_BYTES), { period });
+        stage = 'pointer-read';
+        const value = await readBoundedFeedJson(new Response(object.body), signal, MAX_FEED_POINTER_BYTES);
+        stage = 'pointer-validate';
+        const pointer = validateFeedPointer(value, { period });
         const matches = async candidate => {
           const head = await readR2(bucket, 'head', candidate.objectKey, signal);
           signal.throwIfAborted();
@@ -29,24 +35,30 @@ export async function monitorEarthquakeFeeds(env) {
             head.httpMetadata?.contentType === 'application/json';
         };
         let currentAvailable = false;
+        stage = 'current-head';
         try { currentAvailable = await matches(pointer.current); }
-        catch (error) { signal.throwIfAborted(); diagnostic = failureDiagnostics(error, { code: 'FEED_METADATA_READ_FAILED', stage: 'current-head' }); }
+        catch (error) { signal.throwIfAborted(); uncertain = true; diagnostic = failureDiagnostics(error, { code: 'FEED_METADATA_READ_FAILED', stage: 'current-head' }); }
         if (currentAvailable) { descriptor = pointer.current; state = isFeedStale(descriptor) ? 'stale' : 'fresh'; return; }
         const previous = pointer.previous;
+        stage = 'previous-head';
         if (previous && Date.now() - Math.min(previous.sourceObservedAtMs, previous.upstreamGeneratedAtMs) <= FEED_FALLBACK_MAX_AGE_MS && await matches(previous)) {
           signal.throwIfAborted();
           if (Date.now() - Math.min(previous.sourceObservedAtMs, previous.upstreamGeneratedAtMs) <= FEED_FALLBACK_MAX_AGE_MS) {
             descriptor = previous; state = 'degraded';
           }
         }
+        if (state === 'unavailable' && uncertain) state = 'inconclusive';
       });
     } catch (error) {
-      state = 'unavailable'; descriptor = undefined;
-      diagnostic = failureDiagnostics(error, { code: 'FEED_METADATA_READ_FAILED', stage: 'metadata-observation' });
+      // Transport/deadline failure supplies no evidence that stored data is
+      // unavailable. Missing objects and invalid pointer content do.
+      const invalid = error?.code?.startsWith('INVALID_FEED_') || ['FEED_POINTER_UNAVAILABLE', 'FEED_BYTE_LIMIT'].includes(error?.code) || error instanceof SyntaxError;
+      state = invalid ? 'unavailable' : 'inconclusive'; descriptor = undefined;
+      diagnostic = failureDiagnostics(error, { code: 'FEED_METADATA_READ_FAILED', stage });
     }
     const observedAtMs = Date.now();
     const result = { event: 'feed-serving-metadata-freshness', period, state,
-      observation: 'pointer-and-object-head', integrity: 'metadata-only', observedAtMs,
+      observation: 'pointer-and-object-head', integrity: 'metadata-only', observedAtMs, elapsedMs: Math.max(0, observedAtMs - startedAtMs),
       ...(descriptor ? { sourceAgeMs: Math.max(0, observedAtMs - descriptor.upstreamGeneratedAtMs),
         observationAgeMs: Math.max(0, observedAtMs - descriptor.sourceObservedAtMs), snapshotSequence: descriptor.snapshotSequence } : {}),
       ...diagnostic, ...releaseDiagnostics(env) };

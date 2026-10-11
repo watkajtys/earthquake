@@ -1006,6 +1006,7 @@ var worker_default = {
         retryDisposition: ['scheduled', 'exhausted', 'terminal', 'parked', 'mixed'].includes(item.retry_disposition) ? item.retry_disposition : 'unknown',
       })) : [];
       const data = { processed: Number.isSafeInteger(result.processed) ? result.processed : 0,
+        skipped: Number.isSafeInteger(result.skipped) ? result.skipped : 0,
         errors: Number.isSafeInteger(result.errors) ? result.errors : failures.length,
         recoveredFailures: Number.isSafeInteger(result.recovered_jobs?.failed) ? result.recovered_jobs.failed : 0,
         httpStatus: response.status, failures,

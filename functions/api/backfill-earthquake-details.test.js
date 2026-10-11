@@ -48,6 +48,7 @@ describe('backfill and shared detail persistence against the migrated schema', (
     vi.useFakeTimers();
     vi.setSystemTime(now);
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'info').mockImplementation(() => {});
     fetchValidatedDetail.mockImplementation(async id => feature(id));
     database = new DatabaseSync(':memory:');
     migrations.forEach(sql => database.exec(sql));
@@ -77,7 +78,7 @@ describe('backfill and shared detail persistence against the migrated schema', (
     };
     context = { env, ctx: { waitUntil: vi.fn() } };
   });
-  afterEach(() => { database.close(); vi.useRealTimers(); vi.restoreAllMocks(); vi.clearAllMocks(); });
+  afterEach(() => { database.close(); vi.useRealTimers(); vi.restoreAllMocks(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
   it('preserves stored details and a sanitized individual retry cause on partial success', async () => {
     seed('quake1'); seed('nn00925554');
@@ -106,9 +107,16 @@ describe('backfill and shared detail persistence against the migrated schema', (
 
   it('stops terminal deleted-event fetches without removing an existing archive', async () => {
     seed(); env.GEOJSON_BUCKET.seed('quake1.json', feature());
-    fetchValidatedDetail.mockRejectedValueOnce(new UsgsTransportError('Deleted', { code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409 }));
-    expect(await (await get()).json()).toMatchObject({ success: false, retry_disposition: 'terminal',
-      error_earthquakes: [{ id: 'quake1', code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409, retry_disposition: 'terminal' }] });
+    const transport = await vi.importActual('../utils/usgs-transport.js');
+    fetchValidatedDetail.mockImplementation(transport.fetchValidatedDetail);
+    const upstream = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 302, headers: { Location: 'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=quake1&format=geojson' } }))
+      .mockResolvedValueOnce(new Response('Error 409: Conflict\nThe requested event has been deleted. To see information for deleted events, perform a search.', { status: 409, headers: { 'Content-Type': 'text/plain' } }));
+    vi.stubGlobal('fetch', upstream);
+    expect(await (await post({ operation: 'run_batch', batch_size: 1 })).json()).toMatchObject({ success: true, outcome: 'completed', processed: 0, errors: 0, skipped: 1, retry_disposition: 'terminal',
+      skipped_earthquakes: [{ id: 'quake1', code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409, retry_disposition: 'terminal' }] });
+    expect(upstream).toHaveBeenCalledTimes(2);
+    expect(console.error).not.toHaveBeenCalled();
     expect(row()).toMatchObject({ detail_fetch_attempts: 3, next_detail_fetch_attempt: null });
     expect(env.GEOJSON_BUCKET.readJson('quake1.json')).toEqual(feature());
     expect(await (await get()).json()).toMatchObject({ processed: 0, errors: 0 });
@@ -120,10 +128,36 @@ describe('backfill and shared detail persistence against the migrated schema', (
     await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('R2 outage');
     vi.setSystemTime(now + hour);
     fetchValidatedDetail.mockRejectedValueOnce(new UsgsTransportError('Deleted', { code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409 }));
-    expect(await (await get()).json()).toMatchObject({ success: false, retry_disposition: 'parked',
-      recovered_jobs: { failed: 1, failures: [{ id: 'quake1', code: 'USGS_EVENT_DELETED', retry_disposition: 'parked' }] } });
+    expect(await (await get()).json()).toMatchObject({ success: true, errors: 0, skipped: 1, retry_disposition: 'parked',
+      recovered_jobs: { failed: 0, skipped: 1, failures: [], skips: [{ id: 'quake1', code: 'USGS_EVENT_DELETED', retry_disposition: 'parked' }] } });
     expect(database.prepare('SELECT status FROM EarthquakeDetailJobs').get().status).toBe('parked');
     expect(env.GEOJSON_BUCKET.readJson('quake1.json')).toEqual(feature());
+  });
+
+  it('does not report a deleted-event skip when terminal parking fails', async () => {
+    seed();
+    fetchValidatedDetail.mockRejectedValueOnce(new UsgsTransportError('Deleted', { code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409 }));
+    const prepare = env.DB.prepare.getMockImplementation();
+    env.DB.prepare.mockImplementation(sql => sql.includes('detail_fetch_attempts = MAX')
+      ? { bind: () => ({ run: async () => ({ success: false }) }) } : prepare(sql));
+    const response = await get();
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ status: 'error', message: 'Backfill operation failed.' });
+    expect(row()).toMatchObject({ detail_fetch_attempts: 0 });
+  });
+
+  it('retains a deleted recovery failure when parking cannot be confirmed', async () => {
+    seed();
+    env.GEOJSON_BUCKET.put.mockRejectedValueOnce(new Error('R2 outage'));
+    await expect(persistEarthquakeDetail({ env, detailData: feature() })).rejects.toThrow('R2 outage');
+    vi.setSystemTime(now + hour);
+    fetchValidatedDetail.mockRejectedValueOnce(new UsgsTransportError('Deleted', { code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409 }));
+    const prepare = env.DB.prepare.getMockImplementation();
+    env.DB.prepare.mockImplementation(sql => sql.includes('SELECT archive_key, status, attempts')
+      ? { bind: () => ({ first: async () => { throw new Error('D1 unavailable'); } }) } : prepare(sql));
+    expect(await (await get()).json()).toMatchObject({ success: false, skipped: 0,
+      recovered_jobs: { failed: 1, skipped: 0, failures: [{ code: 'USGS_EVENT_DELETED', retry_disposition: 'unknown' }] } });
+    expect(console.error).toHaveBeenCalled();
   });
 
   it('retains scheduled recovery when another selected event is terminal', async () => {
@@ -132,7 +166,7 @@ describe('backfill and shared detail persistence against the migrated schema', (
       ? { code: 'USGS_EVENT_DELETED', status: 410, upstreamStatus: 409 }
       : { code: 'USGS_UPSTREAM_ERROR', status: 502, upstreamStatus: 503 }); });
     const pending = get('batch_size=2'); await vi.runAllTimersAsync();
-    expect(await (await pending).json()).toMatchObject({ success: false, errors: 2, retry_disposition: 'mixed', retry_scheduled: true });
+    expect(await (await pending).json()).toMatchObject({ success: false, errors: 1, skipped: 1, retry_disposition: 'mixed', retry_scheduled: true });
     expect(row('quake1').detail_fetch_attempts).toBe(3);
     expect(row('quake2').next_detail_fetch_attempt).toBeGreaterThan(now);
   });
