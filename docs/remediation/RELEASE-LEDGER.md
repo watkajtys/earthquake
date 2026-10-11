@@ -691,6 +691,10 @@ Status: production deployed at 19:01:37 MDT; all 22 routine release gates passed
 - Evidence: `.reconciliation.local/residual-fixes-20261010/production-release.json` and adjacent preview, archive, focused-test, freshness, and scheduled receipts. Prior log review: `.reconciliation.local/post-release-health-20261010/retained-dashboard-summary.json`.
 - Recovery: inspect live state before restoring the exact compatible predecessor; retain current bindings, immutable assets, and snapshots. Code rollback does not revert data.
 
+### Main promotion preflight — 2026-10-10 MDT
+
+The later documentation-only commit `e6abf82` exposed a timing-dependent failure in [GitHub CI](https://github.com/watkajtys/earthquake/actions/runs/38100730385): the overlapping-ingestion test exceeded its five-second timeout. Promotion was held before changing remote main. The test advanced a fake clock for a fixed interval while real asynchronous hashing was still in progress. It now observes an actual rejected lease claim, waits for the first handler to complete and release the lease, then wakes the waiting claim. Both successful outcomes, the final checkpoint, persisted rows, and absence of legacy KV access remain asserted. No test cases, timeout increases, or production runtime changes were introduced. Seven focused tests and 15 separate overlap runs passed locally; final CI and main-promotion receipts are retained in `.reconciliation.local/main-promotion-20261010/`.
+
 ## Subrelease record template
 
 Copy this section for each focused release. Replace placeholders with observed facts or explicit `not run` / `not applicable`, never assumed success.

@@ -166,12 +166,32 @@ describe('durable trusted USGS ingestion through the actual handler', () => {
 
     const older = handleTrustedUsgsIngestion(context);
     await firstReadReached;
+    let contentionReached;
+    const contention = new Promise(resolve => { contentionReached = resolve; });
+    const originalPrepare = db.prepare.getMockImplementation();
+    db.prepare.mockImplementation(sql => {
+      const prepared = originalPrepare(sql);
+      if (!sql.includes('SET fence = fence + 1')) return prepared;
+      return { bind(...values) {
+        const operation = prepared.bind(...values);
+        return { ...operation, async run() {
+          const result = await operation.run();
+          if (result.meta.changes === 0) contentionReached();
+          return result;
+        } };
+      } };
+    });
     const newer = handleTrustedUsgsIngestion(context);
-    await vi.advanceTimersByTimeAsync(200);
+    await contention;
     expect(fetch).toHaveBeenCalledTimes(1);
+    expect(state().lease_owner).not.toBeNull();
     releaseFirst();
-    await vi.advanceTimersByTimeAsync(2000);
+    // Native hashing is not controlled by fake timers. Wait for the first
+    // handler's fenced release before waking the contending claim, instead of
+    // assuming a fixed fake-clock advance also finishes native async work.
     expect((await older).status).toBe(200);
+    expect(state().lease_owner).toBeNull();
+    await vi.advanceTimersByTimeAsync(100);
     expect((await newer).status).toBe(200);
     expect(fetch).toHaveBeenCalledTimes(2);
     const latest = runs().find(run => run.source_generated_at_ms === second.metadata.generated);
