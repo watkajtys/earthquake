@@ -674,6 +674,23 @@ Status: production deployed at 22:00:51 MDT; all 22 routine release gates passed
 - Evidence: `.reconciliation.local/resilience-followups-20261010/production-release.json` and adjacent archive, browser, preview, rehearsal, freshness and scheduled receipts. Detail: [INCIDENT-RESILIENCE-2026-10-09.md](INCIDENT-RESILIENCE-2026-10-09.md).
 - Recovery: inspect current deployment before choosing the exact compatible predecessor; preserve all immutable assets/snapshots and current resource configuration. Code rollback does not revert D1/KV/R2 data.
 
+## Residual log classification fixes — 2026-10-10 MDT
+
+Status: production deployed at 19:01:37 MDT; all 22 routine release gates passed at 19:03:25 MDT (2026-10-11 01:03:25 UTC).
+
+- Source: `b5b23e9e9e827bb55c1ce9bd7acf5296d734040d`, branch `codex/resilience-fixes`, pushed to origin. Worker version: `399e8290-8991-44a6-a450-0e2afa5d7001` at 100%. Compatible predecessor: `884ca150-359d-474c-bcdd-ac4fccc60fd9` / `20dd5bd4bf69e9d30a9c7da6644a844515d0f140`.
+- Trigger: the preceding 20.6-hour review found one scheduled exception for a confirmed deleted USGS event, plus two metadata-only monitor timeouts in one invocation. Deleted-event retries had already terminated; the monitor recovered on the next run. Public main-domain adaptive analytics showed no 5xx responses in that window. Seven sampled R2 error spans were missing-key records, not evidence of storage outages. The daily statistics job was observed publishing successfully.
+- Change: confirmed deleted events become explicit terminal skips after saving their retry state. Durable recovery skips require successful parking and a confirming readback. Skip counts reach the scheduled completion log; ordinary upstream, persistence, and recovery failures still fail the batch. Archives remain intact.
+- Change: monitor transport failures and deadlines now report `inconclusive`, including failure code, stage, and elapsed time. Confirmed missing/invalid metadata remains `unavailable`; fresh/stale/degraded semantics remain. The three-second budget and existing classified transient retry are unchanged. Logs only, as requested.
+- Validation: 85 focused tests, scoped lint, independent Sol review, isolated workerd storage/overlap rehearsal and actual Worker route/monitor checks passed. The regression exercises the real scheduled backfill route and verifies the next invocation does not refetch the deleted event. Failure-path checks cover failed terminal persistence and unconfirmed parking. The routine release gate passed 2,043 tests across 152 files, with no skips. [GitHub CI for the exact source](https://github.com/watkajtys/earthquake/actions/runs/38100238804) passed.
+- Preview: version `a7aed336-1a16-4b18-9eca-d8948f64ad4a` returned the exact source identity; 386 GET checks and 354 asset paths passed against isolated resources.
+- Retention: appended the exact predecessor's 20 new asset paths to the existing 334. All 354 paths / 50,717,277 bytes were verified in preview and production; writes were create-only. No assets were deleted or limits expanded.
+- Production: all 22 gates passed, including configuration/version readback and 386 GET checks / 354 asset paths on each public host. Separate full feed checks found all three periods complete and fresh on both hosts.
+- Live observation: 230 new-version invocations were successful with zero exceptions in the bounded post-release tail. Month ingestion completed at 01:02:52 UTC; the five-minute invocation completed at 01:05:45 UTC with all three producer and metadata-monitor observations fresh. New `elapsedMs` values were 419–447 ms. The terminal-deletion regression was verified in isolation; no deleted-event fault was injected into production.
+- Limits: this corrects terminal-event and monitor-result classification; it does not eliminate occasional slow R2 reads or establish their upstream cause. Missing/corrupt data and genuine operation failures remain visible. No production fault injection, schema, resource, secret, or schedule change.
+- Evidence: `.reconciliation.local/residual-fixes-20261010/production-release.json` and adjacent preview, archive, focused-test, freshness, and scheduled receipts. Prior log review: `.reconciliation.local/post-release-health-20261010/retained-dashboard-summary.json`.
+- Recovery: inspect live state before restoring the exact compatible predecessor; retain current bindings, immutable assets, and snapshots. Code rollback does not revert data.
+
 ## Subrelease record template
 
 Copy this section for each focused release. Replace placeholders with observed facts or explicit `not run` / `not applicable`, never assumed success.
